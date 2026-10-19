@@ -155,6 +155,9 @@ Karten im Deck: 45 (`tag:Ziel::3.2.a`)
 - **Lab 27 – Redistribution zwischen OSPF und EIGRP mit Tags und Filtern** (Eignung: geeignet, 6 Fehler, 100 min)
   - Aufgaben: [Teil A Bauen](27-Redistribution-Routenfilter/README.md#teil-a--bauen) · [Teil B Reparieren](27-Redistribution-Routenfilter/README.md#teil-b--reparieren) · [Teil C Üben](27-Redistribution-Routenfilter/README.md#teil-c--üben)
   - Lösungen: [`solutions/`](27-Redistribution-Routenfilter/solutions/) · [`FAULTS.md`](27-Redistribution-Routenfilter/solutions/FAULTS.md)
+- **Lab 30 – Capstone: Routing-Fehlersuche (OSPF, EIGRP, BGP, Redistribution)** (Eignung: geeignet, 8 Fehler, 150 min)
+  - Aufgaben: [Teil A Bauen](30-Capstone-Routing-Troubleshooting/README.md#teil-a--bauen) · [Teil B Reparieren](30-Capstone-Routing-Troubleshooting/README.md#teil-b--reparieren) · [Teil C Üben](30-Capstone-Routing-Troubleshooting/README.md#teil-c--üben)
+  - Lösungen: [`solutions/`](30-Capstone-Routing-Troubleshooting/solutions/) · [`FAULTS.md`](30-Capstone-Routing-Troubleshooting/solutions/FAULTS.md)
 
 ## 3.2.b – OSPFv2 und OSPFv3
 
@@ -178,6 +181,9 @@ Karten im Deck: 86 (`tag:Ziel::3.2.b`)
 - **Lab 28 – OSPF vertieft: Area-Typen, Summarisierung und Authentifizierung** (Eignung: geeignet, 6 Fehler, 100 min)
   - Aufgaben: [Teil A Bauen](28-OSPF-Areatypen-Summary-Auth/README.md#teil-a--bauen) · [Teil B Reparieren](28-OSPF-Areatypen-Summary-Auth/README.md#teil-b--reparieren) · [Teil C Üben](28-OSPF-Areatypen-Summary-Auth/README.md#teil-c--üben)
   - Lösungen: [`solutions/`](28-OSPF-Areatypen-Summary-Auth/solutions/) · [`FAULTS.md`](28-OSPF-Areatypen-Summary-Auth/solutions/FAULTS.md)
+- **Lab 30 – Capstone: Routing-Fehlersuche (OSPF, EIGRP, BGP, Redistribution)** (Eignung: geeignet, 8 Fehler, 150 min)
+  - Aufgaben: [Teil A Bauen](30-Capstone-Routing-Troubleshooting/README.md#teil-a--bauen) · [Teil B Reparieren](30-Capstone-Routing-Troubleshooting/README.md#teil-b--reparieren) · [Teil C Üben](30-Capstone-Routing-Troubleshooting/README.md#teil-c--üben)
+  - Lösungen: [`solutions/`](30-Capstone-Routing-Troubleshooting/solutions/) · [`FAULTS.md`](30-Capstone-Routing-Troubleshooting/solutions/FAULTS.md)
 
 ## 3.2.c – Direktes eBGP
 
@@ -192,6 +198,9 @@ Karten im Deck: 61 (`tag:Ziel::3.2.c`)
 - **Lab 26 – iBGP mit Route Reflector, Local Preference und Communities** (Eignung: geeignet, 6 Fehler, 100 min)
   - Aufgaben: [Teil A Bauen](26-iBGP-RouteReflector-Communities/README.md#teil-a--bauen) · [Teil B Reparieren](26-iBGP-RouteReflector-Communities/README.md#teil-b--reparieren) · [Teil C Üben](26-iBGP-RouteReflector-Communities/README.md#teil-c--üben)
   - Lösungen: [`solutions/`](26-iBGP-RouteReflector-Communities/solutions/) · [`FAULTS.md`](26-iBGP-RouteReflector-Communities/solutions/FAULTS.md)
+- **Lab 30 – Capstone: Routing-Fehlersuche (OSPF, EIGRP, BGP, Redistribution)** (Eignung: geeignet, 8 Fehler, 150 min)
+  - Aufgaben: [Teil A Bauen](30-Capstone-Routing-Troubleshooting/README.md#teil-a--bauen) · [Teil B Reparieren](30-Capstone-Routing-Troubleshooting/README.md#teil-b--reparieren) · [Teil C Üben](30-Capstone-Routing-Troubleshooting/README.md#teil-c--üben)
+  - Lösungen: [`solutions/`](30-Capstone-Routing-Troubleshooting/solutions/) · [`FAULTS.md`](30-Capstone-Routing-Troubleshooting/solutions/FAULTS.md)
 
 ## 3.2.d – Policy-based Routing
 
@@ -200,6 +209,9 @@ Karten im Deck: 16 (`tag:Ziel::3.2.d`)
 - **Lab 04 – Policy-Based Routing mit IP SLA** (Eignung: teilweise, 4 Fehler, 75 min)
   - Aufgaben: [Teil A Bauen](04-PBR-IPSLA/README.md#teil-a--bauen) · [Teil B Reparieren](04-PBR-IPSLA/README.md#teil-b--reparieren) · [Teil C Üben](04-PBR-IPSLA/README.md#teil-c--üben)
   - Lösungen: [`solutions/`](04-PBR-IPSLA/solutions/) · [`FAULTS.md`](04-PBR-IPSLA/solutions/FAULTS.md)
+- **Lab 29 – Policy-Based Routing nach Quelle und Anwendung** (Eignung: geeignet, 5 Fehler, 75 min)
+  - Aufgaben: [Teil A Bauen](29-PBR-Quelle-Anwendung/README.md#teil-a--bauen) · [Teil B Reparieren](29-PBR-Quelle-Anwendung/README.md#teil-b--reparieren) · [Teil C Üben](29-PBR-Quelle-Anwendung/README.md#teil-c--üben)
+  - Lösungen: [`solutions/`](29-PBR-Quelle-Anwendung/solutions/) · [`FAULTS.md`](29-PBR-Quelle-Anwendung/solutions/FAULTS.md)
 
 ## 3.3.a – NTP und PTP
 

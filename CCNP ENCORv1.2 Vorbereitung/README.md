@@ -89,8 +89,8 @@ Zu jedem der 47 Ziele des Kompendiums gibt es Übungsmaterial in drei Zweigen. A
 
 | Zweig | Inhalt | Hinweis |
 |---|---|---|
-| [`CML-Labs/`](CML-Labs/) | 25 Labs für Cisco Modeling Labs 2.x (23 Themen-Labs, 2 Capstones zur Fehlersuche im Gesamtnetz) mit Bau- und Reparatur-Topologie (121 Fehler), dazu Python-/API-Drills mit automatischen Tests und zwei Fallstudien-Pakete | Referenz-Zweig, alle Ziele |
-| [`EVE-NG-Labs/`](EVE-NG-Labs/) | Dieselben 25 Labs für EVE-NG: Node- und Kabeltabellen, Konfigurationsdateien, Hilfsskript zum Einspielen per Konsole | Interface-Namen wie in CML |
-| [`PacketTracer-Labs/`](PacketTracer-Labs/) | 21 Labs mit Aufbau, Konfigurationen und 104 Fehlern; 4 Labs (Multicast, LISP, VXLAN, RESTCONF/EEM) sind in Packet Tracer nicht darstellbar und verweisen auf CML/EVE-NG | Pro Lab Eignung (geeignet, teilweise) |
+| [`CML-Labs/`](CML-Labs/) | 27 Labs für Cisco Modeling Labs 2.x (24 Themen-Labs, 3 Capstones zur Fehlersuche im Gesamtnetz) mit Bau- und Reparatur-Topologie (134 Fehler), dazu Python-/API-Drills mit automatischen Tests und zwei Fallstudien-Pakete | Referenz-Zweig, alle Ziele |
+| [`EVE-NG-Labs/`](EVE-NG-Labs/) | Dieselben 27 Labs für EVE-NG: Node- und Kabeltabellen, Konfigurationsdateien, Hilfsskript zum Einspielen per Konsole | Interface-Namen wie in CML |
+| [`PacketTracer-Labs/`](PacketTracer-Labs/) | 23 Labs mit Aufbau, Konfigurationen und 117 Fehlern; 4 Labs (Multicast, LISP, VXLAN, RESTCONF/EEM) sind in Packet Tracer nicht darstellbar und verweisen auf CML/EVE-NG | Pro Lab Eignung (geeignet, teilweise) |
 
 Die Python-Drills sind getestet. Die Labs auf allen drei Plattformen sind **nicht in einer echten Instanz ausgeführt**: Sie entstehen per Skript, geprüft sind Verkabelung, Ports und Fehlermuster. Details in den READMEs der Zweige.

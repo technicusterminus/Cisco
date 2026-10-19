@@ -1,8 +1,8 @@
 # CCNP ENCOR 350-401 v1.2 – EVE-NG-Labs
 
-Parallelzweig zu den [CML-Labs](../CML-Labs/) für **EVE-NG**: dieselben 25 Labs mit denselben Aufgaben (Bauen, Reparieren, Üben), Fehlerlisten und Lösungen. Die Geräte (vIOS, vIOS-L2, CSRv, Nexus 9000v) tragen dieselben Interface-Namen wie in CML, deshalb gelten Aufgabentexte und Konfigurationen unverändert. Neu sind Node- und Kabeltabellen mit EVE-Templates, Ressourcenbedarf und Konfigurationsdateien zum Einspielen.
+Parallelzweig zu den [CML-Labs](../CML-Labs/) für **EVE-NG**: dieselben 27 Labs mit denselben Aufgaben (Bauen, Reparieren, Üben), Fehlerlisten und Lösungen. Die Geräte (vIOS, vIOS-L2, CSRv, Nexus 9000v) tragen dieselben Interface-Namen wie in CML, deshalb gelten Aufgabentexte und Konfigurationen unverändert. Neu sind Node- und Kabeltabellen mit EVE-Templates, Ressourcenbedarf und Konfigurationsdateien zum Einspielen.
 
-**Inhalt:** 25 Labs, 121 eingebaute Fehler. Die Python-/API-Drills und die Fallstudien-Pakete liegen im CML-Zweig und gelten für alle Plattformen: [`20-Python-REST-Drills`](../CML-Labs/20-Python-REST-Drills/), [`21-Design-Fallstudien.md`](../CML-Labs/21-Design-Fallstudien.md), [`22-Security-Szenarien.md`](../CML-Labs/22-Security-Szenarien.md).
+**Inhalt:** 27 Labs, 134 eingebaute Fehler. Die Python-/API-Drills und die Fallstudien-Pakete liegen im CML-Zweig und gelten für alle Plattformen: [`20-Python-REST-Drills`](../CML-Labs/20-Python-REST-Drills/), [`21-Design-Fallstudien.md`](../CML-Labs/21-Design-Fallstudien.md), [`22-Security-Szenarien.md`](../CML-Labs/22-Security-Szenarien.md).
 
 ## Voraussetzungen
 
@@ -52,6 +52,8 @@ EVE-NG kann Startkonfigurationen nicht als Datei importieren. Pro Lab geht es so
 | [26](26-iBGP-RouteReflector-Communities/) | iBGP mit Route Reflector, Local Preference und Communities | 3.2.c | 5 | 6 | 2.5 GB | 100 min |
 | [27](27-Redistribution-Routenfilter/) | Redistribution zwischen OSPF und EIGRP mit Tags und Filtern | 3.2.a, 3.2.b | 4 | 6 | 2.0 GB | 100 min |
 | [28](28-OSPF-Areatypen-Summary-Auth/) | OSPF vertieft: Area-Typen, Summarisierung und Authentifizierung | 3.2.b | 4 | 6 | 2.0 GB | 100 min |
+| [29](29-PBR-Quelle-Anwendung/) | Policy-Based Routing nach Quelle und Anwendung | 3.2.d | 6 | 5 | 3.0 GB | 75 min |
+| [30](30-Capstone-Routing-Troubleshooting/) | Capstone: Routing-Fehlersuche (OSPF, EIGRP, BGP, Redistribution) | 3.2.a, 3.2.b, 3.2.c | 5 | 8 | 2.5 GB | 150 min |
 
 ## Abdeckung nach Prüfungsziel
 
@@ -76,10 +78,10 @@ Pro Ziel mit Links zu Aufgaben und Lösungen: **[ZIELE.md](ZIELE.md)**.
 | `3.1.a` | 802.1Q und Trunks | 31 | 05, 23 |
 | `3.1.b` | EtherChannel | 34 | 05, 23 |
 | `3.1.c` | RSTP, MST und Schutzfunktionen | 65 | 06, 23 |
-| `3.2.a` | EIGRP und OSPF vergleichen | 45 | 01, 02, 25, 27 |
-| `3.2.b` | OSPFv2 und OSPFv3 | 86 | 01, 02, 23, 24, 27, 28 |
-| `3.2.c` | Direktes eBGP | 61 | 03, 24, 26 |
-| `3.2.d` | Policy-based Routing | 16 | 04 |
+| `3.2.a` | EIGRP und OSPF vergleichen | 45 | 01, 02, 25, 27, 30 |
+| `3.2.b` | OSPFv2 und OSPFv3 | 86 | 01, 02, 23, 24, 27, 28, 30 |
+| `3.2.c` | Direktes eBGP | 61 | 03, 24, 26, 30 |
+| `3.2.d` | Policy-based Routing | 16 | 04, 29 |
 | `3.3.a` | NTP und PTP | 32 | 08, 23 |
 | `3.3.b` | NAT und PAT | 29 | 09, 23 |
 | `3.3.c` | HSRP und VRRP | 30 | 07, 23 |

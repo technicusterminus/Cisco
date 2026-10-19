@@ -186,6 +186,10 @@ Karten im Deck: 45 (`tag:Ziel::3.2.a`)
   - Aufgaben: [Teil A Bauen](27-Redistribution-Routenfilter/README.md#teil-a--bauen) · [Teil B Reparieren](27-Redistribution-Routenfilter/README.md#teil-b--reparieren) · [Teil C Üben](27-Redistribution-Routenfilter/README.md#teil-c--üben)
   - Lösungen: [`solutions/`](27-Redistribution-Routenfilter/solutions/) · [`FAULTS.md`](27-Redistribution-Routenfilter/solutions/FAULTS.md) · [Antworten Teil C](27-Redistribution-Routenfilter/README.md#teil-c--üben)
   - Topologien: [`topology.yaml`](27-Redistribution-Routenfilter/topology.yaml) (bauen) · [`topology-repair.yaml`](27-Redistribution-Routenfilter/topology-repair.yaml) (reparieren)
+- **Lab 30 – Capstone: Routing-Fehlersuche (OSPF, EIGRP, BGP, Redistribution)** (8 Fehler zum Reparieren, 150 min)
+  - Aufgaben: [Teil A Bauen](30-Capstone-Routing-Troubleshooting/README.md#teil-a--bauen) · [Teil B Reparieren](30-Capstone-Routing-Troubleshooting/README.md#teil-b--reparieren) · [Teil C Üben](30-Capstone-Routing-Troubleshooting/README.md#teil-c--üben)
+  - Lösungen: [`solutions/`](30-Capstone-Routing-Troubleshooting/solutions/) · [`FAULTS.md`](30-Capstone-Routing-Troubleshooting/solutions/FAULTS.md) · [Antworten Teil C](30-Capstone-Routing-Troubleshooting/README.md#teil-c--üben)
+  - Topologien: [`topology.yaml`](30-Capstone-Routing-Troubleshooting/topology.yaml) (bauen) · [`topology-repair.yaml`](30-Capstone-Routing-Troubleshooting/topology-repair.yaml) (reparieren)
 
 ## 3.2.b – OSPFv2 und OSPFv3
 
@@ -215,6 +219,10 @@ Karten im Deck: 86 (`tag:Ziel::3.2.b`)
   - Aufgaben: [Teil A Bauen](28-OSPF-Areatypen-Summary-Auth/README.md#teil-a--bauen) · [Teil B Reparieren](28-OSPF-Areatypen-Summary-Auth/README.md#teil-b--reparieren) · [Teil C Üben](28-OSPF-Areatypen-Summary-Auth/README.md#teil-c--üben)
   - Lösungen: [`solutions/`](28-OSPF-Areatypen-Summary-Auth/solutions/) · [`FAULTS.md`](28-OSPF-Areatypen-Summary-Auth/solutions/FAULTS.md) · [Antworten Teil C](28-OSPF-Areatypen-Summary-Auth/README.md#teil-c--üben)
   - Topologien: [`topology.yaml`](28-OSPF-Areatypen-Summary-Auth/topology.yaml) (bauen) · [`topology-repair.yaml`](28-OSPF-Areatypen-Summary-Auth/topology-repair.yaml) (reparieren)
+- **Lab 30 – Capstone: Routing-Fehlersuche (OSPF, EIGRP, BGP, Redistribution)** (8 Fehler zum Reparieren, 150 min)
+  - Aufgaben: [Teil A Bauen](30-Capstone-Routing-Troubleshooting/README.md#teil-a--bauen) · [Teil B Reparieren](30-Capstone-Routing-Troubleshooting/README.md#teil-b--reparieren) · [Teil C Üben](30-Capstone-Routing-Troubleshooting/README.md#teil-c--üben)
+  - Lösungen: [`solutions/`](30-Capstone-Routing-Troubleshooting/solutions/) · [`FAULTS.md`](30-Capstone-Routing-Troubleshooting/solutions/FAULTS.md) · [Antworten Teil C](30-Capstone-Routing-Troubleshooting/README.md#teil-c--üben)
+  - Topologien: [`topology.yaml`](30-Capstone-Routing-Troubleshooting/topology.yaml) (bauen) · [`topology-repair.yaml`](30-Capstone-Routing-Troubleshooting/topology-repair.yaml) (reparieren)
 
 ## 3.2.c – Direktes eBGP
 
@@ -232,6 +240,10 @@ Karten im Deck: 61 (`tag:Ziel::3.2.c`)
   - Aufgaben: [Teil A Bauen](26-iBGP-RouteReflector-Communities/README.md#teil-a--bauen) · [Teil B Reparieren](26-iBGP-RouteReflector-Communities/README.md#teil-b--reparieren) · [Teil C Üben](26-iBGP-RouteReflector-Communities/README.md#teil-c--üben)
   - Lösungen: [`solutions/`](26-iBGP-RouteReflector-Communities/solutions/) · [`FAULTS.md`](26-iBGP-RouteReflector-Communities/solutions/FAULTS.md) · [Antworten Teil C](26-iBGP-RouteReflector-Communities/README.md#teil-c--üben)
   - Topologien: [`topology.yaml`](26-iBGP-RouteReflector-Communities/topology.yaml) (bauen) · [`topology-repair.yaml`](26-iBGP-RouteReflector-Communities/topology-repair.yaml) (reparieren)
+- **Lab 30 – Capstone: Routing-Fehlersuche (OSPF, EIGRP, BGP, Redistribution)** (8 Fehler zum Reparieren, 150 min)
+  - Aufgaben: [Teil A Bauen](30-Capstone-Routing-Troubleshooting/README.md#teil-a--bauen) · [Teil B Reparieren](30-Capstone-Routing-Troubleshooting/README.md#teil-b--reparieren) · [Teil C Üben](30-Capstone-Routing-Troubleshooting/README.md#teil-c--üben)
+  - Lösungen: [`solutions/`](30-Capstone-Routing-Troubleshooting/solutions/) · [`FAULTS.md`](30-Capstone-Routing-Troubleshooting/solutions/FAULTS.md) · [Antworten Teil C](30-Capstone-Routing-Troubleshooting/README.md#teil-c--üben)
+  - Topologien: [`topology.yaml`](30-Capstone-Routing-Troubleshooting/topology.yaml) (bauen) · [`topology-repair.yaml`](30-Capstone-Routing-Troubleshooting/topology-repair.yaml) (reparieren)
 
 ## 3.2.d – Policy-based Routing
 
@@ -241,6 +253,10 @@ Karten im Deck: 16 (`tag:Ziel::3.2.d`)
   - Aufgaben: [Teil A Bauen](04-PBR-IPSLA/README.md#teil-a--bauen) · [Teil B Reparieren](04-PBR-IPSLA/README.md#teil-b--reparieren) · [Teil C Üben](04-PBR-IPSLA/README.md#teil-c--üben)
   - Lösungen: [`solutions/`](04-PBR-IPSLA/solutions/) · [`FAULTS.md`](04-PBR-IPSLA/solutions/FAULTS.md) · [Antworten Teil C](04-PBR-IPSLA/README.md#teil-c--üben)
   - Topologien: [`topology.yaml`](04-PBR-IPSLA/topology.yaml) (bauen) · [`topology-repair.yaml`](04-PBR-IPSLA/topology-repair.yaml) (reparieren)
+- **Lab 29 – Policy-Based Routing nach Quelle und Anwendung** (5 Fehler zum Reparieren, 75 min)
+  - Aufgaben: [Teil A Bauen](29-PBR-Quelle-Anwendung/README.md#teil-a--bauen) · [Teil B Reparieren](29-PBR-Quelle-Anwendung/README.md#teil-b--reparieren) · [Teil C Üben](29-PBR-Quelle-Anwendung/README.md#teil-c--üben)
+  - Lösungen: [`solutions/`](29-PBR-Quelle-Anwendung/solutions/) · [`FAULTS.md`](29-PBR-Quelle-Anwendung/solutions/FAULTS.md) · [Antworten Teil C](29-PBR-Quelle-Anwendung/README.md#teil-c--üben)
+  - Topologien: [`topology.yaml`](29-PBR-Quelle-Anwendung/topology.yaml) (bauen) · [`topology-repair.yaml`](29-PBR-Quelle-Anwendung/topology-repair.yaml) (reparieren)
 
 ## 3.3.a – NTP und PTP
 
