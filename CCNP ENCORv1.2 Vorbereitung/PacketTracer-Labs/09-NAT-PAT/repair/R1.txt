@@ -1,0 +1,26 @@
+hostname R1
+no ip domain-lookup
+service timestamps log datetime msec
+line con 0
+ exec-timeout 0 0
+ logging synchronous
+interface GigabitEthernet0/0
+ ip address 192.168.10.1 255.255.255.0
+ no shutdown
+interface GigabitEthernet0/1
+ ip address 203.0.113.1 255.255.255.252
+ no shutdown
+interface GigabitEthernet0/2
+ ip address 172.16.0.1 255.255.255.0
+ no shutdown
+ip route 0.0.0.0 0.0.0.0 203.0.113.2
+access-list 1 permit 192.168.1.0 0.0.0.255
+interface GigabitEthernet0/0
+interface GigabitEthernet0/2
+ ip nat inside
+interface GigabitEthernet0/1
+ ip nat outside
+ip nat inside source list 1 interface GigabitEthernet0/1
+ip nat inside source static 172.16.0.11 203.0.113.10
+ip nat inside source static tcp 172.16.0.10 80 interface GigabitEthernet0/1 8080
+end

@@ -1,0 +1,62 @@
+hostname R1
+no ip domain-lookup
+service timestamps log datetime msec
+line con 0
+ exec-timeout 0 0
+ logging synchronous
+interface GigabitEthernet0/0
+ ip address 192.168.10.1 255.255.255.0
+ no shutdown
+interface GigabitEthernet0/1
+ ip address 203.0.113.1 255.255.255.252
+ no shutdown
+interface GigabitEthernet0/2
+ ip address 172.16.0.1 255.255.255.0
+ no shutdown
+ip route 0.0.0.0 0.0.0.0 203.0.113.2
+line vty 0 4
+ login
+ password cisco
+ transport input telnet
+ip access-list standard MGMT
+ permit 192.168.1.0 0.0.0.255
+line vty 0 4
+ access-class MGMT in
+ip access-list extended OUTSIDE-IN
+ 5 deny ip any any
+ 10 permit icmp any any echo-reply
+ 20 permit tcp any any established
+ 30 permit tcp any host 172.16.0.10 eq www
+ 40 permit udp any eq domain any
+ 50 deny ip any any log
+ip access-list extended DMZ-IN
+ 10 deny ip 172.16.0.0 0.0.0.255 192.168.10.0 0.0.0.255
+ 20 permit ip any any
+ip access-list extended LAN-IN
+ 10 permit icmp 192.168.10.0 0.0.0.255 172.16.0.0 0.0.0.255
+ 20 permit tcp 192.168.10.0 0.0.0.255 172.16.0.0 0.0.0.255 eq www
+ 30 deny ip 192.168.10.0 0.0.0.255 172.16.0.0 0.0.0.255
+ 40 permit ip any any
+ip access-list extended ICMP-ACL
+ permit udp any any
+ip access-list extended MGMT-ACL
+ permit tcp 192.168.10.0 0.0.0.255 any eq telnet
+ permit tcp 192.168.10.0 0.0.0.255 any eq 22
+class-map match-all CM-ICMP
+ match access-group name ICMP-ACL
+class-map match-all CM-MGMT
+ match access-group name MGMT-ACL
+policy-map COPP
+ class CM-MGMT
+  police rate 256000 bps conform-action transmit exceed-action transmit
+ class CM-ICMP
+  police rate 64000 bps conform-action transmit exceed-action drop
+control-plane
+ service-policy input COPP
+interface GigabitEthernet0/1
+ ip access-group OUTSIDE-IN in
+interface GigabitEthernet0/2
+ ip access-group DMZ-IN out
+interface GigabitEthernet0/0
+ ip access-group LAN-IN in
+end

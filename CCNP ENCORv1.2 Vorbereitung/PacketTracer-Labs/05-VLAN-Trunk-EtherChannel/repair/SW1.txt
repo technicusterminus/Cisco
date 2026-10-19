@@ -1,0 +1,33 @@
+hostname SW1
+no ip domain-lookup
+service timestamps log datetime msec
+line con 0
+ exec-timeout 0 0
+ logging synchronous
+spanning-tree mode rapid-pvst
+vtp mode transparent
+vlan 10
+ name USERS
+vlan 20
+ name SERVERS
+vlan 99
+ name NATIVE
+interface range FastEthernet0/1 - 2
+ channel-group 1 mode active
+interface range FastEthernet0/3 - 4
+ channel-group 2 mode desirable
+interface Port-channel1
+ switchport mode trunk
+ switchport trunk native vlan 99
+ switchport trunk allowed vlan 10,20
+interface Port-channel2
+ switchport mode trunk
+ switchport trunk native vlan 99
+ switchport trunk allowed vlan 10,20
+interface FastEthernet0/5
+ switchport mode trunk
+ switchport nonegotiate
+ switchport trunk native vlan 99
+ switchport trunk allowed vlan 10,20
+port-channel load-balance src-dst-ip
+end

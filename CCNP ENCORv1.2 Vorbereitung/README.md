@@ -83,6 +83,14 @@ Jede Karte hat eine stabile ID (`E12-<Blueprint-Punkt>-<Nr>`), den Themenbezug, 
 
 Kein offizielles Cisco-Material, nicht von Cisco geprüft oder freigegeben. Cisco, CCNP und ENCOR sind Marken von Cisco Systems, Inc. Das Deck dient der privaten Prüfungsvorbereitung.
 
-## CML-Labs
+## Labs: CML, Packet Tracer, EVE-NG
 
-Im Ordner [`CML-Labs/`](CML-Labs/) liegt zu jedem der 47 Ziele des Kompendiums Übungsmaterial: 19 Labs für Cisco Modeling Labs 2.x, je mit Bau-Topologie, Reparatur-Topologie mit eingebauten Fehlern (insgesamt 78), Tickets, Musterlösungen und Transferfragen. Dazu Python-/API-Drills mit automatischen Tests (lokal, ohne CML) und zwei Fallstudien-Pakete für Design, SD-WAN, SD-Access, Virtualisierung, Catalyst Center und Security. Die Python-Drills sind getestet, die CML-Labs nicht in einer echten CML-Instanz; Details in der README dort. Pro Prüfungsziel mit Links zu Aufgaben und Lösungen: [`ZIELE.md`](CML-Labs/ZIELE.md).
+Zu jedem der 47 Ziele des Kompendiums gibt es Übungsmaterial in drei Zweigen. Alle haben dieselbe Struktur: Bauen, Reparieren (eingebaute Fehler mit Tickets), Üben (Transferfragen), Musterlösungen und Fehlerlisten. Pro Prüfungsziel mit Links zu Aufgaben und Lösungen steht jeweils eine `ZIELE.md` im Ordner.
+
+| Zweig | Inhalt | Hinweis |
+|---|---|---|
+| [`CML-Labs/`](CML-Labs/) | 21 Labs für Cisco Modeling Labs 2.x (19 Themen-Labs, 2 Capstones zur Fehlersuche im Gesamtnetz) mit Bau- und Reparatur-Topologie (97 Fehler), dazu Python-/API-Drills mit automatischen Tests und zwei Fallstudien-Pakete | Referenz-Zweig, alle Ziele |
+| [`EVE-NG-Labs/`](EVE-NG-Labs/) | Dieselben 21 Labs für EVE-NG: Node- und Kabeltabellen, Konfigurationsdateien, Hilfsskript zum Einspielen per Konsole | Interface-Namen wie in CML |
+| [`PacketTracer-Labs/`](PacketTracer-Labs/) | 17 Labs mit Aufbau, Konfigurationen und 80 Fehlern; 4 Labs (Multicast, LISP, VXLAN, RESTCONF/EEM) sind in Packet Tracer nicht darstellbar und verweisen auf CML/EVE-NG | Pro Lab Eignung (geeignet, teilweise) |
+
+Die Python-Drills sind getestet. Die Labs auf allen drei Plattformen sind **nicht in einer echten Instanz ausgeführt**: Sie entstehen per Skript, geprüft sind Verkabelung, Ports und Fehlermuster. Details in den READMEs der Zweige.

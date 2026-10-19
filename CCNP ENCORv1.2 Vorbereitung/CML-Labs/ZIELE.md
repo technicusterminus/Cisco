@@ -91,6 +91,10 @@ Karten im Deck: 26 (`tag:Ziel::2.2.a`)
   - Aufgaben: [Teil A Bauen](13-VRF-Lite/README.md#teil-a--bauen) · [Teil B Reparieren](13-VRF-Lite/README.md#teil-b--reparieren) · [Teil C Üben](13-VRF-Lite/README.md#teil-c--üben)
   - Lösungen: [`solutions/`](13-VRF-Lite/solutions/) · [`FAULTS.md`](13-VRF-Lite/solutions/FAULTS.md) · [Antworten Teil C](13-VRF-Lite/README.md#teil-c--üben)
   - Topologien: [`topology.yaml`](13-VRF-Lite/topology.yaml) (bauen) · [`topology-repair.yaml`](13-VRF-Lite/topology-repair.yaml) (reparieren)
+- **Lab 24 – Capstone: WAN, eBGP und IPsec-Overlay, Fehlersuche** (9 Fehler zum Reparieren, 150 min)
+  - Aufgaben: [Teil A Bauen](24-Capstone-WAN-Overlay-Troubleshooting/README.md#teil-a--bauen) · [Teil B Reparieren](24-Capstone-WAN-Overlay-Troubleshooting/README.md#teil-b--reparieren) · [Teil C Üben](24-Capstone-WAN-Overlay-Troubleshooting/README.md#teil-c--üben)
+  - Lösungen: [`solutions/`](24-Capstone-WAN-Overlay-Troubleshooting/solutions/) · [`FAULTS.md`](24-Capstone-WAN-Overlay-Troubleshooting/solutions/FAULTS.md) · [Antworten Teil C](24-Capstone-WAN-Overlay-Troubleshooting/README.md#teil-c--üben)
+  - Topologien: [`topology.yaml`](24-Capstone-WAN-Overlay-Troubleshooting/topology.yaml) (bauen) · [`topology-repair.yaml`](24-Capstone-WAN-Overlay-Troubleshooting/topology-repair.yaml) (reparieren)
 
 ## 2.2.b – GRE und IPsec
 
@@ -100,6 +104,10 @@ Karten im Deck: 53 (`tag:Ziel::2.2.b`)
   - Aufgaben: [Teil A Bauen](14-GRE-IPsec/README.md#teil-a--bauen) · [Teil B Reparieren](14-GRE-IPsec/README.md#teil-b--reparieren) · [Teil C Üben](14-GRE-IPsec/README.md#teil-c--üben)
   - Lösungen: [`solutions/`](14-GRE-IPsec/solutions/) · [`FAULTS.md`](14-GRE-IPsec/solutions/FAULTS.md) · [Antworten Teil C](14-GRE-IPsec/README.md#teil-c--üben)
   - Topologien: [`topology.yaml`](14-GRE-IPsec/topology.yaml) (bauen) · [`topology-repair.yaml`](14-GRE-IPsec/topology-repair.yaml) (reparieren)
+- **Lab 24 – Capstone: WAN, eBGP und IPsec-Overlay, Fehlersuche** (9 Fehler zum Reparieren, 150 min)
+  - Aufgaben: [Teil A Bauen](24-Capstone-WAN-Overlay-Troubleshooting/README.md#teil-a--bauen) · [Teil B Reparieren](24-Capstone-WAN-Overlay-Troubleshooting/README.md#teil-b--reparieren) · [Teil C Üben](24-Capstone-WAN-Overlay-Troubleshooting/README.md#teil-c--üben)
+  - Lösungen: [`solutions/`](24-Capstone-WAN-Overlay-Troubleshooting/solutions/) · [`FAULTS.md`](24-Capstone-WAN-Overlay-Troubleshooting/solutions/FAULTS.md) · [Antworten Teil C](24-Capstone-WAN-Overlay-Troubleshooting/README.md#teil-c--üben)
+  - Topologien: [`topology.yaml`](24-Capstone-WAN-Overlay-Troubleshooting/topology.yaml) (bauen) · [`topology-repair.yaml`](24-Capstone-WAN-Overlay-Troubleshooting/topology-repair.yaml) (reparieren)
 
 ## 2.3.a – LISP
 
@@ -127,6 +135,10 @@ Karten im Deck: 31 (`tag:Ziel::3.1.a`)
   - Aufgaben: [Teil A Bauen](05-VLAN-Trunk-EtherChannel/README.md#teil-a--bauen) · [Teil B Reparieren](05-VLAN-Trunk-EtherChannel/README.md#teil-b--reparieren) · [Teil C Üben](05-VLAN-Trunk-EtherChannel/README.md#teil-c--üben)
   - Lösungen: [`solutions/`](05-VLAN-Trunk-EtherChannel/solutions/) · [`FAULTS.md`](05-VLAN-Trunk-EtherChannel/solutions/FAULTS.md) · [Antworten Teil C](05-VLAN-Trunk-EtherChannel/README.md#teil-c--üben)
   - Topologien: [`topology.yaml`](05-VLAN-Trunk-EtherChannel/topology.yaml) (bauen) · [`topology-repair.yaml`](05-VLAN-Trunk-EtherChannel/topology-repair.yaml) (reparieren)
+- **Lab 23 – Capstone: Campus und Edge, Fehlersuche im Gesamtnetz** (10 Fehler zum Reparieren, 150 min)
+  - Aufgaben: [Teil A Bauen](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-a--bauen) · [Teil B Reparieren](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-b--reparieren) · [Teil C Üben](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-c--üben)
+  - Lösungen: [`solutions/`](23-Capstone-Campus-Edge-Troubleshooting/solutions/) · [`FAULTS.md`](23-Capstone-Campus-Edge-Troubleshooting/solutions/FAULTS.md) · [Antworten Teil C](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-c--üben)
+  - Topologien: [`topology.yaml`](23-Capstone-Campus-Edge-Troubleshooting/topology.yaml) (bauen) · [`topology-repair.yaml`](23-Capstone-Campus-Edge-Troubleshooting/topology-repair.yaml) (reparieren)
 
 ## 3.1.b – EtherChannel
 
@@ -136,6 +148,10 @@ Karten im Deck: 34 (`tag:Ziel::3.1.b`)
   - Aufgaben: [Teil A Bauen](05-VLAN-Trunk-EtherChannel/README.md#teil-a--bauen) · [Teil B Reparieren](05-VLAN-Trunk-EtherChannel/README.md#teil-b--reparieren) · [Teil C Üben](05-VLAN-Trunk-EtherChannel/README.md#teil-c--üben)
   - Lösungen: [`solutions/`](05-VLAN-Trunk-EtherChannel/solutions/) · [`FAULTS.md`](05-VLAN-Trunk-EtherChannel/solutions/FAULTS.md) · [Antworten Teil C](05-VLAN-Trunk-EtherChannel/README.md#teil-c--üben)
   - Topologien: [`topology.yaml`](05-VLAN-Trunk-EtherChannel/topology.yaml) (bauen) · [`topology-repair.yaml`](05-VLAN-Trunk-EtherChannel/topology-repair.yaml) (reparieren)
+- **Lab 23 – Capstone: Campus und Edge, Fehlersuche im Gesamtnetz** (10 Fehler zum Reparieren, 150 min)
+  - Aufgaben: [Teil A Bauen](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-a--bauen) · [Teil B Reparieren](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-b--reparieren) · [Teil C Üben](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-c--üben)
+  - Lösungen: [`solutions/`](23-Capstone-Campus-Edge-Troubleshooting/solutions/) · [`FAULTS.md`](23-Capstone-Campus-Edge-Troubleshooting/solutions/FAULTS.md) · [Antworten Teil C](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-c--üben)
+  - Topologien: [`topology.yaml`](23-Capstone-Campus-Edge-Troubleshooting/topology.yaml) (bauen) · [`topology-repair.yaml`](23-Capstone-Campus-Edge-Troubleshooting/topology-repair.yaml) (reparieren)
 
 ## 3.1.c – RSTP, MST und Schutzfunktionen
 
@@ -145,6 +161,10 @@ Karten im Deck: 65 (`tag:Ziel::3.1.c`)
   - Aufgaben: [Teil A Bauen](06-STP-MST-Schutz/README.md#teil-a--bauen) · [Teil B Reparieren](06-STP-MST-Schutz/README.md#teil-b--reparieren) · [Teil C Üben](06-STP-MST-Schutz/README.md#teil-c--üben)
   - Lösungen: [`solutions/`](06-STP-MST-Schutz/solutions/) · [`FAULTS.md`](06-STP-MST-Schutz/solutions/FAULTS.md) · [Antworten Teil C](06-STP-MST-Schutz/README.md#teil-c--üben)
   - Topologien: [`topology.yaml`](06-STP-MST-Schutz/topology.yaml) (bauen) · [`topology-repair.yaml`](06-STP-MST-Schutz/topology-repair.yaml) (reparieren)
+- **Lab 23 – Capstone: Campus und Edge, Fehlersuche im Gesamtnetz** (10 Fehler zum Reparieren, 150 min)
+  - Aufgaben: [Teil A Bauen](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-a--bauen) · [Teil B Reparieren](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-b--reparieren) · [Teil C Üben](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-c--üben)
+  - Lösungen: [`solutions/`](23-Capstone-Campus-Edge-Troubleshooting/solutions/) · [`FAULTS.md`](23-Capstone-Campus-Edge-Troubleshooting/solutions/FAULTS.md) · [Antworten Teil C](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-c--üben)
+  - Topologien: [`topology.yaml`](23-Capstone-Campus-Edge-Troubleshooting/topology.yaml) (bauen) · [`topology-repair.yaml`](23-Capstone-Campus-Edge-Troubleshooting/topology-repair.yaml) (reparieren)
 
 ## 3.2.a – EIGRP und OSPF vergleichen
 
@@ -171,6 +191,14 @@ Karten im Deck: 86 (`tag:Ziel::3.2.b`)
   - Aufgaben: [Teil A Bauen](02-EIGRP-OSPFv3/README.md#teil-a--bauen) · [Teil B Reparieren](02-EIGRP-OSPFv3/README.md#teil-b--reparieren) · [Teil C Üben](02-EIGRP-OSPFv3/README.md#teil-c--üben)
   - Lösungen: [`solutions/`](02-EIGRP-OSPFv3/solutions/) · [`FAULTS.md`](02-EIGRP-OSPFv3/solutions/FAULTS.md) · [Antworten Teil C](02-EIGRP-OSPFv3/README.md#teil-c--üben)
   - Topologien: [`topology.yaml`](02-EIGRP-OSPFv3/topology.yaml) (bauen) · [`topology-repair.yaml`](02-EIGRP-OSPFv3/topology-repair.yaml) (reparieren)
+- **Lab 23 – Capstone: Campus und Edge, Fehlersuche im Gesamtnetz** (10 Fehler zum Reparieren, 150 min)
+  - Aufgaben: [Teil A Bauen](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-a--bauen) · [Teil B Reparieren](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-b--reparieren) · [Teil C Üben](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-c--üben)
+  - Lösungen: [`solutions/`](23-Capstone-Campus-Edge-Troubleshooting/solutions/) · [`FAULTS.md`](23-Capstone-Campus-Edge-Troubleshooting/solutions/FAULTS.md) · [Antworten Teil C](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-c--üben)
+  - Topologien: [`topology.yaml`](23-Capstone-Campus-Edge-Troubleshooting/topology.yaml) (bauen) · [`topology-repair.yaml`](23-Capstone-Campus-Edge-Troubleshooting/topology-repair.yaml) (reparieren)
+- **Lab 24 – Capstone: WAN, eBGP und IPsec-Overlay, Fehlersuche** (9 Fehler zum Reparieren, 150 min)
+  - Aufgaben: [Teil A Bauen](24-Capstone-WAN-Overlay-Troubleshooting/README.md#teil-a--bauen) · [Teil B Reparieren](24-Capstone-WAN-Overlay-Troubleshooting/README.md#teil-b--reparieren) · [Teil C Üben](24-Capstone-WAN-Overlay-Troubleshooting/README.md#teil-c--üben)
+  - Lösungen: [`solutions/`](24-Capstone-WAN-Overlay-Troubleshooting/solutions/) · [`FAULTS.md`](24-Capstone-WAN-Overlay-Troubleshooting/solutions/FAULTS.md) · [Antworten Teil C](24-Capstone-WAN-Overlay-Troubleshooting/README.md#teil-c--üben)
+  - Topologien: [`topology.yaml`](24-Capstone-WAN-Overlay-Troubleshooting/topology.yaml) (bauen) · [`topology-repair.yaml`](24-Capstone-WAN-Overlay-Troubleshooting/topology-repair.yaml) (reparieren)
 
 ## 3.2.c – Direktes eBGP
 
@@ -180,6 +208,10 @@ Karten im Deck: 61 (`tag:Ziel::3.2.c`)
   - Aufgaben: [Teil A Bauen](03-eBGP-Policy/README.md#teil-a--bauen) · [Teil B Reparieren](03-eBGP-Policy/README.md#teil-b--reparieren) · [Teil C Üben](03-eBGP-Policy/README.md#teil-c--üben)
   - Lösungen: [`solutions/`](03-eBGP-Policy/solutions/) · [`FAULTS.md`](03-eBGP-Policy/solutions/FAULTS.md) · [Antworten Teil C](03-eBGP-Policy/README.md#teil-c--üben)
   - Topologien: [`topology.yaml`](03-eBGP-Policy/topology.yaml) (bauen) · [`topology-repair.yaml`](03-eBGP-Policy/topology-repair.yaml) (reparieren)
+- **Lab 24 – Capstone: WAN, eBGP und IPsec-Overlay, Fehlersuche** (9 Fehler zum Reparieren, 150 min)
+  - Aufgaben: [Teil A Bauen](24-Capstone-WAN-Overlay-Troubleshooting/README.md#teil-a--bauen) · [Teil B Reparieren](24-Capstone-WAN-Overlay-Troubleshooting/README.md#teil-b--reparieren) · [Teil C Üben](24-Capstone-WAN-Overlay-Troubleshooting/README.md#teil-c--üben)
+  - Lösungen: [`solutions/`](24-Capstone-WAN-Overlay-Troubleshooting/solutions/) · [`FAULTS.md`](24-Capstone-WAN-Overlay-Troubleshooting/solutions/FAULTS.md) · [Antworten Teil C](24-Capstone-WAN-Overlay-Troubleshooting/README.md#teil-c--üben)
+  - Topologien: [`topology.yaml`](24-Capstone-WAN-Overlay-Troubleshooting/topology.yaml) (bauen) · [`topology-repair.yaml`](24-Capstone-WAN-Overlay-Troubleshooting/topology-repair.yaml) (reparieren)
 
 ## 3.2.d – Policy-based Routing
 
@@ -198,6 +230,10 @@ Karten im Deck: 32 (`tag:Ziel::3.3.a`)
   - Aufgaben: [Teil A Bauen](08-NTP-Syslog-SNMP/README.md#teil-a--bauen) · [Teil B Reparieren](08-NTP-Syslog-SNMP/README.md#teil-b--reparieren) · [Teil C Üben](08-NTP-Syslog-SNMP/README.md#teil-c--üben)
   - Lösungen: [`solutions/`](08-NTP-Syslog-SNMP/solutions/) · [`FAULTS.md`](08-NTP-Syslog-SNMP/solutions/FAULTS.md) · [Antworten Teil C](08-NTP-Syslog-SNMP/README.md#teil-c--üben)
   - Topologien: [`topology.yaml`](08-NTP-Syslog-SNMP/topology.yaml) (bauen) · [`topology-repair.yaml`](08-NTP-Syslog-SNMP/topology-repair.yaml) (reparieren)
+- **Lab 23 – Capstone: Campus und Edge, Fehlersuche im Gesamtnetz** (10 Fehler zum Reparieren, 150 min)
+  - Aufgaben: [Teil A Bauen](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-a--bauen) · [Teil B Reparieren](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-b--reparieren) · [Teil C Üben](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-c--üben)
+  - Lösungen: [`solutions/`](23-Capstone-Campus-Edge-Troubleshooting/solutions/) · [`FAULTS.md`](23-Capstone-Campus-Edge-Troubleshooting/solutions/FAULTS.md) · [Antworten Teil C](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-c--üben)
+  - Topologien: [`topology.yaml`](23-Capstone-Campus-Edge-Troubleshooting/topology.yaml) (bauen) · [`topology-repair.yaml`](23-Capstone-Campus-Edge-Troubleshooting/topology-repair.yaml) (reparieren)
 
 ## 3.3.b – NAT und PAT
 
@@ -207,6 +243,10 @@ Karten im Deck: 29 (`tag:Ziel::3.3.b`)
   - Aufgaben: [Teil A Bauen](09-NAT-PAT/README.md#teil-a--bauen) · [Teil B Reparieren](09-NAT-PAT/README.md#teil-b--reparieren) · [Teil C Üben](09-NAT-PAT/README.md#teil-c--üben)
   - Lösungen: [`solutions/`](09-NAT-PAT/solutions/) · [`FAULTS.md`](09-NAT-PAT/solutions/FAULTS.md) · [Antworten Teil C](09-NAT-PAT/README.md#teil-c--üben)
   - Topologien: [`topology.yaml`](09-NAT-PAT/topology.yaml) (bauen) · [`topology-repair.yaml`](09-NAT-PAT/topology-repair.yaml) (reparieren)
+- **Lab 23 – Capstone: Campus und Edge, Fehlersuche im Gesamtnetz** (10 Fehler zum Reparieren, 150 min)
+  - Aufgaben: [Teil A Bauen](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-a--bauen) · [Teil B Reparieren](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-b--reparieren) · [Teil C Üben](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-c--üben)
+  - Lösungen: [`solutions/`](23-Capstone-Campus-Edge-Troubleshooting/solutions/) · [`FAULTS.md`](23-Capstone-Campus-Edge-Troubleshooting/solutions/FAULTS.md) · [Antworten Teil C](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-c--üben)
+  - Topologien: [`topology.yaml`](23-Capstone-Campus-Edge-Troubleshooting/topology.yaml) (bauen) · [`topology-repair.yaml`](23-Capstone-Campus-Edge-Troubleshooting/topology-repair.yaml) (reparieren)
 
 ## 3.3.c – HSRP und VRRP
 
@@ -216,6 +256,10 @@ Karten im Deck: 30 (`tag:Ziel::3.3.c`)
   - Aufgaben: [Teil A Bauen](07-FHRP-HSRP-VRRP-GLBP/README.md#teil-a--bauen) · [Teil B Reparieren](07-FHRP-HSRP-VRRP-GLBP/README.md#teil-b--reparieren) · [Teil C Üben](07-FHRP-HSRP-VRRP-GLBP/README.md#teil-c--üben)
   - Lösungen: [`solutions/`](07-FHRP-HSRP-VRRP-GLBP/solutions/) · [`FAULTS.md`](07-FHRP-HSRP-VRRP-GLBP/solutions/FAULTS.md) · [Antworten Teil C](07-FHRP-HSRP-VRRP-GLBP/README.md#teil-c--üben)
   - Topologien: [`topology.yaml`](07-FHRP-HSRP-VRRP-GLBP/topology.yaml) (bauen) · [`topology-repair.yaml`](07-FHRP-HSRP-VRRP-GLBP/topology-repair.yaml) (reparieren)
+- **Lab 23 – Capstone: Campus und Edge, Fehlersuche im Gesamtnetz** (10 Fehler zum Reparieren, 150 min)
+  - Aufgaben: [Teil A Bauen](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-a--bauen) · [Teil B Reparieren](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-b--reparieren) · [Teil C Üben](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-c--üben)
+  - Lösungen: [`solutions/`](23-Capstone-Campus-Edge-Troubleshooting/solutions/) · [`FAULTS.md`](23-Capstone-Campus-Edge-Troubleshooting/solutions/FAULTS.md) · [Antworten Teil C](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-c--üben)
+  - Topologien: [`topology.yaml`](23-Capstone-Campus-Edge-Troubleshooting/topology.yaml) (bauen) · [`topology-repair.yaml`](23-Capstone-Campus-Edge-Troubleshooting/topology-repair.yaml) (reparieren)
 
 ## 3.3.d – Multicast-Verfahren
 
@@ -286,6 +330,10 @@ Karten im Deck: 27 (`tag:Ziel::5.1.a`)
   - Aufgaben: [Teil A Bauen](11-Zugriff-AAA/README.md#teil-a--bauen) · [Teil B Reparieren](11-Zugriff-AAA/README.md#teil-b--reparieren) · [Teil C Üben](11-Zugriff-AAA/README.md#teil-c--üben)
   - Lösungen: [`solutions/`](11-Zugriff-AAA/solutions/) · [`FAULTS.md`](11-Zugriff-AAA/solutions/FAULTS.md) · [Antworten Teil C](11-Zugriff-AAA/README.md#teil-c--üben)
   - Topologien: [`topology.yaml`](11-Zugriff-AAA/topology.yaml) (bauen) · [`topology-repair.yaml`](11-Zugriff-AAA/topology-repair.yaml) (reparieren)
+- **Lab 23 – Capstone: Campus und Edge, Fehlersuche im Gesamtnetz** (10 Fehler zum Reparieren, 150 min)
+  - Aufgaben: [Teil A Bauen](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-a--bauen) · [Teil B Reparieren](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-b--reparieren) · [Teil C Üben](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-c--üben)
+  - Lösungen: [`solutions/`](23-Capstone-Campus-Edge-Troubleshooting/solutions/) · [`FAULTS.md`](23-Capstone-Campus-Edge-Troubleshooting/solutions/FAULTS.md) · [Antworten Teil C](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-c--üben)
+  - Topologien: [`topology.yaml`](23-Capstone-Campus-Edge-Troubleshooting/topology.yaml) (bauen) · [`topology-repair.yaml`](23-Capstone-Campus-Edge-Troubleshooting/topology-repair.yaml) (reparieren)
 
 ## 5.1.b – AAA
 
@@ -304,6 +352,10 @@ Karten im Deck: 52 (`tag:Ziel::5.2.a`)
   - Aufgaben: [Teil A Bauen](10-ACL-CoPP/README.md#teil-a--bauen) · [Teil B Reparieren](10-ACL-CoPP/README.md#teil-b--reparieren) · [Teil C Üben](10-ACL-CoPP/README.md#teil-c--üben)
   - Lösungen: [`solutions/`](10-ACL-CoPP/solutions/) · [`FAULTS.md`](10-ACL-CoPP/solutions/FAULTS.md) · [Antworten Teil C](10-ACL-CoPP/README.md#teil-c--üben)
   - Topologien: [`topology.yaml`](10-ACL-CoPP/topology.yaml) (bauen) · [`topology-repair.yaml`](10-ACL-CoPP/topology-repair.yaml) (reparieren)
+- **Lab 23 – Capstone: Campus und Edge, Fehlersuche im Gesamtnetz** (10 Fehler zum Reparieren, 150 min)
+  - Aufgaben: [Teil A Bauen](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-a--bauen) · [Teil B Reparieren](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-b--reparieren) · [Teil C Üben](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-c--üben)
+  - Lösungen: [`solutions/`](23-Capstone-Campus-Edge-Troubleshooting/solutions/) · [`FAULTS.md`](23-Capstone-Campus-Edge-Troubleshooting/solutions/FAULTS.md) · [Antworten Teil C](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-c--üben)
+  - Topologien: [`topology.yaml`](23-Capstone-Campus-Edge-Troubleshooting/topology.yaml) (bauen) · [`topology-repair.yaml`](23-Capstone-Campus-Edge-Troubleshooting/topology-repair.yaml) (reparieren)
 
 ## 5.2.b – CoPP
 

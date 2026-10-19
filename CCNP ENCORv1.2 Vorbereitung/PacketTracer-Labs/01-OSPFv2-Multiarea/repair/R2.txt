@@ -1,0 +1,33 @@
+hostname R2
+no ip domain-lookup
+service timestamps log datetime msec
+line con 0
+ exec-timeout 0 0
+ logging synchronous
+interface Loopback0
+ ip address 2.2.2.2 255.255.255.255
+ no shutdown
+interface GigabitEthernet0/0
+ ip address 10.0.12.2 255.255.255.252
+ no shutdown
+interface GigabitEthernet0/1
+ ip address 10.1.234.2 255.255.255.0
+ no shutdown
+router ospf 1
+ router-id 2.2.2.2
+ area 1 range 10.1.20.0 255.255.252.0
+interface Loopback0
+ ip ospf 1 area 0
+interface GigabitEthernet0/0
+ ip ospf 1 area 0
+ ip ospf authentication key-chain OSPFKEY
+ ip ospf hello-interval 3
+ ip ospf dead-interval 12
+interface GigabitEthernet0/1
+ ip ospf 1 area 1
+ ip ospf priority 0
+key chain OSPFKEY
+ key 1
+  key-string LabKey123
+  cryptographic-algorithm hmac-sha-256
+end

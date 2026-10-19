@@ -1,0 +1,64 @@
+# Fehlerliste – Lab 14 – GRE, IPsec und VTI
+
+**Spoiler.** Erst nach eigener Fehlersuche lesen.
+
+## Ticket 1 (CE2)
+
+- **Symptom:** Tunnel0 ist up/up, aber OSPF-Nachbar bleibt aus. `show crypto isakmp sa` zeigt MM_NO_STATE bzw. nichts.
+- **Ursache:** Pre-Shared Keys unterscheiden sich: Phase 1 scheitert.
+- **Fix:** Key auf CE2 an CE1 angleichen.
+- **Eingebaut:**
+
+```diff
+- crypto isakmp key CiscoLab123 address 198.51.100.1
++ crypto isakmp key CiscoLab999 address 198.51.100.1
+```
+
+## Ticket 2 (CE1)
+
+- **Symptom:** `QM_IDLE` steht, aber `encaps` steigt ohne `decaps` auf der Gegenseite; OSPF fällt aus.
+- **Ursache:** Phase 2: Transform-Sets passen nicht zusammen (AES-128 vs. AES-256).
+- **Fix:** Transform-Set auf beiden Seiten gleich konfigurieren.
+- **Eingebaut:**
+
+```diff
+- crypto ipsec transform-set TS esp-aes 256 esp-sha256-hmac
++ crypto ipsec transform-set TS esp-aes 128 esp-sha256-hmac
+```
+
+## Ticket 3 (CE1)
+
+- **Symptom:** Tunnel0 zeigt up/up (Keepalive nicht aktiv), aber nichts kommt an; `show crypto isakmp sa` bleibt leer.
+- **Ursache:** Tunnelziel zeigt auf eine nicht existierende Adresse.
+- **Fix:** Tunnelziel auf 203.0.113.1 setzen.
+- **Eingebaut:**
+
+```diff
+- tunnel destination 203.0.113.1
++ tunnel destination 203.0.113.11
+```
+
+## Ticket 4 (CE2)
+
+- **Symptom:** Tunnel und IPsec stehen, aber OSPF-Nachbarschaft fehlt, LANs sind nicht erreichbar.
+- **Ursache:** OSPF auf CE2 enthält das Tunnelnetz nicht; Tunnel0 nimmt nicht am Routing teil.
+- **Fix:** Tunnelnetz 172.16.0.0/30 in OSPF aufnehmen (oder `ip ospf 1 area 0` am Interface).
+- **Eingebaut:**
+
+```diff
+-  network 172.16.0.0 0.0.0.3 area 0
+```
+
+## Ticket 5 (CE2)
+
+- **Symptom:** Tunnel flappt zyklisch, das Log zeigt `%TUN-5-RECURDOWN` (Tunnel Interface is Down, recursive routing).
+- **Ursache:** CE2 kündigt das Transfernetz im Overlay-OSPF an; CE1 lernt es über den Tunnel und routet das Tunnelziel durch den eigenen Tunnel.
+- **Fix:** Transfernetz aus OSPF nehmen, nur Overlay und LANs im IGP.
+- **Eingebaut:**
+
+```diff
+-  network 192.168.2.0 0.0.0.255 area 0
++  network 192.168.2.0 0.0.0.255 area 0
++  network 203.0.113.0 0.0.0.3 area 0
+```
+

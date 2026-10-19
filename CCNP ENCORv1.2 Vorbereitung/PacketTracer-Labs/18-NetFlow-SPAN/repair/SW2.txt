@@ -1,0 +1,22 @@
+hostname SW2
+no ip domain-lookup
+service timestamps log datetime msec
+line con 0
+ exec-timeout 0 0
+ logging synchronous
+spanning-tree mode rapid-pvst
+vlan 10
+ name USERS
+vlan 999
+ name RSPAN
+ remote-span
+interface FastEthernet0/1
+ switchport mode trunk
+ switchport nonegotiate
+ switchport trunk allowed vlan 10
+interface FastEthernet0/6
+ switchport mode access
+ switchport access vlan 10
+monitor session 2 source remote vlan 999
+monitor session 2 destination interface FastEthernet0/6
+end

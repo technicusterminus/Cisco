@@ -1,0 +1,38 @@
+hostname R2
+no ip domain-lookup
+service timestamps log datetime msec
+line con 0
+ exec-timeout 0 0
+ logging synchronous
+interface GigabitEthernet0/0
+ no shutdown
+interface GigabitEthernet0/1
+ no shutdown
+interface GigabitEthernet0/2
+ no shutdown
+vrf definition RED
+ address-family ipv4
+vrf definition BLUE
+ address-family ipv4
+interface GigabitEthernet0/0
+ vrf forwarding RED
+ ip address 10.2.2.1 255.255.255.252
+interface GigabitEthernet0/1
+ vrf forwarding BLUE
+ ip address 10.2.2.1 255.255.255.252
+interface GigabitEthernet0/2.100
+ encapsulation dot1Q 100
+ vrf forwarding RED
+ ip address 10.0.12.2 255.255.255.252
+interface GigabitEthernet0/2.200
+ encapsulation dot1Q 201
+ vrf forwarding BLUE
+ ip address 10.0.12.2 255.255.255.252
+router ospf 1 vrf RED
+ router-id 2.2.2.1
+ network 10.2.2.0 0.0.0.3 area 0
+ network 10.0.12.0 0.0.0.3 area 0
+router ospf 2 vrf BLUE
+ router-id 2.2.2.2
+ network 10.0.12.0 0.0.0.3 area 0
+end

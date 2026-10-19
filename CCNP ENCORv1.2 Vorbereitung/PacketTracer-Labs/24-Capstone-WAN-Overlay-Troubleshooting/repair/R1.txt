@@ -1,0 +1,44 @@
+hostname R1
+no ip domain-lookup
+service timestamps log datetime msec
+line con 0
+ exec-timeout 0 0
+ logging synchronous
+interface GigabitEthernet0/0
+ ip address 198.51.100.1 255.255.255.252
+ no shutdown
+interface GigabitEthernet0/1
+ ip address 192.168.1.1 255.255.255.0
+ no shutdown
+interface GigabitEthernet0/2
+ no shutdown
+router bgp 65001
+ neighbor 198.51.100.2 remote-as 65010
+ network 198.51.100.0 mask 255.255.255.252
+ip vrf GUEST
+ rd 65001:100
+interface GigabitEthernet0/2
+ ip address 192.168.3.1 255.255.255.0
+crypto isakmp policy 10
+ encryption aes 256
+ hash sha
+ authentication pre-share
+ group 2
+crypto isakmp key LabKey123 address 203.0.113.1
+crypto ipsec transform-set TS esp-aes 256 esp-sha-hmac
+ mode transport
+crypto ipsec profile PROF
+ set transform-set TS
+interface Tunnel0
+ ip address 10.99.0.1 255.255.255.252
+ ip mtu 1400
+ tunnel source GigabitEthernet0/0
+ tunnel destination 203.0.113.2
+ tunnel protection ipsec profile PROF
+ ip ospf authentication message-digest
+ ip ospf message-digest-key 1 md5 OspfKey
+router ospf 1
+ passive-interface GigabitEthernet0/1
+ network 10.99.0.0 0.0.0.3 area 0
+ network 192.168.1.0 0.0.0.255 area 0
+end
