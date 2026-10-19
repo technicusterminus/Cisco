@@ -42,6 +42,8 @@ Diese Sammlung ergänzt das Anki-Kompendium (1431 Karten): Die Karten fragen Wis
 
 ## Abdeckung nach Prüfungsziel
 
+Pro Ziel mit direkten Links zu Aufgaben und Lösungen: **[ZIELE.md](ZIELE.md)**.
+
 | Ziel | Thema | Karten | Lab(s) |
 |---|---|---|---|
 | `1.1.a` | Campus-, Fabric- und Cloud-Design | 26 | 21 |
