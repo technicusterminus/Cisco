@@ -82,3 +82,7 @@ Jede Karte hat eine stabile ID (`E12-<Blueprint-Punkt>-<Nr>`), den Themenbezug, 
 ## Rechtliches
 
 Kein offizielles Cisco-Material, nicht von Cisco geprüft oder freigegeben. Cisco, CCNP und ENCOR sind Marken von Cisco Systems, Inc. Das Deck dient der privaten Prüfungsvorbereitung.
+
+## CML-Labs
+
+Im Ordner [`CML-Labs/`](CML-Labs/) liegen sechs Labs für Cisco Modeling Labs 2.x (OSPF, eBGP-Policy, Campus/HSRP, VRF/GRE/IPsec, NAT/ACL/Security, Automation/Assurance) mit Aufgaben, Verifikation und Musterlösungen. Hinweis: nicht in einer echten CML-Instanz getestet, siehe die README dort.
