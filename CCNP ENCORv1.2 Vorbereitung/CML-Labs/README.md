@@ -2,7 +2,7 @@
 
 Diese Sammlung ergänzt das Anki-Kompendium (1431 Karten): Die Karten fragen Wissen ab, die Labs lassen dich es **bauen, reparieren und üben**. Jedes der 47 Prüfungsziele des Kompendiums (`Ziel::…`) ist mindestens einem Lab zugeordnet.
 
-**Inhalt:** 27 CML-Labs (25 Themen-Labs und 2 Capstones (Lab 30 ist ein dritter, zu Routing) mit 134 eingebauten Fehlern insgesamt zum Reparieren), ein Python-/API-Drill-Paket mit automatischen Tests, zwei Fallstudien-Pakete für Themen, die sich nicht sinnvoll simulieren lassen.
+**Inhalt:** 27 CML-Labs (24 Themen-Labs und 3 Capstones, zusammen 134 eingebauten Fehlern zum Reparieren), ein Python-/API-Drill-Paket mit automatischen Tests, zwei Fallstudien-Pakete für Themen, die sich nicht sinnvoll simulieren lassen.
 
 **Andere Plattformen:** Dieselben Labs gibt es für [Packet Tracer](../PacketTracer-Labs/) (soweit PT die Funktionen kann) und [EVE-NG](../EVE-NG-Labs/).
 
