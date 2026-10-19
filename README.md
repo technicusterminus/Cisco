@@ -9,5 +9,5 @@ Sammlung meiner Lernmaterialien für Cisco-Prüfungen. Aktuell:
 
 > Kein offizielles Cisco-Material. Cisco, CCNA, CCNP, ENCOR und Packet Tracer sind Marken von Cisco Systems, Inc.
 
-**Neu:** ENCOR-Labs für drei Plattformen: [CML](CCNP%20ENCORv1.2%20Vorbereitung/CML-Labs/) (21 Labs inkl. 2 Capstones, Python-Drills mit Tests, Fallstudien; alle 47 Ziele), [EVE-NG](CCNP%20ENCORv1.2%20Vorbereitung/EVE-NG-Labs/) (dieselben 21 Labs) und [Packet Tracer](CCNP%20ENCORv1.2%20Vorbereitung/PacketTracer-Labs/) (17 Labs, soweit PT die Funktionen kann).
+**Neu:** ENCOR-Labs für drei Plattformen: [CML](CCNP%20ENCORv1.2%20Vorbereitung/CML-Labs/) (25 Labs inkl. 2 Capstones, Python-Drills mit Tests, Fallstudien; alle 47 Ziele), [EVE-NG](CCNP%20ENCORv1.2%20Vorbereitung/EVE-NG-Labs/) (dieselben 25 Labs) und [Packet Tracer](CCNP%20ENCORv1.2%20Vorbereitung/PacketTracer-Labs/) (21 Labs, soweit PT die Funktionen kann).
 **Neu:** [Packet-Tracer-Labs](CCNA%20200-301%20Vorbereitung/Packet-Tracer-Labs/) zur CCNA (26 Labs zum Bauen und Reparieren, Python-/REST-Drills, Fallstudien; alle 53 Ziele abgedeckt).

@@ -2,7 +2,7 @@
 
 Parallelzweig zu den [CML-Labs](../CML-Labs/): dieselben Themen, Aufgaben (Bauen, Reparieren, Üben) und Fehlerlisten, soweit Packet Tracer sie darstellen kann. Packet Tracer ist kostenlos, startet in Sekunden und eignet sich gut für Layer 2/3, Routing, NAT, ACLs, HSRP, GRE und Grundlagen. Bei LISP, VXLAN, Multicast, NetFlow, EEM, NETCONF/RESTCONF oder IPsec-VTI stößt es an Grenzen. Dort verweist jedes Lab auf CML bzw. EVE-NG.
 
-**Inhalt:** 17 Labs mit Konfigurationen und 80 eingebauten Fehlern, 4 Labs als Verweis (in Packet Tracer nicht darstellbar). Die Python-/API-Drills und die Fallstudien-Pakete liegen im CML-Zweig und gelten für alle Plattformen: [`20-Python-REST-Drills`](../CML-Labs/20-Python-REST-Drills/), [`21-Design-Fallstudien.md`](../CML-Labs/21-Design-Fallstudien.md), [`22-Security-Szenarien.md`](../CML-Labs/22-Security-Szenarien.md).
+**Inhalt:** 21 Labs mit Konfigurationen und 104 eingebauten Fehlern, 4 Labs als Verweis (in Packet Tracer nicht darstellbar). Die Python-/API-Drills und die Fallstudien-Pakete liegen im CML-Zweig und gelten für alle Plattformen: [`20-Python-REST-Drills`](../CML-Labs/20-Python-REST-Drills/), [`21-Design-Fallstudien.md`](../CML-Labs/21-Design-Fallstudien.md), [`22-Security-Szenarien.md`](../CML-Labs/22-Security-Szenarien.md).
 
 ## Arbeiten mit den Dateien
 
@@ -46,6 +46,10 @@ Eignung: **geeignet** = alle verwendeten Funktionen gibt es in PT; **teilweise**
 | [19](19-Programmierbarkeit-EEM/) | RESTCONF, NETCONF, YANG und EEM | 4.6, 6.3, 6.5, 6.6 | – | – | **nicht geeignet** | 90 min |
 | [23](23-Capstone-Campus-Edge-Troubleshooting/) | Capstone: Campus und Edge, Fehlersuche im Gesamtnetz | 3.1.a, 3.1.b, 3.1.c, 3.2.b, 3.3.a, 3.3.b, 3.3.c, 5.1.a, 5.2.a | 8 | 10 | geeignet | 150 min |
 | [24](24-Capstone-WAN-Overlay-Troubleshooting/) | Capstone: WAN, eBGP und IPsec-Overlay, Fehlersuche | 2.2.a, 2.2.b, 3.2.b, 3.2.c | 6 | 9 | teilweise | 150 min |
+| [25](25-EIGRP-Klassisch-Summary-Stub/) | EIGRP klassisch: Nachbarschaft, Authentifizierung, Summary und Stub | 3.2.a | 4 | 6 | geeignet | 90 min |
+| [26](26-iBGP-RouteReflector-Communities/) | iBGP mit Route Reflector, Local Preference und Communities | 3.2.c | 5 | 6 | geeignet | 100 min |
+| [27](27-Redistribution-Routenfilter/) | Redistribution zwischen OSPF und EIGRP mit Tags und Filtern | 3.2.a, 3.2.b | 4 | 6 | geeignet | 100 min |
+| [28](28-OSPF-Areatypen-Summary-Auth/) | OSPF vertieft: Area-Typen, Summarisierung und Authentifizierung | 3.2.b | 4 | 6 | geeignet | 100 min |
 
 ## Abdeckung nach Prüfungsziel
 
@@ -70,9 +74,9 @@ Pro Ziel mit Links zu Aufgaben und Lösungen: **[ZIELE.md](ZIELE.md)**. In Packe
 | `3.1.a` | 802.1Q und Trunks | 31 | 05 (geeignet), 23 (geeignet) |
 | `3.1.b` | EtherChannel | 34 | 05 (geeignet), 23 (geeignet) |
 | `3.1.c` | RSTP, MST und Schutzfunktionen | 65 | 06 (teilweise), 23 (geeignet) |
-| `3.2.a` | EIGRP und OSPF vergleichen | 45 | 01 (geeignet), 02 (teilweise) |
-| `3.2.b` | OSPFv2 und OSPFv3 | 86 | 01 (geeignet), 02 (teilweise), 23 (geeignet), 24 (teilweise) |
-| `3.2.c` | Direktes eBGP | 61 | 03 (geeignet), 24 (teilweise) |
+| `3.2.a` | EIGRP und OSPF vergleichen | 45 | 01 (geeignet), 02 (teilweise), 25 (geeignet), 27 (geeignet) |
+| `3.2.b` | OSPFv2 und OSPFv3 | 86 | 01 (geeignet), 02 (teilweise), 23 (geeignet), 24 (teilweise), 27 (geeignet), 28 (geeignet) |
+| `3.2.c` | Direktes eBGP | 61 | 03 (geeignet), 24 (teilweise), 26 (geeignet) |
 | `3.2.d` | Policy-based Routing | 16 | 04 (teilweise) |
 | `3.3.a` | NTP und PTP | 32 | 08 (teilweise), 23 (geeignet) |
 | `3.3.b` | NAT und PAT | 29 | 09 (geeignet), 23 (geeignet) |

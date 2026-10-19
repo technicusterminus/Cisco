@@ -178,6 +178,14 @@ Karten im Deck: 45 (`tag:Ziel::3.2.a`)
   - Aufgaben: [Teil A Bauen](02-EIGRP-OSPFv3/README.md#teil-a--bauen) · [Teil B Reparieren](02-EIGRP-OSPFv3/README.md#teil-b--reparieren) · [Teil C Üben](02-EIGRP-OSPFv3/README.md#teil-c--üben)
   - Lösungen: [`solutions/`](02-EIGRP-OSPFv3/solutions/) · [`FAULTS.md`](02-EIGRP-OSPFv3/solutions/FAULTS.md) · [Antworten Teil C](02-EIGRP-OSPFv3/README.md#teil-c--üben)
   - Topologien: [`topology.yaml`](02-EIGRP-OSPFv3/topology.yaml) (bauen) · [`topology-repair.yaml`](02-EIGRP-OSPFv3/topology-repair.yaml) (reparieren)
+- **Lab 25 – EIGRP klassisch: Nachbarschaft, Authentifizierung, Summary und Stub** (6 Fehler zum Reparieren, 90 min)
+  - Aufgaben: [Teil A Bauen](25-EIGRP-Klassisch-Summary-Stub/README.md#teil-a--bauen) · [Teil B Reparieren](25-EIGRP-Klassisch-Summary-Stub/README.md#teil-b--reparieren) · [Teil C Üben](25-EIGRP-Klassisch-Summary-Stub/README.md#teil-c--üben)
+  - Lösungen: [`solutions/`](25-EIGRP-Klassisch-Summary-Stub/solutions/) · [`FAULTS.md`](25-EIGRP-Klassisch-Summary-Stub/solutions/FAULTS.md) · [Antworten Teil C](25-EIGRP-Klassisch-Summary-Stub/README.md#teil-c--üben)
+  - Topologien: [`topology.yaml`](25-EIGRP-Klassisch-Summary-Stub/topology.yaml) (bauen) · [`topology-repair.yaml`](25-EIGRP-Klassisch-Summary-Stub/topology-repair.yaml) (reparieren)
+- **Lab 27 – Redistribution zwischen OSPF und EIGRP mit Tags und Filtern** (6 Fehler zum Reparieren, 100 min)
+  - Aufgaben: [Teil A Bauen](27-Redistribution-Routenfilter/README.md#teil-a--bauen) · [Teil B Reparieren](27-Redistribution-Routenfilter/README.md#teil-b--reparieren) · [Teil C Üben](27-Redistribution-Routenfilter/README.md#teil-c--üben)
+  - Lösungen: [`solutions/`](27-Redistribution-Routenfilter/solutions/) · [`FAULTS.md`](27-Redistribution-Routenfilter/solutions/FAULTS.md) · [Antworten Teil C](27-Redistribution-Routenfilter/README.md#teil-c--üben)
+  - Topologien: [`topology.yaml`](27-Redistribution-Routenfilter/topology.yaml) (bauen) · [`topology-repair.yaml`](27-Redistribution-Routenfilter/topology-repair.yaml) (reparieren)
 
 ## 3.2.b – OSPFv2 und OSPFv3
 
@@ -199,6 +207,14 @@ Karten im Deck: 86 (`tag:Ziel::3.2.b`)
   - Aufgaben: [Teil A Bauen](24-Capstone-WAN-Overlay-Troubleshooting/README.md#teil-a--bauen) · [Teil B Reparieren](24-Capstone-WAN-Overlay-Troubleshooting/README.md#teil-b--reparieren) · [Teil C Üben](24-Capstone-WAN-Overlay-Troubleshooting/README.md#teil-c--üben)
   - Lösungen: [`solutions/`](24-Capstone-WAN-Overlay-Troubleshooting/solutions/) · [`FAULTS.md`](24-Capstone-WAN-Overlay-Troubleshooting/solutions/FAULTS.md) · [Antworten Teil C](24-Capstone-WAN-Overlay-Troubleshooting/README.md#teil-c--üben)
   - Topologien: [`topology.yaml`](24-Capstone-WAN-Overlay-Troubleshooting/topology.yaml) (bauen) · [`topology-repair.yaml`](24-Capstone-WAN-Overlay-Troubleshooting/topology-repair.yaml) (reparieren)
+- **Lab 27 – Redistribution zwischen OSPF und EIGRP mit Tags und Filtern** (6 Fehler zum Reparieren, 100 min)
+  - Aufgaben: [Teil A Bauen](27-Redistribution-Routenfilter/README.md#teil-a--bauen) · [Teil B Reparieren](27-Redistribution-Routenfilter/README.md#teil-b--reparieren) · [Teil C Üben](27-Redistribution-Routenfilter/README.md#teil-c--üben)
+  - Lösungen: [`solutions/`](27-Redistribution-Routenfilter/solutions/) · [`FAULTS.md`](27-Redistribution-Routenfilter/solutions/FAULTS.md) · [Antworten Teil C](27-Redistribution-Routenfilter/README.md#teil-c--üben)
+  - Topologien: [`topology.yaml`](27-Redistribution-Routenfilter/topology.yaml) (bauen) · [`topology-repair.yaml`](27-Redistribution-Routenfilter/topology-repair.yaml) (reparieren)
+- **Lab 28 – OSPF vertieft: Area-Typen, Summarisierung und Authentifizierung** (6 Fehler zum Reparieren, 100 min)
+  - Aufgaben: [Teil A Bauen](28-OSPF-Areatypen-Summary-Auth/README.md#teil-a--bauen) · [Teil B Reparieren](28-OSPF-Areatypen-Summary-Auth/README.md#teil-b--reparieren) · [Teil C Üben](28-OSPF-Areatypen-Summary-Auth/README.md#teil-c--üben)
+  - Lösungen: [`solutions/`](28-OSPF-Areatypen-Summary-Auth/solutions/) · [`FAULTS.md`](28-OSPF-Areatypen-Summary-Auth/solutions/FAULTS.md) · [Antworten Teil C](28-OSPF-Areatypen-Summary-Auth/README.md#teil-c--üben)
+  - Topologien: [`topology.yaml`](28-OSPF-Areatypen-Summary-Auth/topology.yaml) (bauen) · [`topology-repair.yaml`](28-OSPF-Areatypen-Summary-Auth/topology-repair.yaml) (reparieren)
 
 ## 3.2.c – Direktes eBGP
 
@@ -212,6 +228,10 @@ Karten im Deck: 61 (`tag:Ziel::3.2.c`)
   - Aufgaben: [Teil A Bauen](24-Capstone-WAN-Overlay-Troubleshooting/README.md#teil-a--bauen) · [Teil B Reparieren](24-Capstone-WAN-Overlay-Troubleshooting/README.md#teil-b--reparieren) · [Teil C Üben](24-Capstone-WAN-Overlay-Troubleshooting/README.md#teil-c--üben)
   - Lösungen: [`solutions/`](24-Capstone-WAN-Overlay-Troubleshooting/solutions/) · [`FAULTS.md`](24-Capstone-WAN-Overlay-Troubleshooting/solutions/FAULTS.md) · [Antworten Teil C](24-Capstone-WAN-Overlay-Troubleshooting/README.md#teil-c--üben)
   - Topologien: [`topology.yaml`](24-Capstone-WAN-Overlay-Troubleshooting/topology.yaml) (bauen) · [`topology-repair.yaml`](24-Capstone-WAN-Overlay-Troubleshooting/topology-repair.yaml) (reparieren)
+- **Lab 26 – iBGP mit Route Reflector, Local Preference und Communities** (6 Fehler zum Reparieren, 100 min)
+  - Aufgaben: [Teil A Bauen](26-iBGP-RouteReflector-Communities/README.md#teil-a--bauen) · [Teil B Reparieren](26-iBGP-RouteReflector-Communities/README.md#teil-b--reparieren) · [Teil C Üben](26-iBGP-RouteReflector-Communities/README.md#teil-c--üben)
+  - Lösungen: [`solutions/`](26-iBGP-RouteReflector-Communities/solutions/) · [`FAULTS.md`](26-iBGP-RouteReflector-Communities/solutions/FAULTS.md) · [Antworten Teil C](26-iBGP-RouteReflector-Communities/README.md#teil-c--üben)
+  - Topologien: [`topology.yaml`](26-iBGP-RouteReflector-Communities/topology.yaml) (bauen) · [`topology-repair.yaml`](26-iBGP-RouteReflector-Communities/topology-repair.yaml) (reparieren)
 
 ## 3.2.d – Policy-based Routing
 
