@@ -1,0 +1,42 @@
+# Fehlerliste – Lab 05 – IPv4-Adressierung, VLSM und private Bereiche
+
+**Spoiler.** Erst nach eigener Fehlersuche lesen.
+
+## Ticket 1 (R2)
+
+- **Symptom:** R1 und R2 sehen sich nicht, kein Ping über den Router-Link; die LANs erreichen sich nicht.
+- **Ursache:** Die Masken am Link passen nicht zusammen (/30 vs. /29): R2 hält 192.168.50.253 nicht für einen Nachbarn im selben Netz.
+- **Fix:** Maske /30 (255.255.255.252) setzen.
+- **Eingebaut:**
+
+```diff
+-  ip address 192.168.50.254 255.255.255.252
++  ip address 192.168.50.254 255.255.255.248
+```
+
+## Ticket 2 (R1)
+
+- **Symptom:** PC-A erreicht LAN-B, aber nicht LAN-C; `show ip route` zeigt die Route zu .96/28 mit dem eigenen Link-Interface als Next Hop.
+- **Ursache:** Der Next Hop zeigt auf die eigene Adresse (192.168.50.253) statt auf R2 (.254).
+- **Fix:** Next Hop auf 192.168.50.254 ändern.
+- **Eingebaut:**
+
+```diff
+- ip route 192.168.50.96 255.255.255.240 192.168.50.254
++ ip route 192.168.50.96 255.255.255.240 192.168.50.253
+```
+
+## Ticket 3 (PC-B)
+
+- **Symptom:** PC-B hat keine Verbindung ausser lokal; `ipconfig` zeigt eine Adresse, die auf .95 endet.
+- **Ursache:** 192.168.50.95 ist die Broadcast-Adresse von 192.168.50.64/27 und darf keinem Host gehören.
+- **Fix:** Gültige Hostadresse vergeben, z. B. 192.168.50.70.
+- **Eingebaut:** Endgerät-Einstellung `ip` = `192.168.50.95`
+
+## Ticket 4 (PC-C)
+
+- **Symptom:** PC-C erreicht nur das eigene Subnetz, aber keine anderen LANs.
+- **Ursache:** Der Default-Gateway liegt neben dem Router (.98 statt .97): kein Gerät antwortet darauf.
+- **Fix:** Gateway 192.168.50.97 eintragen.
+- **Eingebaut:** Endgerät-Einstellung `gw` = `192.168.50.98`
+

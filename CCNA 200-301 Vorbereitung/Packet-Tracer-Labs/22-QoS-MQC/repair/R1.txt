@@ -1,0 +1,34 @@
+hostname R1
+no ip domain-lookup
+line con 0
+ logging synchronous
+ exit
+interface GigabitEthernet0/0
+ ip address 10.22.1.1 255.255.255.0
+ no shutdown
+interface GigabitEthernet0/1
+ ip address 10.22.12.1 255.255.255.252
+ bandwidth 2000
+ no shutdown
+ip route 10.22.2.0 255.255.255.0 10.22.12.2
+ip access-list extended VOICE
+ permit tcp any any range 16384 32767
+ip access-list extended BUSINESS
+ permit tcp any any eq 443
+ permit tcp any any eq 8080
+class-map match-any VOICE
+ match access-group name VOICE
+class-map match-any BUSINESS
+ match access-group name BUSINESS
+policy-map WAN-OUT
+ class VOICE
+  priority percent 90
+  set dscp ef
+ class BUSINESS
+  bandwidth percent 40
+  set dscp af31
+ class class-default
+  fair-queue
+interface GigabitEthernet0/1
+ service-policy input WAN-OUT
+end

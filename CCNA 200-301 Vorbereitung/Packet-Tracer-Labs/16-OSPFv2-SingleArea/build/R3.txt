@@ -1,0 +1,12 @@
+hostname R3
+no ip domain-lookup
+line con 0
+ logging synchronous
+ exit
+interface GigabitEthernet0/0
+ ip address 10.16.0.3 255.255.255.0
+ no shutdown
+interface GigabitEthernet0/1
+ ip address 192.168.3.1 255.255.255.0
+ no shutdown
+end

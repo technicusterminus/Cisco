@@ -1,0 +1,20 @@
+hostname SW2
+no ip domain-lookup
+line con 0
+ logging synchronous
+ exit
+interface FastEthernet0/1
+ no shutdown
+interface range FastEthernet0/21 - 22
+ no shutdown
+vlan 10
+ name USERS
+interface FastEthernet0/1
+ switchport mode access
+ switchport access vlan 10
+interface range FastEthernet0/21 - 22
+ channel-group 1 mode on
+interface Port-channel1
+ switchport mode trunk
+ switchport trunk allowed vlan 20
+end

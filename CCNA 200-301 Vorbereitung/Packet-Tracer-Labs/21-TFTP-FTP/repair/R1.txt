@@ -1,0 +1,11 @@
+hostname R1
+no ip domain-lookup
+line con 0
+ logging synchronous
+ exit
+interface GigabitEthernet0/0
+ ip address 10.21.1.1 255.255.255.128
+ no shutdown
+ip ftp username cisco
+ip ftp password cisco
+end

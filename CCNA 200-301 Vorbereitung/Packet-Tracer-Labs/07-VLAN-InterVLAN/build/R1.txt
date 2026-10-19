@@ -1,0 +1,8 @@
+hostname R1
+no ip domain-lookup
+line con 0
+ logging synchronous
+ exit
+interface GigabitEthernet0/0
+ no shutdown
+end

@@ -1,0 +1,59 @@
+{
+  "device": {
+    "hostname": "SW-LAB1",
+    "model": "C9200L-24P",
+    "location": {
+      "building": "A",
+      "floor": 2
+    },
+    "uptime_s": 86400
+  },
+  "interfaces": [
+    {
+      "name": "GigabitEthernet1/0/1",
+      "enabled": true,
+      "mode": "access",
+      "vlan": 10,
+      "description": "H1",
+      "ipv4": null
+    },
+    {
+      "name": "GigabitEthernet1/0/2",
+      "enabled": true,
+      "mode": "access",
+      "vlan": 20,
+      "description": "H2",
+      "ipv4": null
+    },
+    {
+      "name": "GigabitEthernet1/0/24",
+      "enabled": true,
+      "mode": "trunk",
+      "allowed_vlans": [
+        10,
+        20,
+        99
+      ],
+      "description": "Uplink",
+      "ipv4": null
+    },
+    {
+      "name": "Vlan10",
+      "enabled": true,
+      "mode": "routed",
+      "description": "Gateway USERS",
+      "ipv4": {
+        "address": "192.168.10.1",
+        "mask": "255.255.255.0"
+      }
+    },
+    {
+      "name": "GigabitEthernet1/0/3",
+      "enabled": false,
+      "mode": "access",
+      "vlan": 99,
+      "description": "",
+      "ipv4": null
+    }
+  ]
+}
