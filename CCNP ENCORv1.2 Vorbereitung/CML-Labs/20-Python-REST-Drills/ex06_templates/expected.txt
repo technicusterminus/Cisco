@@ -1,0 +1,17 @@
+hostname SW-LAB1
+!
+interface GigabitEthernet0/1
+ description Uplink
+ switchport mode trunk
+ switchport trunk allowed vlan 10,20
+!
+interface GigabitEthernet0/2
+ description H1
+ switchport mode access
+ switchport access vlan 10
+!
+interface GigabitEthernet0/3
+ switchport mode access
+ switchport access vlan 20
+ shutdown
+!

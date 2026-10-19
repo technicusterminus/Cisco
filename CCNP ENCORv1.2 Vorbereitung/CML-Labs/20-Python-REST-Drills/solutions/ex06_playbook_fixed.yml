@@ -1,0 +1,23 @@
+- name: Switch-Basiskonfiguration
+  hosts: switches
+  gather_facts: false
+  connection: ansible.netcommon.network_cli
+  tasks:
+    - name: VLAN anlegen
+      cisco.ios.ios_config:
+        lines:
+          - name USERS
+        parents:
+          - vlan 10
+    - name: Interface konfigurieren
+      cisco.ios.ios_config:
+        lines:
+          - description Uplink
+          - switchport mode trunk
+        parents:
+          - interface GigabitEthernet0/1
+      notify: speichern
+  handlers:
+    - name: speichern
+      cisco.ios.ios_config:
+        save_when: modified

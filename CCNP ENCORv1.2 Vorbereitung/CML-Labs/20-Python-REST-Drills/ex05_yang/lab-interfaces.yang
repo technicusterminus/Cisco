@@ -1,0 +1,66 @@
+module lab-interfaces {
+  yang-version 1.1;
+  namespace "urn:example:lab-interfaces";
+  prefix li;
+
+  typedef vlan-id {
+    type uint16 {
+      range "1..4094";
+    }
+  }
+
+  container interfaces {
+    description "Alle Schnittstellen des Geräts";
+    list interface {
+      key "name";
+      leaf name {
+        type string;
+      }
+      leaf description {
+        type string;
+      }
+      leaf enabled {
+        type boolean;
+        default "true";
+      }
+      leaf mode {
+        type enumeration {
+          enum access;
+          enum trunk;
+        }
+        mandatory true;
+      }
+      leaf access-vlan {
+        when "../mode = 'access'";
+        type vlan-id;
+      }
+      leaf-list allowed-vlans {
+        when "../mode = 'trunk'";
+        type vlan-id;
+      }
+      container statistics {
+        config false;
+        leaf in-octets {
+          type uint64;
+        }
+        leaf out-octets {
+          type uint64;
+        }
+      }
+    }
+  }
+
+  rpc clear-counters {
+    input {
+      leaf interface-name {
+        type string;
+        mandatory true;
+      }
+    }
+    output {
+      leaf cleared {
+        type boolean;
+      }
+    }
+  }
+}

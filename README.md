@@ -8,4 +8,4 @@ Sammlung meiner Lernmaterialien für Cisco-Prüfungen. Aktuell:
 
 > Kein offizielles Cisco-Material. Cisco, CCNP und ENCOR sind Marken von Cisco Systems, Inc.
 
-**Neu:** [CML-Labs](CCNP%20ENCORv1.2%20Vorbereitung/CML-Labs/) zum ENCOR (6 Labs mit Aufgaben und Lösungen).
+**Neu:** [CML-Labs](CCNP%20ENCORv1.2%20Vorbereitung/CML-Labs/) zum ENCOR (19 Labs zum Bauen und Reparieren, Python-Drills mit Tests, Fallstudien; alle 47 Ziele des Decks abgedeckt).

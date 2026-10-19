@@ -85,4 +85,4 @@ Kein offizielles Cisco-Material, nicht von Cisco geprüft oder freigegeben. Cisc
 
 ## CML-Labs
 
-Im Ordner [`CML-Labs/`](CML-Labs/) liegen sechs Labs für Cisco Modeling Labs 2.x (OSPF, eBGP-Policy, Campus/HSRP, VRF/GRE/IPsec, NAT/ACL/Security, Automation/Assurance) mit Aufgaben, Verifikation und Musterlösungen. Hinweis: nicht in einer echten CML-Instanz getestet, siehe die README dort.
+Im Ordner [`CML-Labs/`](CML-Labs/) liegt zu jedem der 47 Ziele des Kompendiums Übungsmaterial: 19 Labs für Cisco Modeling Labs 2.x, je mit Bau-Topologie, Reparatur-Topologie mit eingebauten Fehlern (insgesamt 78), Tickets, Musterlösungen und Transferfragen. Dazu Python-/API-Drills mit automatischen Tests (lokal, ohne CML) und zwei Fallstudien-Pakete für Design, SD-WAN, SD-Access, Virtualisierung, Catalyst Center und Security. Die Python-Drills sind getestet, die CML-Labs nicht in einer echten CML-Instanz; Details in der README dort.
