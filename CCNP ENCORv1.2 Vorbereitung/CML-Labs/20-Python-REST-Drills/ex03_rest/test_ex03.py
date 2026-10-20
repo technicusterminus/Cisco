@@ -26,9 +26,9 @@ class T(unittest.TestCase):
         self.assertIsNone(c.get_device(self.base, t, "dev-999"))
     def test_set_description(self):
         t = self.tok()
-        task = c.set_description(self.base, t, "dev-003", "Core Landquart")
+        task = c.set_description(self.base, t, "dev-003", "Core Musterstadt")
         self.assertEqual(len(task), 32)
-        self.assertEqual(c.get_device(self.base, t, "dev-003")["description"], "Core Landquart")
+        self.assertEqual(c.get_device(self.base, t, "dev-003")["description"], "Core Musterstadt")
     def test_set_description_errors(self):
         v = self.tok("viewer", "View#2026!")
         with self.assertRaises(PermissionError): c.set_description(self.base, v, "dev-001", "x")
