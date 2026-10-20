@@ -10,6 +10,7 @@
 | [`Trainer/`](Trainer/) | Subnetting-Trainer (HTML, offline) mit Lösungsweg, IPv6 und EUI-64 |
 | [`Pruefungssimulation/`](Pruefungssimulation/) | 263 Übungsfragen mit Zeitlimit, Domänengewicht und Auswertung (HTML, offline) |
 | [`LERNPLAN.md`](LERNPLAN.md) | 8-Wochen-Plan, der Deck, Labs, Trainer und Simulation verbindet |
+| [`CCNA-Cheatsheet.pdf`](CCNA-Cheatsheet.pdf) | 3 Seiten: Subnetting, VLAN, STP, OSPF, ACL, Security, Automation |
 
 Einstieg: [`Packet-Tracer-Labs/README.md`](Packet-Tracer-Labs/README.md) (Arbeitsweise, Übersicht, Reihenfolge, ehrlicher Teststand).
 
