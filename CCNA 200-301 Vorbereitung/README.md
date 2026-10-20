@@ -9,6 +9,6 @@
 
 Einstieg: [`Packet-Tracer-Labs/README.md`](Packet-Tracer-Labs/README.md) (Arbeitsweise, Übersicht, Reihenfolge, ehrlicher Teststand).
 
-Ein passendes Anki-Deck wie beim ENCOR gibt es hier noch nicht. Die Labs richten sich direkt nach dem Prüfungsplan von Cisco.
+Dazu gibt es ein deutsches Anki-Deck mit 533 Karten: [`Anki/`](Anki/). Die Labs richten sich direkt nach dem Prüfungsplan von Cisco.
 
 > Kein offizielles Cisco-Material. Cisco, CCNA und Packet Tracer sind Marken von Cisco Systems, Inc.
