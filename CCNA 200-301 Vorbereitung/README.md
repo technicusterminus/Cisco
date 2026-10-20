@@ -8,7 +8,7 @@
 | [`Packet-Tracer-Labs/ZIELE.md`](Packet-Tracer-Labs/ZIELE.md) | Pro Prüfungsziel: Links zu Aufgaben und Lösungen |
 | [`Anki/`](Anki/) | Deutsches Anki-Deck: 586 Karten zu allen 53 Zielen, davon 53 Prüfungsfallen |
 | [`Trainer/`](Trainer/) | Subnetting-Trainer (HTML, offline) mit Lösungsweg, IPv6 und EUI-64 |
-| [`Pruefungssimulation/`](Pruefungssimulation/) | 113 Übungsfragen mit Zeitlimit, Domänengewicht und Auswertung (HTML, offline) |
+| [`Pruefungssimulation/`](Pruefungssimulation/) | 263 Übungsfragen mit Zeitlimit, Domänengewicht und Auswertung (HTML, offline) |
 | [`LERNPLAN.md`](LERNPLAN.md) | 8-Wochen-Plan, der Deck, Labs, Trainer und Simulation verbindet |
 
 Einstieg: [`Packet-Tracer-Labs/README.md`](Packet-Tracer-Labs/README.md) (Arbeitsweise, Übersicht, Reihenfolge, ehrlicher Teststand).
