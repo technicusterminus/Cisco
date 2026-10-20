@@ -10,6 +10,8 @@ Sammlung meiner Lernmaterialien für Cisco-Prüfungen. Aktuell:
 
 > Kein offizielles Cisco-Material. Cisco, CCNA, CCNP, ENCOR und Packet Tracer sind Marken von Cisco Systems, Inc.
 
-**Neu:** ENCOR-Labs für drei Plattformen: [CML](CCNP%20ENCORv1.2%20Vorbereitung/CML-Labs/) (27 Labs inkl. 3 Capstones, Python-Drills mit Tests, Fallstudien; alle 47 Ziele), [EVE-NG](CCNP%20ENCORv1.2%20Vorbereitung/EVE-NG-Labs/) (dieselben 27 Labs) und [Packet Tracer](CCNP%20ENCORv1.2%20Vorbereitung/PacketTracer-Labs/) (23 Labs, soweit PT die Funktionen kann).
+**Neu:** ENCOR-[Prüfungssimulation](CCNP%20ENCORv1.2%20Vorbereitung/Pruefungssimulation/) (189 Fragen), [Cheatsheet-PDFs](CCNP%20ENCORv1.2%20Vorbereitung/ENCOR-Cheatsheet.pdf) für ENCOR, CCNA und Netzwerk-Einstieg, überarbeiteter [Lernplan](CCNP%20ENCORv1.2%20Vorbereitung/LERNPLAN.md).
+
+**Davor:** ENCOR-Labs für drei Plattformen: [CML](CCNP%20ENCORv1.2%20Vorbereitung/CML-Labs/) (27 Labs inkl. 3 Capstones, Python-Drills mit Tests, Fallstudien; alle 47 Ziele), [EVE-NG](CCNP%20ENCORv1.2%20Vorbereitung/EVE-NG-Labs/) (dieselben 27 Labs) und [Packet Tracer](CCNP%20ENCORv1.2%20Vorbereitung/PacketTracer-Labs/) (23 Labs, soweit PT die Funktionen kann).
 **Neu:** [Netzwerk-Einstieg](Netzwerk-Einstieg/) für Leute ohne Vorkenntnisse (Kapitel, Übungen, Anki, Quiz, Lernplan).
 **Neu:** [Anki-Deck zur CCNA](CCNA%20200-301%20Vorbereitung/Anki/) (621 Karten, alle 53 Ziele), [Subnetting-Trainer](CCNA%20200-301%20Vorbereitung/Trainer/), [Prüfungssimulation](CCNA%20200-301%20Vorbereitung/Pruefungssimulation/) und [Lernplan](CCNA%20200-301%20Vorbereitung/LERNPLAN.md) und [Packet-Tracer-Labs](CCNA%20200-301%20Vorbereitung/Packet-Tracer-Labs/) zur CCNA (26 Labs zum Bauen und Reparieren, Python-/REST-Drills, Fallstudien; alle 53 Ziele abgedeckt).

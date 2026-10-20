@@ -5,6 +5,15 @@ Ein deutschsprachiges Anki-Deck für die Prüfung **Cisco 350-401 ENCOR v1.2**. 
 **Aktuelle Version:** 4.3 (Stand 19.10.2026) · **1.431 Karten**
 **Datei:** [`ENCOR_v1.2_Kompendium_4.3_DE.apkg`](ENCOR_v1.2_Kompendium_4.3_DE.apkg)
 
+## Weiteres Material
+
+| Was | Wo |
+|---|---|
+| Prüfungssimulation, 189 Fragen, 60 Fragen in 75 Minuten (HTML, offline) | [`Pruefungssimulation/`](Pruefungssimulation/) |
+| Cheatsheet, 4 Seiten (PDF) | [`ENCOR-Cheatsheet.pdf`](ENCOR-Cheatsheet.pdf) |
+| 10-Wochen-Lernplan mit Deck, Labs und Simulation | [`LERNPLAN.md`](LERNPLAN.md) |
+| Labs für CML, EVE-NG, Packet Tracer | [`CML-Labs/`](CML-Labs/), [`EVE-NG-Labs/`](EVE-NG-Labs/), [`PacketTracer-Labs/`](PacketTracer-Labs/) |
+
 ## Schnellstart
 
 1. `.apkg` herunterladen und in Anki öffnen (Datei → Importieren).
