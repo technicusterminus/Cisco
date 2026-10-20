@@ -7,7 +7,7 @@ Material für alle, die noch **nichts** über Netzwerke wissen, auf Deutsch, ohn
 | Teil | Inhalt |
 |---|---|
 | [`Kapitel/`](Kapitel/) | 12 kurze Kapitel mit Beispielen, Merksätzen und Selbsttest |
-| [`Cheatsheet.md`](Cheatsheet.md) · [`PDF`](Cheatsheet.pdf) | Eine Seite: Schichten, Ports, Subnetting, Befehle |
+| [`Cheatsheet.md`](Cheatsheet.md) · [`PDF`](Cheatsheet.pdf) | Kurzfassung als Text; PDF mit 3 Seiten: Modelle, Subnetting mit Rechenweg, Protokolle, Geräte, Kabel, Befehle, Fehlersuche nach Symptom |
 | [`Glossar.md`](Glossar.md) | Die wichtigsten Begriffe in Alltagssprache |
 | [`Uebungen/`](Uebungen/) | 5 Praxisübungen: eigenes Netz, Ping, DNS/ARP, Wireshark, Packet Tracer |
 | [`Anki/`](Anki/) | Deutsches Anki-Deck mit 102 Karten |
