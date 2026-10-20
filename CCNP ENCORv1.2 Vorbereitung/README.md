@@ -58,6 +58,8 @@ Jede Karte hat eine stabile ID (`E12-<Blueprint-Punkt>-<Nr>`), den Themenbezug, 
 
 ## Lernempfehlung
 
+Ein konkreter 10-Wochen-Plan, der Deck und Labs verbindet, steht in [`LERNPLAN.md`](LERNPLAN.md).
+
 1. **Aufbauphase (4 bis 6 Wochen):** Gesamtes Deck oder `tag:Modus::Zug` täglich, parallel Labs (EVE-NG, CML oder echte Geräte).
 2. **Vertiefung:** Schwache Domänen gezielt über `tag:Domaene::N` oder `tag:Ziel::…` nacharbeiten.
 3. **Prüfungsphase (die letzten 2 bis 3 Wochen):** Umstellen auf `tag:Fokus::Exhibit`, `tag:Fokus::Falle` und `tag:Fokus::HighYield`.
