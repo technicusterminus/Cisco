@@ -101,14 +101,37 @@ Aufgaben, Verkabelung, Konfigurationen und Fehlerlisten verwenden die Packet-Tra
 > **Packet-Tracer-Hinweis:** **Eignung: teilweise.** Stand Packet Tracer 8.x: QoS (MQC): eingeschränkt. Klassen und Richtlinien lassen sich anlegen, `police`/`shape`/`priority` je nach Gerät nur teilweise; Messwerte nicht aussagekräftig. Akzeptiert PT einen Befehl nicht, ist das ein PT-Limit und kein Fehler von dir; solche Schritte machst du in CML oder EVE-NG. Die CML-Switches (Gi-Ports) sind hier 3560-24PS bzw. 2960 mit FastEthernet-Ports: Die Portzuordnung steht unter dem Adressplan.
 
 ## Teil A – Bauen
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
 
-1. **Trust Boundary.** Entscheide, welchen Hosts du die Markierung glaubst. H1 und H2 sind vertrauenswürdig (DSCP bleibt), H3 (Gast) wird auf DSCP 0 umgeschrieben. Baue am LAN-Interface (Gi0/0, input) `policy-map MARK`: `class-map` per ACL für H3 → `set dscp default`.
-2. **Klassen.** `class-map match-any VOICE` (`match dscp ef`), `VIDEO` (`match dscp af41`), `CRIT` (`match dscp af31`). Warum `match-any`, wenn mehrere Kriterien alternativ gelten (und was macht `match-all` bei zwei sich ausschließenden DSCP-Werten)?
-3. **Child-Policy (Queueing).** `policy-map QUEUE`: VOICE `priority percent 20` (LLQ, impliziter Policer), VIDEO `bandwidth percent 30`, CRIT `bandwidth percent 25`, `class class-default` `fair-queue` mit `random-detect dscp-based`. Wie wirkt LLQ gegenüber CBWFQ (strikte Priorität, aber begrenzt)?
-4. **Parent-Shaper.** `policy-map WAN`: `class class-default` → `shape average 2000000` (2 Mbit/s!) und `service-policy QUEUE`. Wende an: `interface Gi0/1` → `service-policy output WAN`. Warum muss man shapen, wenn die physische Schnittstelle schneller ist als der gebuchte Provider-Rate?
-5. **Policing Gast.** Am LAN-Interface zusätzlich H3-Verkehr mit `police rate 256000 bps conform-action transmit exceed-action drop` begrenzen. Unterschied Policing (verwerfen/remarken, kein Puffer) und Shaping (puffern, glätten).
-6. **Testen.** Von H1, H2, H3 Pings (`repeat 1000 size 1200`) mit den DSCP-Werten Richtung SRV, gleichzeitig. Lies `show policy-map interface Gi0/1`: Pakete pro Klasse, Drops, Queue-Tiefe. Wann tritt Verlust in `class-default` vor dem in VIDEO auf?
-7. **Konzepte.** Erkläre DiffServ-PHBs (EF, AF, CS, BE), DSCP/IP-Precedence/CoS, Tail Drop vs. WRED, Congestion Avoidance vs. Congestion Management, Trust-Modelle in Campus (Trust Boundary am Access-Port, `mls qos trust`/AutoQoS).
+1. **Trust Boundary festlegen.** H1 und H2 sind vertrauenswürdig, ihre Markierung bleibt. H3 (Gast) wird auf DSCP 0 zurückgesetzt. Baue dafür eine ACL für H3, eine `class-map` darauf und eine `policy-map MARK` mit `set dscp default`. Binde sie mit `service-policy input MARK` an Gi0/0.
+   - **Prüfen:** `show policy-map interface Gi0/0` zählt Pakete in der Gast-Klasse, sobald H3 sendet.
+   - **Denkfrage:** Warum darf man nicht jedem Endgerät seine Markierung glauben?
+2. **Klassen anlegen.** Lege an: `class-map match-any VOICE` mit `match dscp ef`, `VIDEO` mit `match dscp af41` und `CRIT` mit `match dscp af31`.
+   - **Denkfrage:** Wann ist `match-any` nötig, und was passiert bei `match-all` mit zwei verschiedenen DSCP-Werten?
+3. **Warteschlangen (Child-Policy).** Baue `policy-map QUEUE`: VOICE mit `priority percent 20`, VIDEO mit `bandwidth percent 30`, CRIT mit `bandwidth percent 25`, `class class-default` mit `fair-queue` und `random-detect dscp-based`.
+   - **Denkfrage:** Was unterscheidet die Priority-Queue (LLQ) von `bandwidth` (CBWFQ)?
+4. **Shaper als Parent.** Baue `policy-map WAN` mit `class class-default`, darin `shape average 2000000` und `service-policy QUEUE`. Binde sie mit `service-policy output WAN` an Gi0/1.
+   - **Prüfen:** `show policy-map interface Gi0/1` zeigt den Shaper mit 2 Mbit/s und darunter die vier Klassen.
+   - **Denkfrage:** Warum braucht man den Shaper, obwohl Gi0/1 viel schneller ist?
+5. **Gast begrenzen.** Ergänze in der Gast-Klasse von `MARK` einen Policer: `police rate 256000 bps conform-action transmit exceed-action drop`.
+   - **Denkfrage:** Was ist der Unterschied zwischen Policing und Shaping?
+6. **Unter Last testen.** Pinge gleichzeitig von H1 (`tos 184`), H2 (`tos 136`) und H3 mit `repeat 1000 size 1200` zu SRV.
+   - **Prüfen:** `show policy-map interface Gi0/1` zeigt Pakete pro Klasse und Drops. Die meisten Drops entstehen in `class-default`.
+   - **Denkfrage:** Warum verliert `class-default` zuerst Pakete und nicht VIDEO?
+7. **Begriffe ordnen.**
+   - **Denkfrage:** Was bedeuten EF, AF, CS und BE? Was ist der Unterschied zwischen Tail Drop und WRED und zwischen Congestion Management und Congestion Avoidance?
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 1:** Jedes Endgerät kann seine Pakete selbst als EF markieren. Ein Gast würde damit der echten Sprache die Priority-Queue wegnehmen. Deshalb vertraut man Markierungen nur ab einer festgelegten Grenze, meist am Access-Port, und nur bei bekannten Geräten wie IP-Telefonen.
+- **Zu 2:** `match-any` trifft, sobald eine der Bedingungen passt. Bei nur einer Bedingung ist es gleich, ob any oder all. `match-all` mit zwei verschiedenen DSCP-Werten trifft nie, weil ein Paket nur einen DSCP-Wert hat.
+- **Zu 3:** Die Priority-Queue wird immer zuerst bedient, das hält Verzögerung und Jitter klein. Damit sie die anderen nicht aushungert, begrenzt ein eingebauter Policer sie bei Stau auf die konfigurierte Rate. `bandwidth` garantiert nur einen Mindestanteil, ohne Vorrang.
+- **Zu 4:** Warteschlangen greifen nur, wenn das Interface selbst überlastet ist. Gi0/1 schafft weit mehr als 2 Mbit/s, also staut sich beim Router nichts. Der Provider würde stattdessen wahllos verwerfen. Der Shaper erzeugt den Engpass von 2 Mbit/s im Router selbst, und erst damit wirken die Warteschlangen.
+- **Zu 5:** Policing verwirft oder markiert um, was über der Rate liegt, sofort und ohne Puffer. Es geht in beide Richtungen. Shaping puffert den Überschuss und sendet ihn später. Das glättet den Verkehr, kostet aber Verzögerung, und geht nur ausgehend.
+- **Zu 6:** VIDEO hat 30 % fest zugesagt. `class-default` hat keine Zusage und bekommt nur, was übrig bleibt. WRED verwirft dort außerdem schon früh.
+- **Zu 7:** EF (Expedited Forwarding) für Sprache, AF (Assured Forwarding) in vier Klassen mit je drei Drop-Stufen, CS (Class Selector) kompatibel zu IP Precedence, BE (Best Effort) = DSCP 0. Tail Drop verwirft erst, wenn die Warteschlange voll ist, und trifft dann alle Verbindungen gleichzeitig. WRED verwirft vorher zufällig und nach Markierung gewichtet. Congestion Management heißt einreihen und bedienen (CBWFQ, LLQ). Congestion Avoidance heißt Stau vermeiden, bevor er entsteht (WRED).
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -123,14 +146,18 @@ Baue die Topologie wie oben (oder behalte deine aus Teil A), setze alle Geräte 
 **Ticket 4:** Der Gast (H3) wird als Voice klassifiziert und nimmt der echten Sprache die Priority-Queue weg.
 
 ## Verifikation
-
 ```
 show policy-map interface GigabitEthernet0/1
 show policy-map interface GigabitEthernet0/0
 show class-map
 show ip interface Gi0/1 | include service
 ```
-Erwartet: Klasse VOICE zählt Pakete (DSCP 46), Priorität nie gedroppt, `class-default` droppt bei Überlast, Gast-Verkehr als `exceed` im Policer.
+
+| Befehl | Das solltest du sehen |
+|---|---|
+| `show policy-map interface Gi0/1` | VOICE zählt Pakete mit DSCP 46, ohne Drops, solange H1 unter 20 % bleibt |
+| | `class-default` verwirft bei Überlast |
+| `show policy-map interface Gi0/0` | Gast-Verkehr im Policer als exceeded |
 
 ## Teil C – Üben
 
@@ -158,8 +185,11 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 </details>
 
 ## Prüfungsbezug
-
-DSCP: EF = 46, AF41 = 34, AF31 = 26, CS3 = 24, BE = 0. Policing wirkt in/out, Shaping nur out. LLQ = `priority`, immer mit Policer. `bandwidth` summiert max. 75 % der Interface-Bandbreite (Default `max-reserved-bandwidth`). Queueing greift nur bei Überlast, auf Ethernet-Interfaces braucht man oft einen Shaper als Parent.
+- DSCP: EF = 46, AF41 = 34, AF31 = 26, CS3 = 24, BE = 0.
+- Policing wirkt ein- und ausgehend, Shaping nur ausgehend.
+- `priority` (LLQ) hat immer einen eingebauten Policer.
+- Mit `bandwidth` lassen sich standardmäßig höchstens 75 % der Interface-Bandbreite vergeben.
+- Warteschlangen greifen nur bei Überlast. Auf schnellen Ethernet-Interfaces braucht es dafür oft einen Shaper als Parent.
 
 ## Lösungen
 

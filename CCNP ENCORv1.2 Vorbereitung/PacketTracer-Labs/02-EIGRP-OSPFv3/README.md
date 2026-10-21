@@ -81,21 +81,57 @@ IPv6-Hosts-Teil jeweils `::1`, `::2` bzw. `::3` im jeweiligen /64.
 > **Packet-Tracer-Hinweis:** **Eignung: teilweise.** Stand Packet Tracer 8.x: EIGRP Named Mode: nicht vorhanden. Named Mode fehlt; klassischen Modus (`router eigrp <AS>`) verwenden. Akzeptiert PT einen Befehl nicht, ist das ein PT-Limit und kein Fehler von dir; solche Schritte machst du in CML oder EVE-NG.
 
 ## Teil A – Bauen
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
 
-**Teil 1 – EIGRP (IPv4)**
+**Teil 1: EIGRP für IPv4**
 
-1. **Named Mode.** Konfiguriere `router eigrp LAB` mit `address-family ipv4 unicast autonomous-system 100`, Router-ID = Lo0. Alle Interfaces `passive` per `af-interface default`, nur die Transit-Links aktiv. Erkläre den Unterschied zu Classic-Mode (`router eigrp 100`) und was „Wide Metrics“ ändern.
-2. **Topologie lesen.** Welche Route nimmt R1 zu 10.3.0.0/24, und warum? Lies `show ip eigrp topology 10.3.0.0/24` und benenne Successor, Feasible Successor, FD und RD (AD).
-3. **Unequal-Cost.** R1 soll Verkehr zu R3 im Verhältnis der Metriken über beide Pfade verteilen. Bestimme das nötige `variance` (FD des FS / FD des Successors, aufrunden) und setze es unter `topology base`. Prüfe in `show ip route`, dass **zwei** Pfade installiert sind. Warum ist der zweite Pfad nur ein FS, wenn seine AD kleiner als die FD des Successors ist (Loop-Freiheit, DUAL)?
-4. **Summarization.** R3 fasst die vier Loopback-Netze auf den Transit-Links zu 10.3.0.0/22 zusammen (`summary-address` im `af-interface`). Was erscheint auf R1 und welche Distanz hat die Summary-Route auf R3 (Null0, AD 5)?
-5. **Authentifizierung.** HMAC-SHA-256 im Named Mode auf allen Transit-Links (`authentication mode hmac-sha-256 0 <Passwort>`). Wie unterscheidet sich das von der MD5-Key-Chain im Classic-Mode?
-6. **Stub.** Setze R3 testweise als `eigrp stub connected` und beobachte, welche Anfragen (Queries) R1/R2 dadurch nicht mehr senden. Welches Problem mit SIA (Stuck-in-Active) löst das?
+1. **Named Mode einrichten.** Konfiguriere `router eigrp LAB` mit `address-family ipv4 unicast autonomous-system 100` und der Loopback0 als Router-ID. Setze unter `af-interface default` alle Interfaces passiv und nimm nur die Transit-Links mit `no passive-interface` wieder heraus.
+   - **Prüfen:** `show ip eigrp neighbors` zeigt auf jedem Router zwei Nachbarn.
+   - **Denkfrage:** Was ist der Unterschied zum klassischen `router eigrp 100`, und was ändern die Wide Metrics?
+2. **Topologie lesen.** Sieh dir auf R1 `show ip eigrp topology 10.3.0.0/24` an.
+   - **Prüfen:** Benenne Successor, Feasible Successor, Feasible Distance (FD) und Reported Distance (RD).
+   - **Denkfrage:** Warum geht R1 über R2, obwohl der Direktlink zu R3 nur einen Hop hat?
+3. **Ungleiche Lastverteilung.** R1 soll beide Wege zu R3 nutzen, im Verhältnis ihrer Metriken. Berechne `variance` = FD über den Feasible Successor ÷ FD des Successors, aufgerundet. Setze den Wert unter `topology base`.
+   - **Prüfen:** `show ip route 10.3.0.0` zeigt zwei Pfade mit unterschiedlichem Traffic-Share.
+   - **Denkfrage:** Warum darf `variance` nur Feasible Successors mitbenutzen und nicht jeden beliebigen Pfad?
+4. **Zusammenfassen.** R3 fasst Lo10 bis Lo13 auf den Transit-Links zu 10.3.0.0/22 zusammen (`summary-address` unter `af-interface`).
+   - **Prüfen:** R1 sieht nur noch `D 10.3.0.0/22`. R3 selbst hat eine Route `10.3.0.0/22 → Null0` mit Administrativer Distanz 5.
+   - **Denkfrage:** Wozu legt R3 die Route nach Null0 an?
+5. **Authentisierung.** Schütze alle Transit-Links mit HMAC-SHA-256: `authentication mode hmac-sha-256 0 <Passwort>` unter `af-interface`.
+   - **Prüfen:** Die Nachbarschaften stehen danach wieder. Ein falsches Passwort auf einer Seite lässt die Nachbarschaft fallen.
+   - **Denkfrage:** Was kann der Named Mode hier, was der klassische Modus nicht kann?
+6. **Stub.** Setze R3 testweise als `eigrp stub connected`.
+   - **Prüfen:** `show ip eigrp neighbors detail` auf R1 zeigt R3 als Stub.
+   - **Denkfrage:** Welche Nachrichten bekommt R3 dadurch nicht mehr, und welches Problem löst das?
 
-**Teil 2 – OSPFv3 (IPv6)**
+**Teil 2: OSPFv3 für IPv6**
 
-7. **IPv6 aktivieren.** `ipv6 unicast-routing` ist gesetzt, Interfaces tragen schon Adressen. Starte `router ospfv3 1` mit `address-family ipv6 unicast`, Router-ID = Lo0 (Pflicht, es gibt keine IPv4-Adresse als Fallback), und aktiviere pro Interface `ospfv3 1 ipv6 area 0`.
-8. **Link-Local verstehen.** Welche Adressen sind Next-Hops in `show ipv6 route ospf` (fe80::/10) und warum? Welches LSA-Paar (Typ 8 / Link-LSA, Typ 9 / Intra-Area-Prefix) ist neu gegenüber OSPFv2?
-9. **Vergleich.** Fülle die Tabelle aus: Metrik (EIGRP composite vs. OSPF cost), Algorithmus (DUAL vs. SPF), Transport (IP 88 vs. IP 89), Admin-Distanz (90/170 vs. 110), Konvergenz, Unequal-Cost (ja/nein).
+7. **OSPFv3 starten.** `ipv6 unicast-routing` ist gesetzt, die Interfaces haben schon IPv6-Adressen. Starte `router ospfv3 1` mit `address-family ipv6 unicast`. Setze die Router-ID von Hand auf die IPv4-Adresse der Loopback0. Aktiviere OSPFv3 an jedem Interface mit `ospfv3 1 ipv6 area 0`.
+   - **Prüfen:** `show ospfv3 neighbor` zeigt alle Nachbarn im Zustand FULL. Ein Ping von Lo0 zu Lo0 per IPv6 klappt.
+8. **Link-Local verstehen.** Sieh dir `show ipv6 route ospf` an.
+   - **Denkfrage:** Warum sind die Next-Hops fe80::-Adressen? Welche zwei LSA-Typen sind in OSPFv3 neu?
+9. **Vergleichen.** Fülle diese Tabelle selbst aus, bevor du die Antwort aufklappst: Metrik, Algorithmus, IP-Protokoll, Administrative Distanz, ungleiche Lastverteilung bei EIGRP und OSPF.
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 1:** Im Named Mode steht alles in einer Hierarchie: `address-family`, darunter `af-interface` für die Interface-Einstellungen und `topology base` für Routing-Optionen. IPv4 und IPv6 laufen in einem Prozess. Im klassischen Modus sind die Einstellungen auf Prozess und Interfaces verteilt. Wide Metrics rechnen mit 64 Bit und feinerem Delay. So lassen sich auch Links über 1 Gbit/s noch unterscheiden.
+- **Zu 2:** Die EIGRP-Metrik nimmt die kleinste Bandbreite auf dem Weg. Über R2 sind das 10 Mbit/s, auf dem Direktlink nur 2 Mbit/s. Die geringere Bandbreite wiegt schwerer als ein zusätzlicher Hop.
+- **Zu 3:** Nur ein Feasible Successor ist garantiert schleifenfrei. Seine RD ist kleiner als die eigene FD, also liegt er näher am Ziel und routet nicht über dich zurück. Bei anderen Pfaden ist das nicht sicher.
+- **Zu 4:** Die Route nach Null0 verhindert Schleifen. Kommt ein Paket für ein Teilnetz der Summary, das es nicht gibt, verwirft R3 es, statt es per Default-Route zurückzuschicken.
+- **Zu 5:** Der Named Mode kann HMAC-SHA-256. Der klassische Modus kennt nur MD5 über eine Key-Chain.
+- **Zu 6:** R1 und R2 schicken R3 keine Queries mehr. Fällt ein Weg weg, bleibt die Suche nach Ersatz kleiner. Das senkt das Risiko für Stuck in Active (SIA).
+- **Zu 8:** OSPFv3 bildet seine Nachbarschaften über die Link-Local-Adressen, also sind diese auch die Next-Hops. Neu sind das Link-LSA (Typ 8, Adressen auf dem Link) und das Intra-Area-Prefix-LSA (Typ 9). Typ 1 und 2 tragen in OSPFv3 keine Präfixe mehr.
+- **Zu 9:**
+
+| | EIGRP | OSPF |
+|---|---|---|
+| Metrik | aus Bandbreite und Delay | Kosten = Referenz ÷ Bandbreite |
+| Algorithmus | DUAL | SPF (Dijkstra) |
+| IP-Protokoll | 88 | 89 |
+| Administrative Distanz | intern 90, extern 170 | 110 |
+| Ungleiche Lastverteilung | ja, mit `variance` | nein |
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -110,7 +146,6 @@ Baue die Topologie wie oben (oder behalte deine aus Teil A), setze alle Geräte 
 **Ticket 4:** Im IPv6-Netz fehlt die Nachbarschaft R2–R3 (EIGRP IPv4 läuft), `show ospfv3 neighbor` zeigt auf R2 keinen Nachbarn an Gi0/1.
 
 ## Verifikation
-
 ```
 show ip eigrp neighbors
 show ip eigrp topology
@@ -119,7 +154,12 @@ show ospfv3 neighbor
 show ipv6 route ospf
 show ospfv3 interface brief
 ```
-Erwartet: R1 hat zu 10.3.0.0/22 zwei EIGRP-Pfade (nach Variance), alle OSPFv3-Nachbarn FULL, IPv6-Pings Lo0↔Lo0 funktionieren.
+
+| Befehl | Das solltest du sehen |
+|---|---|
+| `show ip route eigrp` auf R1 | 10.3.0.0/22 über zwei Pfade (nach Schritt 3 und 4) |
+| `show ospfv3 neighbor` | alle Nachbarn FULL |
+| `ping ipv6 2001:db8:ff::3 source lo0` auf R1 | Antwort von R3 |
 
 ## Teil C – Üben
 
@@ -147,8 +187,11 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 </details>
 
 ## Prüfungsbezug
-
-EIGRP-Named-Mode-Hierarchie, Feasibility Condition (AD < FD), Variance nur mit Feasible Successors, Admin-Distanzen (EIGRP intern 90, extern 170, summary 5), OSPFv3-Router-ID Pflicht, Link-Local als Next-Hop.
+- Feasibility Condition: RD des Nachbarn < FD des Successors.
+- `variance` nutzt nur Feasible Successors.
+- Administrative Distanz: EIGRP intern 90, extern 170, Summary 5.
+- OSPFv3 braucht eine Router-ID im IPv4-Format. Gibt es keine IPv4-Adresse, muss sie von Hand gesetzt werden.
+- In OSPFv3 sind Link-Local-Adressen die Next-Hops.
 
 ## Lösungen
 

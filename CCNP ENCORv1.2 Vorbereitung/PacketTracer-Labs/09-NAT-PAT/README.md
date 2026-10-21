@@ -100,15 +100,38 @@ Aufgaben, Verkabelung, Konfigurationen und Fehlerlisten verwenden die Packet-Tra
 > **Packet-Tracer-Hinweis:** **Eignung: geeignet.** Alle verwendeten Funktionen gibt es in Packet Tracer; Ausgabeformate einzelner `show`-Befehle weichen leicht ab. Die CML-Switches (Gi-Ports) sind hier 3560-24PS bzw. 2960 mit FastEthernet-Ports: Die Portzuordnung steht unter dem Adressplan.
 
 ## Teil A – Bauen
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
 
-1. **Problem erkennen.** PC1 pingt 8.8.8.8: erfolglos. Warum (private Quelle, ISP hat keine Rückroute)? Prüfe mit `debug ip icmp` auf dem ISP.
-2. **PAT.** `ip nat inside`/`outside` auf den Interfaces, Standard-ACL 1 für 192.168.10.0/24, `ip nat inside source list 1 interface Gi0/1 overload`. Prüfe `show ip nat translations` und `show ip nat statistics`. Welche Rolle spielen die Quellports?
-3. **Vier Adressbegriffe.** Ordne in einer Übersetzung die Adressen *inside local*, *inside global*, *outside local*, *outside global* zu. Welche davon ändert NAT im üblichen Szenario?
-4. **Dynamisches NAT.** Definiere Pool `POOL` (203.0.113.16–203.0.113.19, /24) und binde PC2 per ACL 2 ohne Overload daran. Starte vier verschiedene PCs gleichzeitig (oder simuliere) und beobachte Pool-Erschöpfung (`show ip nat statistics`: Misses).
-5. **Statisches NAT.** SRV soll aus dem Internet erreichbar sein: `ip nat inside source static 172.16.0.10 203.0.113.10`. Teste `telnet 203.0.113.10 80` vom ISP. Welche Proxy-ARP-/Routing-Frage stellt sich, wenn die globale Adresse im Transfernetz selbst liegt?
-6. **Static PAT / Port-Forwarding.** Leite TCP/8080 an der Interface-Adresse 203.0.113.1 auf SRV:80 weiter (`ip nat inside source static tcp 172.16.0.10 80 interface Gi0/1 8080`).
-7. **Reihenfolge.** Erkläre Inside→Outside: Routing → NAT; Outside→Inside: NAT → Routing; ACL-Verhalten (Inbound-ACL sieht vor NAT die globale Adresse). Wo setzt man deshalb ACLs?
-8. **Debug.** `debug ip nat detailed` kurz nutzen und `clear ip nat translation *`. Wann ist `clear` im Betrieb heikel (aktive Sessions)?
+1. **Problem erkennen.** PC1 pingt 8.8.8.8, ohne Erfolg. Schalte auf dem ISP kurz `debug ip icmp` ein.
+   - **Prüfen:** Der ISP sieht die Anfrage von 192.168.10.11.
+   - **Denkfrage:** Warum kommt trotzdem keine Antwort zurück?
+2. **PAT einrichten.** Setze `ip nat inside` an Gi0/0 und `ip nat outside` an Gi0/1. Lege eine Standard-ACL 1 für 192.168.10.0/24 an und aktiviere `ip nat inside source list 1 interface Gi0/1 overload`.
+   - **Prüfen:** PC1 und PC2 erreichen 8.8.8.8. `show ip nat translations` zeigt beide als 203.0.113.1 mit verschiedenen Ports.
+   - **Denkfrage:** Wozu braucht PAT die Ports?
+3. **Die vier Adressbegriffe.** Nimm eine Zeile aus `show ip nat translations` für PC1 → 8.8.8.8.
+   - **Denkfrage:** Welche Adresse ist Inside Local, Inside Global, Outside Local und Outside Global? Welche davon ändert NAT hier?
+4. **Dynamisches NAT mit Pool.** Lege einen Pool `POOL` mit 203.0.113.16 bis 203.0.113.19 an und binde PC2 per ACL 2 daran, diesmal ohne `overload`.
+   - **Prüfen:** PC2 erscheint mit einer Adresse aus dem Pool. Gibt es mehr Hosts als Pool-Adressen, steigen in `show ip nat statistics` die Misses.
+5. **Statisches NAT.** SRV soll aus dem Internet erreichbar sein: `ip nat inside source static 172.16.0.10 203.0.113.10`. Setze an Gi0/2 `ip nat inside`.
+   - **Prüfen:** `telnet 203.0.113.10 80` vom ISP baut eine Verbindung auf.
+   - **Denkfrage:** Warum klappt das hier ohne Weiteres, und was müsste R1 tun, wenn 203.0.113.10 direkt im Transfernetz /30 läge?
+6. **Port-Forwarding.** Leite TCP 8080 der Interface-Adresse 203.0.113.1 auf SRV Port 80 weiter: `ip nat inside source static tcp 172.16.0.10 80 interface Gi0/1 8080`.
+   - **Prüfen:** `telnet 203.0.113.1 8080` vom ISP erreicht den Webserver.
+7. **Reihenfolge verstehen.**
+   - **Denkfrage:** Was passiert zuerst, Routing oder NAT, wenn ein Paket von innen nach außen geht? Und von außen nach innen? Welche Adressen muss deshalb eine ACL am Outside-Interface in Eingangsrichtung enthalten?
+8. **Debug und Aufräumen.** Nutze kurz `debug ip nat detailed`, danach `undebug all` und `clear ip nat translation *`.
+   - **Denkfrage:** Warum ist `clear ip nat translation *` im Betrieb heikel?
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 1:** Die Quelle ist eine private Adresse. Der ISP hat dafür keine Route zurück, also verwirft er die Antwort.
+- **Zu 2:** Alle Hosts teilen sich eine öffentliche Adresse. Erst der Quellport macht jede Verbindung eindeutig, und R1 weiß, an wen die Antwort gehört.
+- **Zu 3:** Inside Local = 192.168.10.11 (PC1, wie innen bekannt). Inside Global = 203.0.113.1 (PC1, wie außen sichtbar). Outside Local und Outside Global sind beide 8.8.8.8, weil das Ziel nicht übersetzt wird. NAT ändert hier nur die Quelladresse von Inside Local auf Inside Global.
+- **Zu 5:** Der ISP kennt das ganze 203.0.113.0/24 über R1 und schickt die Pakete für .10 dorthin. Läge die Adresse direkt im Transfernetz, würde der ISP per ARP nach ihr fragen. R1 müsste dann für diese Adresse antworten. IOS legt dafür bei statischem NAT automatisch einen Alias an.
+- **Zu 7:** Von innen nach außen: erst Routing, dann NAT. Von außen nach innen: erst NAT, dann Routing. Eine Eingangs-ACL am Outside-Interface sieht das Paket noch vor der Übersetzung, also mit der globalen Adresse. Sie muss 203.0.113.10 enthalten, nicht 172.16.0.10.
+- **Zu 8:** Der Befehl löscht auch aktive Übersetzungen. Laufende Verbindungen brechen dann ab.
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -123,14 +146,18 @@ Baue die Topologie wie oben (oder behalte deine aus Teil A), setze alle Geräte 
 **Ticket 4:** Der ISP erreicht 203.0.113.10 (Server) nicht, `show ip nat translations` zeigt die Zuordnung zu .11.
 
 ## Verifikation
-
 ```
 show ip nat translations [verbose]
 show ip nat statistics
 show access-lists
 debug ip nat
 ```
-Erwartet: PC1/PC2 erscheinen als `203.0.113.1:port` (PAT), SRV statisch auf 203.0.113.10, Port 8080 leitet an 172.16.0.10:80.
+
+| Befehl | Das solltest du sehen |
+|---|---|
+| `show ip nat translations` | PC1 und PC2 als 203.0.113.1:Port (PAT) |
+| | SRV statisch als 203.0.113.10 |
+| | 203.0.113.1:8080 → 172.16.0.10:80 |
 
 ## Teil C – Üben
 
@@ -158,8 +185,11 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 </details>
 
 ## Prüfungsbezug
-
-Inside Local = interne Host-Adresse, Inside Global = öffentliche Sicht auf den internen Host. NAT ohne Overload braucht ausreichend Poolgröße. Static NAT ist bidirektional, dynamisches NAT nur bei Verkehr von innen. NAT-Reihenfolge vor/nach Routing abhängig von der Richtung. `ip nat inside source` braucht `ip nat inside/outside` an den Interfaces.
+- Inside Local = Adresse des Hosts innen. Inside Global = wie der Host außen erscheint.
+- NAT ohne `overload` braucht so viele Pool-Adressen wie gleichzeitige Hosts.
+- Statisches NAT gilt in beide Richtungen, dynamisches nur für Verbindungen von innen.
+- Von innen: Routing vor NAT. Von außen: NAT vor Routing.
+- Ohne `ip nat inside` und `ip nat outside` an den Interfaces wird nichts übersetzt.
 
 ## Lösungen
 

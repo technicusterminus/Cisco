@@ -36,14 +36,35 @@ RED = CR1 ↔ CR2, BLUE = CB1 ↔ CB2.
 Kunden-LANs: Site 1 = 192.168.1.0/24 (Lo100 auf CR1/CB1), Site 2 = 192.168.2.0/24 (Lo100 auf CR2/CB2), in RED und BLUE identisch.
 
 ## Teil A – Bauen
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
 
-1. **VRFs anlegen.** Auf R1 und R2 `vrf definition RED`/`BLUE` mit `address-family ipv4`. Weise die Kunden-Interfaces (`vrf forwarding`) zu. Beachte: Die IP-Adresse wird beim Zuweisen gelöscht und muss neu gesetzt werden. Welche Routing-Tabelle zeigt `show ip route` ohne VRF?
-2. **Trunk-Subinterfaces.** Auf dem Link R1–R2 je Subinterface `.100` (RED) und `.200` (BLUE) mit `encapsulation dot1Q`, `vrf forwarding`, IP `10.0.12.1/.2`. Warum dürfen beide Subinterfaces dieselbe IP-Adresse tragen?
-3. **OSPF pro VRF.** `router ospf 1 vrf RED`, `router ospf 2 vrf BLUE` auf R1/R2, dazu OSPF auf den CEs (Prozess 1, Area 0). Prüfe `show ip route vrf RED ospf` und die Router-IDs (VRF-spezifisch!).
-4. **Ende-zu-Ende.** `ping vrf RED 192.168.2.1 source Loopback100` von R1 aus bzw. von CR1 aus `ping 192.168.2.1 source Lo100`. Zeige, dass dieselben Netze in beiden VRFs existieren und sich nicht in die Quere kommen.
-5. **Trennung beweisen.** Pinge aus VRF RED eine BLUE-only-Adresse. Erkläre das Ergebnis (`% No route`, VRF-Tabellen sind getrennt).
-6. **Route-Leaking.** Erzeuge auf R1 eine globale Loopback 10.99.99.1/32 und lasse VRF RED sie erreichen: `ip route vrf RED 10.99.99.1 255.255.255.255 Loopback99 global` plus Rückroute. Welche Sicherheitsfolgen hat Leaking, und wie macht man es sauber (Route-Target-Import/Export bei MP-BGP, Firewall-Fusion)?
-7. **Konzepte.** Unterschied VRF-Lite ↔ MPLS-VRF: RD (unterscheidet gleiche Präfixe in MP-BGP), RT (steuert Import/Export), MPLS-Label. Wann reicht VRF-Lite?
+1. **VRFs anlegen.** Lege auf R1 und R2 `vrf definition RED` und `vrf definition BLUE` an, jeweils mit `address-family ipv4`. Weise die Kunden-Interfaces mit `vrf forwarding` zu und setze danach die IP-Adressen neu.
+   - **Prüfen:** `show ip vrf interfaces` listet jedes Kunden-Interface in seiner VRF.
+   - **Denkfrage:** Warum musst du die IP-Adresse neu setzen? Welche Tabelle zeigt `show ip route` ohne Angabe einer VRF?
+2. **Subinterfaces auf dem Link R1–R2.** Lege auf beiden Routern `Gi0/2.100` (RED) und `Gi0/2.200` (BLUE) an, jeweils mit `encapsulation dot1Q`, `vrf forwarding` und der Adresse 10.0.12.1 bzw. .2.
+   - **Prüfen:** `ping vrf RED 10.0.12.2` und `ping vrf BLUE 10.0.12.2` auf R1 klappen beide.
+   - **Denkfrage:** Warum dürfen beide Subinterfaces dieselbe IP-Adresse haben?
+3. **OSPF pro VRF.** Starte auf R1 und R2 `router ospf 1 vrf RED` und `router ospf 2 vrf BLUE`. Auf den Kunden-Routern läuft OSPF-Prozess 1 in Area 0.
+   - **Prüfen:** `show ip route vrf RED ospf` auf R1 zeigt 192.168.2.0/24. `show ip ospf 1` und `show ip ospf 2` zeigen eigene Router-IDs.
+4. **Ende zu Ende testen.** Pinge auf CR1 `ping 192.168.2.1 source Loopback100` und auf CB1 dasselbe.
+   - **Prüfen:** Beide Pings klappen, obwohl RED und BLUE dieselben Adressen verwenden.
+5. **Trennung beweisen.** Pinge aus VRF RED eine Adresse, die es nur in BLUE gibt.
+   - **Prüfen:** Der Ping scheitert.
+   - **Denkfrage:** Warum?
+6. **Route-Leaking verstehen.** Manchmal soll eine VRF einen gemeinsamen Dienst erreichen, etwa einen DNS-Server in der globalen Tabelle. Mit einer statischen Route in der VRF und dem Schlüsselwort `global` am Next-Hop (`ip route vrf RED <Netz> <Maske> <Next-Hop> global`) zeigt die Route in die globale Tabelle. Für den Rückweg braucht die globale Tabelle eine Route in die VRF.
+   - **Denkfrage:** Welche Gefahr bringt Route-Leaking mit sich, und wie macht man es sauberer?
+7. **Einordnen.**
+   - **Denkfrage:** Was unterscheidet VRF-Lite von VRFs in einem MPLS-VPN? Wann reicht VRF-Lite?
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 1:** Beim Wechsel der VRF entfernt IOS alle IP-Einstellungen, weil die Adresse jetzt in eine andere Tabelle gehört. `show ip route` ohne VRF zeigt die globale Tabelle.
+- **Zu 2:** Jedes Subinterface gehört zu einer anderen VRF, also zu einer anderen Routing-Tabelle. Adressen dürfen sich nur innerhalb einer VRF nicht überschneiden.
+- **Zu 5:** RED und BLUE haben getrennte Tabellen. In RED gibt es keine Route zu einem Netz, das nur in BLUE existiert.
+- **Zu 6:** Leaking öffnet ein Loch in der Trennung. Wird zu viel geleakt, können sich Kunden gegenseitig erreichen. Sauberer ist es, nur einzelne Präfixe gezielt freizugeben, in MPLS-VPNs per Route-Target-Import und -Export. Oder man führt die VRFs über eine Firewall zusammen, die den Verkehr prüft.
+- **Zu 7:** VRF-Lite trennt Tabellen nur lokal. Jede VRF braucht ein eigenes Interface oder Subinterface bis zum nächsten Router und ein eigenes Routing. Ein MPLS-VPN transportiert alle VRFs über ein gemeinsames Netz: Route Distinguisher machen gleiche Präfixe in MP-BGP eindeutig, Route Targets steuern Import und Export, Labels trennen die Daten. VRF-Lite reicht bei wenigen VRFs und wenigen Hops.
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -58,15 +79,19 @@ Importiere `topology-repair.yaml`. Alle Geräte sind vollständig konfiguriert, 
 **Ticket 4:** RED-Site 2 ist nicht erreichbar (192.168.2.0/24 fehlt in VRF RED auf R1), BLUE funktioniert.
 
 ## Verifikation
-
 ```
 show vrf
 show ip route vrf RED
-show ip ospf 1 neighbor        ! Prozess pro VRF
+show ip ospf 1 neighbor          ! ein Prozess pro VRF
 show ip vrf interfaces
-ping vrf RED 192.168.2.1 source Loopback100
+ping vrf RED 192.168.2.1         ! auf R1
+ping 192.168.2.1 source Loopback100   ! auf CR1 und CB1
 ```
-Erwartet: In jeder VRF auf R1 eine OSPF-Route nach 192.168.2.0/24, Pings Ende-zu-Ende in RED und in BLUE.
+
+| Befehl | Das solltest du sehen |
+|---|---|
+| `show ip route vrf RED` und `vrf BLUE` auf R1 | in beiden eine OSPF-Route nach 192.168.2.0/24 |
+| Ping von CR1 und CB1 | Ende zu Ende erfolgreich in beiden VRFs |
 
 ## Teil C – Üben
 
@@ -94,8 +119,10 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 </details>
 
 ## Prüfungsbezug
-
-VRF-Lite ist lokal signifikant, keine Labels. RD macht Präfixe eindeutig (nur in MP-BGP), RT steuert Import/Export. `vrf forwarding` löscht die IP-Adresse. OSPF-Prozesse laufen pro VRF, Interfaces gehören genau einer VRF.
+- VRF-Lite wirkt nur lokal und braucht keine Labels.
+- Der Route Distinguisher macht Präfixe in MP-BGP eindeutig, das Route Target steuert Import und Export.
+- `vrf forwarding` löscht die IP-Adresse am Interface.
+- OSPF läuft pro VRF in einem eigenen Prozess. Ein Interface gehört genau zu einer VRF.
 
 ## Lösungen
 

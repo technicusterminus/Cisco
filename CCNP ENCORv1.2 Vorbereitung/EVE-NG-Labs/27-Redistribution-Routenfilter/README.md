@@ -60,14 +60,38 @@ Summe (alle Nodes als vIOS/…): ca. **2.0 GB RAM**. Mit VPCS statt vIOS-Hosts: 
 Loopback0: R1 10.255.0.1, R2 .2, R3 .3, R4 .4. R1 Lo10 10.1.0.1/24 (OSPF-LAN), R4 Lo10 10.4.0.1/24 und Lo11 10.4.1.1/24 (EIGRP-LANs). **Vorgabe:** 10.4.1.0/24 ist lokal und darf nicht nach OSPF gelangen. Der Weg über R2 soll bevorzugt werden (R2 Metrik 20, R3 Metrik 100).
 
 ## Teil A – Bauen
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
 
-1. **Domänen aufbauen.** OSPF 1 Area 0 auf R1 (alle Links, Loopbacks, Lo10 mit `ip ospf network point-to-point`, damit /24 statt /32 angekündigt wird), R2 und R3 (jeweils Richtung R1). EIGRP 100 auf R2, R3, R4 (Richtung R4, Lo10/Lo11, `no auto-summary`). Prüfe, dass R1 nichts von R4 weiß.
-2. **Einfache Redistribution.** Nur auf R2: `redistribute eigrp 100 subnets` in OSPF und `redistribute ospf 1 metric 10000 100 255 1 1500` in EIGRP. Warum braucht EIGRP einen Seed-Metric (Bandbreite, Delay, Reliability, Load, MTU), OSPF nur optional (Standard 20, Typ E2)? Prüfe auf R1 `show ip route ospf` (`O E2`) und auf R4 `show ip route eigrp` (`D EX`, AD 170).
-3. **Zweiter ASBR.** Ergänze dasselbe auf R3. Beobachte `show ip route` auf R2/R3/R4: Es entstehen Routen, die im Kreis laufen (Feedback), weil R3 die von R2 in EIGRP injizierten OSPF-Routen zurück nach OSPF gibt.
-4. **Tags gegen Rückkopplung.** Route-Maps: `E2O` (EIGRP→OSPF): `deny` bei Tag 1 (kam aus OSPF), sonst `permit` mit `set tag 2` und Metrik; `O2E` (OSPF→EIGRP): `deny` bei Tag 2, sonst `permit` mit `set tag 1`. Setze die Route-Maps auf R2 und R3 an die `redistribute`-Befehle. Prüfe mit `show ip route 10.1.0.0` auf R4, dass Tag 1 sichtbar ist, und dass keine Schleife entsteht.
-5. **Metrik steuern.** In `E2O` auf R2 `set metric 20`, auf R3 `set metric 100`: Welchen Weg wählt R1 für 10.4.0.0/24? Wie würdest du Typ E1 statt E2 setzen und wann ist das sinnvoll?
-6. **Filter.** Prefix-Liste `LOCAL-ONLY` (`permit 10.4.1.0/24`), in `E2O` als erste Zeile (`deny`) mit `match ip address prefix-list LOCAL-ONLY`. Prüfe, dass 10.4.1.0/24 auf R1 fehlt, 10.4.0.0/24 aber da ist.
-7. **Verwandtes.** `distribute-list` (bei EIGRP/OSPF-intern), `administrative distance` pro Quelle, `redistribute connected`, `default-information originate`. Wann ist einseitige Redistribution mit Default-Route statt gegenseitiger Redistribution besser?
+1. **Zwei Domänen aufbauen.** OSPF 1 in Area 0 auf R1 (alle Links, Loopbacks, Lo10 mit `ip ospf network point-to-point`, damit /24 statt /32 angekündigt wird) sowie auf R2 und R3 Richtung R1. EIGRP 100 auf R2, R3 und R4 Richtung R4, inklusive Lo10 und Lo11 von R4, mit `no auto-summary`.
+   - **Prüfen:** R1 kennt noch keine Netze von R4, R4 keine von R1.
+2. **Redistribution an einem Punkt.** Nur auf R2: `redistribute eigrp 100 subnets` unter OSPF und `redistribute ospf 1 metric 10000 100 255 1 1500` unter EIGRP.
+   - **Prüfen:** R1 zeigt die EIGRP-Netze als `O E2`. R4 zeigt die OSPF-Netze als `D EX` mit Administrativer Distanz 170.
+   - **Denkfrage:** Warum braucht EIGRP eine Startmetrik, OSPF aber nicht?
+3. **Zweiter Redistributionspunkt.** Konfiguriere dasselbe auf R3.
+   - **Prüfen:** In `show ip route` auf R2, R3 und R4 tauchen Routen auf, die über den anderen Punkt zurücklaufen.
+   - **Denkfrage:** Wie entsteht diese Rückkopplung?
+4. **Tags gegen Rückkopplung.** Baue auf R2 und R3 zwei Route-Maps:
+   - `E2O` (EIGRP nach OSPF): Routen mit Tag 1 verwerfen (`deny`, die stammen aus OSPF), alle anderen mit `set tag 2` übernehmen.
+   - `O2E` (OSPF nach EIGRP): Routen mit Tag 2 verwerfen, alle anderen mit `set tag 1` übernehmen.
+
+   Hänge die Route-Maps an die `redistribute`-Befehle.
+   - **Prüfen:** `show ip route 10.1.0.0` auf R4 zeigt Tag 1. Es laufen keine Routen mehr im Kreis.
+5. **Metrik steuern.** Setze in `E2O` auf R2 `set metric 20`, auf R3 `set metric 100`.
+   - **Prüfen:** R1 wählt für 10.4.0.0/24 den Weg über R2.
+   - **Denkfrage:** Wie würdest du E1 statt E2 setzen, und wann ist das sinnvoll?
+6. **Filtern.** Lege die Prefix-List `LOCAL-ONLY` mit `permit 10.4.1.0/24` an. Setze in `E2O` als erste Sequenz ein `deny` mit `match ip address prefix-list LOCAL-ONLY`.
+   - **Prüfen:** Auf R1 fehlt 10.4.1.0/24, 10.4.0.0/24 ist da.
+7. **Einordnen.**
+   - **Denkfrage:** Wann ist es besser, nur in eine Richtung zu redistribuieren und in die andere eine Default-Route zu schicken?
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 2:** EIGRP setzt für fremde Routen ohne Angabe eine unendliche Metrik und übernimmt sie dann nicht. Es braucht fünf Werte: Bandbreite, Delay, Zuverlässigkeit, Last und MTU. OSPF setzt von selbst Metrik 20 und Typ E2.
+- **Zu 3:** R2 gibt OSPF-Routen nach EIGRP. R3 lernt sie dort als EIGRP-Routen und gibt sie zurück nach OSPF, jetzt als externe Route. Je nach Administrativer Distanz und Metrik bevorzugt ein Router plötzlich den Umweg, oder Routen laufen im Kreis.
+- **Zu 5:** Mit `set metric-type type-1` in der Route-Map oder `metric-type 1` am `redistribute`. E1 addiert die internen Kosten bis zum ASBR. Das lohnt sich, wenn es mehrere ASBRs gibt und jeder Router den für ihn nächsten nehmen soll.
+- **Zu 7:** Wenn die eine Domäne nur einen Weg hinaus hat, etwa ein Standort am Rand. Dann genügt dort eine Default-Route, und es gibt keine Rückkopplung, die man mit Tags abfangen muss.
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -86,7 +110,6 @@ Setze alle Nodes zurück (Rechtsklick → *Wipe*) und spiele `repair/<Node>.cfg`
 **Ticket 6:** R1 und R3 bilden keine OSPF-Nachbarschaft; im Log `Mismatched Area ID`/hängt in `INIT`.
 
 ## Verifikation
-
 ```
 show ip route ospf / eigrp
 show ip route 10.4.0.0           ! Tag, Typ, Metrik
@@ -95,7 +118,12 @@ show ip eigrp topology
 show route-map
 show ip prefix-list
 ```
-Erwartet: R1 `O E2 10.4.0.0/24` mit Tag 2 über R2 (Metrik 20), kein 10.4.1.0/24; R4 `D EX 10.1.0.0/24` mit Tag 1 über R2 und R3, keine Routen mit Tag 2 zurück.
+
+| Befehl | Das solltest du sehen |
+|---|---|
+| `show ip route 10.4.0.0` auf R1 | `O E2` mit Tag 2 über R2, Metrik 20 |
+| `show ip route 10.4.1.0` auf R1 | nicht vorhanden |
+| `show ip route 10.1.0.0` auf R4 | `D EX` mit Tag 1, keine Routen mit Tag 2 zurück |
 
 ## Teil C – Üben
 
@@ -123,8 +151,10 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 </details>
 
 ## Prüfungsbezug
-
-Redistribution braucht eine Metrik im Zielprotokoll (EIGRP: fünf Werte, OSPF: Standard 20, BGP: Metrik der IGP). Ohne `subnets` übernimmt OSPF nur klassische Netze. Bei mehreren ASBRs verhindern Route-Tags und Route-Maps Rückkopplungen; die Distanz (AD) schützt nur teilweise (EIGRP extern 170, OSPF 110). Typ E2: Metrik bleibt gleich, E1: addiert die interne Kosten.
+- Redistribution braucht eine Metrik im Zielprotokoll. EIGRP: fünf Werte. OSPF: Standard 20.
+- Ohne `subnets` übernimmt OSPF nur klassenbehaftete Netze.
+- Bei mehreren Redistributionspunkten verhindern Tags und Route-Maps Rückkopplungen. Die Administrative Distanz schützt nur teilweise.
+- E2: Metrik bleibt gleich. E1: interne Kosten kommen dazu.
 
 ## Lösungen
 

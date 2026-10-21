@@ -62,15 +62,40 @@ Summe (alle Nodes als vIOS/…): ca. **2.0 GB RAM**. Mit VPCS statt vIOS-Hosts: 
 Loopback0: R1 10.255.0.1, R2 .2, R3 .3, R4 .4 (jeweils /32). R1 hat zusätzlich Lo10 bis Lo13 mit 172.16.0.1 bis 172.16.3.1 (je /24), R4 hat Lo1 192.168.4.1/24. AS-Nummer: **100**.
 
 ## Teil A – Bauen
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
 
-1. **Grundkonfiguration.** `router eigrp 100`, `eigrp router-id` (= Loopback0), `network` je Link mit Wildcard-Maske, `no auto-summary`, `passive-interface default` und auf den Router-Links `no passive-interface`. Prüfe `show ip eigrp neighbors` (Hold Time, SRTT, Q Cnt) und `show ip protocols`.
-2. **Topology Table lesen.** `show ip eigrp topology` auf R3 für 172.16.0.0/24: FD und RD, Successor und Feasible Successor. Warum ist ein Pfad mit RD < FD des Successors ein FS (Feasibility Condition)? Schalte den Successor-Link ab und beobachte, dass es ohne Query umschaltet.
-3. **Metrik.** Berechne die klassische Metrik (K1 und K3 aktiv): `256 × (10^7/kleinste Bandbreite in kbit/s + Summe Delay/10)`. Ändere `bandwidth` und `delay` an einem Link und vergleiche mit `show interfaces`. Warum nimmt man bevorzugt `delay` statt `bandwidth` zur Pfadsteuerung?
-4. **Unequal-Cost.** `variance 2` unter `router eigrp 100` auf R3 und prüfe, wann zwei Pfade in `show ip route` erscheinen (Bedingung: FD des Feasible Successor < Variance × FD des Successors, und er muss Feasible Successor sein).
-5. **Summary.** Auf R1: `ip summary-address eigrp 100 172.16.0.0 255.255.252.0` auf Gi0/0 und Gi0/1. Prüfe auf R2/R3, dass nur noch `172.16.0.0/22` ankommt, und auf R1 die automatische Route nach `Null0` (Distanz 5). Wozu dient sie?
-6. **Stub.** R4: `eigrp stub connected`. Prüfe `show ip eigrp neighbors detail` auf R2 (`Stub Peer Advertising ( CONNECTED ) Routes`). Warum fragt R2 den Stub-Router bei einem Ausfall nicht mehr (Query-Scoping, Stuck-in-Active)?
-7. **Authentifizierung.** Key-Chain `KC` (Key 1, `EigrpKey`) und `ip authentication mode eigrp 100 md5` plus `ip authentication key-chain eigrp 100 KC` auf dem Link R1–R2. Teste einen falschen Schlüssel.
-8. **Vergleich mit OSPF.** Distanzvektor (genauer: Advanced Distance Vector) vs. Link-State, DUAL vs. SPF, Standard-AD (intern 90, extern 170, OSPF 110), Multicast 224.0.0.10 vs. 224.0.0.5/6, Metrik. Wann würdest du eines der beiden wählen?
+1. **Grundkonfiguration.** Starte auf allen Routern `router eigrp 100` mit `eigrp router-id` (= Loopback0), je einem `network` pro Link mit Wildcard-Maske und `no auto-summary`. Setze `passive-interface default` und nimm die Router-Links mit `no passive-interface` heraus.
+   - **Prüfen:** `show ip eigrp neighbors` zeigt Hold Time, SRTT und Q Cnt pro Nachbar. `show ip protocols` zeigt AS, K-Werte und passive Interfaces.
+2. **Topologie-Tabelle lesen.** Sieh dir auf R3 `show ip eigrp topology 172.16.0.0/24` an. Schalte danach den Link zum Successor ab.
+   - **Prüfen:** Benenne FD, RD, Successor und Feasible Successor. Nach dem Abschalten übernimmt der Feasible Successor sofort, ohne Query.
+   - **Denkfrage:** Warum darf der Feasible Successor ohne Rückfrage übernehmen?
+3. **Metrik berechnen.** Berechne die klassische Metrik mit K1 und K3: 256 × (10⁷ ÷ kleinste Bandbreite in kbit/s + Summe der Delays in µs ÷ 10). Ändere an einem Link `bandwidth` oder `delay` und vergleiche mit `show interfaces`.
+   - **Prüfen:** `show ip eigrp topology` zeigt nach der Änderung die neue Metrik.
+   - **Denkfrage:** Warum steuert man Pfade lieber mit `delay` als mit `bandwidth`?
+4. **Ungleiche Lastverteilung.** Setze auf R3 `variance 2` unter `router eigrp 100`.
+   - **Prüfen:** `show ip route 172.16.0.0` zeigt zwei Pfade, wenn die Bedingung erfüllt ist.
+   - **Denkfrage:** Welche zwei Bedingungen muss der zweite Pfad erfüllen?
+5. **Zusammenfassen.** Setze auf R1 an Gi0/0 und Gi0/1 `ip summary-address eigrp 100 172.16.0.0 255.255.252.0`.
+   - **Prüfen:** R2 und R3 sehen nur noch 172.16.0.0/22. R1 hat eine Route 172.16.0.0/22 nach Null0 mit Administrativer Distanz 5.
+   - **Denkfrage:** Wozu dient die Route nach Null0?
+6. **Stub.** Setze auf R4 `eigrp stub connected`.
+   - **Prüfen:** `show ip eigrp neighbors detail` auf R2 meldet „Stub Peer Advertising (CONNECTED) Routes“.
+   - **Denkfrage:** Warum schickt R2 dem Stub bei einem Ausfall keine Query mehr?
+7. **Authentisierung.** Lege die Key-Chain `KC` mit Key 1 und dem String `EigrpKey` an. Setze auf dem Link R1–R2 `ip authentication mode eigrp 100 md5` und `ip authentication key-chain eigrp 100 KC`. Teste danach einen falschen Schlüssel.
+   - **Prüfen:** Mit falschem Schlüssel fällt die Nachbarschaft, `debug eigrp packets` meldet „authentication mismatch“.
+8. **Mit OSPF vergleichen.**
+   - **Denkfrage:** Wie unterscheiden sich EIGRP und OSPF in Verfahren, Algorithmus, Administrativer Distanz, Multicast-Adressen und Metrik? Wann nimmst du welches?
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 2:** Seine RD ist kleiner als die FD des Successors. Der Nachbar ist also näher am Ziel als R3 über seinen besten Weg und kann nicht über R3 zurückrouten. Damit ist der Weg garantiert schleifenfrei.
+- **Zu 3:** `bandwidth` wirkt sich auch auf andere Dinge aus, etwa auf QoS-Prozentwerte und OSPF-Kosten. Und weil EIGRP nur die kleinste Bandbreite auf dem Weg zählt, ändert sich oft nichts. `delay` wird über den Weg aufsummiert und ändert gezielt nur die Pfade über diesen Link.
+- **Zu 4:** Erstens muss er ein Feasible Successor sein. Zweitens muss seine Metrik kleiner sein als `variance` × FD des Successors.
+- **Zu 5:** Sie verhindert Schleifen. Kommt ein Paket für ein Teilnetz der Summary, das es nicht gibt, verwirft R1 es, statt es per Default-Route zurückzuschicken.
+- **Zu 6:** Ein Stub sagt seinen Nachbarn: Hinter mir gibt es keinen anderen Weg. R2 muss ihn also nicht fragen. Die Suche nach einem Ersatzweg bleibt klein, und Stuck in Active wird unwahrscheinlicher.
+- **Zu 8:** EIGRP ist ein erweitertes Distanzvektorverfahren mit DUAL, OSPF ein Link-State-Verfahren mit SPF. Administrative Distanz: EIGRP intern 90, extern 170, OSPF 110. Multicast: EIGRP 224.0.0.10, OSPF 224.0.0.5 und 224.0.0.6. EIGRP rechnet mit Bandbreite und Delay, OSPF mit Kosten aus der Bandbreite. EIGRP ist einfach und kann ungleiche Lastverteilung. OSPF ist ein offener Standard, läuft also auch mit anderen Herstellern, und gliedert große Netze in Areas.
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -89,7 +114,6 @@ Setze alle Nodes zurück (Rechtsklick → *Wipe*) und spiele `repair/<Node>.cfg`
 **Ticket 6:** R2 und R3 sind direkt verbunden, aber `show ip eigrp neighbors` auf R2 zeigt R3 nicht (Nachbarschaft nur über R1).
 
 ## Verifikation
-
 ```
 show ip eigrp neighbors
 show ip eigrp topology [all-links]
@@ -97,7 +121,12 @@ show ip route eigrp
 show ip protocols
 show ip eigrp interfaces detail
 ```
-Erwartet: R1 hat zwei Nachbarn (R2, R3), R2 drei (R1, R3, R4), R3 sieht `172.16.0.0/22` über beide Wege, R4 erscheint bei R2 als Stub.
+
+| Befehl | Das solltest du sehen |
+|---|---|
+| `show ip eigrp neighbors` | R1 zwei Nachbarn (R2, R3), R2 drei (R1, R3, R4) |
+| `show ip route eigrp` auf R3 | 172.16.0.0/22 über beide Wege (nach Schritt 4 und 5) |
+| `show ip eigrp neighbors detail` auf R2 | R4 als Stub |
 
 ## Teil C – Üben
 
@@ -125,8 +154,11 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 </details>
 
 ## Prüfungsbezug
-
-EIGRP-Nachbarn brauchen gleiche AS-Nummer, gleiche K-Werte, passende Authentifizierung und Adressen im selben Subnetz; Hello/Hold-Timer müssen **nicht** übereinstimmen. Successor = bester Pfad, Feasible Successor = Pfad mit RD < FD des Successors. Query/Reply, Stub und Summarisierung begrenzen die Ausbreitung (SIA). Variance erlaubt ungleiche Lastverteilung nur für FS. Externe Routen AD 170, interne 90, Summary-Null0 AD 5.
+- EIGRP-Nachbarn brauchen gleiche AS-Nummer, gleiche K-Werte, passende Authentisierung und Adressen im selben Subnetz. Die Hello- und Hold-Timer dürfen verschieden sein.
+- Successor = bester Pfad. Feasible Successor = Pfad mit RD < FD des Successors.
+- Stub und Summary begrenzen die Ausbreitung von Queries und damit das Risiko für Stuck in Active.
+- `variance` gilt nur für Feasible Successors.
+- Administrative Distanz: intern 90, extern 170, Summary 5.
 
 ## Lösungen
 

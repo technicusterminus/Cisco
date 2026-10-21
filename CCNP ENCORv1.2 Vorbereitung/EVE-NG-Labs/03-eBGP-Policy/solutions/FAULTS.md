@@ -19,7 +19,7 @@
 
 - **Symptom:** R1 wählt zu 198.51.100.0/24 den Pfad über ISP-B, obwohl ISP-A bevorzugt sein soll (LocPrf überall 100).
 - **So findest du es:** `show ip bgp 198.51.100.0` zeigt beide Pfade mit Local Preference 100. `show ip bgp neighbors 10.12.0.2 | include route-map` bleibt leer: Die Route-Map hängt nicht an der Sitzung.
-- **Ursache:** Route-Map FROM-ISPA ist nicht auf die Session angewendet; bei Gleichstand gewinnt die niedrigere Router-ID (3.3.3.3).
+- **Ursache:** Route-Map FROM-ISPA ist nicht auf die Session angewendet; ohne sie herrscht Gleichstand bis zu den Tie-Breakern, und ISP-B (Router-ID 3.3.3.3) gewinnt.
 - **Fix:** `neighbor 10.12.0.2 route-map FROM-ISPA in`, danach `clear ip bgp 10.12.0.2 soft in`.
 - **Eingebaut:**
 

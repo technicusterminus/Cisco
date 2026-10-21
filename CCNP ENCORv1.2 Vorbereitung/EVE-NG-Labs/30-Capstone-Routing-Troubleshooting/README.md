@@ -66,12 +66,27 @@ Summe (alle Nodes als vIOS/…): ca. **2.5 GB RAM**. Mit VPCS statt vIOS-Hosts: 
 Loopback0: R1 10.255.0.1, R2 .2, R3 .3 (Area 1), R4 .4 (EIGRP). R3 Lo10 192.168.3.1/24, R4 Lo10 172.20.4.1/24, ISP Lo10 203.0.113.1/24. **Soll:** Alle internen Netze erreichen 203.0.113.1 über eine Default-Route (aus BGP in OSPF, R4 per statischer Default auf R2); R4s Netz ist in OSPF sichtbar; der ISP hat statische Rückrouten für die internen Netze.
 
 ## Teil A – Bauen
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
 
-1. **Provider.** eBGP R1 (65001) ↔ ISP (65000); ISP `neighbor 198.51.100.1 default-originate`, kündigt 203.0.113.0/24 an. ISP-Rückrouten: `ip route 10.0.0.0 255.0.0.0 198.51.100.1`, `172.20.0.0 255.255.0.0` und `192.168.0.0 255.255.0.0` ebenfalls zu R1.
-2. **OSPF.** Area 0: R1, R2; Area 1 (Stub): R2 und R3 (`area 1 stub` auf beiden). R1 gibt die Default-Route mit `default-information originate` weiter. Loopbacks von R3 mit `ip ospf network point-to-point`.
-3. **EIGRP-Standort.** R2/R4 EIGRP 100 auf dem Link und Lo10 (R4), `no auto-summary`. R4: `ip route 0.0.0.0 0.0.0.0 10.0.24.1`.
-4. **Redistribution.** R2: `redistribute eigrp 100 subnets` in OSPF und `redistribute ospf 1 metric 10000 100 255 1 1500` in EIGRP. Warum reicht hier ein Redistributionspunkt ohne Tags?
-5. **Abnahme.** `ping 203.0.113.1 source Loopback10` von R3 und R4, `show ip route` auf allen Routern (Codes `B`, `O*E2`, `O IA`, `O E2`, `D EX`).
+Dieses Lab ist vor allem zum Reparieren gedacht. Wenn du es selbst baust, gehe von außen nach innen vor: Provider, OSPF, EIGRP, dann die Verbindung dazwischen.
+
+1. **Provider.** Baue eBGP zwischen R1 (AS 65001) und ISP (AS 65000) auf. Der ISP schickt mit `neighbor 198.51.100.1 default-originate` eine Default-Route und kündigt 203.0.113.0/24 an. Für den Rückweg bekommt der ISP statische Routen zu 10.0.0.0/8, 172.20.0.0/16 und 192.168.0.0/16, alle über R1.
+   - **Prüfen:** `show ip bgp summary` auf R1 zeigt den ISP Established. `show ip route` auf R1 enthält `B* 0.0.0.0/0`.
+2. **OSPF.** Area 0 zwischen R1 und R2, Area 1 als Stub zwischen R2 und R3 (`area 1 stub` auf beiden). R1 gibt die Default-Route mit `default-information originate` in OSPF weiter. Die Loopbacks von R3 bekommen `ip ospf network point-to-point`.
+   - **Prüfen:** R2 hat `O*E2 0.0.0.0/0`, R3 eine Default-Route `O*IA` vom ABR.
+3. **EIGRP-Standort.** Starte EIGRP 100 auf R2 und R4 für den Link und Lo10 von R4, mit `no auto-summary`. R4 bekommt `ip route 0.0.0.0 0.0.0.0 10.0.24.1`.
+   - **Prüfen:** `show ip eigrp neighbors` zeigt R2 und R4 als Nachbarn.
+4. **Redistribution.** Setze auf R2 `redistribute eigrp 100 subnets` unter OSPF und `redistribute ospf 1 metric 10000 100 255 1 1500` unter EIGRP.
+   - **Prüfen:** R1 sieht `O E2 172.20.4.0/24`, R4 sieht die OSPF-Netze als `D EX`.
+   - **Denkfrage:** Warum braucht es hier keine Tags?
+5. **Abnahme.** Pinge von R3 und R4 mit `ping 203.0.113.1 source Loopback10`. Prüfe `show ip route` auf allen Routern.
+   - **Prüfen:** Beide Pings klappen. Du findest die Codes `B`, `O*E2`, `O IA`, `O E2` und `D EX`.
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 4:** Es gibt nur einen Punkt, an dem Routen zwischen OSPF und EIGRP wechseln. Eine Route kann nicht über einen zweiten Punkt in ihre Ursprungsdomäne zurückfließen. Tags braucht man erst bei zwei oder mehr Punkten (siehe Lab 27).
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -94,14 +109,19 @@ Setze alle Nodes zurück (Rechtsklick → *Wipe*) und spiele `repair/<Node>.cfg`
 **Ticket 8:** Alle Pings von internen Quellen an 203.0.113.1 scheitern auf dem Rückweg, obwohl das Routing intern stimmt; Traceroute zeigt den Hinweg bis zum ISP.
 
 ## Verifikation
-
 ```
 show ip bgp summary           show ip route bgp
 show ip ospf neighbor         show ip route ospf
 show ip eigrp neighbors       show ip route eigrp
 ping 203.0.113.1 source Loopback10
 ```
-Erwartet: BGP `Established`, R2 und R3 haben `O*E2 0.0.0.0/0`, R1 sieht `O E2 172.20.4.0/24`, R3 hat 192.168.3.0/24 lokal, die Pings vom R3/R4 an 203.0.113.1 klappen.
+
+| Befehl | Das solltest du sehen |
+|---|---|
+| `show ip bgp summary` auf R1 | ISP Established |
+| `show ip route` auf R2 und R3 | eine Default-Route (`O*E2` bzw. `O*IA`) |
+| `show ip route ospf` auf R1 | `O E2 172.20.4.0/24` |
+| Ping von R3 und R4 an 203.0.113.1 | erfolgreich |
 
 ## Teil C – Üben
 
@@ -129,8 +149,10 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 </details>
 
 ## Prüfungsbezug
-
-Arbeitsmethode bei Routing-Fehlern: Nachbarschaft (OSPF/EIGRP/BGP-State), dann Routen (welcher Code, welche Distanz), dann Weiterleitung (Next-Hop, Rückweg). Bei Redistribution immer Metrik (EIGRP: fünf Werte) und `subnets` prüfen. Default-Routen kommen in OSPF nur mit `default-information originate`; in Stub-Areas liefert der ABR die Default automatisch. Den Rückweg nicht vergessen: Bei einem Ping zählt der Weg in beide Richtungen.
+- Vorgehen bei Routing-Fehlern: erst die Nachbarschaft (Zustand bei OSPF, EIGRP, BGP), dann die Routen (welcher Code, welche Distanz), dann die Weiterleitung (Next-Hop, Rückweg).
+- Bei Redistribution immer die Metrik (EIGRP: fünf Werte) und `subnets` prüfen.
+- In OSPF kommt eine Default-Route nur mit `default-information originate`. In Stub-Areas erzeugt der ABR sie selbst.
+- Ein Ping braucht Hin- und Rückweg.
 
 ## Lösungen
 

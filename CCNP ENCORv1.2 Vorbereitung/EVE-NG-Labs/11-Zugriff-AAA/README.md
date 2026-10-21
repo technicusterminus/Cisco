@@ -50,15 +50,40 @@ Summe (alle Nodes als vIOS/…): ca. **1.0 GB RAM**. Mit VPCS statt vIOS-Hosts: 
 Telnet wird für die Tests genutzt, weil sich vty-Verhalten damit am einfachsten prüfen lässt. SSH baust du in Aufgabe 6 zusätzlich auf (RSA-Schlüssel erzeugst du selbst, sie sind nicht Teil der Konfigurationsdatei).
 
 ## Teil A – Bauen
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
 
-1. **Lines.** Console: `logging synchronous`, `exec-timeout 5 0`. vty 0 4: `transport input ssh` später, jetzt `telnet`. Was bewirkt `privilege level 15` an einer Line, und warum ist ein Passwort `login` auf vty ohne Benutzername ein Auditproblem?
-2. **Lokale Benutzer.** `username admin privilege 15 algorithm-type scrypt secret …`, `username helpdesk privilege 5 …`. Vergleiche Typ 0/5/7/8/9 (Klartext, MD5, reversibel, PBKDF2-SHA256, scrypt). Warum ist Typ 7 kein Schutz?
-3. **AAA-Modell.** `aaa new-model`, `aaa authentication login default local`. Was ändert sich für alle Lines durch `aaa new-model` (Gefahr des Aussperrens, deshalb zweite Session offen lassen)?
-4. **TACACS+ mit Fallback.** Definiere `tacacs server TAC1` (10.0.12.99, key, timeout 2) und `aaa group server tacacs+ TACGRP`. Methodenliste `VTY_LIST`: `group TACGRP local`. Wende sie auf vty an (`login authentication VTY_LIST`). Melde dich von R2 an: Beobachte die Wartezeit und das Fallback auf lokale Benutzer. Wie unterscheidet sich eine Methodenliste mit `none` am Ende (gefährlich!) von `local`?
-5. **Autorisierung und Accounting.** `aaa authorization exec VTY_LIST group TACGRP local` (Privilege vom Server/aus lokalem Benutzer), `aaa authorization commands 15 VTY_LIST group TACGRP local`, `aaa accounting exec default start-stop group TACGRP`. Was passiert ohne Exec-Authorization (Benutzer landet im User-EXEC, Privileg 1)? Wann nutzt man Command Authorization (TACACS+) statt Privilege Levels?
-6. **Härtung.** `login block-for 60 attempts 3 within 30`, `login on-failure log`, `ip domain-name`, RSA 2048 erzeugen, `ip ssh version 2`, `transport input ssh`, `exec-timeout 5 0`, `banner login`. Prüfe `show login failures` nach drei Fehlversuchen.
-7. **TACACS+ vs. RADIUS.** Vergleiche Transport (TCP 49 vs. UDP 1812/1813), Verschlüsselung (ganzes Paket vs. nur Passwort), Trennung von AAA (TACACS+ getrennt, RADIUS kombiniert), typische Einsätze (Gerätezugriff vs. 802.1X/VPN).
-8. **Privilege Levels.** Gib `helpdesk` (Level 5) nur `show ip interface brief` und `ping`: `privilege exec level 5 show ip interface brief`. Vergleiche das mit Command Authorization und RBAC-Views (`parser view`).
+1. **Lines einrichten.** Setze an der Konsole `logging synchronous` und `exec-timeout 5 0`. Erlaube an `line vty 0 4` vorerst `transport input telnet`, SSH kommt in Schritt 6.
+   - **Denkfrage:** Was bewirkt `privilege level 15` an einer Line? Und warum ist ein reines Line-Passwort mit `login` ohne Benutzernamen ein Problem bei einem Audit?
+2. **Lokale Benutzer.** Lege `username admin privilege 15 algorithm-type scrypt secret …` und `username helpdesk privilege 5 algorithm-type scrypt secret …` an.
+   - **Prüfen:** `show running-config | include username` zeigt bei beiden ein `secret 9`.
+   - **Denkfrage:** Was unterscheidet die Passworttypen 0, 5, 7, 8 und 9? Warum ist Typ 7 kein echter Schutz?
+3. **AAA einschalten.** Setze `aaa new-model` und `aaa authentication login default local`. Halte vorher eine zweite Sitzung offen.
+   - **Prüfen:** Eine neue Anmeldung per Telnet von R2 fragt jetzt nach Benutzername und Passwort.
+   - **Denkfrage:** Warum sollst du beim Einschalten von AAA eine zweite Sitzung offen halten?
+4. **TACACS+ mit Fallback.** Lege `tacacs server TAC1` an (Adresse 10.0.12.99, Schlüssel, `timeout 2`) und die Gruppe `aaa group server tacacs+ TACGRP`. Die Methodenliste `aaa authentication login VTY_LIST group TACGRP local` bindest du mit `login authentication VTY_LIST` an die vty-Lines. Den Server gibt es nicht, das ist Absicht.
+   - **Prüfen:** Melde dich von R2 an. Die Anmeldung dauert ein paar Sekunden, dann klappt sie mit dem lokalen Benutzer.
+   - **Denkfrage:** Warum klappt die Anmeldung trotz fehlendem Server? Und warum ist `none` am Ende einer Methodenliste gefährlich?
+5. **Autorisierung und Accounting.** Setze `aaa authorization exec VTY_LIST group TACGRP local` und an den vty-Lines `authorization exec VTY_LIST`. Dazu `aaa accounting exec default start-stop group TACGRP`.
+   - **Prüfen:** `admin` landet nach der Anmeldung direkt in `R1#`, `helpdesk` in `R1>`.
+   - **Denkfrage:** Was passiert ohne die Exec-Autorisierung? Wann lohnt sich Befehlsautorisierung per TACACS+ statt Privilege Levels?
+6. **Härten.** Setze `login block-for 60 attempts 3 within 30`, `login on-failure log`, einen `ip domain-name`, erzeuge einen RSA-Schlüssel mit 2048 Bit, setze `ip ssh version 2` und `transport input ssh`. Ergänze ein `banner login`.
+   - **Prüfen:** Nach drei falschen Anmeldungen zeigt `show login failures` die Versuche, und `show login` meldet die Sperre. SSH von R2 auf R1 klappt, Telnet nicht mehr.
+7. **TACACS+ und RADIUS vergleichen.** Fülle für beide aus: Transport, was verschlüsselt wird, ob die drei A getrennt sind, typischer Einsatz.
+8. **Privilege Levels.** Gib Level 5 zusätzlich `show ip interface brief` und `ping`: `privilege exec level 5 show ip interface brief` und `privilege exec level 5 ping`.
+   - **Prüfen:** Als `helpdesk` funktionieren diese beiden Befehle, `configure terminal` nicht.
+   - **Denkfrage:** Was wäre die modernere Alternative zu Privilege Levels?
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 1:** Mit `privilege level 15` landet jeder, der sich an dieser Line anmeldet, sofort im privilegierten Modus. Bei einem Line-Passwort ohne Benutzername teilen sich alle dasselbe Passwort. Im Log steht dann nicht, wer etwas geändert hat.
+- **Zu 2:** Typ 0 ist Klartext. Typ 7 ist nur verschleiert und lässt sich in Sekunden zurückrechnen. Typ 5 ist ein MD5-Hash, heute zu schwach. Typ 8 (PBKDF2 mit SHA-256) und Typ 9 (scrypt) sind die sicheren Varianten.
+- **Zu 3:** Mit `aaa new-model` gelten sofort neue Regeln für alle Lines. Ist die Methodenliste falsch, kommst du nicht mehr hinein. Die offene Sitzung ist deine Rettung.
+- **Zu 4:** Der Server antwortet nicht, also nimmt der Router nach dem Timeout die nächste Methode, `local`. Würde der Server antworten und ablehnen, gäbe es kein Fallback. `none` am Ende lässt jeden ohne Prüfung hinein, sobald die anderen Methoden nicht antworten.
+- **Zu 5:** Ohne Exec-Autorisierung übernimmt der Router das Privileg des Benutzers nicht. Alle landen in `R1>` mit Level 1. Befehlsautorisierung per TACACS+ lohnt sich, wenn viele Admins mit unterschiedlichen Rechten arbeiten. Jeder Befehl wird zentral geprüft und protokolliert.
+- **Zu 7:** TACACS+: TCP 49, verschlüsselt das ganze Paket, trennt Authentisierung, Autorisierung und Accounting, typisch für die Verwaltung von Geräten. RADIUS: UDP 1812/1813, verschlüsselt nur das Passwort, fasst Authentisierung und Autorisierung zusammen, typisch für den Netzzugang (802.1X, VPN, WLAN).
+- **Zu 8:** Rollenbasierte CLI-Views (`parser view`) oder Befehlsautorisierung über TACACS+. Beide sind feiner und übersichtlicher als nummerierte Level.
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -73,16 +98,20 @@ Setze alle Nodes zurück (Rechtsklick → *Wipe*) und spiele `repair/<Node>.cfg`
 **Ticket 4:** Audit-Befund: untätige vty-Sitzungen laufen nie ab.
 
 ## Verifikation
-
 ```
 show aaa servers
 show aaa method-lists authentication
 show running-config | section aaa|line vty|username
 show users
 show login failures
-telnet 10.0.12.1               ! von R2 aus
+telnet 10.0.12.1               ! von R2 aus (vor Schritt 6)
 ```
-Erwartet: Anmeldung von R2 mit `admin` landet in `R1#` (Privileg 15), `helpdesk` in `R1>` mit eingeschränkten Befehlen; nach TACACS-Timeout greift lokal.
+
+| Test | Das solltest du sehen |
+|---|---|
+| Anmeldung als `admin` von R2 | nach kurzer Wartezeit `R1#` (Fallback auf lokal) |
+| Anmeldung als `helpdesk` | `R1>`, nur die freigegebenen Befehle |
+| `show aaa servers` | TAC1 mit Status DEAD bzw. ohne Antworten |
 
 ## Teil C – Üben
 
@@ -110,8 +139,11 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 </details>
 
 ## Prüfungsbezug
-
-`aaa new-model` aktiviert AAA, Methodenlisten werden der Reihe nach probiert, nur bei Nichterreichbarkeit (nicht bei Ablehnung) wird die nächste Methode genutzt. TACACS+ TCP 49, RADIUS UDP 1812/1813. Authentication ≠ Authorization ≠ Accounting. Passwort-Typen: 5 = MD5, 7 = reversibel, 8 = PBKDF2-SHA256, 9 = scrypt.
+- `aaa new-model` schaltet AAA ein. Methodenlisten werden der Reihe nach probiert.
+- Die nächste Methode greift nur, wenn der Server nicht antwortet, nicht wenn er ablehnt.
+- TACACS+: TCP 49. RADIUS: UDP 1812/1813.
+- Authentisierung, Autorisierung und Accounting sind drei getrennte Schritte.
+- Passworttypen: 5 = MD5, 7 = umkehrbar, 8 = PBKDF2-SHA-256, 9 = scrypt.
 
 ## Lösungen
 

@@ -59,14 +59,34 @@ Die Hosts sind in den Aufgaben IOS-Geräte mit `no ip routing` (Dateien `build/<
 H1/H2 liegen im selben Subnetz 10.10.10.0/24, aber an verschiedenen Leafs: Das ist der Sinn von VXLAN (Layer-2 über Layer 3). Die Management-Schnittstelle `mgmt0` bleibt ungenutzt. Interface-Namen (Eth1/1, Eth1/2) hängen vom CML-Node-Typ ab: gegebenenfalls anpassen.
 
 ## Teil A – Bauen
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
 
-1. **Underlay.** Eth1/1 als Routed Port (`no switchport`, IP), Loopback0 als VTEP-Adresse, OSPF 1 (Area 0) auf beiden. LEAF1 muss `10.255.0.2` per Ping erreichen (Quelle Loopback0).
-2. **Features.** `feature ospf`, `feature nv overlay`, `feature vn-segment-vlan-based`. Wozu `vn-segment-vlan-based`?
-3. **VLAN-zu-VNI.** `vlan 10` → `vn-segment 10010`. Wie viele Bits hat die VNI (24 Bit, ca. 16 Mio.) im Vergleich zur VLAN-ID (12 Bit)?
-4. **NVE-Interface.** `interface nve1`: `no shutdown`, `source-interface loopback0`, `member vni 10010`, `ingress-replication protocol static` + `peer-ip 10.255.0.2` (bzw. .1 auf dem anderen Leaf). Beschreibe die Alternative per Multicast (`mcast-group`) und EVPN (BGP als Control Plane).
-5. **Access-Ports.** Eth1/2 als `switchport access vlan 10`. H1 und H2 bekommen 10.10.10.11/12: Ping muss gehen.
-6. **Beobachten.** `show nve peers`, `show nve vni`, `show mac address-table`. Wo lernt ein Leaf die MAC von H2 (Flood-and-Learn über Remote-VTEP)? Was ist die Kapselung: Outer MAC/IP, UDP 4789, VXLAN-Header (8 Byte, Flag `I`, VNI), Inner Frame. Wie groß ist der Overhead (50 Byte) und welche MTU brauchst du im Underlay (≥ 1550, besser 9216)?
-7. **Vergleich zu SD-Access.** Fabric-Edge ≙ VTEP, VN ≙ VNI/VRF, SGT in VXLAN-GPO-Header. Worin unterscheidet sich EVPN-VXLAN (BGP verteilt MAC/IP) von Flood-and-Learn?
+1. **Underlay.** Mache Eth1/1 zum gerouteten Port (`no switchport` und IP-Adresse). Lege Loopback0 als VTEP-Adresse an. Starte OSPF 1 in Area 0 auf Eth1/1 und Loopback0, auf beiden Leafs.
+   - **Prüfen:** `ping 10.255.0.2 source 10.255.0.1` auf LEAF1 klappt.
+2. **Features einschalten.** Setze `feature ospf`, `feature nv overlay` und `feature vn-segment-vlan-based`.
+   - **Denkfrage:** Wozu dient `vn-segment-vlan-based`?
+3. **VLAN mit VNI verbinden.** Setze unter `vlan 10` den Befehl `vn-segment 10010`.
+   - **Denkfrage:** Wie viele Segmente kann eine VNI unterscheiden, und wie viele eine VLAN-ID?
+4. **NVE-Interface.** Konfiguriere `interface nve1` mit `no shutdown`, `source-interface loopback0` und `member vni 10010`. Darunter `ingress-replication protocol static` und `peer-ip` mit der VTEP-Adresse des anderen Leafs.
+   - **Prüfen:** `show nve peers` zeigt den anderen Leaf mit State Up.
+   - **Denkfrage:** Welche Alternativen zur statischen Ingress Replication gibt es?
+5. **Hosts anschließen.** Setze Eth1/2 auf `switchport access vlan 10`. H1 und H2 bekommen 10.10.10.11 und .12.
+   - **Prüfen:** H1 pingt H2, obwohl dazwischen ein geroutetes Netz liegt.
+6. **Beobachten.** Sieh dir `show nve peers`, `show nve vni` und `show mac address-table` an.
+   - **Prüfen:** Die MAC von H2 steht auf LEAF1 mit der VTEP-Adresse von LEAF2 statt einem Port.
+   - **Denkfrage:** Wie lernt LEAF1 die MAC von H2? Wie sieht ein VXLAN-Paket aus, und welche MTU braucht das Underlay?
+7. **Bezug zu SD-Access und EVPN.**
+   - **Denkfrage:** Wo findest du VXLAN in SD-Access wieder? Was ändert EVPN gegenüber Flood-and-Learn?
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 2:** Das Feature erlaubt, ein VLAN per `vn-segment` einer VNI zuzuordnen. Ohne es gibt es den Befehl nicht.
+- **Zu 3:** Die VNI hat 24 Bit, also rund 16 Millionen Segmente. Die VLAN-ID hat 12 Bit, also 4094 nutzbare VLANs.
+- **Zu 4:** Statt einer festen Peer-Liste kann Broadcast-, unbekannter Unicast- und Multicast-Verkehr über eine Multicast-Gruppe im Underlay laufen (`mcast-group`, braucht PIM). Oder EVPN übernimmt: BGP verteilt die Liste der VTEPs und die bekannten MAC- und IP-Adressen.
+- **Zu 6:** LEAF1 packt ein ankommendes VXLAN-Paket aus und merkt sich die innere Quell-MAC zusammen mit der äußeren Quell-IP, also dem VTEP von LEAF2. Aufbau eines Pakets: äußerer Ethernet-Header (14 Byte), äußerer IP-Header (20), UDP mit Zielport 4789 (8), VXLAN-Header mit VNI (8), dann der ursprüngliche Frame. Das sind 50 Byte Overhead, das Underlay braucht also mindestens 1550 Byte MTU. In der Praxis setzt man Jumbo-Frames (9216).
+- **Zu 7:** In SD-Access ist jeder Fabric Edge ein VTEP. Ein virtuelles Netz entspricht einer VRF bzw. VNI, und die SGT steckt im erweiterten VXLAN-Header (VXLAN-GPO). EVPN verteilt MAC- und IP-Adressen per BGP, statt sie durch Fluten zu lernen. Das spart Broadcasts, und Multi-Homing wird möglich.
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -81,7 +101,6 @@ Setze alle Nodes zurück (Rechtsklick → *Wipe*) und spiele `repair/<Node>.cfg`
 **Ticket 4:** LEAF2 erreicht 10.255.0.1 nicht (Ping auf die VTEP-Adresse scheitert), NVE-Peer bleibt down.
 
 ## Verifikation
-
 ```
 show nve peers
 show nve vni
@@ -90,7 +109,12 @@ show mac address-table
 show ip ospf neighbors
 ping 10.10.10.12                   ! von H1
 ```
-Erwartet: `Peer-IP 10.255.0.2 State Up`, VNI 10010 `Up`, H1 ↔ H2 Ping über das Underlay.
+
+| Befehl | Das solltest du sehen |
+|---|---|
+| `show nve peers` auf LEAF1 | Peer-IP 10.255.0.2, State Up |
+| `show nve vni` | VNI 10010 Up, Modus static/ingress replication |
+| Ping H1 → H2 | erfolgreich über das geroutete Underlay |
 
 ## Teil C – Üben
 
@@ -118,8 +142,11 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 </details>
 
 ## Prüfungsbezug
-
-VXLAN kapselt Ethernet-Frames in UDP/IP (Port 4789), VNI 24 Bit, VTEP = Tunnel-Endpunkt. Overhead ~50 Byte. Control Plane: Flood-and-Learn (Multicast/Head-End) oder EVPN. VXLAN dehnt Layer-2-Domänen über Layer-3-Underlays.
+- VXLAN verpackt Ethernet-Frames in UDP/IP mit Zielport 4789.
+- Die VNI hat 24 Bit, der VTEP ist der Tunnelendpunkt.
+- Overhead etwa 50 Byte, also mindestens 1550 Byte MTU im Underlay.
+- Control Plane: Flood-and-Learn (Multicast oder Ingress Replication) oder EVPN.
+- VXLAN streckt Layer 2 über ein Layer-3-Netz.
 
 ## Lösungen
 

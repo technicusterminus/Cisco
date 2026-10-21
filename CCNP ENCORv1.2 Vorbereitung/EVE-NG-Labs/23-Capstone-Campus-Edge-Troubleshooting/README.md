@@ -91,16 +91,32 @@ Die Hosts sind in den Aufgaben IOS-Geräte mit `no ip routing` (Dateien `build/<
 **Design-Vorgaben:** SW1 ist STP-Root für VLAN 10 und 20 (Priorität 4096), SW2 hat 61440. Po1 ist ein LACP-Trunk (nur VLAN 10, 20). R1 ist HSRP-Active (Priorität 110, preempt) für beide VLANs, R2 Standby. OSPF 1 Area 0 mit `passive-interface default`. EDGE originiert die Default-Route per OSPF und macht PAT (Quell-Netz 10.10.0.0/16) auf Gi0/2. VLAN 20 darf VLAN 10 nicht erreichen (ACL auf R1/R2, eingehend am VLAN-20-Subinterface). NTP-Quelle ist EDGE. Verwaltung nur per SSH (Benutzer `admin`, Passwort `Lab-Passw0rd!`).
 
 ## Teil A – Bauen
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
 
-Dieses Lab ist vor allem zum **Reparieren** gedacht (Teil B). Wer es bauen will, geht in dieser Reihenfolge vor und prüft nach jeder Stufe:
+Dieses Lab ist vor allem zum Reparieren gedacht (Teil B). Wenn du es selbst bauen willst, gehe Schicht für Schicht vor und prüfe nach jeder Stufe, bevor du weitermachst.
 
-1. **Layer 2.** VLAN 10/20 auf SW1/SW2, LACP-Po1 (`channel-group 1 mode active` auf SW1, `passive` auf SW2), Trunks zu R1/R2 (`switchport mode trunk`, `nonegotiate`, Allowed 10,20), Access-Ports für H10/H20 mit PortFast. Root-Design per `spanning-tree vlan 10,20 priority 4096` (SW1) bzw. 61440 (SW2). Prüfe `show etherchannel summary`, `show spanning-tree root`.
-2. **Gateway-Redundanz.** Subinterfaces `Gi0/0.10/.20` auf R1/R2, HSRP **Version 2**, Gruppen 10 und 20, R1 Priorität 110 mit `preempt`. Prüfe `show standby brief` und dass H10/H20 ihr Gateway erreichen.
-3. **Routing.** OSPF 1 mit `passive-interface default`, Gi0/1 und Gi0/2 (EDGE: Gi0/0 und Gi0/1) aktivieren; `network 10.0.0.0 0.255.255.255 area 0`. Auf EDGE Default-Route zum ISP und `default-information originate`.
-4. **NAT.** EDGE: `access-list 1 permit 10.10.0.0 0.0.255.255`, `ip nat inside` auf Gi0/0 und Gi0/1, `ip nat outside` auf Gi0/2, `ip nat inside source list 1 interface GigabitEthernet0/2 overload`. Test: H10 und H20 pingen 8.8.8.8.
-5. **ACL.** `ip access-list extended V20-IN` mit `deny ip 10.10.20.0 0.0.0.255 10.10.10.0 0.0.0.255` vor `permit ip any any`, am Subinterface .20 eingehend (R1 und R2).
-6. **Zeit und Verwaltung.** EDGE `ntp master 3`, R1/R2 `ntp server 10.255.0.3`. Auf allen Routern `ip domain-name lab.local`, lokaler Benutzer, `crypto key generate rsa modulus 2048` (manuell, steht nicht in der Startkonfiguration), `ip ssh version 2`, vty `login local` und `transport input ssh`.
-7. **Abnahme.** H10 pingt 8.8.8.8, H20 pingt 8.8.8.8, H20 pingt H10 **nicht**, `show ntp status` auf R1 und R2 zeigt synchronisiert, SSH von R1 zu R2 klappt, Abschalten von R1 lässt H10 und H20 über R2 im Internet.
+1. **Layer 2.** Lege VLAN 10 und 20 auf SW1 und SW2 an. Bündle die Links zu Po1 mit LACP (SW1 `active`, SW2 `passive`). Die Ports zu R1 und R2 werden feste Trunks (`switchport mode trunk`, `nonegotiate`, erlaubt 10 und 20). Die Ports von H10 und H20 sind Access-Ports mit PortFast. SW1 bekommt `spanning-tree vlan 10,20 priority 4096`, SW2 61440.
+   - **Prüfen:** `show etherchannel summary` zeigt `Po1(SU)`. `show spanning-tree root` zeigt SW1 als Root für beide VLANs.
+   - **Denkfrage:** Warum bekommt SW2 bewusst die schlechteste Priorität 61440?
+2. **Gateway-Redundanz.** Lege auf R1 und R2 die Subinterfaces `Gi0/0.10` und `.20` an. Konfiguriere HSRP Version 2 mit den Gruppen 10 und 20. R1 bekommt Priorität 110 und `preempt`.
+   - **Prüfen:** `show standby brief` zeigt R1 Active in beiden Gruppen. H10 und H20 pingen ihr Gateway.
+3. **Routing.** Starte OSPF 1 mit `passive-interface default` und `network 10.0.0.0 0.255.255.255 area 0`. Nimm die Uplinks mit `no passive-interface` heraus: auf R1 und R2 Gi0/1 und Gi0/2, auf EDGE Gi0/0 und Gi0/1. EDGE bekommt eine Default-Route zum ISP und `default-information originate`.
+   - **Prüfen:** `show ip ospf neighbor` auf EDGE zeigt R1 und R2. R1 und R2 haben eine Route `O*E2 0.0.0.0/0`.
+4. **NAT.** Auf EDGE: `access-list 1 permit 10.10.0.0 0.0.255.255`, `ip nat inside` an Gi0/0 und Gi0/1, `ip nat outside` an Gi0/2 und `ip nat inside source list 1 interface GigabitEthernet0/2 overload`.
+   - **Prüfen:** H10 und H20 pingen 8.8.8.8. `show ip nat translations` zeigt Einträge aus beiden VLANs.
+5. **Segmente trennen.** Lege `ip access-list extended V20-IN` an: zuerst `deny ip 10.10.20.0 0.0.0.255 10.10.10.0 0.0.0.255`, dann `permit ip any any`. Binde sie eingehend an `.20` auf R1 und R2.
+   - **Prüfen:** H20 erreicht H10 nicht mehr, das Internet schon. `show access-lists` zählt Treffer auf der Deny-Zeile.
+   - **Denkfrage:** Warum muss die ACL auf beiden Routern stehen?
+6. **Zeit und Verwaltung.** EDGE bekommt `ntp master 3`, R1 und R2 `ntp server 10.255.0.3`. Auf allen Routern: `ip domain-name lab.local`, ein lokaler Benutzer, `crypto key generate rsa modulus 2048` (von Hand, steht nicht in der Startkonfiguration), `ip ssh version 2` und an den vty-Lines `login local` und `transport input ssh`.
+   - **Prüfen:** `show ntp status` auf R1 und R2 meldet synchronisiert. SSH von R1 auf R2 klappt.
+7. **Abnahme.** Prüfe alles zusammen: H10 und H20 pingen 8.8.8.8, H20 pingt H10 nicht. Schalte R1 ab: H10 und H20 kommen über R2 weiter ins Internet.
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 1:** SW2 soll nie Root werden, solange SW1 lebt. Mit 61440 hat er die schlechteste mögliche Priorität. Jeder andere Switch mit Standardwert 32768 würde vor ihm gewinnen, und das Design bleibt vorhersehbar.
+- **Zu 5:** Je nachdem, welcher Router gerade HSRP Active ist, läuft der Verkehr aus VLAN 20 über R1 oder R2. Stünde die ACL nur auf R1, wäre die Trennung nach einem Wechsel auf R2 weg.
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -127,7 +143,6 @@ Setze alle Nodes zurück (Rechtsklick → *Wipe*) und spiele `repair/<Node>.cfg`
 **Ticket 10:** H10/H20 erreichen 8.8.8.8 nicht. EDGE erreicht den ISP, R1 und R2 haben aber keine Default-Route (`show ip route 0.0.0.0` → `Network not in table`).
 
 ## Verifikation
-
 ```
 show etherchannel summary          show spanning-tree root
 show standby brief                 show ip ospf neighbor
@@ -135,7 +150,14 @@ show ip route ospf | include O\*   show ip nat translations
 show access-lists                  show ntp status
 show ip ssh                        ping 8.8.8.8 source 10.10.10.2
 ```
-Erwartet: Po1 `SU` mit `Gi0/2(P) Gi0/3(P)`, SW1 Root, R1 Active für beide VLANs, EDGE hat zwei OSPF-Nachbarn, R1 und R2 haben eine `O*E2` Default-Route, NAT-Einträge für 10.10.x.x.
+
+| Befehl | Das solltest du sehen |
+|---|---|
+| `show etherchannel summary` | Po1 `SU` mit `Gi0/2(P) Gi0/3(P)` |
+| `show spanning-tree root` / `show standby brief` | SW1 Root, R1 Active für beide VLANs |
+| `show ip ospf neighbor` auf EDGE | zwei Nachbarn (R1, R2) |
+| `show ip route` auf R1 und R2 | `O*E2 0.0.0.0/0` |
+| `show ip nat translations` | Einträge für 10.10.x.x |
 
 ## Teil C – Üben
 
@@ -163,8 +185,10 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 </details>
 
 ## Prüfungsbezug
-
-Eine Troubleshooting-Aufgabe in der Prüfung gibt dir selten den Fehler, sondern ein Symptom. Arbeitsmethode: Layer 1/2 (Interface, VLAN, Trunk, Channel, STP), Layer 3 (Adressen, Gateway/FHRP, Routing), Dienste (NAT, ACL, NTP, SSH). Prüfe immer **beide Seiten** einer Verbindung, und denke an verdeckende Fehler: Ein Fehler weiter unten im Stack kann die Wirkung eines weiter oben liegenden verbergen.
+- Eine Troubleshooting-Frage nennt dir selten den Fehler, sondern ein Symptom.
+- Vorgehen: erst Layer 1 und 2 (Interface, VLAN, Trunk, Channel, STP), dann Layer 3 (Adressen, Gateway, Routing), dann Dienste (NAT, ACL, NTP, SSH).
+- Prüfe immer beide Seiten einer Verbindung.
+- Ein Fehler weiter unten kann einen Fehler weiter oben verdecken. Nach jeder Reparatur neu testen.
 
 ## Lösungen
 

@@ -110,13 +110,34 @@ Aufgaben, Verkabelung, Konfigurationen und Fehlerlisten verwenden die Packet-Tra
 > **Packet-Tracer-Hinweis:** **Eignung: teilweise.** Stand Packet Tracer 8.x: IP SLA / Track: nicht vorhanden. IP SLA und Track-Objekte gibt es nicht; die Teile mit Tracking in CML oder EVE-NG machen. Akzeptiert PT einen Befehl nicht, ist das ein PT-Limit und kein Fehler von dir; solche Schritte machst du in CML oder EVE-NG. Die CML-Switches (Gi-Ports) sind hier 3560-24PS bzw. 2960 mit FastEthernet-Ports: Die Portzuordnung steht unter dem Adressplan.
 
 ## Teil A – Bauen
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
 
-1. **Ausgangslage.** Prüfe von H1 und H2 mit `traceroute 8.8.8.8`, dass beide über ISP1 (R2) laufen.
-2. **PBR.** H1 (192.168.1.11) soll über ISP2 (R3, 10.0.13.2) laufen, H2 weiter über ISP1. Baue ACL `H1-ONLY`, Route-Map `PBR` (`match ip address`, `set ip next-hop`) und binde sie **eingehend** an das LAN-Interface von R1 (`ip policy route-map`). Prüfe per `traceroute` und `show route-map PBR` (Zähler).
-3. **Reihenfolge.** Was passiert mit Verkehr, der keine Route-Map-Sequenz trifft? Was mit Verkehr, der zwar zum `match`, aber zu keinem `set` führt? Wozu dient `set ip default next-hop` im Vergleich zu `set ip next-hop` (Routing-Tabelle zuerst oder PBR zuerst)?
-4. **Überwachung.** Baue `ip sla 1` (icmp-echo 10.0.13.2, Quelle Gi0/2, alle 5 s) und **plane ihn ein** (`ip sla schedule 1 life forever start-time now`). Erzeuge `track 1 ip sla 1 reachability` und nutze in der Route-Map `set ip next-hop verify-availability 10.0.13.2 10 track 1`. Schalte R1 Gi0/2 testweise ab: Was geschieht mit H1?
-5. **Local PBR.** Pings, die R1 selbst nach 9.9.9.9 sendet, sollen über ISP2 laufen. Warum greift `ip policy` am LAN-Interface nicht für diesen Verkehr, und welcher Befehl ist stattdessen nötig (`ip local policy route-map`)?
-6. **Debug.** Nutze `debug ip policy` kurz zur Fehlersuche (danach `undebug all`) und prüfe CEF-Pfad: Warum verliert man mit PBR eventuell Performance, wenn die Plattform es nicht in Hardware kann?
+1. **Ausgangslage prüfen.** Führe auf H1 und H2 `traceroute 8.8.8.8` aus.
+   - **Prüfen:** Beide laufen über ISP1, der zweite Hop ist 10.0.12.2 (R2).
+2. **PBR für H1.** H1 (192.168.1.11) soll über ISP2 (R3, 10.0.13.2) laufen, H2 weiter über ISP1. Baue dafür auf R1:
+   - eine ACL `H1-ONLY`, die nur 192.168.1.11 erlaubt,
+   - eine Route-Map `PBR` mit `match ip address H1-ONLY` und `set ip next-hop 10.0.13.2`,
+   - die Bindung mit `ip policy route-map PBR` am LAN-Interface, also dort, wo die Pakete von H1 ankommen.
+   - **Prüfen:** `traceroute 8.8.8.8` auf H1 geht über 10.0.13.2, auf H2 weiter über 10.0.12.2. `show route-map PBR` zählt Treffer.
+3. **Verhalten ohne Treffer.** Überlege, bevor du testest:
+   - **Denkfrage:** Was passiert mit einem Paket, das keine Sequenz der Route-Map trifft? Was mit einem, das zwar `match`, aber kein `set` hat? Und worin unterscheidet sich `set ip default next-hop` von `set ip next-hop`?
+4. **Next-Hop überwachen.** Baue `ip sla 1` mit `icmp-echo 10.0.13.2 source-interface Gi0/2` und `frequency 5`. Starte die Messung mit `ip sla schedule 1 life forever start-time now`. Lege `track 1 ip sla 1 reachability` an und ändere die Route-Map auf `set ip next-hop verify-availability 10.0.13.2 10 track 1`.
+   - **Prüfen:** `show track 1` ist Up. Schalte dann Gi0/2 auf R1 ab: `show track 1` geht nach einigen Sekunden auf Down.
+   - **Denkfrage:** Welchen Weg nimmt H1 jetzt, und warum?
+5. **Verkehr des Routers selbst.** Pings, die R1 selbst nach 9.9.9.9 schickt, sollen über ISP2 laufen.
+   - **Denkfrage:** Warum greift `ip policy` am LAN-Interface hier nicht, und welcher Befehl ist stattdessen nötig?
+6. **Fehlersuche.** Schalte kurz `debug ip policy` ein, sende einen Ping von H1 und lies die Meldungen. Danach `undebug all`.
+   - **Prüfen:** Die Meldung zeigt „policy match“ und den gewählten Next-Hop.
+   - **Denkfrage:** Warum kann PBR die Leistung kosten, wenn eine Plattform es nicht in Hardware erledigt?
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 3:** Ein Paket ohne Treffer wird ganz normal nach der Routing-Tabelle weitergeleitet, nicht verworfen. Dasselbe gilt für einen Treffer ohne `set`. `set ip next-hop` hat Vorrang vor der Routing-Tabelle. `set ip default next-hop` greift nur, wenn die Tabelle für das Ziel keine spezifischere Route als die Default kennt.
+- **Zu 4:** H1 läuft wieder über ISP1. `verify-availability` nutzt den Next-Hop nur, solange Track 1 Up ist. Ist er Down, wird das Paket normal geroutet, und die Default-Route zeigt auf ISP1.
+- **Zu 5:** `ip policy` prüft nur Pakete, die an diesem Interface ankommen. Pakete, die R1 selbst erzeugt, kommen an keinem Interface an. Für sie gibt es `ip local policy route-map`.
+- **Zu 6:** Ohne Hardware-Unterstützung muss die CPU jedes Paket selbst prüfen statt der schnellen Weiterleitung per CEF oder Hardware. Moderne Router und Switches erledigen PBR meist in CEF bzw. in der TCAM.
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -131,7 +152,6 @@ Baue die Topologie wie oben (oder behalte deine aus Teil A), setze alle Geräte 
 **Ticket 4:** H1 hat Internet-Ausfall (Pings zu 8.8.8.8 scheitern), H2 funktioniert; der Pfad bis R3 steht.
 
 ## Verifikation
-
 ```
 traceroute 8.8.8.8               ! auf H1 und H2
 show route-map PBR
@@ -140,7 +160,12 @@ show ip sla statistics 1
 show track 1
 show ip route 8.8.8.8
 ```
-Erwartet: H1 geht über 10.0.13.2, H2 über 10.0.12.2, `track 1` Up, `ip sla statistics` mit Erfolgszählern.
+
+| Befehl | Das solltest du sehen |
+|---|---|
+| `traceroute` auf H1 / H2 | H1 über 10.0.13.2, H2 über 10.0.12.2 |
+| `show track 1` | State Up |
+| `show ip sla statistics 1` | steigende Zahl erfolgreicher Messungen, Rückgabe OK |
 
 ## Teil C – Üben
 
@@ -168,8 +193,9 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 </details>
 
 ## Prüfungsbezug
-
-PBR wirkt nur auf eingehenden Verkehr des Interfaces (Router-eigener Verkehr nur mit `ip local policy`). Ohne `ip sla schedule` läuft keine Messung (Track bleibt down). `set ip next-hop` überschreibt die Routing-Tabelle, `set ip default next-hop` greift nur ohne Tabelleneintrag.
+- PBR wirkt nur auf Pakete, die am Interface ankommen. Für Pakete des Routers selbst gibt es `ip local policy`.
+- Ohne `ip sla schedule` misst IP SLA nie, der Track bleibt Down.
+- `set ip next-hop` überstimmt die Routing-Tabelle. `set ip default next-hop` greift nur, wenn es keine spezifische Route gibt.
 
 ## Lösungen
 

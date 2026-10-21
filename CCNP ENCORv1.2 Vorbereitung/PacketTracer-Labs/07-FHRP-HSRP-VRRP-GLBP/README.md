@@ -125,14 +125,38 @@ Aufgaben, Verkabelung, Konfigurationen und Fehlerlisten verwenden die Packet-Tra
 > **Packet-Tracer-Hinweis:** **Eignung: teilweise.** Stand Packet Tracer 8.x: IP SLA / Track: nicht vorhanden. IP SLA und Track-Objekte gibt es nicht; die Teile mit Tracking in CML oder EVE-NG machen. VRRP: nicht vorhanden. Nicht vorhanden. In CML oder EVE-NG üben. GLBP: nicht vorhanden. Nicht vorhanden. In CML oder EVE-NG üben. Akzeptiert PT einen Befehl nicht, ist das ein PT-Limit und kein Fehler von dir; solche Schritte machst du in CML oder EVE-NG. Die CML-Switches (Gi-Ports) sind hier 3560-24PS bzw. 2960 mit FastEthernet-Ports: Die Portzuordnung steht unter dem Adressplan.
 
 ## Teil A – Bauen
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
 
-1. **Subinterfaces.** Auf R1 und R2 `Gi0/0.10/.20/.30` (`encapsulation dot1Q`, eigene IP .2 bzw. .3). Auf dem Switch SW: VLANs 10/20/30 anlegen, Trunks zu R1 und R2 (Allowed 10,20,30), Hosts als Access (H1 V10, H2 V20, H3/H4 V30).
-2. **HSRP (VLAN 10).** `standby version 2`, Gruppe 10, VIP .1, R1 Priorität 110 mit `preempt`, R2 Default 100. Lies `show standby brief`: Active/Standby/Virtual-MAC `0000.0C9F.Fxxx`. Warum ist Preempt standardmäßig aus?
-3. **Tracking.** `track 1 interface Gi0/2 line-protocol` und `standby 10 track 1 decrement 20`. Schalte R1 Gi0/2 ab: Wechselt R2 auf Active? Welcher Decrement-Wert ist nötig (110 − x < 100)? Warum bräuchte man bei Layer-3-Uplinks ein besseres Track-Objekt (IP SLA, Route-Existenz)?
-4. **VRRP (VLAN 20).** `vrrp 20 ip 10.10.20.1`, R2 `priority 110`. VRRP (RFC 5798) vs. HSRP: Preempt ist Standard, Multicast 224.0.0.18, Master/Backup, virtuelle MAC `0000.5E00.01xx`.
-5. **GLBP (VLAN 30).** `glbp 30 ip 10.10.30.1`, R1 `priority 110 preempt`, `load-balancing round-robin`. Prüfe von H3 und H4 per `show arp`, dass die Gateway-MAC **unterschiedlich** ist (AVF 1/2). Welche Rollen gibt es (AVG/AVF)?
-6. **Timer.** Setze bei HSRP `timers msec 200 msec 750` und beobachte die Ausfallzeit mit `ping repeat 1000` beim Abschalten von R1 Gi0/0. Vergleiche mit Default (3/10 s) und mit BFD-Ansatz.
-7. **HA-Konzepte.** Beschreibe zu jeder Redundanzstufe (Link: EtherChannel, Gerät: FHRP/StackWise, Chassis: SSO/NSF, Standort: Dual-Site) die typische Ausfallzeit und Konfiguration. Was leisten **SSO** und **NSF** im Gegensatz zu FHRP?
+1. **Subinterfaces und Switch.** Lege auf R1 und R2 die Subinterfaces `Gi0/0.10`, `.20` und `.30` an (`encapsulation dot1Q`, R1 jeweils .2, R2 jeweils .3). Lege auf dem Switch die VLANs 10, 20 und 30 an, mache die Ports zu R1 und R2 zu Trunks (erlaubt: 10, 20, 30) und die Host-Ports zu Access-Ports (H1 VLAN 10, H2 VLAN 20, H3 und H4 VLAN 30).
+   - **Prüfen:** R1 pingt R2 in allen drei VLANs.
+2. **HSRP in VLAN 10.** Konfiguriere `standby version 2` und Gruppe 10 mit der virtuellen IP 10.10.10.1. R1 bekommt Priorität 110 mit `preempt`, R2 behält 100.
+   - **Prüfen:** `show standby brief` zeigt R1 als Active, R2 als Standby und die virtuelle MAC `0000.0C9F.F00A`.
+   - **Denkfrage:** Warum ist Preempt bei HSRP standardmäßig aus?
+3. **Tracking.** Lege auf R1 `track 1 interface Gi0/2 line-protocol` an und koppel es mit `standby 10 track 1 decrement 20` an HSRP. Schalte dann Gi0/2 auf R1 ab.
+   - **Prüfen:** `show standby` auf R1 zeigt Priorität 90, R2 wird Active.
+   - **Denkfrage:** Welcher Decrement ist mindestens nötig? Und warum reicht der Zustand des Interfaces bei einem Layer-3-Uplink oft nicht aus?
+4. **VRRP in VLAN 20.** Konfiguriere `vrrp 20 ip 10.10.20.1` auf beiden Routern, R2 bekommt `vrrp 20 priority 110`.
+   - **Prüfen:** `show vrrp brief` zeigt R2 als Master.
+   - **Denkfrage:** Was unterscheidet VRRP von HSRP?
+5. **GLBP in VLAN 30.** Konfiguriere `glbp 30 ip 10.10.30.1`, auf R1 `glbp 30 priority 110` und `glbp 30 preempt`, auf beiden `glbp 30 load-balancing round-robin`.
+   - **Prüfen:** H3 und H4 pingen ihr Gateway. `show arp` auf H3 und H4 zeigt für 10.10.30.1 zwei verschiedene MAC-Adressen.
+   - **Denkfrage:** Welche Rollen gibt es bei GLBP, und wer verteilt die MAC-Adressen?
+6. **Timer verkürzen.** Setze in HSRP `standby 10 timers msec 200 msec 750`. Starte auf H1 `ping 10.10.10.1 repeat 1000` und schalte Gi0/0 auf R1 ab.
+   - **Prüfen:** Es gehen nur wenige Pings verloren. Mit den Standardwerten (3 s Hello, 10 s Hold) wären es deutlich mehr.
+   - **Denkfrage:** Was wäre eine Alternative zu sehr kurzen Timern?
+7. **Redundanz einordnen.** Ordne zu, was auf welcher Ebene schützt: Link (EtherChannel), Gerät (FHRP, StackWise), Chassis (SSO, NSF), Standort (zweites Rechenzentrum).
+   - **Denkfrage:** Was leisten SSO und NSF, was FHRP nicht kann?
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 2:** Ohne Preempt bleibt ein Router Active, bis er ausfällt. So vermeidet HSRP, dass die Rolle ständig hin und her springt, wenn ein Router neu startet. Wer die Rolle zurückholen soll, braucht `preempt` ausdrücklich.
+- **Zu 3:** Die Priorität muss unter die von R2 fallen: 110 − x < 100, also mindestens 11. Ein Interface kann up sein, obwohl dahinter nichts mehr erreichbar ist. Besser ist dann ein Track auf eine Route (`track … ip route … reachability`) oder auf IP SLA.
+- **Zu 4:** VRRP ist ein offener Standard (RFC 5798) und nutzt 224.0.0.18. Es heißt Master und Backup statt Active und Standby, Preempt ist standardmäßig an, und die virtuelle MAC lautet `0000.5E00.01xx`. Die virtuelle IP darf sogar die echte Adresse eines Routers sein.
+- **Zu 5:** Der Active Virtual Gateway (AVG) beantwortet die ARP-Anfragen und verteilt dabei die virtuellen MAC-Adressen. Bis zu vier Active Virtual Forwarders (AVF) leiten die Pakete weiter. Jeder Host bekommt so ein anderes Gateway, obwohl alle dieselbe IP benutzen.
+- **Zu 6:** BFD erkennt Ausfälle in Millisekunden und meldet sie an die Protokolle. So bleibt die CPU-Last durch Hellos klein.
+- **Zu 7:** SSO hält den Zustand zwischen zwei Supervisoren in einem Gerät synchron. Fällt einer aus, übernimmt der andere ohne Neustart. NSF leitet in dieser Zeit weiter Pakete weiter, die Nachbarn halten ihre Routen. FHRP schützt dagegen gegen den Ausfall eines ganzen Geräts mit Hilfe eines zweiten.
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -147,14 +171,18 @@ Baue die Topologie wie oben (oder behalte deine aus Teil A), setze alle Geräte 
 **Ticket 4:** Nach dem Wiederanschalten von R1 Gi0/2 bleibt R2 Active, obwohl R1 höhere Priorität hat.
 
 ## Verifikation
-
 ```
 show standby brief          show vrrp brief          show glbp brief
 show track
 show ip route ospf
 show arp                    ! auf den Hosts
 ```
-Erwartet: R1 HSRP Active, R2 VRRP Master, R1 AVG mit AVF 1 (R1) und AVF 2 (R2).
+
+| Befehl | Das solltest du sehen |
+|---|---|
+| `show standby brief` | R1 Active für VLAN 10 |
+| `show vrrp brief` | R2 Master für VLAN 20 |
+| `show glbp brief` | R1 als AVG, R1 und R2 je ein AVF |
 
 ## Teil C – Üben
 
@@ -182,8 +210,11 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 </details>
 
 ## Prüfungsbezug
-
-HSRP: v1 224.0.0.2, v2 224.0.0.102, Priorität 100, Preempt aus. VRRP: Master/Backup, Preempt an, 224.0.0.18. GLBP: AVG vergibt virtuelle MACs an AVFs (pro Gruppe max. 4). Track senkt die Priorität, ändert aber nichts, wenn die Differenz nicht reicht. SSO hält den Control Plane Zustand zwischen Supervisoren, NSF erlaubt Weiterleiten während Neustart.
+- HSRP: v1 224.0.0.2, v2 224.0.0.102, Priorität 100, Preempt aus.
+- VRRP: Master/Backup, Preempt an, 224.0.0.18.
+- GLBP: Der AVG verteilt bis zu vier virtuelle MAC-Adressen an die AVFs.
+- Tracking senkt die Priorität, wirkt aber nur, wenn die Differenz reicht.
+- SSO synchronisiert die Control Plane zwischen Supervisoren, NSF leitet während des Wechsels weiter.
 
 ## Lösungen
 

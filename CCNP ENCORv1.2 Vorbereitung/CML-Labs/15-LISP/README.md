@@ -35,14 +35,36 @@ Trennung von Identität (EID) und Ort (RLOC): zwei xTR-Standorte, ein kombiniert
 Der CORE kennt nur die drei /30-Netze (RLOC-Space). Die EID-Netze 192.168.x.0/24 sind dort **nicht** geroutet. xTRs haben eine Default-Route zum CORE, der MSMR ebenfalls.
 
 ## Teil A – Bauen
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
 
-1. **Underlay prüfen.** xTR1 → `ping 10.0.2.1 source 10.0.1.1` und `ping 10.0.99.1` müssen gehen. H1 → H2 geht noch nicht: Warum nicht (EIDs im Core unbekannt)?
-2. **Map-Server/Map-Resolver.** Auf dem MSMR: `router lisp`, `site SITE1/SITE2` mit `authentication-key`, `eid-prefix`; `ipv4 map-server`, `ipv4 map-resolver`. Welche Aufgaben haben Map-Server (nimmt Registrierungen an) und Map-Resolver (beantwortet Anfragen)?
-3. **xTR-Konfiguration.** `locator-set` mit dem RLOC, `eid-table default instance-id 0` mit `database-mapping <EID-Netz> locator-set …`, `ipv4 itr map-resolver`, `ipv4 etr map-server … key …`, `ipv4 itr`, `ipv4 etr`. Was ist ITR, was ETR, was PITR/PETR?
-4. **Registrierung prüfen.** Auf dem MSMR `show ip lisp site` (registriert: `yes`), `show lisp site detail`. Auf den xTRs `show ip lisp database`.
-5. **Datenverkehr.** H1 pingt H2: Der erste Ping scheitert oft (Map-Request/Reply nötig), danach läuft er. Prüfe `show ip lisp map-cache` auf xTR1: Eintrag 192.168.2.0/24 mit RLOC 10.0.2.1. Beschreibe den Ablauf: Map-Request → Map-Reply, Encapsulation (LISP-UDP 4341/4342), Decapsulation.
-6. **Negative Map-Replies.** Pinge von H1 eine nicht existierende EID (z. B. 192.168.99.1). Was zeigt der Map-Cache (Negative Cache Entry), warum ist das effizient?
-7. **Anwendungsbezug.** Erkläre den Zusammenhang mit SD-Access (Control Plane = LISP Map-Server, Fabric Edge = xTR, Border = PxTR) und mit Host-Mobilität.
+1. **Underlay prüfen.** Pinge auf xTR1 `ping 10.0.2.1 source 10.0.1.1` und `ping 10.0.99.1`. Danach pingt H1 seinen Kollegen H2.
+   - **Prüfen:** Die beiden Pings von xTR1 klappen, der Ping von H1 zu H2 nicht.
+   - **Denkfrage:** Warum erreicht H1 seinen Kollegen H2 noch nicht?
+2. **Map-Server und Map-Resolver.** Konfiguriere auf dem MSMR `router lisp` mit `site SITE1` und `site SITE2`, jeweils mit `authentication-key` und `eid-prefix`. Schalte `ipv4 map-server` und `ipv4 map-resolver` ein.
+   - **Denkfrage:** Was macht der Map-Server, was der Map-Resolver?
+3. **xTRs konfigurieren.** Lege auf jedem xTR an: ein `locator-set` mit der eigenen RLOC-Adresse, unter `eid-table default instance-id 0` ein `database-mapping` für das eigene LAN, dazu `ipv4 itr map-resolver 10.0.99.1`, `ipv4 etr map-server 10.0.99.1 key …`, `ipv4 itr` und `ipv4 etr`.
+   - **Denkfrage:** Was ist ein ITR, ein ETR, ein PITR und ein PETR?
+4. **Registrierung prüfen.**
+   - **Prüfen:** `show lisp site` auf dem MSMR zeigt beide Sites mit „yes“. `show ip lisp database` auf den xTRs zeigt das eigene EID-Netz mit dem RLOC.
+5. **Daten senden.** Pinge von H1 zu H2.
+   - **Prüfen:** Der erste Ping geht oft verloren, danach klappt es. `show ip lisp map-cache` auf xTR1 zeigt 192.168.2.0/24 mit RLOC 10.0.2.1.
+   - **Denkfrage:** Was passiert zwischen dem ersten Paket von H1 und dem Eintrag im Map-Cache?
+6. **Unbekanntes Ziel.** Pinge von H1 eine Adresse, die es nirgends gibt, z. B. 192.168.99.1.
+   - **Prüfen:** `show ip lisp map-cache` zeigt dafür einen negativen Eintrag.
+   - **Denkfrage:** Warum lohnt es sich, auch ein „gibt es nicht“ zu speichern?
+7. **Bezug zu SD-Access.**
+   - **Denkfrage:** Welche LISP-Rollen findest du in SD-Access wieder, und wie hilft LISP bei wandernden Hosts?
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 1:** Der Core kennt nur die RLOC-Netze. Die EID-Netze der Hosts sind dort nicht geroutet. Ohne LISP weiß niemand, hinter welchem xTR 192.168.2.10 liegt.
+- **Zu 2:** Der Map-Server nimmt die Registrierungen der ETRs an und speichert, welches EID-Netz hinter welchem RLOC liegt. Der Map-Resolver nimmt die Anfragen der ITRs an und leitet sie weiter. Die Antwort kommt am Ende vom zuständigen ETR.
+- **Zu 3:** Der ITR (Ingress) verpackt Verkehr, der seine Site verlässt. Der ETR (Egress) packt ankommenden Verkehr aus und registriert seine EIDs. Ein xTR ist beides. PITR und PETR verbinden LISP-Sites mit Netzen ohne LISP: Der PITR nimmt Verkehr von außen an und verpackt ihn, der PETR packt Verkehr zu Zielen ohne LISP aus.
+- **Zu 5:** xTR1 hat keinen Cache-Eintrag und schickt einen Map-Request an den Map-Resolver. Der leitet ihn über den Map-Server an xTR2. xTR2 antwortet mit einem Map-Reply direkt an xTR1. xTR1 speichert das Mapping und verpackt die Pakete ab jetzt in UDP 4341 an 10.0.2.1. xTR2 packt sie aus und stellt sie H2 zu.
+- **Zu 6:** Ohne den Eintrag würde xTR1 bei jedem Paket erneut nachfragen. Der negative Eintrag sagt für eine Weile: „Gibt es nicht, mach dies oder das damit“, z. B. verwerfen oder an einen PETR schicken.
+- **Zu 7:** Der Control Plane Node in SD-Access ist Map-Server und Map-Resolver. Fabric Edges sind xTRs, Border Nodes sind PxTRs. Zieht ein Host um, registriert der neue Edge die EID mit seinem RLOC. Die Adresse des Hosts bleibt gleich, nur das Mapping ändert sich.
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -57,16 +79,20 @@ Importiere `topology-repair.yaml`. Alle Geräte sind vollständig konfiguriert, 
 **Ticket 4:** H1 erreicht H2 nie, `show ip lisp map-cache` ist leer (keine Map-Requests).
 
 ## Verifikation
-
 ```
-show ip lisp site                ! auf MSMR
-show ip lisp                      ! auf xTR
+show lisp site                   ! auf MSMR
+show ip lisp                     ! auf xTR
 show ip lisp database
 show ip lisp map-cache
 show ip lisp forwarding eid remote
-debug lisp control-plane all      ! kurz
+debug lisp control-plane all     ! kurz
 ```
-Erwartet: Beide Sites registriert, `map-cache` auf xTR1 mit 192.168.2.0/24, Ping H1 ↔ H2 nach dem ersten Verlust erfolgreich.
+
+| Befehl | Das solltest du sehen |
+|---|---|
+| `show lisp site` auf dem MSMR | SITE1 und SITE2 registriert (yes) |
+| `show ip lisp map-cache` auf xTR1 | 192.168.2.0/24 mit RLOC 10.0.2.1 |
+| Ping H1 → H2 | nach dem ersten Verlust erfolgreich |
 
 ## Teil C – Üben
 
@@ -94,8 +120,11 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 </details>
 
 ## Prüfungsbezug
-
-LISP: EID = Endpunktadresse, RLOC = Router-Locator im Underlay. Map-Request/Map-Reply vs. Map-Register/Map-Notify. LISP-Daten UDP 4341, Control UDP 4342. ITR kapselt, ETR entkapselt, xTR = beides. SD-Access nutzt LISP als Control Plane (Host Tracking Database).
+- EID = Adresse des Endgeräts, RLOC = Adresse des Routers im Underlay.
+- Map-Request/Map-Reply für Anfragen, Map-Register/Map-Notify für Registrierungen.
+- LISP-Daten UDP 4341, Control Plane UDP 4342.
+- Der ITR verpackt, der ETR packt aus, ein xTR macht beides.
+- SD-Access nutzt LISP als Control Plane.
 
 ## Lösungen
 

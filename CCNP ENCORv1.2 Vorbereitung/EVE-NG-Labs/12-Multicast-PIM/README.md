@@ -68,15 +68,43 @@ Die Hosts sind in den Aufgaben IOS-Geräte mit `no ip routing` (Dateien `build/<
 Loopbacks: R1 10.255.0.1, R2 10.255.0.2 (RP), R3 10.255.0.3, R4 10.255.0.4 (jeweils /32). OSPF 1 (Area 0) als Unicast-Underlay ist vorhanden. Multicast-Gruppe für Tests: **239.1.1.1**.
 
 ## Teil A – Bauen
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
 
-1. **Multicast aktivieren.** Auf allen Routern `ip multicast-routing`, auf allen Interfaces (inkl. Loopback des RP und LANs) `ip pim sparse-mode`. Prüfe `show ip pim neighbor`.
-2. **Statischer RP.** `ip pim rp-address 10.255.0.2` auf allen Routern. Prüfe `show ip pim rp mapping`. Warum ist der RP eine Loopback-Adresse? Was passiert, wenn der RP ausfällt (Redundanz: Anycast-RP/MSDP, Phantom-RP)?
-3. **Empfänger anmelden.** Auf REC1 und REC2: `interface Gi0/0` → `ip igmp join-group 239.1.1.1`. Prüfe `show ip igmp groups` auf R3/R4 und `show ip mroute 239.1.1.1` auf dem RP: Wo entsteht `(*,G)`? Welche Rolle spielt der IGMP-Querier?
-4. **Quelle starten.** Auf SRC: `ping 239.1.1.1 repeat 100`. Beide Empfänger müssen Echo-Replies senden (die Antwort geht Unicast zurück). Beobachte auf R1 die PIM-Register-Nachricht, auf R2 `(S,G)` und beim ersten Empfänger-Router den Wechsel auf den Shortest Path Tree (`show ip mroute`, Flags `S`, `J`, `T`).
-5. **RPF-Check.** Erkläre den Reverse Path Forwarding Check. Erzeuge ihn gezielt zu Fall, indem du auf R3 eine Route zur Quelle (192.168.1.0/24) über das falsche Interface setzt, und lies `show ip rpf 192.168.1.10` und `debug ip mpacket` (kurz). Was ist die Ausgabe `RPF failed`?
-6. **SPT-Schwelle.** Setze auf R3 `ip pim spt-threshold infinity` und beobachte, dass der Verkehr beim RP-Tree bleibt. Wann ist das sinnvoll?
-7. **Auto-RP oder BSR.** Ersetze den statischen RP durch **BSR** (R2 `ip pim bsr-candidate Loopback0`, `ip pim rp-candidate Loopback0 group-list 10`), prüfe die Zuordnung auf R3. Vergleiche Auto-RP (Cisco, Dense-Mode-Fallback, 224.0.1.39/40) mit BSR (offen, Standard).
-8. **SSM.** `ip pim ssm default` (232.0.0.0/8) und `ip igmp version 3` am Empfänger, `ip igmp join-group 232.1.1.1 source 192.168.1.10`. Warum braucht SSM keinen RP?
+1. **Multicast einschalten.** Setze auf allen Routern `ip multicast-routing`. Aktiviere `ip pim sparse-mode` auf allen Interfaces, auch auf den LANs und der Loopback des RP.
+   - **Prüfen:** `show ip pim neighbor` zeigt auf R2 drei Nachbarn.
+2. **Statischer RP.** Setze auf allen Routern `ip pim rp-address 10.255.0.2`.
+   - **Prüfen:** `show ip pim rp mapping` nennt überall 10.255.0.2.
+   - **Denkfrage:** Warum ist der RP eine Loopback-Adresse? Was passiert, wenn der RP ausfällt?
+3. **Empfänger anmelden.** Setze auf REC1 und REC2 unter `interface Gi0/0` den Befehl `ip igmp join-group 239.1.1.1`.
+   - **Prüfen:** `show ip igmp groups` auf R3 und R4 zeigt die Gruppe. `show ip mroute 239.1.1.1` auf R2 zeigt einen Eintrag `(*, 239.1.1.1)`.
+   - **Denkfrage:** Woher weiß R2 von den Empfängern? Welche Aufgabe hat der IGMP-Querier?
+4. **Quelle starten.** Sende auf SRC `ping 239.1.1.1 repeat 100`.
+   - **Prüfen:** REC1 und REC2 antworten (die Antwort kommt per Unicast zurück). `show ip mroute` auf R3 zeigt nach kurzer Zeit einen Eintrag `(192.168.1.10, 239.1.1.1)` mit dem Flag `T`.
+   - **Denkfrage:** Was passiert der Reihe nach zwischen R1, dem RP und R3, bis das Flag `T` erscheint?
+5. **RPF-Check stören.** Setze auf R3 eine statische Route zu 192.168.1.0/24 über ein falsches Interface. Lies `show ip rpf 192.168.1.10` und kurz `debug ip mpacket`. Entferne die Route danach wieder.
+   - **Prüfen:** Die Multicast-Pakete kommen bei REC1 nicht mehr an, und das Debug meldet „RPF failed“.
+   - **Denkfrage:** Was prüft der RPF-Check genau?
+6. **Auf dem Shared Tree bleiben.** Setze auf R3 `ip pim spt-threshold infinity`.
+   - **Prüfen:** `show ip mroute` auf R3 zeigt keinen `(S,G)`-Eintrag mit `T` mehr, die Daten kommen über den RP.
+   - **Denkfrage:** Wann ist das sinnvoll?
+7. **BSR statt statischem RP.** Entferne `ip pim rp-address` und setze auf R2 `ip pim bsr-candidate Loopback0` und `ip pim rp-candidate Loopback0`.
+   - **Prüfen:** `show ip pim rp mapping` auf R3 zeigt den RP mit der Info „learned via bootstrap“.
+   - **Denkfrage:** Was unterscheidet BSR von Auto-RP?
+8. **Source-Specific Multicast.** Setze `ip pim ssm default` auf allen Routern, `ip igmp version 3` auf R3 Gi0/1 und auf REC1 `ip igmp join-group 232.1.1.1 source 192.168.1.10`.
+   - **Prüfen:** `show ip mroute 232.1.1.1` auf R3 zeigt direkt einen `(S,G)`-Eintrag ohne `(*,G)`.
+   - **Denkfrage:** Warum braucht SSM keinen RP?
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 2:** Eine Loopback ist immer up und über jeden verfügbaren Weg erreichbar. Fällt der RP aus, finden neue Quellen und Empfänger nicht mehr zueinander. Bestehende Shortest Path Trees laufen weiter. Für Redundanz gibt es Anycast-RP mit MSDP.
+- **Zu 3:** REC1 meldet sich per IGMP bei R3. R3 schickt daraufhin einen PIM-Join Richtung RP, und so entsteht `(*,G)` auf dem Weg bis R2. Der IGMP-Querier fragt im LAN regelmäßig nach, ob es noch Empfänger gibt. Bei IGMPv2 übernimmt das der Router mit der niedrigsten IP.
+- **Zu 4:** R1 sieht die Quelle und schickt die ersten Pakete in Register-Nachrichten per Unicast an den RP. Der RP packt sie aus und schickt sie den Shared Tree hinunter. Er baut außerdem einen `(S,G)`-Baum zu R1 auf. R3 erhält die ersten Pakete, erfährt so die Quelle und baut einen direkten `(S,G)`-Baum zur Quelle. Sobald Daten darüber ankommen, setzt er das Flag `T`.
+- **Zu 5:** Der Router schaut in der Unicast-Tabelle nach, über welches Interface er die Quelle erreicht. Nur Multicast-Pakete, die auf genau diesem Interface ankommen, leitet er weiter. Alle anderen verwirft er. So verhindert Multicast Schleifen.
+- **Zu 6:** Wenn es viele Quellen mit wenig Verkehr gibt, spart das Einträge und Zustände in den Routern. Oder wenn der RP ohnehin auf dem besten Weg liegt.
+- **Zu 7:** BSR ist Teil des PIMv2-Standards und verteilt die RP-Informationen in PIM-Nachrichten von Router zu Router. Auto-RP ist eine Cisco-Lösung mit den Gruppen 224.0.1.39 (Kandidaten) und 224.0.1.40 (Mapping Agent). Sie braucht Dense Mode oder `ip pim autorp listener`.
+- **Zu 8:** Der Empfänger nennt per IGMPv3 die Quelle gleich mit. Der Router kann sofort einen Baum direkt zur Quelle bauen. Der RP wird nur gebraucht, um unbekannte Quellen und Empfänger zusammenzubringen.
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -91,16 +119,20 @@ Setze alle Nodes zurück (Rechtsklick → *Wipe*) und spiele `repair/<Node>.cfg`
 **Ticket 4:** Der RP zeigt `(*,G)`-Einträge nicht und Multicast wird auf R2 nicht weitergeleitet.
 
 ## Verifikation
-
 ```
 show ip pim neighbor
 show ip pim rp mapping
 show ip igmp groups
 show ip mroute [239.1.1.1]
 show ip rpf 192.168.1.10
-show ip mfib / show ip multicast
+show ip mfib
 ```
-Erwartet: R2 hat `(*, 239.1.1.1)` mit RP = lokal und eine `(192.168.1.10, 239.1.1.1)`-Zeile; REC1 und REC2 antworten auf Ping.
+
+| Befehl | Das solltest du sehen |
+|---|---|
+| `show ip mroute 239.1.1.1` auf R2 | `(*, 239.1.1.1)` mit RP 10.255.0.2 und `(192.168.1.10, 239.1.1.1)` |
+| Ping von SRC an 239.1.1.1 | Antworten von REC1 und REC2 |
+| `show ip rpf 192.168.1.10` auf R3 | RPF-Interface = Uplink zu R2 |
 
 ## Teil C – Üben
 
@@ -128,8 +160,11 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 </details>
 
 ## Prüfungsbezug
-
-Multicast-Bereiche: 224.0.0.0/24 lokal, 232/8 SSM, 239/8 administrativ. PIM-SM: Shared Tree `(*,G)` zum RP, Quellbaum `(S,G)`, Register-/Join-Nachrichten, RPF-Check am Eingang. IGMPv2 (Querier, General Query), IGMPv3 (Source-Filter für SSM). Multicast-MAC: 01-00-5E + untere 23 Bit der IP.
+- Bereiche: 224.0.0.0/24 lokal, 232.0.0.0/8 SSM, 239.0.0.0/8 administrativ.
+- PIM-SM: Shared Tree `(*,G)` zum RP, Quellbaum `(S,G)`, Register- und Join-Nachrichten.
+- Der RPF-Check prüft das Eingangs-Interface gegen den Unicast-Rückweg zur Quelle.
+- IGMPv2: Querier und General Query. IGMPv3: Quellfilter, nötig für SSM.
+- Multicast-MAC: 01-00-5E plus die unteren 23 Bit der Gruppenadresse.
 
 ## Lösungen
 

@@ -25,7 +25,7 @@ module: lab-interfaces
 ```
 
 1. `interfaces` und `statistics` sind **container**, `interface` ist eine **list** (Schlüssel `name`), `name`, `description`, `enabled`, `mode`, `access-vlan`, `in-octets`, `out-octets` sind **leaf**, `allowed-vlans` ist ein **leaf-list**. `config false` markiert Zustandsdaten (nur lesbar, nicht Teil der Konfiguration).
-2. `mode` ist Pflicht (`mandatory true`), der Schlüssel `name` ebenfalls. `enabled` hat den Default `true`. Fehlt `mode`, meldet NETCONF `missing-element` (rpc-error), RESTCONF antwortet typischerweise mit `400 Bad Request`.
+2. `mode` ist Pflicht (`mandatory true`), der Schlüssel `name` ebenfalls. `enabled` hat den Default `true`. Fehlt `mode`, meldet NETCONF `missing-element` (rpc-error), RESTCONF antwortet mit `400 Bad Request`.
 3. ```json
 {
   "lab-interfaces:interface": [

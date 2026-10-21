@@ -35,13 +35,30 @@ Ein Branch-Router mit zwei Providern: Die Routing-Tabelle sendet alles über Pro
 R4 hat Loopback0 192.0.2.44/32 als Server. R1 hat nur die Default-Route über R2. Soll: H1 normal über Provider A, H2 **immer** über Provider B, Web-Verkehr (TCP 80) aller Hosts über Provider B.
 
 ## Teil A – Bauen
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
 
-1. **Ausgangszustand.** Statische Routen sind gesetzt. Prüfe `traceroute 192.0.2.44` von H1 und H2: Beide gehen über R2.
-2. **Quellbasiert.** ACL `H2-ONLY` (`permit ip host 10.1.0.12 any`), Route-Map `PBR` Sequenz 10 mit `match ip address H2-ONLY` und `set ip next-hop 10.0.13.2`. Am Interface `Gi0/2` `ip policy route-map PBR`. Traceroute von H2: nun über R3, H1 weiter über R2. Warum wirkt die Policy am **Eingangs**-Interface?
-3. **Anwendungsbasiert.** ACL `WEB` (`permit tcp any any eq 80`), Sequenz 20 mit demselben Next-Hop. Prüfe mit `show ip policy` und `show route-map PBR` die Zähler (Matches). Wie testest du TCP 80 ohne Server? (`debug ip policy`, `telnet 192.0.2.44 80`.)
-4. **Reihenfolge.** Vertausche testweise Sequenz 10 und 20 (neue Nummern): Was ändert sich, wenn ein Paket auf beide Regeln passt? Was passiert mit Paketen, die auf **keine** Sequenz passen (normale Routing-Entscheidung) und mit `deny`-Sequenzen?
-5. **Lokaler Verkehr.** R1-eigene Pakete umgeht `ip policy`. Mit `ip local policy route-map PBR` greift die Policy auch für sie. Wann braucht man das?
-6. **Robustheit.** Wie würdest du Ausfall von Provider B abfangen (`set ip next-hop verify-availability` mit Track/IP SLA, oder `set ip next-hop … 10.0.12.2` als zweiter Eintrag)? Siehe Lab 04.
+1. **Ausgangslage prüfen.** Die statischen Routen sind gesetzt. Führe auf H1 und H2 `traceroute 192.0.2.44` aus.
+   - **Prüfen:** Beide laufen über R2 (Provider A).
+2. **Nach Quelle umleiten.** Lege die ACL `H2-ONLY` an (`permit ip host 10.1.0.12 any`). Die Route-Map `PBR` bekommt in Sequenz 10 `match ip address H2-ONLY` und `set ip next-hop 10.0.13.2`. Binde sie mit `ip policy route-map PBR` an Gi0/2.
+   - **Prüfen:** `traceroute` von H2 geht jetzt über R3, von H1 weiter über R2.
+   - **Denkfrage:** Warum gehört die Policy an Gi0/2 und nicht an die Uplinks?
+3. **Nach Anwendung umleiten.** Lege die ACL `WEB` an (`permit tcp any any eq 80`) und hänge sie als Sequenz 20 mit demselben Next-Hop an.
+   - **Prüfen:** Ein `telnet 192.0.2.44 80` von H1 lässt in `show route-map PBR` die Zähler von Sequenz 20 steigen, auch wenn dort kein Webserver antwortet.
+4. **Reihenfolge testen.** Lege die beiden Regeln testweise in umgekehrter Reihenfolge an.
+   - **Denkfrage:** Welche Sequenz greift, wenn ein Paket auf beide passt? Was passiert mit Paketen, die auf keine Sequenz passen, und mit einer `deny`-Sequenz?
+5. **Verkehr des Routers selbst.** Pakete, die R1 selbst erzeugt, laufen an `ip policy` vorbei. Mit `ip local policy route-map PBR` gilt die Policy auch für sie.
+   - **Denkfrage:** Wann braucht man das?
+6. **Ausfall abfangen.**
+   - **Denkfrage:** Wie stellst du sicher, dass H2 bei einem Ausfall von Provider B nicht im Leeren landet?
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 2:** PBR wirkt nur auf Pakete, die an diesem Interface ankommen. Die Pakete von H1 und H2 kommen an Gi0/2 an. An den Uplinks gehen sie nur hinaus.
+- **Zu 4:** Die Sequenz mit der kleinsten Nummer gewinnt, der Rest wird nicht mehr geprüft. Hier haben beide denselben Next-Hop, also ändert sich nur, welcher Zähler steigt. Pakete ohne Treffer und Pakete, die auf eine `deny`-Sequenz passen, werden normal nach der Routing-Tabelle weitergeleitet.
+- **Zu 5:** Wenn Pakete des Routers einen bestimmten Weg nehmen sollen, etwa IP-SLA-Messungen, Syslog oder Management-Verkehr über einen bestimmten Provider.
+- **Zu 6:** Mit `set ip next-hop verify-availability` und einem Track auf eine IP-SLA-Messung, wie in Lab 04. Oder mit einem zweiten Next-Hop in derselben Zeile (`set ip next-hop 10.0.13.2 10.0.12.2`). IOS nimmt den ersten, der erreichbar ist.
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -58,7 +75,6 @@ Importiere `topology-repair.yaml`. Alle Geräte sind vollständig konfiguriert, 
 **Ticket 5:** H2 (über Provider B) erreicht den Server nicht; die Traceroute endet bei R3.
 
 ## Verifikation
-
 ```
 show ip policy
 show route-map PBR
@@ -66,7 +82,11 @@ traceroute 192.0.2.44        ! von H1 und H2
 debug ip policy              ! kurz, nur im Lab
 show ip route 0.0.0.0
 ```
-Erwartet: H1 geht über 10.0.12.2, H2 über 10.0.13.2; Zähler in `show route-map PBR` steigen.
+
+| Befehl | Das solltest du sehen |
+|---|---|
+| `traceroute` von H1 / H2 | H1 über 10.0.12.2, H2 über 10.0.13.2 |
+| `show route-map PBR` | steigende Zähler in Sequenz 10 und 20 |
 
 ## Teil C – Üben
 
@@ -94,8 +114,10 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 </details>
 
 ## Prüfungsbezug
-
-PBR entscheidet vor dem normalen Routing, nur für **eingehenden** Verkehr am Interface (lokal mit `ip local policy`). Match über ACL, Paketlänge; Set: Next-Hop, Interface, DSCP, Default-Next-Hop. Bei `permit` ohne Match auf ein Set wird normal geroutet; `deny` heißt: nicht per Policy, sondern normales Routing. Fehlt der Next-Hop, fällt das Paket auf die Routing-Tabelle zurück (außer `set interface`/`default`-Varianten mit Unterschieden).
+- PBR entscheidet vor dem normalen Routing, und nur für Pakete, die am Interface ankommen. Für eigene Pakete gibt es `ip local policy`.
+- Match über ACL oder Paketlänge. Set: Next-Hop, Interface, DSCP, Default-Next-Hop.
+- Ohne Treffer und bei `deny` wird normal geroutet.
+- Ist der Next-Hop nicht erreichbar, fällt das Paket auf die Routing-Tabelle zurück.
 
 ## Lösungen
 

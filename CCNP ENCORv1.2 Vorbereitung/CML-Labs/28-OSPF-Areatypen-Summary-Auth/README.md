@@ -37,13 +37,32 @@ Ein ABR verbindet Area 0 mit einer Totally-Stubby-Area und einer NSSA. Dazu Zusa
 Loopback0: R1 10.255.0.1, R2 10.255.0.2 (Area 0), R3 10.255.0.3 (Area 1), R4 10.255.0.4 (Area 2). R1 Lo10 10.1.0.1/24, R3 Lo10–13 192.168.0.1 bis 192.168.3.1 (je /24), R4 hat eine statische Route 172.31.0.0/24 nach Null0 (wird als extern eingespeist). OSPF-Passwort: `OspfKey` (Key 1).
 
 ## Teil A – Bauen
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
 
-1. **Basis.** OSPF 1 auf allen Routern, `passive-interface default` mit `no passive-interface` auf den Links, Interfaces gemäß Tabelle in die Areas (Loopbacks mit `ip ospf network point-to-point`, damit /24 statt /32 kommt). Prüfe `show ip ospf neighbor` und `show ip route ospf`.
-2. **Authentifizierung.** Link R1–R2: `ip ospf authentication message-digest`, `ip ospf message-digest-key 1 md5 OspfKey` auf beiden Seiten. Wie unterscheidet sich das von `area 0 authentication`?
-3. **Totally Stubby Area 1.** R2: `area 1 stub no-summary`, R3: `area 1 stub`. Vergleiche vorher/nachher `show ip route` auf R3: Statt Inter-Area-Routen (O IA) bleibt nur die Default-Route (`O*IA`). Welche LSA-Typen werden blockiert (3, 4, 5)?
-4. **NSSA Area 2.** R2 und R4: `area 2 nssa`. R4: `redistribute static subnets`. Prüfe auf R4 `show ip ospf database nssa-external` (Typ 7) und auf R1 `show ip ospf database external` (Typ 5, vom ABR umgewandelt). Welche Router wandelt Typ 7 in Typ 5 um (ABR mit höchster Router-ID)?
-5. **Summarisierung am ABR.** R2: `area 1 range 192.168.0.0 255.255.252.0`. R1 soll nur noch **eine** Route `192.168.0.0/22` sehen. Prüfe, dass in R2 eine Null0-Route mit AD 110 entsteht.
-6. **Prüfen und herleiten.** Welche LSA-Typen entstehen wo (1 Router, 2 Network, 3 Summary, 4 ASBR-Summary, 5 External, 7 NSSA)? Warum prüft OSPF das E-Bit/N-Bit im Hello, und was passiert bei Abweichung?
+1. **Grundkonfiguration.** Starte auf allen Routern OSPF 1 mit `passive-interface default` und nimm die Links mit `no passive-interface` heraus. Ordne die Interfaces laut Tabelle den Areas zu. Setze an den Loopbacks `ip ospf network point-to-point`, damit sie als /24 statt /32 erscheinen.
+   - **Prüfen:** `show ip ospf neighbor` auf R2 zeigt drei Nachbarn im Zustand FULL. `show ip route ospf` auf R1 enthält alle Netze.
+2. **Authentisierung.** Setze auf dem Link R1–R2 auf beiden Seiten `ip ospf authentication message-digest` und `ip ospf message-digest-key 1 md5 OspfKey`.
+   - **Prüfen:** `show ip ospf interface Gi0/0` meldet „Message digest authentication enabled“.
+   - **Denkfrage:** Was ist der Unterschied zu `area 0 authentication message-digest`?
+3. **Area 1 als Totally Stubby.** Setze auf R2 `area 1 stub no-summary`, auf R3 `area 1 stub`. Vergleiche `show ip route` auf R3 vorher und nachher.
+   - **Prüfen:** Vorher stehen dort viele `O IA`-Routen, danach nur noch eine Default-Route `O*IA`.
+   - **Denkfrage:** Welche LSA-Typen hält der ABR jetzt aus Area 1 heraus?
+4. **Area 2 als NSSA.** Setze auf R2 und R4 `area 2 nssa`. R4 speist mit `redistribute static subnets` seine statische Route ein.
+   - **Prüfen:** `show ip ospf database nssa-external` auf R4 zeigt ein Typ-7-LSA. `show ip ospf database external` auf R1 zeigt dasselbe Netz als Typ 5.
+   - **Denkfrage:** Wer wandelt Typ 7 in Typ 5 um?
+5. **Zusammenfassen am ABR.** Setze auf R2 `area 1 range 192.168.0.0 255.255.252.0`.
+   - **Prüfen:** R1 sieht nur noch eine Route `O IA 192.168.0.0/22`. R2 hat eine Route 192.168.0.0/22 nach Null0.
+6. **LSA-Typen zuordnen.**
+   - **Denkfrage:** Welcher Router erzeugt hier welches LSA (Typ 1, 2, 3, 4, 5, 7)? Warum prüft OSPF im Hello das Stub-Flag?
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 2:** `area 0 authentication message-digest` schaltet die Authentisierung für alle Interfaces der Area auf einmal ein. Den Schlüssel setzt man trotzdem pro Interface. Die Interface-Variante wirkt nur auf diesen einen Link.
+- **Zu 3:** Typ 3 (außer der Default-Route, die der ABR selbst erzeugt), Typ 4 und Typ 5.
+- **Zu 4:** Der ABR, hier R2. Gibt es mehrere ABRs an einer NSSA, übernimmt das der mit der höchsten Router-ID.
+- **Zu 6:** Jeder Router erzeugt ein Typ-1-LSA für seine Area. Typ 2 erzeugt der DR auf Broadcast-Netzen. Ethernet ist standardmäßig ein Broadcast-Netz, also wählt OSPF auch auf den /30-Links einen DR, und es gibt Typ 2. Typ 3 und Typ 4 erzeugt der ABR R2. Typ 7 erzeugt R4 in der NSSA, R2 macht daraus Typ 5. Das Stub-Flag zeigt, ob eine Area externe Routen erlaubt. Sind sich zwei Router darin uneinig, würden sie verschiedene LSAs erwarten. Deshalb verwirft OSPF das Hello, und es entsteht keine Nachbarschaft.
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -62,15 +81,19 @@ Importiere `topology-repair.yaml`. Alle Geräte sind vollständig konfiguriert, 
 **Ticket 6:** R3 trägt trotz Stub-Area alle Inter-Area-Routen (O IA) statt nur der Default-Route.
 
 ## Verifikation
-
 ```
 show ip ospf neighbor
 show ip route ospf
 show ip ospf database summary / external / nssa-external
-show ip ospf interface Gi0/0       ! Authentifizierung
+show ip ospf interface Gi0/0       ! Authentisierung
 show ip protocols
 ```
-Erwartet: R3 hat nur Default und eigene Netze, R1 sieht `O IA 192.168.0.0/22` und `O E2 172.31.0.0/24`, R2 hat `O N2 172.31.0.0/24`.
+
+| Befehl | Das solltest du sehen |
+|---|---|
+| `show ip route` auf R3 | nur die Default-Route `O*IA` und eigene Netze |
+| `show ip route ospf` auf R1 | `O IA 192.168.0.0/22` und `O E2 172.31.0.0/24` |
+| `show ip route ospf` auf R2 | `O N2 172.31.0.0/24` |
 
 ## Teil C – Üben
 
@@ -98,8 +121,11 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 </details>
 
 ## Prüfungsbezug
-
-Stub (kein Typ 5), Totally Stubby (kein Typ 3/4/5, nur Default), NSSA (Typ 7 statt 5, ASBR erlaubt), Totally NSSA. Area-Typ muss auf allen Routern der Area übereinstimmen (E-Bit im Hello). Summarisierung inter-area am ABR (`area range`), extern am ASBR (`summary-address`). Typ-7-zu-Typ-5-Umwandlung durch den ABR. MD5-Authentifizierung über Key-ID und Passwort pro Interface oder Area.
+- Stub: kein Typ 5. Totally Stubby: kein Typ 3, 4, 5, nur eine Default-Route. NSSA: Typ 7 statt Typ 5, ein ASBR ist erlaubt.
+- Der Area-Typ muss auf allen Routern der Area gleich sein.
+- Zusammenfassen: Inter-Area am ABR (`area range`), extern am ASBR (`summary-address`).
+- Der ABR wandelt Typ 7 in Typ 5 um.
+- MD5-Authentisierung mit Key-ID und Passwort, pro Interface oder für die ganze Area.
 
 ## Lösungen
 

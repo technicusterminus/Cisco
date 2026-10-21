@@ -123,15 +123,40 @@ Aufgaben, Verkabelung, Konfigurationen und Fehlerlisten verwenden die Packet-Tra
 > **Packet-Tracer-Hinweis:** **Eignung: teilweise.** Stand Packet Tracer 8.x: MST: eingeschränkt. MST nur in Grundzügen; Region/Instanzen anlegen geht, Feinheiten (z. B. `show spanning-tree mst`-Ausgabe) weichen ab. Akzeptiert PT einen Befehl nicht, ist das ein PT-Limit und kein Fehler von dir; solche Schritte machst du in CML oder EVE-NG. Die CML-Switches (Gi-Ports) sind hier 3560-24PS bzw. 2960 mit FastEthernet-Ports: Die Portzuordnung steht unter dem Adressplan.
 
 ## Teil A – Bauen
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
 
-1. **Trunks.** Alle sechs Inter-Switch-Links statische Trunks (`mode trunk`, `nonegotiate`, erlaubte VLANs 10,20, Native 99, VLAN 99 anlegen). Prüfe, dass H1 ↔ H2 pingen.
-2. **Rapid-PVST lesen.** Auf SW3: `show spanning-tree vlan 10`. Wer ist Root (niedrigste Bridge-ID = Priorität + MAC)? Welche Ports sind Root, Designated, Alternate? Warum sind Alternate-Ports in RSTP sofort einsatzbereit?
-3. **Root platzieren.** SW1 Root für VLAN 10, SW2 Root für VLAN 20 (jeweils Secondary für das andere) mit `spanning-tree vlan X root primary|secondary`. Welche Priorität wird gesetzt? Wie beeinflusst `spanning-tree cost` die Pfadwahl (Standardkosten Short-Metrik: 1 Gbit/s = 4, 100 Mbit/s = 19; Long-Metrik: 1 Gbit/s = 20000)?
-4. **Umstieg auf MST.** `spanning-tree mode mst`, Region `ENCOR`, Revision 1, Instanz 1 = VLAN 10, Instanz 2 = VLAN 20 auf **allen** Switches. Prioritäten: Instanz 0 und 1 SW1 (4096), Instanz 2 SW2 (4096), jeweils der andere als Backup (8192). Warum sind Name, Revision **und** VLAN-Mapping Teil des Region-Digests, und was passiert bei Abweichung (Boundary-Port, alle VLANs hängen am IST)?
-5. **Edge-Schutz.** Auf H1/H2-Ports und Fa0/6 (SW5): `portfast`, `bpduguard`. Aktiviere SW5 (`no shutdown`) mit niedriger Priorität und beobachte das Err-Disable. Dann zusätzlich `errdisable recovery cause bpduguard` mit Intervall 60 s. Wie unterscheidet sich **BPDU Filter** (still, gefährlich) von **BPDU Guard**?
-6. **Root Guard.** Setze Root Guard auf den Distribution→Access-Ports (SW1 Fa0/2, Fa0/3, SW2 Fa0/2, Fa0/3). Erkläre den Zustand `root-inconsistent` und warum Root Guard keine Nachbarn blockiert, sondern nur Superior BPDUs.
-7. **Loop Guard und UDLD.** Aktiviere Loop Guard auf den Access-Uplinks (`spanning-tree guard loop` oder global `spanning-tree loopguard default`) und `udld enable`/`udld aggressive`. Welcher Fehler (unidirektionale Verbindung, BPDU-Verlust) entsteht ohne sie?
-8. **Konvergenz testen.** `ping 10.10.10.12 repeat 1000` von H1, dann Root-Link abschalten: Wie lange dauert der Ausfall bei Rapid-PVST/MST (Proposal/Agreement, `show spanning-tree summary`)?
+1. **Trunks.** Lege VLAN 99 an. Mache alle sechs Links zwischen den Switches zu festen Trunks (`mode trunk`, `nonegotiate`) mit den erlaubten VLANs 10 und 20 und Native VLAN 99.
+   - **Prüfen:** H1 pingt H2.
+2. **Rapid-PVST lesen.** Führe auf SW3 `show spanning-tree vlan 10` aus.
+   - **Prüfen:** Finde die Root (niedrigste Bridge-ID) und die Rolle jedes Ports: Root, Designated oder Alternate.
+   - **Denkfrage:** Warum kann ein Alternate-Port in RSTP sofort übernehmen?
+3. **Root festlegen.** Mache SW1 zur Root für VLAN 10 und SW2 zur Root für VLAN 20, jeweils mit dem anderen als Ersatz: `spanning-tree vlan X root primary` bzw. `secondary`.
+   - **Prüfen:** `show spanning-tree root` zeigt für VLAN 10 SW1, für VLAN 20 SW2.
+   - **Denkfrage:** Welche Priorität setzen `primary` und `secondary`? Wie kannst du mit `spanning-tree cost` die Pfadwahl beeinflussen?
+4. **Auf MST umstellen.** Setze auf allen Switches `spanning-tree mode mst` mit Region `ENCOR`, Revision 1, Instanz 1 = VLAN 10, Instanz 2 = VLAN 20. Prioritäten: Instanz 0 und 1 SW1 4096, Instanz 2 SW2 4096, der jeweils andere 8192.
+   - **Prüfen:** `show spanning-tree mst configuration` ist auf allen Switches gleich. `show spanning-tree mst` zeigt keine Boundary-Ports.
+   - **Denkfrage:** Warum müssen Name, Revision und VLAN-Zuordnung überall gleich sein, und was passiert sonst?
+5. **Edge-Ports schützen.** Setze an den Ports von H1, H2 und an Fa0/6 (SW5) `spanning-tree portfast` und `spanning-tree bpduguard enable`. Schalte SW5 mit `no shutdown` ein.
+   - **Prüfen:** Der Port zu SW5 geht in den Zustand err-disabled, die Root bleibt SW1. Danach `errdisable recovery cause bpduguard` mit `errdisable recovery interval 60` setzen.
+   - **Denkfrage:** Was ist der Unterschied zwischen BPDU Guard und BPDU Filter?
+6. **Root Guard.** Setze `spanning-tree guard root` an den Ports der Distribution-Switches Richtung Access (SW1 Fa0/2, Fa0/3, SW2 Fa0/2, Fa0/3).
+   - **Prüfen:** `show spanning-tree inconsistentports` ist leer, solange niemand eine bessere BPDU schickt.
+   - **Denkfrage:** Was macht Root Guard, wenn doch eine bessere BPDU kommt, und warum blockiert er normale Nachbarn nicht?
+7. **Loop Guard und UDLD.** Aktiviere Loop Guard auf den Uplinks der Access-Switches (`spanning-tree guard loop` oder global `spanning-tree loopguard default`) und `udld aggressive`.
+   - **Denkfrage:** Welcher Fehler entsteht ohne die beiden, wenn ein Link nur noch in eine Richtung überträgt?
+8. **Konvergenz messen.** Starte auf H1 `ping 10.10.10.12 repeat 1000` und schalte den Link zur Root ab.
+   - **Prüfen:** Zähle die verlorenen Pings. Bei Rapid-PVST und MST sind es nur wenige.
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 2:** RSTP hält den Alternate-Port als fertigen Ersatz für den Root-Port bereit. Fällt der Root-Port aus, wechselt der Alternate-Port direkt auf Forwarding, ohne Listening und Learning.
+- **Zu 3:** `primary` setzt 24576 oder, falls nötig, einen Wert 4096 unter der aktuellen Root. `secondary` setzt 28672. Mit `spanning-tree cost` machst du einen Port teurer oder günstiger. Der Switch nimmt den Weg mit den geringsten Gesamtkosten zur Root (Standard kurz: 1 Gbit/s = 4, 100 Mbit/s = 19, lang: 1 Gbit/s = 20 000).
+- **Zu 4:** Aus Name, Revision und VLAN-Zuordnung berechnet MST einen Digest, an dem sich Switches derselben Region erkennen. Weicht ein Wert ab, bildet der Switch eine eigene Region. Die Ports dazwischen werden Boundary-Ports, und dort laufen alle VLANs über die IST. Die Lastverteilung nach Instanz geht verloren.
+- **Zu 5:** BPDU Guard schaltet den Port ab, sobald eine BPDU ankommt. Das ist laut und sicher. BPDU Filter am Interface unterdrückt BPDUs einfach. Hängt dort ein Switch, merkt STP nichts, und es kann eine Schleife entstehen.
+- **Zu 6:** Kommt eine bessere BPDU, setzt Root Guard den Port auf root-inconsistent und blockiert ihn. Hören die besseren BPDUs auf, gibt er den Port von selbst wieder frei. Normale Nachbarn senden schlechtere BPDUs, die lässt Root Guard durch.
+- **Zu 7:** Kommen auf einem Port keine BPDUs mehr an, hält STP den Weg für frei und schaltet einen blockierten Port auf Forwarding. Die Folge ist eine Schleife. Loop Guard setzt den Port in diesem Fall auf loop-inconsistent. UDLD erkennt die einseitige Verbindung und schaltet den Port ab.
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -144,7 +169,6 @@ Baue die Topologie wie oben (oder behalte deine aus Teil A), setze alle Geräte 
 **Ticket 3:** Nachdem jemand an Fa0/6 einen kleinen Switch angeschlossen hat, wechselt die Root und das Netz flattert. SW3 zeigt eine neue Root über Fa0/6.
 
 ## Verifikation
-
 ```
 show spanning-tree
 show spanning-tree mst configuration
@@ -154,7 +178,12 @@ show spanning-tree summary
 show errdisable recovery
 show udld neighbors
 ```
-Erwartet: SW1 Root für IST und Instanz 1, SW2 Root für Instanz 2, SW4/SW3 haben Alternate-Ports, keine `Boundary`-Ports, SW5 verursacht kein Root-Wechsel (BPDU Guard).
+
+| Befehl | Das solltest du sehen |
+|---|---|
+| `show spanning-tree mst` | SW1 Root für Instanz 0 und 1, SW2 Root für Instanz 2 |
+| `show spanning-tree mst 1` auf SW3 und SW4 | mindestens ein Alternate-Port, keine Boundary-Ports |
+| `show interfaces status err-disabled` auf SW3 | der Port zu SW5, ausgelöst durch BPDU Guard |
 
 ## Teil C – Üben
 
@@ -182,8 +211,10 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 </details>
 
 ## Prüfungsbezug
-
-Rapid-PVST: eine Instanz pro VLAN, MST: pro Instanz gruppierte VLANs (nur eine PVST+-Instanz an der Boundary). Port-Rollen Root/Designated/Alternate/Backup, Zustände Discarding/Learning/Forwarding. Root Guard am Port Richtung Access, BPDU Guard am Edge, Loop Guard auf Non-Designated Ports. Default Pfadkosten: 1G=4 (short) bzw. 20000 (long), Priorität in 4096er-Schritten (+VLAN-ID bei PVST).
+- Rapid-PVST hat eine Instanz pro VLAN, MST fasst VLANs zu Instanzen zusammen.
+- Port-Rollen: Root, Designated, Alternate, Backup. Zustände: Discarding, Learning, Forwarding.
+- Root Guard an Ports Richtung Access, BPDU Guard an Edge-Ports, Loop Guard an blockierenden Ports.
+- Standardkosten 1 Gbit/s: 4 (kurz) bzw. 20 000 (lang). Priorität in Schritten von 4096, bei PVST plus VLAN-ID.
 
 ## Lösungen
 

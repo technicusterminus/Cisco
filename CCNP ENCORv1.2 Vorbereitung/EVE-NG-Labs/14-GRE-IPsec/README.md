@@ -53,15 +53,42 @@ Summe (alle Nodes als vIOS/…): ca. **1.5 GB RAM**. Mit VPCS statt vIOS-Hosts: 
 CE1/CE2 haben je eine Default-Route zum ISP. Der ISP kennt nur die zwei Transfernetze.
 
 ## Teil A – Bauen
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
 
-1. **Underlay.** `ping 203.0.113.1 source Gi0/0` von CE1: ok. Ping Lo100 ↔ Lo100: erfolglos. Warum? (Private LAN-Netze kennt der ISP nicht.)
-2. **GRE-Tunnel.** `Tunnel0` mit Quelle Gi0/0, Ziel Gegenstelle, IP 172.16.0.1/.2 (/30). Prüfe `show interfaces tunnel0`: Tunnelprotokoll, Keepalive, Header-Overhead (GRE 24 Byte), Tunnel-MTU 1476. Was ist GRE (IP-Protokoll 47) und was kann es nicht (Verschlüsselung, Authentifizierung)?
-3. **Routing über den Tunnel.** OSPF 1 auf Tunnel0 und den LAN-Loopbacks (Area 0, `ip ospf network point-to-point` auf dem Tunnel). LAN1 ↔ LAN2 muss pingen. Prüfe `show ip route 192.168.2.0` (Next-Hop über Tunnel0).
-4. **Rekursiv-Routing-Falle.** Kündige testweise das Transfernetz (203.0.113.0/30) in OSPF an und beobachte `%TUN-5-RECURDOWN`: Der Tunnelzielpfad führt plötzlich über den Tunnel. Wie verhinderst du das (Netze nicht in den Overlay-IGP, Tunnel-VRF, Filter)?
-5. **IPsec auf GRE (IKEv1).** ISAKMP-Policy (AES-256, SHA-256, DH 14, Pre-Shared Key), Transform-Set `esp-aes 256 esp-sha256-hmac` im **Transport-Mode**, `crypto ipsec profile`, `tunnel protection ipsec profile` auf Tunnel0. Prüfe `show crypto isakmp sa` (QM_IDLE), `show crypto ipsec sa` (encaps/decaps steigen). Warum Transport-Mode bei GRE (die GRE-Header sind schon der äußere IP-Header)?
-6. **MTU/MSS.** Setze `ip mtu 1400` und `ip tcp adjust-mss 1360` auf dem Tunnel. Rechne den Overhead (IP 20 + GRE 4 + ESP ≈ 50–60) nach. Warum bricht sonst große TCP-Übertragung ab (Black-Hole bei DF-Bit/ICMP)?
-7. **IKEv2 und VTI.** Baue `Tunnel1` als IPsec-VTI: `tunnel mode ipsec ipv4`, IKEv2 Proposal/Policy/Keyring/Profile, Transform-Set im **Tunnel-Mode**. Vergleiche mit GRE-over-IPsec (Multicast/Routing-Protokolle ohne GRE: VTI trägt nur IP-Unicast, aber dank IP-Tunnel auch IGP).
-8. **IKEv1 vs. IKEv2.** Phase 1/2 vs. IKE_SA_INIT/IKE_AUTH, Main-/Aggressive-Mode, Authentifizierung, Resilienz (DPD, MOBIKE), Sicherheit, Standard (RFC 7296).
+1. **Underlay prüfen.** Pinge auf CE1 `ping 203.0.113.1 source Gi0/0`, danach `ping 192.168.2.1 source Loopback100`.
+   - **Prüfen:** Der erste Ping klappt, der zweite nicht.
+   - **Denkfrage:** Warum scheitert der zweite Ping?
+2. **GRE-Tunnel bauen.** Lege auf beiden Seiten `interface Tunnel0` an: Quelle Gi0/0, Ziel die Gi0/0-Adresse der Gegenseite, IP 172.16.0.1/30 bzw. .2/30.
+   - **Prüfen:** `show interfaces Tunnel0` zeigt up/up, „Tunnel protocol/transport GRE/IP“ und eine Tunnel-MTU von 1476. Ein Ping auf 172.16.0.2 klappt.
+   - **Denkfrage:** Woher kommen die 1476 Byte, und was kann GRE nicht?
+3. **Routing über den Tunnel.** Starte OSPF 1 in Area 0 auf Tunnel0 und auf Lo100. Setze am Tunnel `ip ospf network point-to-point`.
+   - **Prüfen:** `show ip route 192.168.2.0` auf CE1 zeigt Tunnel0 als Ausgang. Der Ping von Lo100 zu Lo100 klappt jetzt.
+4. **Die Falle mit rekursivem Routing.** Nimm testweise das Transfernetz 203.0.113.0/30 auf CE2 in OSPF auf.
+   - **Prüfen:** Nach kurzer Zeit meldet das Log `%TUN-5-RECURDOWN`, der Tunnel geht down und wieder up. Nimm das Netz danach wieder heraus.
+   - **Denkfrage:** Was passiert hier genau, und wie verhinderst du es dauerhaft?
+5. **IPsec über GRE (IKEv1).** Lege an: eine ISAKMP-Policy mit AES-256, SHA-256, DH-Gruppe 14 und Pre-Shared Key, ein Transform-Set `esp-aes 256 esp-sha256-hmac` mit `mode transport`, ein `crypto ipsec profile` und `tunnel protection ipsec profile …` an Tunnel0.
+   - **Prüfen:** `show crypto isakmp sa` zeigt QM_IDLE. Bei einem Ping steigen in `show crypto ipsec sa` die Zähler encaps und decaps.
+   - **Denkfrage:** Warum reicht hier der Transport-Mode?
+6. **MTU und MSS.** Setze an Tunnel0 `ip mtu 1400` und `ip tcp adjust-mss 1360`.
+   - **Prüfen:** `ping 192.168.2.1 source Loopback100 size 1400 df-bit` klappt, mit `size 1450` nicht.
+   - **Denkfrage:** Wie viel Overhead kommt durch GRE und ESP dazu? Was passiert ohne diese Einstellungen bei großen TCP-Übertragungen?
+7. **IKEv2 mit VTI.** Baue zusätzlich `Tunnel1` als reines IPsec-Interface: `tunnel mode ipsec ipv4`, dazu IKEv2 Proposal, Policy, Keyring und Profile und ein Transform-Set im Tunnel-Mode. Adressen 172.16.1.1/.2.
+   - **Prüfen:** `show crypto ikev2 sa` zeigt den Status READY. Ein Ping über 172.16.1.2 klappt.
+   - **Denkfrage:** Was unterscheidet einen VTI von GRE über IPsec?
+8. **IKEv1 und IKEv2 vergleichen.**
+   - **Denkfrage:** Wie laufen die beiden Versionen ab, und warum ist IKEv2 heute der Standard?
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 1:** Der ISP kennt nur die beiden Transfernetze, nicht die privaten LANs. Das Paket an 192.168.2.1 geht per Default-Route zum ISP, und der hat keine Route dafür.
+- **Zu 2:** 1500 − 20 Byte neuer IP-Header − 4 Byte GRE-Header = 1476 Byte. GRE verpackt nur. Es verschlüsselt nichts und prüft weder Herkunft noch Unverfälschtheit.
+- **Zu 4:** CE1 lernt das Transfernetz von CE2 jetzt per OSPF über den Tunnel. Die Route zum Tunnelziel zeigt dann in den Tunnel selbst. Der Tunnel kann sich so nicht tragen und geht down. Danach verschwindet die OSPF-Route, der Tunnel kommt hoch, und das Spiel beginnt von vorn. Dauerhaft verhinderst du das, indem Transfernetze nie ins Overlay-Routing kommen, oder per Filter bzw. eigener VRF für das Underlay.
+- **Zu 5:** GRE hat das Paket schon mit einem neuen äußeren IP-Header versehen. Der Tunnel-Mode würde noch einen weiteren IP-Header davorsetzen, also 20 Byte mehr ohne Nutzen.
+- **Zu 6:** GRE kostet 24 Byte (IP 20 + GRE 4), ESP je nach Algorithmus und Auffüllung etwa 30 bis 60 Byte. 1400 lässt genug Reserve. MSS 1360 = 1400 − 20 Byte IP − 20 Byte TCP. Ohne diese Werte sind große Pakete mit gesetztem DF-Bit zu groß. Wird die ICMP-Meldung „Fragmentation needed“ unterwegs blockiert, verschwinden sie spurlos: Kleine Pings gehen, große Übertragungen hängen.
+- **Zu 7:** Ein VTI ist ein IPsec-Tunnel ohne GRE-Header, er spart also 4 Byte. Er ist ein normales Interface, über das man routen kann. Auch OSPF läuft darüber. Er trägt aber nur IP. GRE kann zusätzlich andere Protokolle verpacken.
+- **Zu 8:** IKEv1 braucht Phase 1 (Main Mode mit 6 Nachrichten oder Aggressive Mode mit 3) und Phase 2 (Quick Mode). IKEv2 erledigt beides mit 4 Nachrichten (IKE_SA_INIT und IKE_AUTH). Dazu bringt IKEv2 Dead Peer Detection, NAT-Traversal, EAP und MOBIKE schon mit (RFC 7296).
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -78,7 +105,6 @@ Setze alle Nodes zurück (Rechtsklick → *Wipe*) und spiele `repair/<Node>.cfg`
 **Ticket 5:** Tunnel flappt zyklisch, das Log zeigt `%TUN-5-RECURDOWN` (Tunnel Interface is Down, recursive routing).
 
 ## Verifikation
-
 ```
 show interfaces tunnel0
 show crypto isakmp sa            show crypto ikev2 sa
@@ -87,7 +113,13 @@ show ip ospf neighbor
 show ip route 192.168.2.0
 ping 192.168.2.1 source Loopback100 size 1400 df-bit
 ```
-Erwartet: OSPF-Nachbar FULL über Tunnel0, `QM_IDLE`, wachsende `encaps/decaps`, Ping mit 1400 Byte ohne Fragmentierung.
+
+| Befehl | Das solltest du sehen |
+|---|---|
+| `show ip ospf neighbor` | CE2 im Zustand FULL über Tunnel0 |
+| `show crypto isakmp sa` | QM_IDLE |
+| `show crypto ipsec sa` | encaps und decaps steigen bei jedem Ping |
+| Ping mit 1400 Byte und DF-Bit | erfolgreich, ohne Fragmentierung |
 
 ## Teil C – Üben
 
@@ -115,8 +147,10 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 </details>
 
 ## Prüfungsbezug
-
-GRE = IP-Protokoll 47. IPsec: ESP = 50, AH = 51, IKE = UDP 500 (NAT-T 4500). Transport-Mode schützt nur Payload, Tunnel-Mode kapselt das ganze Paket. VTI ist routbar, Crypto-Map nicht. IKEv1: Phase 1 (ISAKMP SA), Phase 2 (IPsec SA).
+- GRE = IP-Protokoll 47, ESP = 50, AH = 51, IKE = UDP 500, NAT-T = UDP 4500.
+- Transport-Mode schützt nur die Nutzlast, Tunnel-Mode verpackt das ganze Paket neu.
+- Ein VTI ist ein routbares Interface, eine Crypto Map nicht.
+- IKEv1: Phase 1 baut die ISAKMP-SA, Phase 2 die IPsec-SA.
 
 ## Lösungen
 

@@ -70,22 +70,50 @@ Die Hosts sind in den Aufgaben IOS-Geräte mit `no ip routing` (Dateien `build/<
 SW1 Port-Belegung: Gi0/0 → R1 (Access VLAN 10), Gi0/1 → SW2 (Trunk), Gi1/0 → H1, Gi1/1 → H2, Gi1/2 → ANA1. SW2: Gi0/0 → SW1 (Trunk), Gi1/1 → ANA2.
 
 ## Teil A – Bauen
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
 
-**Teil 1 – Flexible NetFlow auf R1**
+**Teil 1: Flexible NetFlow auf R1**
 
-1. **Record.** `flow record REC`: `match ipv4 source address`, `match ipv4 destination address`, `match ipv4 protocol`, `match transport source-port`, `match transport destination-port`, `collect counter bytes`, `collect counter packets`. Was ist ein Flow (Key-Felder, Siebener-Tupel)?
-2. **Exporter.** `flow exporter EXP`: `destination 10.20.20.10`, `transport udp 2055`, `source Gi0/1`, `export-protocol netflow-v9`. Wozu Templates in v9/IPFIX?
-3. **Monitor und Anwendung.** `flow monitor MON` (record + exporter), `interface Gi0/0` → `ip flow monitor MON input` (und `output`). Erzeuge Traffic (Ping H1 → SRV, `telnet`) und lies `show flow monitor MON cache`.
-4. **Vergleich.** Traditional NetFlow (`ip flow ingress`) vs. Flexible NetFlow (frei definierbare Records), NetFlow vs. sFlow (Sampling) vs. IPFIX (IETF).
+1. **Record anlegen.** Lege `flow record REC` an mit den Key-Feldern `match ipv4 source address`, `match ipv4 destination address`, `match ipv4 protocol`, `match transport source-port` und `match transport destination-port`. Dazu die Zähler `collect counter bytes` und `collect counter packets`.
+   - **Denkfrage:** Was ist ein Flow, und was bewirken die `match`-Zeilen?
+2. **Exporter anlegen.** Lege `flow exporter EXP` an mit `destination 10.20.20.10`, `transport udp 2055`, `source Gi0/1` und `export-protocol netflow-v9`.
+   - **Denkfrage:** Wozu braucht NetFlow v9 Templates?
+3. **Monitor anlegen und binden.** Verbinde Record und Exporter in `flow monitor MON`. Binde ihn an Gi0/0 mit `ip flow monitor MON input` (und `output`). Erzeuge Verkehr: Ping von H1 zu SRV, dazu einen Telnet-Versuch.
+   - **Prüfen:** `show flow monitor MON cache` zeigt eigene Zeilen für ICMP und für TCP mit Zielport 23.
+4. **Einordnen.**
+   - **Denkfrage:** Was unterscheidet klassisches NetFlow, Flexible NetFlow, sFlow und IPFIX?
 
-**Teil 2 – Lokales SPAN**
+**Teil 2: Lokales SPAN**
 
-5. Auf SW1 `monitor session 1 source interface Gi1/0 both`, `destination interface Gi1/2`. Prüfe `show monitor session 1`. Was passiert mit dem Ziel-Port (nimmt keinen normalen Verkehr mehr, kein STP)?
+5. **Port spiegeln.** Konfiguriere auf SW1 `monitor session 1 source interface Gi1/0 both` und `monitor session 1 destination interface Gi1/2`.
+   - **Prüfen:** `show monitor session 1` zeigt Quelle und Ziel. ANA1 sieht den Verkehr von H1.
+   - **Denkfrage:** Was passiert mit dem Zielport?
 
-**Teil 3 – RSPAN**
+**Teil 3: RSPAN**
 
-6. VLAN 999 als `remote-span` auf **beiden** Switches, im Trunk erlaubt. SW1: `monitor session 2 source interface Gi1/1 both`, `destination remote vlan 999`. SW2: `monitor session 2 source remote vlan 999`, `destination interface Gi1/1`. Prüfe die Sicht auf ANA2.
-7. **Konzept.** Vergleiche SPAN, RSPAN (Layer 2, ein VLAN), ERSPAN (GRE, geroutet). Gib die ERSPAN-Konfiguration (IOS-XE) an: `monitor session 3 type erspan-source / source interface Gi1 both / destination / erspan-id 10 / ip address 10.1.1.1 / origin ip address 10.1.1.2`.
+6. **Über zwei Switches spiegeln.** Lege VLAN 999 auf beiden Switches an und setze darunter `remote-span`. Erlaube es auf dem Trunk. SW1: `monitor session 2 source interface Gi1/1 both` und `monitor session 2 destination remote vlan 999`. SW2: `monitor session 2 source remote vlan 999` und `monitor session 2 destination interface Gi1/1`.
+   - **Prüfen:** ANA2 sieht den Verkehr von H2. `show vlan remote-span` listet VLAN 999.
+7. **ERSPAN verstehen.** So sähe eine ERSPAN-Quelle auf IOS XE aus:
+
+   ```
+   monitor session 3 type erspan-source
+    source interface Gi1 both
+    destination
+     erspan-id 10
+     ip address 10.1.1.1
+     origin ip address 10.1.1.2
+   ```
+   - **Denkfrage:** Was unterscheidet SPAN, RSPAN und ERSPAN?
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 1:** Ein Flow ist eine Folge von Paketen mit gleichen Key-Feldern. Die `match`-Zeilen legen diese Key-Felder fest, hier also Quell- und Ziel-IP, Protokoll und Ports. Die `collect`-Zeilen zählen nur mit und machen keinen neuen Flow auf. Klassisches NetFlow nutzte fest sieben Key-Felder: dazu noch ToS und Eingangs-Interface.
+- **Zu 2:** Ein Template beschreibt, welche Felder in welcher Reihenfolge in den Datensätzen stehen. So kann der Collector auch frei definierte Records lesen. v5 hatte ein festes Format.
+- **Zu 4:** Klassisches NetFlow hat feste Felder. Flexible NetFlow lässt dich Record, Exporter und Monitor selbst zusammenstellen. sFlow nimmt nur Stichproben aus dem Verkehr. IPFIX ist der IETF-Standard auf Basis von NetFlow v9 und wird auch NetFlow v10 genannt.
+- **Zu 5:** Der Zielport gibt nur noch die Kopien aus. Er nimmt keinen normalen Verkehr mehr an und nimmt nicht an STP teil.
+- **Zu 7:** SPAN spiegelt lokal auf einem Switch. RSPAN transportiert die Kopien in einem eigenen VLAN über Trunks zu einem anderen Switch, also nur auf Layer 2. ERSPAN verpackt die Kopien in GRE und schickt sie per IP an ein beliebiges Ziel, auch über Router hinweg.
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -100,14 +128,18 @@ Setze alle Nodes zurück (Rechtsklick → *Wipe*) und spiele `repair/<Node>.cfg`
 **Ticket 4:** ANA1 sieht H1-Verkehr nicht, `show monitor session 1` zeigt ein anderes Ziel.
 
 ## Verifikation
-
 ```
 show flow monitor MON cache
 show flow exporter EXP statistics
 show monitor session all
 show vlan remote-span
 ```
-Erwartet: Cache mit Flows H1 → SRV, Exporter-Statistik zählt Flow-Records, ANA1 sieht H1-Verkehr, ANA2 sieht H2-Verkehr per RSPAN.
+
+| Befehl | Das solltest du sehen |
+|---|---|
+| `show flow monitor MON cache` | Flows von H1 zu SRV, getrennt nach Protokoll und Port |
+| `show flow exporter EXP statistics` | steigende Zahl exportierter Records |
+| Mitschnitt auf ANA1 / ANA2 | ANA1 sieht H1 (SPAN), ANA2 sieht H2 (RSPAN) |
 
 ## Teil C – Üben
 
@@ -135,8 +167,11 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 </details>
 
 ## Prüfungsbezug
-
-Flow = Paketfolge mit gleichen Key-Feldern. Flexible NetFlow nutzt Record/Exporter/Monitor. NetFlow v9 und IPFIX sind template-basiert. SPAN: Quelle(Ports/VLANs), Ziel-Port; RSPAN über spezielles Remote-VLAN; ERSPAN kapselt per GRE zu einem IP-Ziel. Ein SPAN-Ziel-Port nimmt keinen normalen Verkehr entgegen.
+- Ein Flow ist eine Paketfolge mit gleichen Key-Feldern.
+- Flexible NetFlow besteht aus Record, Exporter und Monitor.
+- NetFlow v9 und IPFIX arbeiten mit Templates.
+- SPAN spiegelt lokal, RSPAN über ein Remote-VLAN, ERSPAN per GRE zu einer IP-Adresse.
+- Ein SPAN-Zielport nimmt keinen normalen Verkehr an.
 
 ## Lösungen
 

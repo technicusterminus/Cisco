@@ -62,14 +62,34 @@ Summe (alle Nodes als vIOS/…): ca. **2.5 GB RAM**. Mit VPCS statt vIOS-Hosts: 
 Loopback0 (/32): R1 10.255.0.1, R2 10.255.0.2, R3 10.255.0.3. OSPF 1 Area 0 trägt die internen Netze (nicht die Provider-Links). Provider-Prefixe: ISP1 kündigt 203.0.113.0/24 und 198.51.100.0/24 an, ISP2 kündigt 203.0.113.0/24 und 198.18.0.0/24 an (gleicher Prefix von zwei Providern!).
 
 ## Teil A – Bauen
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
 
-1. **Underlay.** OSPF 1 Area 0 für Links und Loopbacks (`network 10.0.0.0 0.255.255.255 area 0`) auf R1 bis R3. Prüfe, dass R2 die Loopback von R3 per Ping erreicht.
-2. **iBGP mit Route Reflector.** R1 als RR: `neighbor 10.255.0.2/.3 remote-as 65001`, `update-source Loopback0`, `route-reflector-client`. R2 und R3 peeren **nur** zu R1. Warum braucht iBGP sonst eine Vollvermaschung, und was löst der RR? Welche Attribute (`ORIGINATOR_ID`, `CLUSTER_LIST`) verhindern Schleifen?
-3. **eBGP.** R2 zu ISP1 (65100), R3 zu ISP2 (65200). Prüfe `show ip bgp summary`.
-4. **Next-Hop.** Die Provider-Links stehen nicht im OSPF. Setze auf R2 und R3 `neighbor 10.255.0.1 next-hop-self`. Was passiert ohne (Next-Hop nicht erreichbar, Route `inaccessible`)?
-5. **Local Preference.** Auf R2: Route-Map `ISP1-IN` in Richtung ISP1 mit `set local-preference 200`. Prüfe auf R3 `show ip bgp 203.0.113.0`: Welcher Pfad gewinnt und warum (Local-Pref vor AS-Pfadlänge)? Wohin geht ein Ping von R3 an 203.0.113.1?
-6. **Communities.** In derselben Route-Map `set community 65001:100 additive`, global `ip bgp-community new-format`, `neighbor … send-community` zwischen R1, R2 und R3. Prüfe `show ip bgp community 65001:100` auf R3. Wozu setzt man Communities (Policy-Weitergabe ohne Prefix-Listen)?
-7. **Pfadauswahl.** Schreibe die Entscheidungsreihenfolge auf (Weight, Local-Pref, lokal erzeugt, AS-Pfadlänge, Origin, MED, eBGP vor iBGP, IGP-Metrik zum Next-Hop, Router-ID).
+1. **Underlay mit OSPF.** Starte auf R1 bis R3 OSPF 1 in Area 0 für die internen Links und Loopbacks (`network 10.0.0.0 0.255.255.255 area 0`).
+   - **Prüfen:** R2 pingt die Loopback von R3 (10.255.0.3).
+2. **iBGP mit Route Reflector.** Mache R1 zum Route Reflector: `neighbor 10.255.0.2 remote-as 65001` und `neighbor 10.255.0.3 remote-as 65001`, jeweils mit `update-source Loopback0` und `route-reflector-client`. R2 und R3 peeren nur mit R1, ebenfalls über ihre Loopback.
+   - **Prüfen:** `show ip bgp summary` auf R1 zeigt zwei Nachbarn Established.
+   - **Denkfrage:** Warum bräuchte iBGP ohne Route Reflector eine Vollvermaschung? Wie verhindern ORIGINATOR_ID und CLUSTER_LIST Schleifen?
+3. **eBGP zu den Providern.** Verbinde R2 mit ISP1 (AS 65100) und R3 mit ISP2 (AS 65200).
+   - **Prüfen:** `show ip bgp summary` auf R2 und R3 zeigt die Provider Established, mit empfangenen Präfixen.
+4. **Next-Hop setzen.** Die Provider-Links stehen nicht im OSPF. Setze auf R2 und R3 `neighbor 10.255.0.1 next-hop-self`.
+   - **Prüfen:** `show ip bgp` auf R1 zeigt die Provider-Präfixe jetzt mit Next-Hop 10.255.0.2 bzw. .3 und dem Zeichen `>`.
+   - **Denkfrage:** Was passiert ohne `next-hop-self`?
+5. **Local Preference.** Lege auf R2 die Route-Map `ISP1-IN` mit `set local-preference 200` an und binde sie eingehend an ISP1.
+   - **Prüfen:** `show ip bgp 203.0.113.0` auf R3 zeigt den Pfad über R2 als besten.
+   - **Denkfrage:** Warum gewinnt dieser Pfad, obwohl R3 einen direkten Weg zu ISP2 hat? Welchen Weg nimmt ein Ping von R3 an 203.0.113.1?
+6. **Communities.** Ergänze in `ISP1-IN` die Zeile `set community 65001:100 additive`. Setze global `ip bgp-community new-format` und auf R1, R2 und R3 `neighbor … send-community`.
+   - **Prüfen:** `show ip bgp community 65001:100` auf R3 zeigt die Präfixe von ISP1.
+   - **Denkfrage:** Wozu sind Communities gut?
+7. **Pfadauswahl wiederholen.** Schreibe die Best-Path-Reihenfolge aus dem Kopf auf und vergleiche mit dem Prüfungsbezug unten.
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 2:** Ein iBGP-Router gibt Routen, die er per iBGP gelernt hat, nicht an andere iBGP-Nachbarn weiter. So verhindert BGP Schleifen im eigenen AS. Ohne Hilfe muss deshalb jeder mit jedem peeren: n × (n − 1) ÷ 2 Sessions. Der Route Reflector darf Routen an seine Clients weiterreichen. ORIGINATOR_ID trägt die Router-ID des Ursprungs, ein Router verwirft Routen mit seiner eigenen ID. CLUSTER_LIST sammelt die Cluster-IDs der Reflectoren, ein Reflector verwirft Routen, in denen seine ID schon steht.
+- **Zu 4:** iBGP gibt den Next-Hop des Providers (192.0.2.2) unverändert weiter. R1 und R3 kennen dieses Netz nicht, die Route ist „inaccessible“ und wird nicht benutzt.
+- **Zu 5:** Local Preference steht in der Best-Path-Reihenfolge weit vorne, noch vor der Länge des AS-Pfads. 200 schlägt 100. Ein Ping von R3 geht deshalb über R1 zu R2 und dann zu ISP1, nicht direkt zu ISP2.
+- **Zu 6:** Mit einer Community markierst du Routen. Andere Router können dann nach dieser Markierung handeln, etwa Local Preference setzen oder filtern, ohne Prefix-Listen zu pflegen.
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -88,7 +108,6 @@ Setze alle Nodes zurück (Rechtsklick → *Wipe*) und spiele `repair/<Node>.cfg`
 **Ticket 6:** R1 und R3 erreichen 10.255.0.2 nicht, die iBGP-Session zu R2 bleibt unten, obwohl der Link steht.
 
 ## Verifikation
-
 ```
 show ip bgp summary
 show ip bgp
@@ -96,7 +115,12 @@ show ip bgp 203.0.113.0
 show ip bgp community 65001:100
 show ip route bgp
 ```
-Erwartet: R1 hat zwei Peers (Clients), R3 sieht 203.0.113.0/24 mit Local-Pref 200 über R2 (Next-Hop 10.255.0.2), 198.18.0.0/24 direkt über ISP2.
+
+| Befehl | Das solltest du sehen |
+|---|---|
+| `show ip bgp summary` auf R1 | zwei iBGP-Peers (die Clients) |
+| `show ip bgp 203.0.113.0` auf R3 | bester Pfad über R2, Next-Hop 10.255.0.2, LocPrf 200 |
+| `show ip route bgp` auf R3 | 198.18.0.0/24 direkt über ISP2 |
 
 ## Teil C – Üben
 
@@ -124,8 +148,11 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 </details>
 
 ## Prüfungsbezug
-
-iBGP-Nachbarn leiten Routen nicht an andere iBGP-Nachbarn weiter (Split Horizon), Route Reflector oder Konföderation lösen das. Next-Hop bleibt bei iBGP unverändert (`next-hop-self`). Local Preference wirkt nur innerhalb des AS (Standard 100, höher gewinnt), MED zwischen benachbarten AS (niedriger gewinnt). `send-community` ist für Communities nötig. eBGP-AD 20, iBGP 200.
+- iBGP-Router geben iBGP-Routen nicht an andere iBGP-Nachbarn weiter. Route Reflector oder Confederation lösen das.
+- Bei iBGP bleibt der Next-Hop unverändert, außer mit `next-hop-self`.
+- Local Preference gilt im eigenen AS (Standard 100, höher gewinnt). MED gilt zwischen benachbarten AS (niedriger gewinnt).
+- Communities werden nur mit `send-community` verschickt.
+- Administrative Distanz: eBGP 20, iBGP 200.
 
 ## Lösungen
 

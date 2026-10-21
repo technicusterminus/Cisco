@@ -41,13 +41,29 @@ Zwei Standorte sind per eBGP an einen ISP angebunden und über einen GRE-Tunnel 
 eBGP: R1 (AS 65001) und R2 (AS 65002) sprechen mit dem ISP (AS 65000) und kündigen ihr Transportnetz an (R1 `198.51.100.0/30`, R2 `203.0.113.0/30`). Der ISP filtert eingehend nach Kunden-Prefix-Listen und kündigt zusätzlich `192.0.2.1/32` an. Das Overlay (GRE, IPsec-Profil `PROF`, PSK `LabKey123`) trägt OSPF 1 Area 0 mit MD5-Authentifizierung (Key 1 `OspfKey`) und die beiden Kunden-LANs.
 
 ## Teil A – Bauen
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
 
-1. **Underlay (eBGP).** Interface-IPs sind gesetzt. Konfiguriere auf ISP, R1, R2 die eBGP-Sessions (`router bgp`, `neighbor … remote-as`) und kündige die Transportnetze per `network … mask …` an. Der ISP bekommt je Kunde eine eingehende Prefix-Liste, die nur dessen Transportnetz erlaubt (`ip prefix-list FROM-R1 seq 5 permit 198.51.100.0/30`), plus `network 192.0.2.1 mask 255.255.255.255`. Prüfe `show ip bgp summary` und dass R1 `203.0.113.1` und R2 `198.51.100.1` per Ping erreichen.
-2. **IPsec-Profil.** Auf R1 und R2: `crypto isakmp policy 10` (AES 256, SHA, pre-share, Gruppe 2), `crypto isakmp key LabKey123 address <Gegenstelle>`, `crypto ipsec transform-set TS esp-aes 256 esp-sha-hmac` mit `mode transport`, `crypto ipsec profile PROF` mit dem Transform-Set. Warum reicht Transport-Mode, wenn GRE ohnehin kapselt?
-3. **GRE-Tunnel.** `interface Tunnel0`, IP 10.99.0.1/.2 mit /30, `tunnel source GigabitEthernet0/0`, `tunnel destination <Gegenstelle>`, `ip mtu 1400`, `tunnel protection ipsec profile PROF`. Prüfe `show crypto isakmp sa`, `show crypto ipsec sa` (Zähler encaps/decaps) und `show interfaces tunnel0`.
-4. **Overlay-Routing.** OSPF 1 auf Tunnel0 und dem Kunden-LAN (Gi0/1 passiv). Authentifizierung am Tunnel: `ip ospf authentication message-digest`, `ip ospf message-digest-key 1 md5 OspfKey`. Test: H1 pingt H2 (und umgekehrt), Traceroute zeigt den Tunnel, nicht den ISP.
-5. **VRF-Lite.** Auf R1 `ip vrf GUEST` mit `rd 65001:100`, Gi0/2 per `ip vrf forwarding GUEST` einbinden (danach IP neu setzen), H3 steht dahinter. Prüfe `show ip route vrf GUEST`: H3 erreicht nur seinen Gateway, **nicht** 192.168.1.10 und nicht 10.99.0.2. Wie würdest du kontrolliert einen Default-Route-Leak nach global bauen (`ip route vrf GUEST 0.0.0.0 0.0.0.0 <next-hop> global`)?
-6. **Abnahme.** Beide BGP-Sessions `Established`, Tunnel0 up/up, OSPF-Nachbar `FULL`, H1 ↔ H2 klappt, H3 ist isoliert.
+Auch dieses Lab ist vor allem zum Reparieren gedacht. Wenn du es selbst baust, gehe von unten nach oben vor: erst das Underlay, dann IPsec, dann das Routing im Tunnel.
+
+1. **Underlay mit eBGP.** Die Interface-Adressen sind gesetzt. Konfiguriere auf ISP, R1 und R2 die eBGP-Sessions (`router bgp`, `neighbor … remote-as`) und kündige die Transportnetze mit `network … mask …` an. Der ISP bekommt pro Kunde eine Prefix-List für die Eingangsrichtung, die nur dessen Transportnetz erlaubt (z. B. `ip prefix-list FROM-R1 seq 5 permit 198.51.100.0/30`), dazu `network 192.0.2.1 mask 255.255.255.255`.
+   - **Prüfen:** `show ip bgp summary` zeigt alle Sessions Established. R1 pingt 203.0.113.1, R2 pingt 198.51.100.1.
+2. **IPsec-Profil.** Lege auf R1 und R2 an: `crypto isakmp policy 10` (AES 256, SHA, pre-share, Gruppe 2), `crypto isakmp key LabKey123 address <Gegenstelle>`, `crypto ipsec transform-set TS esp-aes 256 esp-sha-hmac` mit `mode transport` und `crypto ipsec profile PROF` mit diesem Transform-Set.
+   - **Denkfrage:** Warum reicht der Transport-Mode, wenn GRE ohnehin verpackt? Und was würdest du an der Policy in einem echten Netz ändern?
+3. **GRE-Tunnel.** Lege `interface Tunnel0` an: IP 10.99.0.1/30 bzw. .2/30, `tunnel source GigabitEthernet0/0`, `tunnel destination <Gegenstelle>`, `ip mtu 1400` und `tunnel protection ipsec profile PROF`.
+   - **Prüfen:** `show interfaces tunnel0` zeigt up/up, `show crypto isakmp sa` QM_IDLE. In `show crypto ipsec sa` steigen encaps und decaps.
+4. **Routing im Tunnel.** Starte OSPF 1 auf Tunnel0 und dem Kunden-LAN (Gi0/1 passiv). Schütze den Tunnel mit `ip ospf authentication message-digest` und `ip ospf message-digest-key 1 md5 OspfKey`.
+   - **Prüfen:** `show ip ospf neighbor` zeigt FULL über Tunnel0. H1 pingt H2. Ein Traceroute zeigt den Tunnel als Weg, nicht den ISP.
+5. **Gastnetz mit VRF-Lite.** Lege auf R1 `ip vrf GUEST` mit `rd 65001:100` an. Binde Gi0/2 mit `ip vrf forwarding GUEST` ein und setze die IP-Adresse neu. Dahinter hängt H3.
+   - **Prüfen:** `show ip route vrf GUEST` enthält nur das Gast-Netz. H3 erreicht sein Gateway, aber weder 192.168.1.10 noch 10.99.0.2.
+   - **Denkfrage:** Wie würdest du dem Gastnetz kontrolliert Zugang zum Internet geben?
+6. **Abnahme.** Beide BGP-Sessions Established, Tunnel0 up/up, OSPF-Nachbar FULL, H1 und H2 erreichen sich, H3 ist isoliert.
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 2:** GRE setzt schon einen neuen äußeren IP-Header mit den Tunnel-Adressen davor. Der Tunnel-Mode würde einen weiteren IP-Header hinzufügen, also nur 20 Byte Ballast. In einem echten Netz würdest du statt SHA-1 und DH-Gruppe 2 mindestens SHA-256 und DH-Gruppe 14 nehmen, besser gleich IKEv2.
+- **Zu 5:** Mit einer Default-Route in der VRF, deren Next-Hop in der globalen Tabelle liegt: `ip route vrf GUEST 0.0.0.0 0.0.0.0 <Next-Hop> global`. Für den Rückweg braucht die globale Tabelle eine Route ins Gastnetz, und meist NAT. Damit Gäste trotzdem nicht ins interne Netz kommen, sichert man den Übergang mit einer ACL oder Firewall ab.
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -72,7 +88,6 @@ Importiere `topology-repair.yaml`. Alle Geräte sind vollständig konfiguriert, 
 **Ticket 9:** H3 (Gast) pingt H1 erfolgreich und sogar 10.99.0.2. `show ip route vrf GUEST` ist leer, die Gast-LAN liegt in der globalen Routing-Tabelle.
 
 ## Verifikation
-
 ```
 show ip bgp summary           show ip bgp
 show crypto isakmp sa         show crypto ipsec sa | include encaps|decaps
@@ -80,7 +95,13 @@ show interfaces tunnel0       show ip ospf neighbor
 show ip route                 show ip route vrf GUEST
 ping 192.168.2.10 source 192.168.1.1
 ```
-Erwartet: R1 lernt `203.0.113.0/30` und R2 `198.51.100.0/30` per BGP, ISAKMP `QM_IDLE`, OSPF `FULL/-` über Tunnel0, R1 hat `192.168.2.0/24` per OSPF.
+
+| Befehl | Das solltest du sehen |
+|---|---|
+| `show ip bgp` | R1 lernt 203.0.113.0/30, R2 lernt 198.51.100.0/30 |
+| `show crypto isakmp sa` | QM_IDLE |
+| `show ip ospf neighbor` | FULL über Tunnel0 |
+| `show ip route` auf R1 | 192.168.2.0/24 per OSPF über Tunnel0 |
 
 ## Teil C – Üben
 
@@ -108,8 +129,11 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 </details>
 
 ## Prüfungsbezug
-
-Faustregeln: Ein GRE-Tunnel ohne Keepalive bleibt `up/up`, solange das Tunnel-Quell-Interface oben ist, auch wenn die Gegenstelle fehlt. Ist die Tunnel-Destination nicht im Underlay erreichbar, fällt der Tunnel (`up/down`). OSPF über einen Tunnel scheitert in `EXSTART`, wenn die MTU der Seiten verschieden ist. IPsec: Phase 1 (ISAKMP/IKE, PSK, Policy) und Phase 2 (Transform-Set, Profil) müssen auf beiden Seiten übereinstimmen. eBGP: AS-Nummer, Peer-Adresse und Filter (Prefix-Liste, Route-Map) prüfen, danach `network`-Statement (muss exakt in der RIB liegen).
+- Ein GRE-Tunnel ohne Keepalive bleibt up/up, solange das Quell-Interface up ist, auch wenn die Gegenstelle fehlt.
+- Ist das Tunnelziel im Underlay nicht erreichbar, geht der Tunnel auf up/down.
+- OSPF über einen Tunnel hängt in EXSTART, wenn die MTU auf beiden Seiten verschieden ist.
+- IPsec: Phase 1 (Policy, PSK) und Phase 2 (Transform-Set, Profil) müssen auf beiden Seiten passen.
+- eBGP: erst AS-Nummer, Nachbaradresse und Filter prüfen, dann das `network`-Statement (muss exakt in der Routing-Tabelle stehen).
 
 ## Lösungen
 
