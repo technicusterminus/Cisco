@@ -1,5 +1,7 @@
 # Übung 2: Ping und Traceroute
 
+**Ziel:** Du prüfst Schritt für Schritt, wie weit deine Verbindung reicht, und verfolgst den Weg ins Internet.
+
 ## Aufgabe A: Ping-Reihe
 
 Führe nacheinander aus und notiere, ob es klappt:
@@ -28,9 +30,11 @@ traceroute 8.8.8.8       (Linux/macOS)
 
 <details><summary>Lösungshinweise</summary>
 
-- Erste Zeile = dein Router. Danach der Provider.
-- `* * *`: Der Hop antwortet nicht auf ICMP (gefiltert), der Weg geht trotzdem weiter.
-- Die Zeit wächst meist mit der Entfernung, kleine Sprünge sind normal.
+- **Aufgabe A:** Die Reihe testet von nah nach fern. Ohne WLAN scheitert es ab dem Gateway. Mit falschem Gateway klappen Loopback und eigene IP, alles außerhalb deines Subnetzes nicht.
+- **Erster Hop = dein Router (Gateway).** Danach folgen die Router deines Providers.
+- **`* * *` heißt: Dieser Router antwortet nicht.** Oft filtert er ICMP. Der Weg geht trotzdem weiter, wenn spätere Hops wieder antworten.
+- **Die Zeit wächst meist mit der Entfernung.** Kleine Sprünge sind normal, weil Router Ping-Antworten nur nebenbei bearbeiten.
+
 </details>
 
 ## Merke

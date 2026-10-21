@@ -33,7 +33,9 @@ Eine Seite zum Ausdrucken oder Daneben-Legen.
 | /29 | .248 | 6 | 8 |
 | /30 | .252 | 2 | 4 |
 
-Hosts = 2^Hostbits − 2.
+Hosts = 2^Hostbits − 2. Blockgröße = 256 − Maskenwert. Netze beginnen bei Vielfachen der Blockgröße, der Broadcast liegt eins vor dem nächsten Netz.
+
+> **Beispiel:** 192.168.1.130/26 → Block 64 → Netz .128, Broadcast .191, Hosts .129 bis .190.
 
 ## Private Adressen
 
@@ -63,4 +65,4 @@ Nützliche Show-Befehle:
 ## Fehlersuche in fünf Schritten
 
 Kabel → Switch/VLAN → IP/Gateway → Erreichbarkeit/Ports → DNS/Anwendung.
-Ping-Reihenfolge: `127.0.0.1` → eigene IP → Gateway → `8.8.8.8` → Name.
+Ping-Reihenfolge: `127.0.0.1` → eigene IP → Gateway → `8.8.8.8` → Name. Der erste Ping, der scheitert, zeigt die Stelle.

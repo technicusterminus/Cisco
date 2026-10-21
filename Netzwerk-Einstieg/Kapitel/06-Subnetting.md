@@ -1,6 +1,10 @@
 # 6. Subnetting leicht gemacht
 
-Subnetting heißt: ein großes Netz in kleinere Netze teilen. Es klingt schwerer, als es ist. Du brauchst nur **eine Tabelle** und **zwei Regeln**.
+> **Darum geht's:** Subnetting heißt: ein großes Netz in kleinere teilen, wie ein Grundstück in Parzellen. Das sieht nach Mathematik aus, ist aber immer derselbe Rechenweg mit einer kleinen Tabelle.
+>
+> **Danach kannst du:** zu jedem Präfix Maske, Hostzahl und Blockgröße angeben · zu einer Adresse Netz, Broadcast und Hostbereich berechnen · für eine Hostzahl das passende Präfix wählen.
+
+Du brauchst nur **eine Tabelle** und **zwei Regeln**.
 
 ## Die Präfixlänge
 
@@ -42,6 +46,12 @@ Für /17 bis /23 wendest du dieselbe Methode im dritten Oktett an. Beispiel /20:
 
 Jeden Tag 10 bis 15 Minuten mit dem [Subnetting-Trainer](../../CCNA%20200-301%20Vorbereitung/Trainer/subnetting-trainer.html). Nach zwei Wochen sind die Blockgrößen im Kopf.
 
+## Das Wichtigste in Kürze
+
+- Nutzbare Hosts = 2^Hostbits − 2.
+- Subnetze beginnen bei Vielfachen der Blockgröße, der Broadcast liegt eins vor dem nächsten Netz.
+- Für eine Hostzahl suchst du die kleinste Zweierpotenz, die Hosts + 2 abdeckt.
+
 ## Selbsttest
 
 1. Wie viele Hosts hat ein /27?
@@ -50,9 +60,10 @@ Jeden Tag 10 bis 15 Minuten mit dem [Subnetting-Trainer](../../CCNA%20200-301%20
 
 <details><summary>Antworten</summary>
 
-1. 30.
-2. Blockgröße 16, 200 liegt in 192–207 → Netz `192.168.5.192`, Broadcast `192.168.5.207`.
-3. 102 Adressen nötig → 2<sup>7</sup> = 128 → /25.
+1. **30.** Ein /27 hat 5 Hostbits: 2^5 = 32, minus Netzadresse und Broadcast.
+2. **Netz 192.168.5.192, Broadcast 192.168.5.207.** Bei /28 ist die Blockgröße 16. Die Netze beginnen bei 176, 192, 208 … 200 liegt im Block 192 bis 207.
+3. **/25.** Du brauchst 100 + 2 = 102 Adressen. Die nächste Zweierpotenz ist 128 = 2^7, also 7 Hostbits und 32 − 7 = 25 Netzbits.
+
 </details>
 
 Zurück: [5. IP-Adressen](05-IP-Adressen.md) · Weiter: [7. Router und Routing](07-Router-und-Routing.md)

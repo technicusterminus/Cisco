@@ -1,5 +1,9 @@
 # 2. Geräte und Kabel
 
+> **Darum geht's:** Jedes Gerät im Netz hat eine bestimmte Aufgabe, und jedes Kabel hat Grenzen. Wer das weiß, erkennt viele Probleme schon beim Hinsehen.
+>
+> **Danach kannst du:** Switch, Router, Access Point, Firewall und Modem auseinanderhalten · Kupfer, Multimode- und Singlemode-Faser passend einsetzen · Duplex und PoE erklären.
+
 ## Die wichtigsten Geräte
 
 | Gerät | Was es tut | Arbeitet mit |
@@ -57,6 +61,12 @@ WLAN (802.11) überträgt auf 2,4, 5 oder 6 GHz. Bequem, aber geteilt, störanf�
 
 Power over Ethernet versorgt Geräte wie Access Points, IP-Telefone und Kameras über das Netzwerkkabel mit Strom. Eine Steckdose weniger.
 
+## Das Wichtigste in Kürze
+
+- Switch arbeitet mit MAC-Adressen, Router mit IP-Adressen. Der Heimrouter vereint beides plus WLAN und Firewall.
+- Kupfer reicht 100 m, Multimode einige hundert Meter, Singlemode viele Kilometer.
+- Stimmt das Duplex an beiden Enden nicht überein, wird der Link langsam, obwohl er funktioniert.
+
 ## Selbsttest
 
 1. Wie lang darf ein Kupferkabel zwischen Switch und PC sein?
@@ -65,9 +75,10 @@ Power over Ethernet versorgt Geräte wie Access Points, IP-Telefone und Kameras 
 
 <details><summary>Antworten</summary>
 
-1. 100 Meter.
-2. Für große Strecken (Kilometer).
-3. Strom und Daten über ein Kabel für AP, Telefon, Kamera.
+1. **Höchstens 100 Meter.** Danach wird das Signal zu schwach und zu störanfällig.
+2. **Bei langen Strecken, also über mehrere Kilometer.** Singlemode hat einen sehr dünnen Kern, das Licht läuft fast ohne Streuung und kommt weit. Multimode reicht nur einige hundert Meter.
+3. **Es liefert Strom über das Netzwerkkabel.** Access Points, IP-Telefone und Kameras brauchen dann keine eigene Steckdose.
+
 </details>
 
 Zurück: [1. Was ist ein Netzwerk?](01-Was-ist-ein-Netzwerk.md) · Weiter: [3. Das Schichtenmodell](03-Schichtenmodell-OSI-TCPIP.md)

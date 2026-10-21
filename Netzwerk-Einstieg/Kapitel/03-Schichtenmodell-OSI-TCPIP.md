@@ -1,6 +1,10 @@
 # 3. Das Schichtenmodell (OSI und TCP/IP)
 
-Netzwerkkommunikation ist kompliziert. Deshalb teilt man sie in **Schichten**: Jede Schicht hat eine klare Aufgabe und redet nur mit der Schicht darüber und darunter.
+> **Darum geht's:** Netzwerk ist viel auf einmal. Das Schichtenmodell teilt es in Stockwerke: Jedes Stockwerk erledigt eine Aufgabe und verlässt sich auf das darunter. So kannst du Probleme Stockwerk für Stockwerk suchen.
+>
+> **Danach kannst du:** die sieben OSI-Schichten und ihre Aufgaben aufzählen · Geräte und Protokolle einer Schicht zuordnen · erklären, wie Daten beim Senden verpackt werden.
+
+Jede **Schicht** hat eine klare Aufgabe und redet nur mit der Schicht darüber und darunter.
 
 ## OSI-Modell (sieben Schichten)
 
@@ -51,6 +55,12 @@ Zum Fehlersuchen: Wenn eine Webseite nicht lädt, gehst du die Schichten durch.
 - Layer 4: Port erreichbar, Firewall?
 - Layer 7: Dienst läuft, DNS-Name stimmt?
 
+## Das Wichtigste in Kürze
+
+- OSI hat sieben Schichten, TCP/IP fasst sie zu vier zusammen.
+- Beim Senden packt jede Schicht einen eigenen Umschlag (Header) um die Daten: Segment, Paket, Frame, Bits.
+- Bei der Fehlersuche gehst du die Schichten von unten nach oben durch.
+
 ## Selbsttest
 
 1. Auf welcher Schicht arbeiten Switches? Und Router?
@@ -59,9 +69,10 @@ Zum Fehlersuchen: Wenn eine Webseite nicht lädt, gehst du die Schichten durch.
 
 <details><summary>Antworten</summary>
 
-1. Switch: Layer 2, Router: Layer 3.
-2. Frame.
-3. Layer 4, Transport.
+1. **Switches auf Layer 2, Router auf Layer 3.** Der Switch entscheidet nach der MAC-Adresse, der Router nach der IP-Adresse.
+2. **Frame.** Auf Layer 3 heißt sie Paket, auf Layer 4 Segment.
+3. **Auf Layer 4, der Transportschicht.** Dort sorgen TCP und UDP mit Portnummern dafür, dass die Daten beim richtigen Programm ankommen.
+
 </details>
 
 Zurück: [2. Geräte und Kabel](02-Geraete-und-Kabel.md) · Weiter: [4. Ethernet, MAC und Switch](04-Ethernet-MAC-Switch.md)

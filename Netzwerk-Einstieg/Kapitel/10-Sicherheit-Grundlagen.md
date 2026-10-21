@@ -1,5 +1,9 @@
 # 10. Sicherheit: Die Grundlagen
 
+> **Darum geht's:** Sicherheit ist kein Produkt, sondern viele kleine Gewohnheiten. Die Schutzziele sagen, was du schützen willst, die Maßnahmen, wie.
+>
+> **Danach kannst du:** die drei Schutzziele erklären · typische Bedrohungen erkennen · grundlegende Schutzmaßnahmen begründen.
+
 ## Schutzziele (CIA)
 
 - **C**onfidentiality: Nur Berechtigte lesen die Daten.
@@ -38,6 +42,12 @@ Die häufigste Schwachstelle ist der **Mensch**. Technik hilft, ersetzt aber kei
 
 Ein verschlüsselter Tunnel durch ein unsicheres Netz. Damit verbindest du Standorte (Site-to-Site) oder Einzelne (Remote Access) sicher mit dem Firmennetz.
 
+## Das Wichtigste in Kürze
+
+- Schutzziele: Vertraulichkeit, Integrität, Verfügbarkeit (CIA).
+- Die häufigste Schwachstelle ist der Mensch, z. B. durch Phishing.
+- Updates, starke Passwörter mit MFA, Backups und getrennte Netze bilden die Basis.
+
 ## Selbsttest
 
 1. Was verletzt ein Angreifer, der Daten mitliest?
@@ -46,9 +56,10 @@ Ein verschlüsselter Tunnel durch ein unsicheres Netz. Damit verbindest du Stand
 
 <details><summary>Antworten</summary>
 
-1. Die Vertraulichkeit.
-2. IDS meldet nur, IPS kann blockieren.
-3. Ein gestohlenes Passwort allein reicht nicht.
+1. **Die Vertraulichkeit.** Er sieht Daten, die nicht für ihn bestimmt sind. Ändert er sie, wäre zusätzlich die Integrität verletzt.
+2. **Ein IDS meldet nur, ein IPS kann blockieren.** Das IPS sitzt dafür direkt im Datenweg, das IDS bekommt nur eine Kopie.
+3. **Weil ein gestohlenes Passwort allein nicht reicht.** Der Angreifer bräuchte zusätzlich den zweiten Faktor, z. B. dein Handy.
+
 </details>
 
 Zurück: [9. WLAN](09-WLAN.md) · Weiter: [11. Fehlersuche](11-Fehlersuche.md)

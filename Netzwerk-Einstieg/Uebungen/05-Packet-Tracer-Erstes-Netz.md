@@ -51,9 +51,10 @@ Die Switches brauchen keine Konfiguration.
 
 <details><summary>Lösungshinweise</summary>
 
-1. Die ersten Pakete lösen ARP aus; der erste Ping kann verloren gehen, die folgenden klappen.
-2. Gi0/1 bleibt `administratively down`, PC2 ist nicht erreichbar.
-3. `C` = Netz direkt verbunden, `L` = eigene Interface-Adresse (/32).
+1. **Wegen ARP.** Vor dem ersten Paket muss PC1 die MAC des Gateways und der Router die MAC von PC2 erfragen. Bis dahin geht ein Ping verloren, die folgenden klappen.
+2. **Gi0/1 bleibt `administratively down`.** Damit fehlt das Netz 192.168.2.0/24 in der Routing-Tabelle, und PC2 ist nicht erreichbar.
+3. **Zwei C- und zwei L-Einträge.** `C` = direkt verbundenes Netz (192.168.1.0/24 und 192.168.2.0/24), `L` = die eigene Adresse am Interface als /32.
+
 </details>
 
 ## Weiter

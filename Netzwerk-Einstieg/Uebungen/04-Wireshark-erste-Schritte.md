@@ -1,5 +1,7 @@
 # Übung 4: Wireshark, ein Paket sehen
 
+**Ziel:** Du siehst die Schichten aus Kapitel 3 in echten Paketen: MAC, IP, Ports und den TCP-Handshake.
+
 Wireshark ist kostenlos (wireshark.org). Starte die Aufzeichnung auf deiner aktiven Netzwerkkarte. Erfasse nur Verkehr in deinem eigenen Netz und auf eigenen Geräten.
 
 ## Aufgabe A: Ping aufzeichnen
@@ -32,7 +34,8 @@ Finde die Schichten:
 
 <details><summary>Lösungshinweise</summary>
 
-- Die Ziel-MAC ist die deines Gateways, weil 8.8.8.8 in einem anderen Netz liegt.
-- DNS: Quellport zufällig, Zielport 53 (UDP).
-- Handshake: SYN → SYN/ACK → ACK, danach erst TLS und HTTP.
+- **Die Ziel-MAC gehört deinem Gateway, nicht 8.8.8.8.** 8.8.8.8 liegt in einem anderen Netz. Im Frame steht deshalb die MAC des nächsten Routers, die IP-Adresse bleibt 8.8.8.8.
+- **DNS: Quellport zufällig, Zielport 53, Protokoll UDP.** Die Antwort kommt von Port 53 an deinen zufälligen Port zurück.
+- **Handshake: SYN, SYN/ACK, ACK.** Erst danach folgen TLS und HTTP.
+
 </details>

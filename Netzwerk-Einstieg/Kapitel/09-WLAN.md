@@ -1,5 +1,9 @@
 # 9. WLAN
 
+> **Darum geht's:** WLAN ist ein Netz über Funk. Funk ist bequem, aber alle Geräte teilen sich die Luft, und Wände, Nachbarn und Mikrowellen stören. Wer die Bänder und Kanäle kennt, baut ein stabiles WLAN.
+>
+> **Danach kannst du:** SSID, BSSID und Roaming erklären · 2,4, 5 und 6 GHz vergleichen und Kanäle sinnvoll wählen · WLAN-Sicherheitsverfahren bewerten.
+
 ## Grundlagen
 
 - Standard: **IEEE 802.11**. Die Wi-Fi-Bezeichnungen: Wi-Fi 4 (n), Wi-Fi 5 (ac), Wi-Fi 6 (ax), Wi-Fi 6E (ax mit 6 GHz).
@@ -36,6 +40,12 @@ Tipp fürs Heimnetz: WPA2 oder WPA3, langes Passwort, Gäste-WLAN getrennt, Rout
 
 Viele Access Points werden zentral von einem **Wireless LAN Controller (WLC)** verwaltet. Die APs sind sogenannte *Lightweight APs* und sprechen mit dem Controller über **CAPWAP**.
 
+## Das Wichtigste in Kürze
+
+- Im 2,4-GHz-Band überlappen sich nur die Kanäle 1, 6 und 11 nicht.
+- 5 und 6 GHz bieten mehr Kanäle und Tempo, aber weniger Reichweite.
+- WEP ist gebrochen. Nimm WPA2 mit AES oder WPA3 und ein langes Passwort.
+
 ## Selbsttest
 
 1. Welche 2,4-GHz-Kanäle überlappen sich nicht?
@@ -44,9 +54,10 @@ Viele Access Points werden zentral von einem **Wireless LAN Controller (WLC)** v
 
 <details><summary>Antworten</summary>
 
-1. 1, 6 und 11.
-2. Der Name des WLANs.
-3. Die Verschlüsselung ist gebrochen und lässt sich in Minuten knacken.
+1. **1, 6 und 11.** Die Kanäle liegen 5 MHz auseinander, ein WLAN belegt aber etwa 20 MHz.
+2. **Der Name des WLANs.** Die BSSID ist dagegen die MAC-Adresse des Funkmoduls im Access Point.
+3. **Weil die Verschlüsselung gebrochen ist.** Ein Angreifer findet den Schlüssel in wenigen Minuten.
+
 </details>
 
 Zurück: [8. TCP, UDP, DNS, DHCP, NAT](08-TCP-UDP-DNS-DHCP-NAT.md) · Weiter: [10. Sicherheit](10-Sicherheit-Grundlagen.md)

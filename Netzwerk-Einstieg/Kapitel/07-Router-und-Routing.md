@@ -1,5 +1,9 @@
 # 7. Router und Routing
 
+> **Darum geht's:** Ein Router ist wie ein Wegweiser an einer Kreuzung: Er schaut auf die Zieladresse und schickt das Paket in die passende Richtung. Welche Richtung das ist, steht in seiner Routing-Tabelle.
+>
+> **Danach kannst du:** erklären, woher ein Router seine Routen kennt · mit Longest Prefix Match vorhersagen, welche Route gewinnt · eine Zeile der Cisco-Routing-Tabelle lesen.
+
 Ein Router verbindet **verschiedene Netze**. Er schaut auf die Ziel-IP eines Pakets und entscheidet anhand seiner **Routing-Tabelle**, wohin es als Nächstes geht.
 
 ## Wie ein Router entscheidet
@@ -52,6 +56,12 @@ O    10.2.0.0/16 [110/20] via 10.0.0.2, 00:05:12, GigabitEthernet0/1
 
 OSPF-Route (`O`), AD 110, Metrik 20, Next-Hop 10.0.0.2, vor 5:12 gelernt, Ausgang Gi0/1.
 
+## Das Wichtigste in Kürze
+
+- Routen kommen von direkt verbundenen Netzen, von Hand (statisch) oder von Routing-Protokollen (dynamisch).
+- Erst gewinnt das längste passende Präfix, bei Gleichstand die kleinere Administrative Distanz.
+- Die Default-Route 0.0.0.0/0 fängt alles auf, was sonst nicht passt.
+
 ## Selbsttest
 
 1. Was ist ein Default Gateway im Verhältnis zur Default Route?
@@ -60,9 +70,10 @@ OSPF-Route (`O`), AD 110, Metrik 20, Next-Hop 10.0.0.2, vor 5:12 gelernt, Ausgan
 
 <details><summary>Antworten</summary>
 
-1. Das Default Gateway steht auf dem Host (wohin mit fremden Zielen?). Die Default Route steht auf dem Router und sagt dasselbe für ihn.
-2. `10.1.1.0/24` (längerer Präfix).
-3. Sie verhindert, dass Pakete endlos kreisen.
+1. **Beide meinen „wohin mit unbekannten Zielen“, nur auf verschiedenen Geräten.** Das Default Gateway steht auf dem Host, die Default-Route auf dem Router.
+2. **10.1.1.0/24.** Beide passen, aber /24 ist länger und damit genauer. Die längere Route gewinnt immer.
+3. **Sie verhindert, dass Pakete endlos im Kreis laufen.** Jeder Router zieht 1 ab. Bei 0 wird das Paket verworfen.
+
 </details>
 
 Zurück: [6. Subnetting](06-Subnetting.md) · Weiter: [8. Transport und Anwendung](08-TCP-UDP-DNS-DHCP-NAT.md)

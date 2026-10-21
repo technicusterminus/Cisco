@@ -1,5 +1,9 @@
 # 1. Was ist ein Netzwerk?
 
+> **Darum geht's:** Bevor es um Kabel und Adressen geht, brauchst du ein Bild vom Ganzen: Wer redet mit wem, und wer hilft dabei? Stell dir ein Netzwerk wie die Post vor: Absender, Empfänger, Briefträger und Regeln für die Adresse.
+>
+> **Danach kannst du:** die vier Bausteine eines Netzwerks benennen · LAN, WAN und WLAN unterscheiden · erklären, was Client und Server tun.
+
 Ein Netzwerk verbindet Geräte, damit sie Daten austauschen können: Dein Laptop mit dem Drucker, dein Handy mit dem Internet, ein Server mit hundert Rechnern.
 
 ## Die vier Grundbausteine
@@ -41,6 +45,12 @@ Genau diese Schritte lernst du in den nächsten Kapiteln im Detail.
 
 **Switch = innerhalb eines Netzes. Router = zwischen Netzen.**
 
+## Das Wichtigste in Kürze
+
+- Ein Netzwerk besteht aus Endgeräten, Verbindungen, Vermittlern und Protokollen.
+- Ein LAN ist lokal (Haus, Büro), ein WAN verbindet Standorte. Das Internet ist das größte WAN.
+- Switch = innerhalb eines Netzes, Router = zwischen Netzen.
+
 ## Selbsttest
 
 1. Nenne die vier Grundbausteine eines Netzwerks.
@@ -49,9 +59,10 @@ Genau diese Schritte lernst du in den nächsten Kapiteln im Detail.
 
 <details><summary>Antworten</summary>
 
-1. Endgeräte, Verbindungen, Vermittler, Protokolle.
-2. Der Server bietet einen Dienst an, der Client nutzt ihn.
-3. Ein LAN. Die Verbindung zum Provider ist Teil eines WAN.
+1. **Endgeräte, Verbindungen, Vermittler und Protokolle.** Ohne einen davon funktioniert nichts: Ohne Protokolle wüssten die Geräte nicht, wie sie sich verständigen.
+2. **Der Server bietet einen Dienst an, der Client nutzt ihn.** Dein Browser (Client) fragt eine Webseite beim Webserver an. Ein Gerät kann auch beides sein.
+3. **Ein LAN.** Es reicht nur über deine Wohnung. Die Leitung zum Provider gehört schon zu einem WAN.
+
 </details>
 
 Weiter: [2. Geräte und Kabel](02-Geraete-und-Kabel.md)

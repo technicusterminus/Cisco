@@ -1,5 +1,9 @@
 # 11. Fehlersuche mit einfachen Mitteln
 
+> **Darum geht's:** Bei einer Störung hilft kein Raten, sondern eine feste Reihenfolge. Du arbeitest dich vom Kabel bis zur Anwendung vor, und wo der erste Test scheitert, liegt das Problem.
+>
+> **Danach kannst du:** die wichtigsten Diagnosebefehle einsetzen · mit Ping von nah nach fern eine Störung eingrenzen · typische Fehlerbilder einer Ursache zuordnen.
+
 Bei Netzwerkproblemen hilft eine feste Reihenfolge, von unten nach oben:
 
 ```
@@ -24,7 +28,7 @@ Bei Netzwerkproblemen hilft eine feste Reihenfolge, von unten nach oben:
 ## Der Standardablauf (von nahe nach fern)
 
 1. `ping 127.0.0.1`: Funktioniert der Netzwerk-Stack?
-2. `ping <eigene IP>`: Läuft die Netzwerkkarte?
+2. `ping <eigene IP>`: Ist die eigene Adresse richtig eingerichtet?
 3. `ping <Gateway>`: Funktioniert das lokale Netz?
 4. `ping 8.8.8.8`: Funktioniert der Weg ins Internet?
 5. `ping www.example.com`: Funktioniert DNS?
@@ -45,6 +49,12 @@ Wo der erste Ping scheitert, liegt das Problem.
 
 Mit Wireshark siehst du jedes Paket: Welche MAC fragt per ARP? Ging der DNS-Query raus? Kam ein SYN/ACK zurück? Fürs Verständnis unbezahlbar (siehe [Übungen](../Uebungen/)).
 
+## Das Wichtigste in Kürze
+
+- Von unten nach oben: Kabel, Switch-Port, Adresse und Gateway, Erreichbarkeit, DNS und Anwendung.
+- Ping von nah nach fern: Loopback, eigene IP, Gateway, Internet-Adresse, Name.
+- Der erste Test, der scheitert, zeigt dir die Stelle.
+
 ## Selbsttest
 
 1. Ping auf das Gateway klappt, Ping auf 8.8.8.8 nicht. Wo suchst du?
@@ -53,9 +63,10 @@ Mit Wireshark siehst du jedes Paket: Welche MAC fragt per ARP? Ging der DNS-Quer
 
 <details><summary>Antworten</summary>
 
-1. Hinter dem Gateway: Routing, NAT, Provider.
-2. DNS.
-3. `tracert` bzw. `traceroute`.
+1. **Hinter dem Gateway.** Das lokale Netz funktioniert. Prüfe Routing, NAT und die Verbindung zum Provider.
+2. **DNS.** Das Internet ist erreichbar, nur die Übersetzung von Namen in Adressen klappt nicht. Prüfe den DNS-Server mit `nslookup`.
+3. **`tracert` unter Windows, `traceroute` unter Linux und macOS.** Er zeigt jede Station auf dem Weg.
+
 </details>
 
 Zurück: [10. Sicherheit](10-Sicherheit-Grundlagen.md) · Weiter: [12. Cisco-CLI und Weg zur CCNA](12-Cisco-CLI-und-Weg-zur-CCNA.md)

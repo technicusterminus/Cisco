@@ -10,6 +10,6 @@ Deutschsprachige Lernmaterialien für Cisco-Prüfungen, vom Einstieg bis zum CCN
 
 **Reihenfolge:** Wer neu ist, startet mit dem Netzwerk-Einstieg, dann CCNA, dann ENCOR. Jeder Ordner hat einen eigenen Lernplan, der Karten, Labs und Simulation verbindet.
 
-**Neu:** ENCOR-Deck 4.4 und ENCOR-Prüfungssimulation didaktisch überarbeitet. Jede Antwort nennt zuerst den Kern und erklärt dann, warum.
+**Neu:** Alle drei Pakete sind didaktisch überarbeitet: Karten, Simulationen, Labs, Kapitel und Cheatsheets. Jede Antwort nennt zuerst den Kern und erklärt dann, warum. Jedes Lab beginnt mit Lernzielen, und jedes Fehler-Ticket sagt, mit welchem Befehl du den Fehler findest.
 
 > Kein offizielles Cisco-Material. Cisco, CCNA, CCNP, ENCOR und Packet Tracer sind Marken von Cisco Systems, Inc.
