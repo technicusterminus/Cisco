@@ -6,16 +6,16 @@ Parallelzweig zu den [CML-Labs](../CML-Labs/): dieselben Themen, Aufgaben (Bauen
 
 ## Arbeiten mit den Dateien
 
-Packet-Tracer-Dateien (`.pkt`) liegen nicht bei: Ich kann sie ohne Packet Tracer weder erzeugen noch prüfen. Dafür beschreibt jedes Lab Geräte, Modelle, Ports und Kabel in Tabellen und liefert die Konfigurationen als Textdateien. Der Aufbau dauert pro Lab etwa 5 bis 10 Minuten; speichere ihn danach als eigene `.pkt`.
+Fertige `.pkt`-Dateien liegen nicht bei. Stattdessen beschreibt jedes Lab Geräte, Modelle, Ports und Kabel in Tabellen und liefert die Konfigurationen als Textdateien. Der Aufbau dauert pro Lab etwa 5 bis 10 Minuten; speichere ihn danach als eigene `.pkt`.
 
 1. **Topologie bauen.** Geräte laut Tabelle „Geräte“ platzieren, Kabel laut Tabelle „Verkabelung“ von Hand wählen und auf die genannten Ports stecken.
 2. **Ausgangszustand laden.** Pro Gerät: *CLI*-Tab → `enable` → `configure terminal`, dann den Inhalt von `build/<Gerät>.txt` einfügen. Lange Dateien in Blöcken einfügen, falls Zeilen verloren gehen, danach `end` und `write memory`.
 3. **Endgeräte** (PC-PT) setzen: *Desktop* → *IP Configuration* mit den Werten aus der Adresstabelle.
-4. **Teil A** selbst bauen, danach mit `solutions/<Gerät>.cfg` vergleichen.
-5. **Teil B (Reparieren).** Geräte zurücksetzen (`erase startup-config`, `reload`), dann `repair/<Gerät>.txt` einfügen. Tickets abarbeiten, Auflösung in `solutions/FAULTS.md`.
+4. **Teil A** selbst bauen und jeden Schritt mit den Befehlen aus „Verifikation“ prüfen. Erst am Ende mit `solutions/<Gerät>.cfg` vergleichen.
+5. **Teil B (Reparieren).** Geräte zurücksetzen (`erase startup-config`, `reload`), dann `repair/<Gerät>.txt` einfügen. Tickets wie im Betrieb abarbeiten: Symptom nachstellen, eingrenzen, beheben, verifizieren. Erst nach 20 Minuten ohne Fortschritt in `solutions/FAULTS.md` schauen.
 6. **Teil C** (Transferfragen) erst selbst beantworten, dann aufklappen.
 
-**Gerätemodelle und Portnamen.** Router sind 2911 (nur drei Ports `Gi0/0` bis `Gi0/2`: Alle Labs sind darauf ausgelegt), Layer-2/3-Switches sind 3560-24PS (`Fa0/1` bis `Fa0/24`, `Gi0/1`/`Gi0/2`), Hosts sind PC-PT. Die CML-Switches haben Gigabit-Ports (`Gi0/0` bis `Gi3/3`). Umrechnung: **`GiX/Y` → `Fa0/(X·4+Y+1)`**, z. B. `Gi0/0` → `Fa0/1`, `Gi1/0` → `Fa0/5`. In den Aufgabentexten und Konfigurationen ist das schon umgesetzt.
+**Gerätemodelle und Portnamen.** Router sind 2911 (drei Ports `Gi0/0` bis `Gi0/2`, alle Labs kommen damit aus), Layer-2/3-Switches sind 3560-24PS (`Fa0/1` bis `Fa0/24`, `Gi0/1`/`Gi0/2`), Hosts sind PC-PT. Die CML-Switches haben Gigabit-Ports (`Gi0/0` bis `Gi3/3`). Umrechnung: **`GiX/Y` → `Fa0/(X·4+Y+1)`**, z. B. `Gi0/0` → `Fa0/1`, `Gi1/0` → `Fa0/5`. In den Aufgabentexten und Konfigurationen ist das schon umgesetzt.
 
 Voraussetzung: Cisco Packet Tracer 8.2 oder neuer (kostenlos über Cisco Networking Academy).
 
@@ -107,10 +107,10 @@ Pro Ziel mit Links zu Aufgaben und Lösungen: **[ZIELE.md](ZIELE.md)**. In Packe
 | `6.6` | EEM-Applets | 27 | – |
 | `6.7` | Agentenbasierte und agentenlose Automation | 21 | 20 (CML-Paket) |
 
-## Ehrlicher Hinweis zum Test-Stand
+## Stand und Grenzen
 
-- **Nicht in Packet Tracer ausgeführt.** Die Labs entstehen automatisch aus den CML-Labs (Geräte, Verkabelung, Konfigurationen, Fehler). Geprüft ist per Skript: Ports existieren am gewählten Modell, kein Port doppelt, Router-Link-Subnetze passen, jedes Fehlermuster kommt in der Konfiguration vor.
-- **Funktionsliste = Kenntnisstand.** Was Packet Tracer 8.x unterstützt, habe ich nach bestem Wissen eingetragen; einzelne Einträge (z. B. HSRP Version 2, VRF, MST, NTP-Authentifizierung) können je nach Version abweichen. Wird ein Befehl nicht akzeptiert, ist das ein Limit der Software, kein Fehler von dir.
-- **Abweichendes Verhalten.** Packet Tracer simuliert vereinfacht: Timer, `debug`-Ausgaben, Zähler und einzelne `show`-Befehle unterscheiden sich vom echten IOS. Für die Prüfungsvorbereitung zählen die Konzepte; für exakte Ausgaben sind CML oder EVE-NG näher an der Realität.
+- **Geprüft per Skript:** Die Labs entstehen automatisch aus den CML-Labs. Das Skript prüft, dass jeder Port am gewählten Modell existiert, kein Port doppelt belegt ist, die Subnetze der Router-Links passen und jeder Fehler in der Konfiguration steckt. In Packet Tracer selbst sind die Labs noch nicht durchgespielt.
+- **Befehl wird nicht angenommen?** Der Funktionsumfang schwankt zwischen PT-Versionen, z. B. bei HSRP Version 2, VRF, MST oder NTP-Authentifizierung. Dann ist das eine Grenze der Software, kein Fehler von dir.
+- **Ausgaben weichen ab.** Packet Tracer vereinfacht: Timer, `debug`, Zähler und manche `show`-Befehle sehen anders aus als im echten IOS. Für die Konzepte reicht PT. Wer die echten Ausgaben üben will, nimmt CML oder EVE-NG.
 
 Alle Adressen stammen aus Privat- oder Dokumentationsbereichen, Passwörter sind reine Lab-Werte.

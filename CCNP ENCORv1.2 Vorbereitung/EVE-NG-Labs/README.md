@@ -1,6 +1,6 @@
 # CCNP ENCOR 350-401 v1.2 – EVE-NG-Labs
 
-Parallelzweig zu den [CML-Labs](../CML-Labs/) für **EVE-NG**: dieselben 27 Labs mit denselben Aufgaben (Bauen, Reparieren, Üben), Fehlerlisten und Lösungen. Die Geräte (vIOS, vIOS-L2, CSRv, Nexus 9000v) tragen dieselben Interface-Namen wie in CML, deshalb gelten Aufgabentexte und Konfigurationen unverändert. Neu sind Node- und Kabeltabellen mit EVE-Templates, Ressourcenbedarf und Konfigurationsdateien zum Einspielen.
+Parallelzweig zu den [CML-Labs](../CML-Labs/) für **EVE-NG**: dieselben 27 Labs mit denselben Aufgaben (Bauen, Reparieren, Üben), Fehlerlisten und Lösungen. Die Geräte (vIOS, vIOS-L2, CSRv, Nexus 9000v) tragen dieselben Interface-Namen wie in CML, deshalb gelten Aufgabentexte und Konfigurationen unverändert. Dazu kommen Node- und Kabeltabellen mit EVE-Templates, der RAM-Bedarf und Konfigurationsdateien zum Einspielen.
 
 **Inhalt:** 27 Labs, 134 eingebaute Fehler. Die Python-/API-Drills und die Fallstudien-Pakete liegen im CML-Zweig und gelten für alle Plattformen: [`20-Python-REST-Drills`](../CML-Labs/20-Python-REST-Drills/), [`21-Design-Fallstudien.md`](../CML-Labs/21-Design-Fallstudien.md), [`22-Security-Szenarien.md`](../CML-Labs/22-Security-Szenarien.md).
 
@@ -18,8 +18,8 @@ EVE-NG kann Startkonfigurationen nicht als Datei importieren. Pro Lab geht es so
 3. **Ausgangszustand einspielen.** Entweder per Hand: Konsole öffnen, `enable`, `configure terminal`, Inhalt von `build/<Node>.cfg` einfügen, `end`, `write memory`. Oder mit dem Hilfsskript [`tools/eve_push_configs.py`](tools/eve_push_configs.py), das die Dateien per Telnet-Konsole tippt:
    `python3 tools/eve_push_configs.py <EVE-IP> <Lab-Ordner> --mode build --ports R1=32769 SW1=32770 …`
    Die Telnet-Ports zeigt EVE-NG je Node an. `--dry-run` zeigt nur an, was gesendet würde.
-4. **Teil A** selbst bauen, danach mit `solutions/<Node>.cfg` vergleichen.
-5. **Teil B (Reparieren).** Nodes per Rechtsklick *Wipe* zurücksetzen und `repair/<Node>.cfg` einspielen (`--mode repair`). Tickets abarbeiten, Auflösung in `solutions/FAULTS.md`.
+4. **Teil A** selbst bauen und jeden Schritt mit den Befehlen aus „Verifikation“ prüfen. Erst am Ende mit `solutions/<Node>.cfg` vergleichen.
+5. **Teil B (Reparieren).** Nodes per Rechtsklick *Wipe* zurücksetzen und `repair/<Node>.cfg` einspielen (`--mode repair`). Tickets wie im Betrieb abarbeiten: Symptom nachstellen, eingrenzen, beheben, verifizieren. Erst nach 20 Minuten ohne Fortschritt in `solutions/FAULTS.md` schauen.
 6. **Stand sichern.** Wenn dein Image es unterstützt, speichert *Export CFG* den Zustand als Startkonfiguration im Lab.
 7. **Hosts.** Standardmäßig vIOS wie in CML. Alternative VPCS (spart RAM): Zeile aus `vpcs/<Host>.vpc` in der VPCS-Konsole eingeben oder `--vpcs H1=<Port>` nutzen.
 
@@ -109,11 +109,11 @@ Pro Ziel mit Links zu Aufgaben und Lösungen: **[ZIELE.md](ZIELE.md)**.
 | `6.6` | EEM-Applets | 27 | 19 |
 | `6.7` | Agentenbasierte und agentenlose Automation | 21 | 20 |
 
-## Ehrlicher Hinweis zum Test-Stand
+## Stand
 
-- **Nicht in EVE-NG ausgeführt.** Die Labs entstehen automatisch aus den CML-Labs: Geräte, Verkabelung, Konfigurationen und Fehler sind identisch. Geprüft ist per Skript, dass Links auf existierende Interfaces zeigen, kein Port doppelt belegt ist und jedes Fehlermuster in der Konfiguration vorkommt.
-- **Namens- und Template-Zuordnung.** Die EVE-Templates und RAM-Werte sind Richtwerte nach meinem Kenntnisstand; Interface-Zählung und Mindest-RAM können je nach Image-Version abweichen. Das gilt besonders für Nexus 9000v (Interface-Nummerierung) und CSRv (Gi1 statt Gi0/0).
-- **Hilfsskript.** `tools/eve_push_configs.py` habe ich gegen lokale Dummy-Telnet-Server getestet (Zeilen, Reihenfolge, NX-OS-Variante, VPCS), nicht gegen ein echtes EVE-NG. Bei Problemen: Dateien per Copy and Paste einfügen.
-- **Risiko-Labs:** 15 (LISP braucht ein passendes Image), 16 (Nexus, viel RAM), 19 (CSRv mit Cloud-Anbindung).
+- **Geprüft per Skript:** Die Labs entstehen automatisch aus den CML-Labs, mit denselben Geräten, Kabeln, Konfigurationen und Fehlern. Das Skript prüft, dass alle Links auf vorhandene Interfaces zeigen, kein Port doppelt belegt ist und jeder Fehler in der Konfiguration steckt. In einer laufenden EVE-NG-Instanz sind die Labs noch nicht durchgespielt.
+- **Templates und RAM** sind Richtwerte. Bei Nexus 9000v kann die Interface-Nummerierung je nach Image abweichen, beim CSRv heißt das erste Interface Gi1 statt Gi0/0.
+- **Das Hilfsskript** ist gegen simulierte Telnet-Konsolen getestet (Reihenfolge, NX-OS, VPCS). Klappt es bei dir nicht, füge die Dateien per Copy and Paste ein.
+- **Anspruchsvolle Labs:** 15 (LISP braucht ein passendes Image), 16 (Nexus, viel RAM), 19 (CSRv mit Cloud-Anbindung).
 
 Alle Adressen stammen aus Privat- oder Dokumentationsbereichen, Passwörter sind reine Lab-Werte.

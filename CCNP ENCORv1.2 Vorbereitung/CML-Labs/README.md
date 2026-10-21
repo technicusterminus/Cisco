@@ -1,8 +1,8 @@
 # CCNP ENCOR 350-401 v1.2 – Labs zum Kompendium
 
-Diese Sammlung ergänzt das Anki-Kompendium (1431 Karten): Die Karten fragen Wissen ab, die Labs lassen dich es **bauen, reparieren und üben**. Jedes der 47 Prüfungsziele des Kompendiums (`Ziel::…`) ist mindestens einem Lab zugeordnet.
+Diese Labs ergänzen das Anki-Kompendium (1.431 Karten). Die Karten bauen Wissen auf, in den Labs wendest du es an: **bauen, reparieren, üben**. Jedes der 47 Prüfungsziele des Kompendiums (`Ziel::…`) ist mindestens einem Lab zugeordnet.
 
-**Inhalt:** 27 CML-Labs (24 Themen-Labs und 3 Capstones, zusammen 134 eingebauten Fehlern zum Reparieren), ein Python-/API-Drill-Paket mit automatischen Tests, zwei Fallstudien-Pakete für Themen, die sich nicht sinnvoll simulieren lassen.
+**Inhalt:** 27 CML-Labs (24 Themen-Labs und 3 Capstones, zusammen 134 eingebaute Fehler zum Reparieren), ein Python-/API-Drill-Paket mit automatischen Tests, zwei Fallstudien-Pakete für Themen, die sich nicht sinnvoll simulieren lassen.
 
 **Andere Plattformen:** Dieselben Labs gibt es für [Packet Tracer](../PacketTracer-Labs/) (soweit PT die Funktionen kann) und [EVE-NG](../EVE-NG-Labs/).
 
@@ -14,6 +14,13 @@ Diese Sammlung ergänzt das Anki-Kompendium (1431 Karten): Die Karten fragen Wis
 | `topology-repair.yaml` | **Reparieren:** komplett gebaute Topologie mit eingebauten Fehlern. Die Tickets stehen im README, die Auflösung in `solutions/FAULTS.md`. |
 | `README.md` | Teil A Aufgaben, Teil B Tickets, Verifikation, Teil C Transferfragen mit Antworten, Prüfungsbezug |
 | `solutions/*.cfg` | Musterlösung je Gerät (ohne Basis-IP-Adressen) |
+
+## So arbeitest du ein Lab durch
+
+1. **Teil A: Bauen.** Lies zuerst das Ziel des Labs und die Skizze. Baue dann Schritt für Schritt und prüfe jeden Schritt mit den Befehlen aus „Verifikation“. Erst am Ende vergleichst du mit `solutions/`.
+2. **Teil B: Reparieren.** Am besten an einem anderen Tag. Lade die Reparatur-Topologie, lies das Ticket und gehe vor wie im Betrieb: Symptom nachstellen, eingrenzen, beheben, verifizieren. Erst nach 20 Minuten ohne Fortschritt in `solutions/FAULTS.md` schauen.
+3. **Teil C: Üben.** Beantworte die Transferfragen erst selbst, dann klappst du die Antwort auf.
+4. **Nacharbeiten.** Wiederhole im Anki-Deck die Karten zum Ziel des Labs (`tag:Ziel::…`), besonders zu den Fehlern, die du nicht gefunden hast.
 
 ## Übersicht
 
@@ -111,16 +118,13 @@ Pro Ziel mit direkten Links zu Aufgaben und Lösungen: **[ZIELE.md](ZIELE.md)**.
 2. **Betrieb und Sicherheit:** 08, 09, 10, 11, 04, 12.
 3. **Overlay und QoS:** 13, 14, 15, 16, 17.
 4. **Assurance und Automation:** 18, 19, 20.
-5. **Konzept:** 21, 22 (Fallstudien), dazu die Karten mit `Typ::Exhibit` im Deck.
-6. **Abschluss:** 23, 24 und 30 (Capstones). Reine Fehlersuche im Gesamtnetz, mit mehreren verdeckenden Fehlern; mache sie zuletzt und ohne Blick in die Lösungen.
+5. **Konzept:** 21, 22 (Fallstudien), dazu die Karten mit `tag:Fokus::Exhibit` im Deck.
+6. **Abschluss:** 23, 24 und 30 (Capstones). Reine Fehlersuche im ganzen Netz, bei der ein Fehler den nächsten verdecken kann. Mach sie zuletzt und ohne Blick in die Lösungen.
 
-Faustregel: Erst Teil A bauen, am nächsten Tag Teil B (Reparieren) ohne Blick in die Lösung, danach Teil C und die passenden Karten im Deck.
+## Voraussetzungen und Stand
 
-## Ehrlicher Hinweis zum Test-Stand
-
-- **Python-Drills (Lab 20):** Tests, Mock-API, Templates und Playbook-Check wurden mit den Musterlösungen ausgeführt (alle grün).
-- **CML-Labs (01–19, 23–30):** Topologien und Konfigurationen sind per Skript erzeugt. Geprüft ist, dass Links auf existierende Interfaces zeigen, jedes eingebaute Fehlermuster in der Konfiguration vorkommt und das YAML sauber lädt. **Auf einer echten CML-Instanz habe ich sie nicht gestartet.** Befehle sind nach bestem Wissen für IOSv/IOSvL2 (15.x), CSR1000v (IOS XE) und NX-OSv 9000 geschrieben, einzelne Syntaxdetails oder Verhalten der Images können abweichen.
-- **Mit größerem Risiko:** Lab 15 (LISP braucht ein IOSv-Image mit LISP-Unterstützung), Lab 16 (NX-OSv 9000: Interface-Zuordnung und hoher RAM-Bedarf), Lab 19 (CSR1000v mit External Connector).
-- Wenn etwas nicht läuft: Fehlermeldung als Lernanlass behandeln, mit der Cisco-Dokumentation gegenprüfen und gern eine Korrektur einreichen.
+- **Images:** IOSv und IOSvL2 (15.x), CSR1000v (IOS XE) und NX-OSv 9000. Lab 15 braucht ein IOSv-Image mit LISP, Lab 16 den NX-OSv 9000 mit viel RAM, Lab 19 einen CSR1000v mit External Connector.
+- **Getestet:** Die Python-Drills (Lab 20) laufen mit den Musterlösungen grün. Bei den CML-Labs ist per Skript geprüft, dass das YAML lädt, alle Links auf vorhandene Interfaces zeigen und jeder eingebaute Fehler in der Konfiguration steckt. In einer laufenden CML-Instanz sind sie noch nicht durchgespielt.
+- **Wenn ein Befehl nicht durchgeht:** Image-Versionen unterscheiden sich in Details. Prüfe die Syntax in der Cisco-Dokumentation. Das ist gleich eine gute Übung. Eine Korrektur per Issue hilft allen.
 
 Alle Adressen stammen aus Privat- oder Dokumentationsbereichen, Passwörter sind reine Lab-Werte. Es stecken keine echten Netzdaten drin.

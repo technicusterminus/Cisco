@@ -1,6 +1,6 @@
 # CCNP ENCOR 350-401 v1.2 – Anki-Kompendium (Deutsch)
 
-Ein deutschsprachiges Anki-Deck für die Prüfung **Cisco 350-401 ENCOR v1.2**. Es deckt die Blueprint-Themen vollständig ab und ist darauf ausgelegt, Verständnis aufzubauen, nicht nur Fakten abzufragen. Zum Lernen unterwegs gibt es kurze Karten ohne Code, zum Prüfungstraining Exhibits und Fallen.
+Ein deutschsprachiges Anki-Deck für die Prüfung **Cisco 350-401 ENCOR v1.2**. Es deckt alle Themen des Blueprints ab. Die Karten fragen nicht nur Fakten ab, sondern erklären, warum etwas so ist. Für unterwegs gibt es kurze Karten ohne Code, fürs Prüfungstraining Exhibits und Fallen.
 
 **Aktuelle Version:** 4.4 (Stand 21.10.2026) · **1.431 Karten**
 **Datei:** [`ENCOR_v1.2_Kompendium_4.4_DE.apkg`](ENCOR_v1.2_Kompendium_4.4_DE.apkg)
@@ -61,25 +61,28 @@ In Anki unter **Karteikarten durchsuchen** oder als gefiltertes Deck:
 | `tag:Ziel::3.2.b` usw. | – | Ein einzelner Blueprint-Punkt |
 | `tag:Korrektur::2026_10_19` | – | Nachträglich fachlich geschärfte Karten |
 
-## Aufbau einer Karte
+## So ist eine Karte aufgebaut
 
-Jede Karte hat eine stabile ID (`E12-<Blueprint-Punkt>-<Nr>`), den Themenbezug, Typ und Stufe (Leicht, Mittel, Schwer), Frage, Antwort, einen optionalen Hinweis und Quellenlinks. Die Karten-IDs bleiben über Versionen hinweg gleich, deshalb funktioniert der Update-Import.
+- **Frage:** konkret und mit Kontext, z. B. „Eine OSPF-Nachbarschaft hängt in ExStart oder Exchange. Was prüfst du zuerst?“
+- **Antwort:** beginnt fett mit dem Kern (**Die MTU auf beiden Seiten.**). Danach folgen ein bis zwei Sätze, warum das so ist: Bei unterschiedlicher MTU werden die Database-Description-Pakete abgelehnt. Rechenwege stehen ausgeschrieben da.
+- **Hinweis** (nicht immer vorhanden): eine Merkhilfe, eine typische Falle oder der nächste Prüfschritt.
+- **Quellen:** Links zur Cisco-Dokumentation oder zum RFC.
+
+Jede Karte hat eine feste ID (`E12-<Blueprint-Punkt>-<Nr>`), dazu Thema, Typ und Stufe (Leicht, Mittel, Schwer). Die IDs bleiben über alle Versionen gleich. Deshalb behält ein Update-Import deinen Lernfortschritt.
 
 ## Lernempfehlung
 
-Ein konkreter 10-Wochen-Plan, der Deck und Labs verbindet, steht in [`LERNPLAN.md`](LERNPLAN.md).
+Am besten folgst du dem [10-Wochen-Lernplan](LERNPLAN.md). Er verbindet Deck, Labs und Simulation. Kurz gefasst:
 
-1. **Aufbauphase (4 bis 6 Wochen):** Gesamtes Deck oder `tag:Modus::Zug` täglich, parallel Labs (EVE-NG, CML oder echte Geräte).
-2. **Vertiefung:** Schwache Domänen gezielt über `tag:Domaene::N` oder `tag:Ziel::…` nacharbeiten.
-3. **Prüfungsphase (die letzten 2 bis 3 Wochen):** Umstellen auf `tag:Fokus::Exhibit`, `tag:Fokus::Falle` und `tag:Fokus::HighYield`.
+1. **Wochen 1 bis 8:** je ein Thema. Karten mit dem passenden Filter (`tag:Ziel::…` oder `tag:Domaene::N`), dazu das Lab.
+2. **Woche 9:** Capstones, also Fehlersuche im ganzen Netz unter Zeitdruck.
+3. **Woche 10:** nur noch `tag:Fokus::Exhibit`, `tag:Fokus::Falle`, `tag:Fokus::HighYield` und Prüfungsläufe in der Simulation.
 
-## Qualität und Grenzen
+Für unterwegs eignet sich `tag:Modus::Zug`: kurze Karten ohne Codeblöcke.
 
-- Die Karten sind eigene Formulierungen, keine Kopien von Cisco-Material. Die Quellenlinks verweisen auf Cisco-Dokumentation und RFCs.
-- Sie sind nicht Karte für Karte gegen die Cisco-Dokumentation geprüft. **Im Zweifel gilt die offizielle Cisco-Dokumentation.**
-- Die Exhibits sind gekürzt, Werte teilweise frei gewählt. Sie trainieren das Lesen, ersetzen aber keine echten Geräteausgaben.
-- Aussagen zu Defaults und Grenzwerten hängen oft von Plattform und Release ab. Wo das relevant ist, steht es im Hinweisfeld.
-- Du hast einen Fehler gefunden? Bitte als Issue melden, mit Karten-ID und Begründung.
+## Fehler gefunden?
+
+Die Karten sind eigene Formulierungen, die Quellenlinks führen zur Cisco-Dokumentation und zu den RFCs. Im Zweifel gilt die Cisco-Dokumentation. Wenn dir ein Fehler auffällt, melde ihn bitte als Issue, mit Karten-ID und Begründung.
 
 ## Versionen
 
@@ -97,7 +100,13 @@ Kein offizielles Cisco-Material, nicht von Cisco geprüft oder freigegeben. Cisc
 
 ## Labs: CML, Packet Tracer, EVE-NG
 
-Zu jedem der 47 Ziele des Kompendiums gibt es Übungsmaterial in drei Zweigen. Alle haben dieselbe Struktur: Bauen, Reparieren (eingebaute Fehler mit Tickets), Üben (Transferfragen), Musterlösungen und Fehlerlisten. Pro Prüfungsziel mit Links zu Aufgaben und Lösungen steht jeweils eine `ZIELE.md` im Ordner.
+Zu jedem der 47 Ziele gibt es Übungsmaterial in drei Zweigen. Jedes Lab hat dieselben drei Teile:
+
+1. **Bauen:** Schritt für Schritt aufbauen und verifizieren.
+2. **Reparieren:** Tickets mit eingebauten Fehlern lösen, wie im Betrieb.
+3. **Üben:** Transferfragen mit aufklappbaren Antworten.
+
+Musterlösungen und Fehlerlisten liegen jeweils in `solutions/`. Die Datei `ZIELE.md` in jedem Zweig ordnet die Prüfungsziele den Aufgaben zu.
 
 | Zweig | Inhalt | Hinweis |
 |---|---|---|
@@ -105,4 +114,4 @@ Zu jedem der 47 Ziele des Kompendiums gibt es Übungsmaterial in drei Zweigen. A
 | [`EVE-NG-Labs/`](EVE-NG-Labs/) | Dieselben 27 Labs für EVE-NG: Node- und Kabeltabellen, Konfigurationsdateien, Hilfsskript zum Einspielen per Konsole | Interface-Namen wie in CML |
 | [`PacketTracer-Labs/`](PacketTracer-Labs/) | 23 Labs mit Aufbau, Konfigurationen und 117 Fehlern; 4 Labs (Multicast, LISP, VXLAN, RESTCONF/EEM) sind in Packet Tracer nicht darstellbar und verweisen auf CML/EVE-NG | Pro Lab Eignung (geeignet, teilweise) |
 
-Die Python-Drills sind getestet. Die Labs auf allen drei Plattformen sind **nicht in einer echten Instanz ausgeführt**: Sie entstehen per Skript, geprüft sind Verkabelung, Ports und Fehlermuster. Details in den READMEs der Zweige.
+Die Python-Drills haben automatische Tests. Die Topologien entstehen per Skript, geprüft sind Verkabelung, Ports und Fehlermuster. In einer laufenden Instanz sind sie noch nicht durchgespielt. Hakt etwas, hilft ein Issue mit Lab-Nummer.
