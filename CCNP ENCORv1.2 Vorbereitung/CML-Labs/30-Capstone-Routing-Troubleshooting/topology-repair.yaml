@@ -25,7 +25,7 @@ nodes:
     interface GigabitEthernet0/0
      ip address 198.51.100.2 255.255.255.252
      no shutdown
-    ip route 10.0.0.0 255.0.0.0 198.51.100.3
+    ip route 10.0.0.0 255.0.0.0 198.51.100.5
     ip route 172.20.0.0 255.255.0.0 198.51.100.1
     ip route 192.168.0.0 255.255.0.0 198.51.100.1
     router bgp 65000
@@ -223,7 +223,7 @@ nodes:
     interface GigabitEthernet0/0
      ip address 10.0.24.2 255.255.255.252
      no shutdown
-    ip route 0.0.0.0 0.0.0.0 10.0.24.3
+    ip route 0.0.0.0 0.0.0.0 Loopback10
     router eigrp 100
      network 10.0.24.0 0.0.0.3
      network 172.20.4.0 0.0.0.255

@@ -23,6 +23,5 @@ router bgp 65001
  neighbor 10.255.0.2 route-reflector-client
  neighbor 10.255.0.2 send-community
  neighbor 10.255.0.3 remote-as 65001
- neighbor 10.255.0.3 update-source Loopback0
  neighbor 10.255.0.3 route-reflector-client
 end

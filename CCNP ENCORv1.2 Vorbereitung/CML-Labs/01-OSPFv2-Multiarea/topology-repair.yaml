@@ -188,7 +188,7 @@ nodes:
     router ospf 1
      router-id 3.3.3.3
      passive-interface default
-     interface Loopback0
+    interface Loopback0
      ip ospf 1 area 1
     interface GigabitEthernet0/0
      ip ospf 1 area 1

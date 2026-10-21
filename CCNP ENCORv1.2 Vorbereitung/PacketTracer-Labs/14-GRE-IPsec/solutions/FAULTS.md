@@ -17,9 +17,9 @@
 
 ## Ticket 2 (CE1)
 
-- **Symptom:** `QM_IDLE` steht, aber `encaps` steigt ohne `decaps` auf der Gegenseite; OSPF fällt aus.
-- **So findest du es:** `show crypto ipsec sa` auf CE1 zeigt steigendes `encaps`, auf CE2 kein `decaps`. `show crypto ipsec transform-set` zeigt AES-128 auf der einen, AES-256 auf der anderen Seite.
-- **Ursache:** Phase 2: Transform-Sets passen nicht zusammen (AES-128 vs. AES-256).
+- **Symptom:** `show crypto isakmp sa` zeigt `QM_IDLE`, aber über den Tunnel geht nichts: Der OSPF-Nachbar bleibt aus, `encaps` und `decaps` stehen auf 0.
+- **So findest du es:** Phase 1 steht also, Phase 2 nicht. `show crypto ipsec sa` zeigt keine aktive ESP-SA, das Log bzw. `debug crypto ipsec` meldet, dass kein Proposal passt. `show crypto ipsec transform-set` zeigt AES-128 auf CE1 und AES-256 auf CE2.
+- **Ursache:** Die Transform-Sets passen nicht zusammen (AES-128 gegen AES-256). Ohne gemeinsames Proposal entsteht keine IPsec-SA, deshalb verschlüsselt CE1 nichts und die Zähler bleiben bei 0.
 - **Fix:** Transform-Set auf beiden Seiten gleich konfigurieren.
 - **Eingebaut:**
 

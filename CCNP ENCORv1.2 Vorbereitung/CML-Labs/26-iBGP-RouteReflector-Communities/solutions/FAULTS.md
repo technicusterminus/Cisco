@@ -2,15 +2,18 @@
 
 **Spoiler.** Erst nach eigener Fehlersuche lesen.
 
-## Ticket 1 (R3)
+## Ticket 1 (R1, R3)
 
-- **Symptom:** Die iBGP-Session R1–R3 bleibt `Active`/`Idle`, auf R1 steht R3 nicht im Zustand `Established`.
-- **So findest du es:** `show ip bgp summary` auf R1 zeigt R3 nicht Established. `debug ip bgp` auf R1 meldet eine Verbindung von 10.0.13.2, erwartet wird 10.255.0.3.
-- **Ursache:** R3 sendet die BGP-Verbindung von der Adresse des Links (10.0.13.2), R1 erwartet 10.255.0.3 als Quelle: Die Quelladresse passt nicht.
-- **Fix:** `neighbor 10.255.0.1 update-source Loopback0` auf R3.
+- **Symptom:** Die iBGP-Session R1–R3 bleibt `Active`/`Idle`, auf R1 steht R3 nicht im Zustand `Established`. R1–R2 läuft.
+- **So findest du es:** Vergleiche die Neighbor-Konfiguration für R2 und R3 auf R1 (`show run | section bgp`): Bei R3 fehlt `update-source`. Auf R3 fehlt es ebenso. `debug ip bgp` zeigt Verbindungsversuche von 10.0.13.1 und 10.0.13.2, erwartet werden 10.255.0.1 und 10.255.0.3.
+- **Ursache:** Auf beiden Seiten fehlt `update-source Loopback0`. Jede Seite baut die TCP-Verbindung von ihrer Link-Adresse auf, die Gegenseite kennt aber nur die Loopback als Nachbarn und verwirft den Versuch. Fehlt es nur auf einer Seite, kommt die Sitzung meist trotzdem hoch, weil die andere Seite von ihrer Loopback aus verbindet.
+- **Fix:** Auf R1 `neighbor 10.255.0.3 update-source Loopback0`, auf R3 `neighbor 10.255.0.1 update-source Loopback0`.
 - **Eingebaut:**
 
 ```diff
+  ! R1
+-  neighbor 10.255.0.3 update-source Loopback0
+  ! R3
 -  neighbor 10.255.0.1 update-source Loopback0
 ```
 

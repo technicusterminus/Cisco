@@ -67,15 +67,15 @@
 
 ## Ticket 6 (R4)
 
-- **Symptom:** R4 erreicht nichts außerhalb des direkten Links; `show ip route` zeigt die Default mit unerreichbarem Next-Hop.
-- **So findest du es:** `show ip route 0.0.0.0` auf R4 zeigt einen Next-Hop, den es nicht gibt. Ein Ping darauf scheitert.
-- **Ursache:** Falscher Next-Hop der statischen Default auf R4.
-- **Fix:** Next-Hop 10.0.24.1 (R2).
+- **Symptom:** R4 erreicht 203.0.113.1 nicht, schon der erste Hop im Traceroute bleibt stumm. Die Default-Route steht aber in `show ip route`.
+- **So findest du es:** `show ip route 0.0.0.0` auf R4 zeigt `directly connected, via Loopback10`. Die Pakete verlassen R4 also nie Richtung R2.
+- **Ursache:** Die statische Default zeigt auf das falsche Ausgangs-Interface. Eine Loopback leitet nichts weiter, R4 verwirft die Pakete. Weil die statische Route Distanz 1 hat, verdrängt sie auch eine Default, die per EIGRP kommt.
+- **Fix:** `no ip route 0.0.0.0 0.0.0.0 Loopback10`, dann `ip route 0.0.0.0 0.0.0.0 10.0.24.1` (R2).
 - **Eingebaut:**
 
 ```diff
 - ip route 0.0.0.0 0.0.0.0 10.0.24.1
-+ ip route 0.0.0.0 0.0.0.0 10.0.24.3
++ ip route 0.0.0.0 0.0.0.0 Loopback10
 ```
 
 ## Ticket 7 (R3)
@@ -92,14 +92,14 @@
 
 ## Ticket 8 (ISP)
 
-- **Symptom:** Alle Pings von internen Quellen an 203.0.113.1 scheitern auf dem Rückweg, obwohl das Routing intern stimmt; Traceroute zeigt den Hinweg bis zum ISP.
-- **So findest du es:** `traceroute` endet am ISP. `show ip route 10.0.0.0` auf dem ISP zeigt einen Next-Hop, den es nicht gibt.
-- **Ursache:** Die Rückroute des ISP für 10.0.0.0/8 zeigt auf einen nicht vorhandenen Next-Hop.
+- **Symptom:** Pings aus den 10er-Netzen an 203.0.113.1 scheitern auf dem Rückweg, obwohl das Routing intern stimmt. Der Traceroute zeigt den Hinweg bis zum ISP.
+- **So findest du es:** `show ip route 10.0.0.0` auf dem ISP findet nichts, obwohl `show run | include ip route` die Route enthält. Ihr Next-Hop 198.51.100.5 liegt in keinem angeschlossenen Netz.
+- **Ursache:** Tippfehler im Next-Hop der Rückroute (198.51.100.5 statt .1). Ein Next-Hop, den der Router nicht auflösen kann, macht die statische Route ungültig, sie landet nicht in der Routing-Tabelle.
 - **Fix:** Next-Hop 198.51.100.1 (R1).
 - **Eingebaut:**
 
 ```diff
 - ip route 10.0.0.0 255.0.0.0 198.51.100.1
-+ ip route 10.0.0.0 255.0.0.0 198.51.100.3
++ ip route 10.0.0.0 255.0.0.0 198.51.100.5
 ```
 

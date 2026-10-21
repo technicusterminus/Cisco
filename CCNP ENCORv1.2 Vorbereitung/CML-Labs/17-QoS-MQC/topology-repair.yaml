@@ -203,7 +203,7 @@ nodes:
       random-detect dscp-based
     policy-map WAN
      class class-default
-      shape average 2000
+      shape average 20000
       service-policy QUEUE
     interface GigabitEthernet0/0
      service-policy input MARK

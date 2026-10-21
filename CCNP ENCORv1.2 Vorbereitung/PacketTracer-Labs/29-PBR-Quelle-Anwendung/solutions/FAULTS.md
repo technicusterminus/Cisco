@@ -29,15 +29,15 @@
 
 ## Ticket 3 (R1)
 
-- **Symptom:** H2 verliert die Verbindung zum Server (Timeouts), H1 ist unbeeinträchtigt.
-- **So findest du es:** `show ip arp 10.0.13.3` auf R1 zeigt „Incomplete“. Ein Ping auf diese Adresse scheitert.
-- **Ursache:** Der Next-Hop 10.0.13.3 existiert nicht (ARP unvollständig).
+- **Symptom:** H2 geht über Provider A, obwohl Sequenz 10 auf `permit` steht und in `show route-map PBR` Treffer zählt.
+- **So findest du es:** `show route-map PBR` zeigt bei Sequenz 10 den Next-Hop 10.0.31.2. `show ip route 10.0.31.2` liefert nur die Default über R2: Die Adresse liegt in keinem angeschlossenen Netz.
+- **Ursache:** Zahlendreher im Next-Hop (10.0.31.2 statt 10.0.13.2). `set ip next-hop` greift nur, wenn der Next-Hop direkt angeschlossen ist. Sonst ignoriert R1 die Anweisung und routet das Paket normal, also über die Default zu Provider A.
 - **Fix:** Next-Hop 10.0.13.2 (R3).
 - **Eingebaut:**
 
 ```diff
 -  set ip next-hop 10.0.13.2
-+  set ip next-hop 10.0.13.3
++  set ip next-hop 10.0.31.2
 ```
 
 ## Ticket 4 (R1)

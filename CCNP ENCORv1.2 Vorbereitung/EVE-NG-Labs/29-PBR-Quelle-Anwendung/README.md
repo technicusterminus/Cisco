@@ -101,7 +101,7 @@ Setze alle Nodes zurück (Rechtsklick → *Wipe*) und spiele `repair/<Node>.cfg`
 
 **Ticket 2:** H2 nimmt den normalen Weg, die Zähler der Sequenz 10 bleiben 0.
 
-**Ticket 3:** H2 verliert die Verbindung zum Server (Timeouts), H1 ist unbeeinträchtigt.
+**Ticket 3:** H2 geht über Provider A, obwohl Sequenz 10 auf `permit` steht und in `show route-map PBR` Treffer zählt.
 
 **Ticket 4:** H2 geht über Provider A, obwohl ACL und Next-Hop stimmen; nur Web-Verkehr (Sequenz 20) wird umgeleitet.
 

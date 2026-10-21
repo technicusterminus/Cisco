@@ -102,11 +102,11 @@ Setze alle Nodes zurück (Rechtsklick → *Wipe*) und spiele `repair/<Node>.cfg`
 
 **Ticket 5:** Auf R4 fehlen die OSPF-Routen (R3-Loopback, 10.0.12.0/30); nur die statische Default erreicht R2.
 
-**Ticket 6:** R4 erreicht nichts außerhalb des direkten Links; `show ip route` zeigt die Default mit unerreichbarem Next-Hop.
+**Ticket 6:** R4 erreicht 203.0.113.1 nicht, schon der erste Hop im Traceroute bleibt stumm. Die Default-Route steht aber in `show ip route`.
 
 **Ticket 7:** Das Netz 192.168.3.0/24 fehlt auf R1/R2, Pings von R3-Lo10 ins Internet scheitern am Rückweg.
 
-**Ticket 8:** Alle Pings von internen Quellen an 203.0.113.1 scheitern auf dem Rückweg, obwohl das Routing intern stimmt; Traceroute zeigt den Hinweg bis zum ISP.
+**Ticket 8:** Pings aus den 10er-Netzen an 203.0.113.1 scheitern auf dem Rückweg, obwohl das Routing intern stimmt. Der Traceroute zeigt den Hinweg bis zum ISP.
 
 ## Verifikation
 ```

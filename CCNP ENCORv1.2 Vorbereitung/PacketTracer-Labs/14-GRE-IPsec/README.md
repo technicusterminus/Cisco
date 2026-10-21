@@ -119,7 +119,7 @@ Baue die Topologie wie oben (oder behalte deine aus Teil A), setze alle Geräte 
 
 **Ticket 1:** Tunnel0 ist up/up, aber OSPF-Nachbar bleibt aus. `show crypto isakmp sa` zeigt MM_NO_STATE bzw. nichts.
 
-**Ticket 2:** `QM_IDLE` steht, aber `encaps` steigt ohne `decaps` auf der Gegenseite; OSPF fällt aus.
+**Ticket 2:** `show crypto isakmp sa` zeigt `QM_IDLE`, aber über den Tunnel geht nichts: Der OSPF-Nachbar bleibt aus, `encaps` und `decaps` stehen auf 0.
 
 **Ticket 3:** Tunnel0 zeigt up/up (Keepalive nicht aktiv), aber nichts kommt an; `show crypto isakmp sa` bleibt leer.
 

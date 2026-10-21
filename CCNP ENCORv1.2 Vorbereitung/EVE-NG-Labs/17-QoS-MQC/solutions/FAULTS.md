@@ -36,14 +36,14 @@
 ## Ticket 3 (R1)
 
 - **Symptom:** Der Durchsatz Richtung SRV bricht auf einen winzigen Bruchteil ein, Pings dauern extrem lang.
-- **So findest du es:** `show policy-map interface Gi0/1` zeigt eine Shaping-Rate von 2000 bit/s.
-- **Ursache:** `shape average` erwartet bit/s: 2000 bps statt 2 000 000 bps (2 Mbit/s).
+- **So findest du es:** `show policy-map interface Gi0/1` zeigt eine Shaping-Rate von 20 000 bit/s, also 1 % des Sollwerts.
+- **Ursache:** `shape average` erwartet bit/s. Eingetragen sind 20 000 bit/s statt 2 000 000 bit/s (2 Mbit/s), zwei Nullen fehlen.
 - **Fix:** Rate auf 2000000 korrigieren.
 - **Eingebaut:**
 
 ```diff
 - shape average 2000000
-+ shape average 2000
++ shape average 20000
 ```
 
 ## Ticket 4 (R1)
