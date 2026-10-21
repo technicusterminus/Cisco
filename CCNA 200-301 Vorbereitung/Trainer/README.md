@@ -13,7 +13,7 @@ Aufgabentypen mit Lösungsweg:
 - IPv6 kürzen
 - EUI-64 aus MAC-Adresse
 
-Die Aufgaben sind zufällig. Die Rechenlogik ist gegen Pythons `ipaddress`-Modul mit je 300 Aufgaben pro Typ geprüft.
+Die Aufgaben sind zufällig, der Lösungsweg rechnet Schritt für Schritt mit den Zahlen der jeweiligen Aufgabe. Die Rechenlogik ist gegen Pythons `ipaddress`-Modul mit je 300 Aufgaben pro Typ geprüft.
 
 ## So übst du
 

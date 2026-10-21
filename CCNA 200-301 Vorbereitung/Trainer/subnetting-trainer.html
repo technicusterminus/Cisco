@@ -71,30 +71,37 @@ const norm6=s=>s.trim().toLowerCase().replace(/\s+/g,'');
 const gens={
  subnet:{name:'Subnetz bestimmen',gen(){
    const p=rnd(17,29),ip=randIP(),i=info(ip,p);
-   const interest=Math.floor((p-1)/8), blockSize=256-(maskN(p)>>>(24-8*interest)&255);
+   const k=Math.ceil(p/8)-1, mo=maskN(p)>>>(24-8*k)&255, bs=256-mo;
+   const ho=ip2n(ip)>>>(24-8*k)&255, no=Math.floor(ho/bs)*bs;
+   const pos=['ersten','zweiten','dritten','vierten'][k];
+   const rest=k<3?` Alle Oktette dahinter sind im Netz 0 und im Broadcast 255.`:'';
    return{q:`Host <code>${ip}/${p}</code>`,
     fields:[{l:'Netzadresse',a:n2ip(i.net)},{l:'Broadcast',a:n2ip(i.bc)},{l:'Erster Host',a:n2ip(i.first)},{l:'Letzter Host',a:n2ip(i.last)},{l:'Nutzbare Hosts',a:String(i.hosts)}],
-    steps:`<ol><li>Maske: <code>/${p}</code> = <code>${mask(p)}</code>. Hostbits: ${32-p}.</li>
-    <li>Interessantes Oktett: ${interest+1}. Blockgröße = 256 − ${maskN(p)>>>(24-8*interest)&255} = <code>${blockSize}</code>.</li>
-    <li>Netzadresse = größtes Vielfaches von ${blockSize} ≤ Host im Oktett ${interest+1} → <code>${n2ip(i.net)}</code>.</li>
-    <li>Broadcast = nächstes Netz − 1 → <code>${n2ip(i.bc)}</code>.</li>
-    <li>Hosts: 2<sup>${32-p}</sup> − 2 = <code>${i.hosts}</code>; erster Host Netz+1, letzter Broadcast−1.</li></ol>`};}},
+    steps:p%8===0?`<ol><li><b>Maske:</b> <code>/${p}</code> = <code>${mask(p)}</code>. Die Grenze liegt genau zwischen zwei Oktetten: Die ersten ${p/8} Oktette sind das Netz, der Rest ist Hostteil.</li>
+    <li><b>Netz:</b> Hostteil auf 0 setzen → <code>${n2ip(i.net)}</code>.</li>
+    <li><b>Broadcast:</b> Hostteil auf 255 setzen → <code>${n2ip(i.bc)}</code>.</li>
+    <li><b>Hosts:</b> ${32-p} Hostbits, also 2<sup>${32-p}</sup> − 2 = <code>${i.hosts}</code>. Erster Host = Netz + 1, letzter = Broadcast − 1.</li></ol>`
+    :`<ol><li><b>Maske:</b> <code>/${p}</code> = <code>${mask(p)}</code>. Die Grenze liegt im ${pos} Oktett, dort steht <code>${mo}</code>.</li>
+    <li><b>Blockgröße:</b> 256 − ${mo} = <code>${bs}</code>. Die Netze beginnen dort bei ${[0,1,2,3].map(x=>x*bs).filter(x=>x<256).join(', ')}${4*bs<256?' usw.':''}.</li>
+    <li><b>Netz:</b> Im ${pos} Oktett des Hosts steht ${ho}. Das größte Vielfache von ${bs}, das nicht größer ist: <code>${no}</code>. Netz = <code>${n2ip(i.net)}</code>.${rest}</li>
+    <li><b>Broadcast:</b> Der Block endet bei ${no} + ${bs} − 1 = ${no+bs-1}, eins vor dem nächsten Netz. Broadcast = <code>${n2ip(i.bc)}</code>.</li>
+    <li><b>Hosts:</b> ${32-p} Hostbits, also 2<sup>${32-p}</sup> − 2 = <code>${i.hosts}</code>. Netz und Broadcast fallen weg. Erster Host = Netz + 1, letzter = Broadcast − 1.</li></ol>`};}},
  hosts:{name:'Hosts → Präfix',gen(){
    const need=pick([2,6,12,25,30,50,60,100,120,200,250,500,1000]);let bits=1;while(Math.pow(2,bits)-2<need)bits++;
    const p=32-bits;
    return{q:`Ein Subnetz braucht <code>${need}</code> nutzbare Hosts. Welche kleinste passende Präfixlänge (/…)?`,
     fields:[{l:'Präfix (nur Zahl)',a:String(p),alt:['/'+p]},{l:'Subnetzmaske',a:mask(p)},{l:'Nutzbare Hosts',a:String(Math.pow(2,bits)-2)}],
-    steps:`<ol><li>Suche kleinste Potenz 2<sup>n</sup> mit 2<sup>n</sup> − 2 ≥ ${need}: n = <code>${bits}</code> (${Math.pow(2,bits)} − 2 = ${Math.pow(2,bits)-2}).</li><li>Präfix = 32 − ${bits} = <code>/${p}</code>.</li><li>Maske <code>${mask(p)}</code>.</li></ol>`};}},
+    steps:`<ol><li><b>Adressen nötig:</b> ${need} Hosts + Netz + Broadcast = ${need+2}.</li><li><b>Nächste Zweierpotenz:</b> 2<sup>${bits}</sup> = ${Math.pow(2,bits)} ≥ ${need+2}${bits>2?`, 2<sup>${bits-1}</sup> = ${Math.pow(2,bits-1)} wäre zu klein`:''}. Du brauchst also <code>${bits}</code> Hostbits.</li><li><b>Präfix:</b> 32 − ${bits} = <code>/${p}</code>, Maske <code>${mask(p)}</code>, nutzbar ${Math.pow(2,bits)-2} Hosts.</li></ol>`};}},
  mask:{name:'Maske ↔ Präfix',gen(){
    const p=rnd(9,30);
    if(Math.random()<.5)return{q:`Welche Präfixlänge hat die Maske <code>${mask(p)}</code>?`,fields:[{l:'Präfix (Zahl)',a:String(p),alt:['/'+p]}],
-     steps:`<ol><li>Zähle die gesetzten Bits: 255 = 8 Bit je Oktett, danach Teilwert (128=1, 192=2, 224=3, 240=4, 248=5, 252=6, 254=7).</li><li>Ergebnis: <code>/${p}</code>.</li></ol>`};
+     steps:`<ol><li><b>Bits je Oktett zählen:</b> 255 = 8, 254 = 7, 252 = 6, 248 = 5, 240 = 4, 224 = 3, 192 = 2, 128 = 1, 0 = 0.</li><li><b>Hier:</b> ${mask(p).split('.').map(o=>`${o} = ${({255:8,254:7,252:6,248:5,240:4,224:3,192:2,128:1,0:0})[o]}`).join(', ')}.</li><li><b>Summe:</b> ${mask(p).split('.').map(o=>({255:8,254:7,252:6,248:5,240:4,224:3,192:2,128:1,0:0})[o]).join(' + ')} = <code>/${p}</code>.</li></ol>`};
    return{q:`Welche Subnetzmaske gehört zu <code>/${p}</code>?`,fields:[{l:'Maske',a:mask(p)}],
-     steps:`<ol><li>${p} = ${Math.floor(p/8)} volle Oktette (255) plus ${p%8} Bit.</li><li>Teilwert: ${p%8?(256-Math.pow(2,8-p%8)):'–'}.</li><li>Ergebnis: <code>${mask(p)}</code>.</li></ol>`};}},
+     steps:`<ol><li><b>Zerlegen:</b> ${p} = ${Math.floor(p/8)} × 8 + ${p%8}. Das sind ${Math.floor(p/8)} volle Oktette mit 255${p%8?` und ${p%8} Bit im nächsten`:''}.</li>${p%8?`<li><b>Teilwert:</b> 256 − 2<sup>${8-p%8}</sup> = 256 − ${Math.pow(2,8-p%8)} = <code>${256-Math.pow(2,8-p%8)}</code>.</li>`:''}<li><b>Rest mit 0 auffüllen:</b> <code>${mask(p)}</code>.</li></ol>`};}},
  wild:{name:'Wildcard-Maske',gen(){
    const p=rnd(16,30);
    return{q:`Welche Wildcard-Maske gehört zu <code>${mask(p)}</code> (<code>/${p}</code>)?`,fields:[{l:'Wildcard',a:wild(p)}],
-    steps:`<ol><li>Wildcard = 255.255.255.255 − Subnetzmaske.</li><li>255.255.255.255 − ${mask(p)} = <code>${wild(p)}</code>.</li><li>Verwendung: <code>permit ip ${n2ip(ip2n(randIP())&maskN(p))} ${wild(p)} any</code> (ACL/OSPF-network).</li></ol>`};}},
+    steps:`<ol><li><b>Regel:</b> Wildcard = 255.255.255.255 − Maske, Oktett für Oktett. Wo die Maske 1-Bits hat, hat die Wildcard 0-Bits.</li><li><b>Hier:</b> ${mask(p).split('.').map(o=>`255 − ${o} = ${255-o}`).join(', ')} → <code>${wild(p)}</code>.</li><li>Verwendung: <code>permit ip ${n2ip(ip2n(randIP())&maskN(p))} ${wild(p)} any</code> (ACL/OSPF-network).</li></ol>`};}},
  same:{name:'Selbes Subnetz?',gen(){
    const p=rnd(24,29),a=randIP(),ia=info(a,p);let b;
    const same=Math.random()<.5;
@@ -103,14 +110,14 @@ const gens={
    const ib=info(b,p),eq=ia.net===ib.net;
    return{q:`Hosts <code>${a}/${p}</code> und <code>${b}/${p}</code>. Können sie ohne Router direkt kommunizieren? (ja/nein)`,
     fields:[{l:'ja / nein',a:eq?'ja':'nein',alt:eq?['j']:['n']}],
-    steps:`<ol><li>Host 1: Netz <code>${n2ip(ia.net)}</code>, Broadcast <code>${n2ip(ia.bc)}</code>.</li><li>Host 2: Netz <code>${n2ip(ib.net)}</code>.</li><li>${eq?'Gleiches Netz → direkte Kommunikation.':'Unterschiedliche Netze → Router nötig.'}</li></ol>`};}},
+    steps:`<ol><li><b>Blockgröße:</b> /${p} hat im letzten Oktett 256 − ${maskN(p)&255} = ${256-(maskN(p)&255)} Adressen je Netz.</li><li><b>Host 1</b> liegt im Netz <code>${n2ip(ia.net)}</code> bis <code>${n2ip(ia.bc)}</code>.</li><li><b>Host 2</b> liegt im Netz <code>${n2ip(ib.net)}</code> bis <code>${n2ip(ib.bc)}</code>.</li><li>${eq?'<b>Ja:</b> Beide liegen im selben Netz und erreichen sich direkt über ARP.':'<b>Nein:</b> Die Netze sind verschieden, dazwischen muss ein Router.'}</li></ol>`};}},
  vlsm:{name:'VLSM',gen(){
    const base=`192.168.${rnd(0,255)}.0`;const needs=[pick([100,120,60,50]),pick([25,30,28]),pick([10,12,14]),2].sort((x,y)=>y-x);
    let cur=ip2n(base);const out=[];const f=[];let steps='<ol>';
    needs.forEach((nd,k)=>{let bits=1;while(Math.pow(2,bits)-2<nd)bits++;const p=32-bits,sz=Math.pow(2,bits);
      out.push({nd,p,net:cur});f.push({l:`Netz ${k+1} (${nd} Hosts)`,a:`${n2ip(cur)}/${p}`});
      steps+=`<li>${nd} Hosts → 2<sup>${bits}</sup> = ${sz} Adressen → <code>/${p}</code>, Netz <code>${n2ip(cur)}</code>, Broadcast <code>${n2ip(cur+sz-1)}</code>; nächstes beginnt bei <code>${n2ip(cur+sz)}</code>.</li>`;cur+=sz;});
-   steps+='</ol>Reihenfolge: vom größten zum kleinsten Bedarf, jeweils direkt hinter dem vorigen Block.';
+   steps+=`</ol>Warum der größte zuerst? Große Blöcke müssen auf ihrer eigenen Grenze beginnen (ein /25 bei .0 oder .128). Fängst du groß an, liegen alle folgenden Blöcke automatisch richtig. Belegt sind ${cur-ip2n(base)} von 256 Adressen.`;
    return{q:`Block <code>${base}/24</code>. Teile VLSM-gerecht (größter Bedarf zuerst) auf: ${needs.map(x=>`<code>${x}</code>`).join(', ')} Hosts. Gib Netzadresse/Präfix an.`,fields:f,steps};}},
  v6short:{name:'IPv6 kürzen',gen(){
    const parts=['2001','0db8',pick(['0000','0001','00a0','0010']),pick(['0000','0001']),'0000',pick(['0000','0000','00ff']),pick(['0000','1234']),pick(['0001','0005','00ab'])];

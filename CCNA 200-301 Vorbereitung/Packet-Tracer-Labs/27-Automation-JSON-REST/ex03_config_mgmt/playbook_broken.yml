@@ -1,4 +1,4 @@
-# Dieses Playbook enthaelt Fehler. Behebe sie, bis check_playbook.py "OK" meldet.
+# Dieses Playbook enthält Fehler. Behebe sie, bis check_playbook.py "OK" meldet.
 - name: Switch-Basiskonfiguration
   gather_facts: true
   connection: local

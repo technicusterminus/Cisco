@@ -24,9 +24,11 @@ module: lab-interfaces
           +--ro cleared?   boolean
 ```
 
-1. `interfaces` und `statistics` sind **container**, `interface` ist eine **list** (Schlüssel `name`), `name`, `description`, `enabled`, `mode`, `access-vlan`, `in-octets`, `out-octets` sind **leaf**, `allowed-vlans` ist ein **leaf-list**. `config false` markiert Zustandsdaten (nur lesbar, nicht Teil der Konfiguration).
-2. `mode` ist Pflicht (`mandatory true`), der Schlüssel `name` ebenfalls. `enabled` hat den Default `true`. Fehlt `mode`, meldet NETCONF `missing-element` (rpc-error), RESTCONF antwortet mit `400 Bad Request`.
-3. ```json
+1. **Container: `interfaces`, `statistics`. List: `interface` mit Schlüssel `name`. Leaf-List: `allowed-vlans`. Alles andere sind Leafs.** Ein Container gruppiert nur, eine List hat beliebig viele Einträge, die der Schlüssel unterscheidet. Ein Leaf hält genau einen Wert, eine Leaf-List mehrere Werte desselben Typs. `config false` markiert Zustandsdaten: Du kannst sie lesen, aber nicht konfigurieren. Im Baum erkennst du sie an `ro`.
+2. **Pflicht sind `mode` und der Schlüssel `name`, einen Default hat nur `enabled` (`true`).** Ein Schlüssel ist immer Pflicht, `mode` hat `mandatory true`. Fehlt `mode`, lehnt das Gerät die Änderung ab: NETCONF antwortet mit einem `rpc-error` vom Typ `missing-element`, RESTCONF mit `400 Bad Request`.
+3. **Ein Listeneintrag mit Modulpräfix, `mode` und `access-vlan`.** `description` ist optional, `enabled` darf fehlen, weil es den Default `true` hat.
+
+```json
 {
   "lab-interfaces:interface": [
     {
@@ -38,7 +40,9 @@ module: lab-interfaces
   ]
 }
 ```
-4. ```json
+4. **`mode` auf `trunk`, die VLANs als JSON-Array.** Eine Leaf-List wird in JSON zur Liste. `access-vlan` darf hier nicht stehen, weil seine `when`-Bedingung nur bei Access gilt.
+
+```json
 {
   "lab-interfaces:interface": [
     {
@@ -53,9 +57,9 @@ module: lab-interfaces
   ]
 }
 ```
-5. Ungültig sind: (a) die `when`-Bedingung `../mode = 'trunk'` ist nicht erfüllt, (b) 5000 liegt außerhalb `1..4094`, (c) der Schlüssel `name` fehlt, (d) `statistics` ist `config false` und schreibgeschützt.
-6. `GET /restconf/data/lab-interfaces:interfaces/interface=GigabitEthernet0%2F1`: Der Schrägstrich im Schlüsselwert wird als `%2F` kodiert.
-7. Datenknoten sind Daten (lesen/schreiben), ein RPC ist eine Operation mit Ein-/Ausgabe. RESTCONF: `POST /restconf/operations/lab-interfaces:clear-counters` mit Body
+5. **Alle vier sind ungültig.** (a) `allowed-vlans` gilt nur bei `when "../mode = 'trunk'"`, an einem Access-Port darf der Knoten nicht stehen. (b) Der Typ `vlan-id` erlaubt nur `1..4094`. (c) Ohne den Schlüssel `name` lässt sich der Listeneintrag nicht identifizieren. (d) `statistics` ist `config false`, Zustandsdaten kann `edit-config` nicht schreiben.
+6. **`GET /restconf/data/lab-interfaces:interfaces/interface=GigabitEthernet0%2F1`.** Ein Listeneintrag wird mit `=Schlüsselwert` adressiert. Der Schrägstrich im Namen muss als `%2F` kodiert werden, sonst hielte RESTCONF ihn für eine neue Pfadebene.
+7. **Ein Datenknoten ist ein Zustand, den du liest oder schreibst. Ein RPC ist eine Aktion mit Ein- und Ausgabe.** Einen RPC rufst du per `POST` unter `/restconf/operations/` auf, hier `POST /restconf/operations/lab-interfaces:clear-counters` mit diesem Body:
 ```json
 {
   "lab-interfaces:input": {
@@ -63,4 +67,4 @@ module: lab-interfaces
   }
 }
 ```
-8. YANG beschreibt Struktur, Typen und Regeln der Daten. Transport leisten NETCONF (SSH/830) oder RESTCONF (HTTPS). Beispiele: Standard `ietf-interfaces`, Hersteller `Cisco-IOS-XE-native`, OpenConfig `openconfig-interfaces`.
+8. **YANG beschreibt nur, wie die Daten aussehen. Transportiert werden sie per NETCONF oder RESTCONF.** Das Modell legt Struktur, Typen und Regeln fest, ähnlich wie ein Datenbankschema. NETCONF überträgt XML über SSH (Port 830), RESTCONF JSON oder XML über HTTPS. Beispiele: Standard `ietf-interfaces`, Hersteller `Cisco-IOS-XE-native`, OpenConfig `openconfig-interfaces`.
