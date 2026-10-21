@@ -1,6 +1,6 @@
 # Lernplan ENCOR 350-401 v1.2: 10 Wochen
 
-Der Plan verbindet das Anki-Deck, die Labs und die Prüfungssimulation. Er rechnet mit **etwa 8 Stunden pro Woche**. Hast du weniger Zeit, strecke ihn auf 12 Wochen und lass die Labs weg, die als „optional“ markiert sind.
+Der Plan verbindet das Anki-Deck, die Labs, die [Trainer](Trainer/) und die Prüfungssimulation. Er rechnet mit **etwa 8 Stunden pro Woche**. Hast du weniger Zeit, strecke ihn auf 12 Wochen und lass die Labs weg, die als „optional“ markiert sind.
 
 ## Das Prinzip
 
@@ -17,7 +17,8 @@ Jede Woche hat ein Thema und läuft in drei Schritten:
 | Mo, Mi, Fr, So | 20 Min. | Anki: fällige Karten plus Wochenthema (Filter in der Tabelle unten) |
 | Di | 2 Std. | Lab Teil A: aufbauen und verifizieren |
 | Do | 2 Std. | Lab Teil B: Tickets lösen, ohne in `solutions/` zu schauen |
-| Sa | 1,5 Std. | Teil C üben, Lücken nacharbeiten, Karten zu deinen Fehlern wiederholen |
+| Sa | 1,5 Std. | Teil C üben, die Tickets des Labs im [Ticket-Trainer](Trainer/ticket-trainer.html), Lücken nacharbeiten |
+| zwischendurch | 10 Min. | [Rechentrainer](Trainer/encor-rechentrainer.html) zum Wochenthema: STP in Woche 1, OSPF und EIGRP in Woche 3, BGP in Woche 4, DSCP in Woche 6 |
 
 **So gehst du bei Teil B vor:** Symptom nachstellen, eingrenzen (welche Schicht, welches Gerät?), beheben, verifizieren. Erst wenn ein Ticket nach 20 Minuten nicht gelöst ist, schaust du in `FAULTS.md`. Danach wiederholst du die passende Karte im Deck, damit der Fehler beim nächsten Mal sitzt.
 
@@ -34,7 +35,7 @@ Jede Woche hat ein Thema und läuft in drei Schritten:
 | 7 | Assurance und Security | 4.1–4.5, 5.1, 5.2 | [18](CML-Labs/18-NetFlow-SPAN/), [04](CML-Labs/04-PBR-IPSLA/) (IP SLA), [10](CML-Labs/10-ACL-CoPP/), [11](CML-Labs/11-Zugriff-AAA/) | `tag:Domaene::4`, `tag:Ziel::5.1.*`, `tag:Ziel::5.2.*` |
 | 8 | Security-Produkte und Automation | 5.3, 5.4, 4.6, 6.1–6.7 | [22](CML-Labs/22-Security-Szenarien.md), [19](CML-Labs/19-Programmierbarkeit-EEM/), [20](CML-Labs/20-Python-REST-Drills/) | `tag:Domaene::5`, `tag:Domaene::6` |
 | 9 | Capstones (Fehlersuche im Gesamtnetz) | alle 3.x | [23](CML-Labs/23-Capstone-Campus-Edge-Troubleshooting/), [24](CML-Labs/24-Capstone-WAN-Overlay-Troubleshooting/), [30](CML-Labs/30-Capstone-Routing-Troubleshooting/) | `tag:Fokus::Exhibit` |
-| 10 | Prüfungsphase | alle | keine neuen Labs; [Simulation](Pruefungssimulation/) und Wiederholung | `tag:Fokus::Falle`, `tag:Fokus::HighYield`, `tag:Fokus::Exhibit` |
+| 10 | Prüfungsphase | alle | keine neuen Labs; [Simulation](Pruefungssimulation/) mit „Falsch beantwortete wiederholen“, [Ticket-Trainer](Trainer/ticket-trainer.html) mit allen Tickets | `tag:Fokus::Falle`, `tag:Fokus::HighYield`, `tag:Fokus::Exhibit` |
 
 Die Labs für [Packet Tracer](PacketTracer-Labs/) und [EVE-NG](EVE-NG-Labs/) haben dieselben Nummern. In jedem Lab steht, was auf der Plattform geht.
 

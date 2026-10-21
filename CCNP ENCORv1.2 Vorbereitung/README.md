@@ -9,7 +9,8 @@ Ein deutschsprachiges Anki-Deck für die Prüfung **Cisco 350-401 ENCOR v1.2**. 
 
 | Was | Wo |
 |---|---|
-| Prüfungssimulation, 189 Fragen, 60 Fragen in 75 Minuten (HTML, offline) | [`Pruefungssimulation/`](Pruefungssimulation/) |
+| Prüfungssimulation, 241 Fragen mit Exhibits und Drag-and-drop, 60 Fragen in 75 Minuten, lädt auch eigene Fragenpools (HTML, offline) | [`Pruefungssimulation/`](Pruefungssimulation/) |
+| Rechentrainer (BGP, STP, OSPF, EIGRP, QoS) und Ticket-Trainer mit den 134 Lab-Tickets (HTML, offline) | [`Trainer/`](Trainer/) |
 | Cheatsheet, 4 Seiten (PDF) | [`ENCOR-Cheatsheet.pdf`](ENCOR-Cheatsheet.pdf) |
 | 10-Wochen-Lernplan mit Deck, Labs und Simulation | [`LERNPLAN.md`](LERNPLAN.md) |
 | Labs für CML, EVE-NG, Packet Tracer | [`CML-Labs/`](CML-Labs/), [`EVE-NG-Labs/`](EVE-NG-Labs/), [`PacketTracer-Labs/`](PacketTracer-Labs/) |

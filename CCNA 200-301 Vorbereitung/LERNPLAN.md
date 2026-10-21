@@ -19,7 +19,7 @@ Gewichtung der Prüfung: Network Fundamentals 20 %, Network Access 20 %, IP Conn
 | Mo, Mi, Fr, So | 20 Min. | Anki: fällige Karten plus Wochenthema (Filter in der Tabelle unten) |
 | Di | 1,5 Std. | Lab Teil A: aufbauen und jeden Schritt prüfen |
 | Do | 1,5 Std. | Lab Teil B: Tickets lösen, ohne in `solutions/` zu schauen |
-| Sa | 1,5 Std. | Teil C üben, Lücken nacharbeiten, Karten zu deinen Fehlern wiederholen |
+| Sa | 1,5 Std. | Teil C üben, die Tickets des Labs im [Ticket-Trainer](Trainer/ticket-trainer.html), Lücken nacharbeiten |
 
 **So gehst du bei Teil B vor:** Symptom nachstellen, eingrenzen (welche Schicht, welches Gerät?), beheben, verifizieren. Erst wenn ein Ticket nach 15 Minuten nicht gelöst ist, schaust du in `solutions/FAULTS.md`. Dort steht zuerst, mit welchem Befehl du den Fehler gefunden hättest. Danach wiederholst du die passende Karte im Deck.
 

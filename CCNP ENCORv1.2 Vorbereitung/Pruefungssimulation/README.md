@@ -4,30 +4,65 @@ Datei: [`encor-pruefungssimulation.html`](encor-pruefungssimulation.html). Im Br
 
 ## Was drin ist
 
-- **189 Fragen** aus den sechs Domänen des Blueprints, im Prüfungsstil: Einfachauswahl, „Wähle zwei/drei“ und 10 Exhibit-Fragen mit `show`-Ausgaben, Routingtabellen, ACLs und Python/REST-Beispielen.
+- **241 Fragen** aus den sechs Domänen des Blueprints, im Prüfungsstil: Einfachauswahl, „Wähle zwei/drei“, **43 Exhibit-Fragen** mit `show`-Ausgaben, Routing-Tabellen, ACLs, JSON, NETCONF und Python sowie **21 Fragen zum Ordnen und Zuordnen**.
 - **Jede Erklärung** nennt zuerst die richtige Antwort, dann den Grund. Wo eine falsche Antwort naheliegt, steht dabei, warum sie nicht passt.
 
 | Domäne | Fragen |
 |---|---:|
-| 1 Architektur | 26 |
-| 2 Virtualisierung | 18 |
-| 3 Infrastruktur | 58 |
-| 4 Network Assurance | 20 |
-| 5 Security | 37 |
-| 6 Automation | 30 |
+| 1 Architektur | 29 |
+| 2 Virtualisierung | 26 |
+| 3 Infrastruktur | 77 |
+| 4 Network Assurance | 26 |
+| 5 Security | 42 |
+| 6 Automation | 41 |
 
-## Drei Modi
+## Modi
 
 - **Prüfung:** 60 Fragen in 75 Minuten. Die Auswahl richtet sich nach dem Gewicht der Domänen (Architektur 15 %, Virtualisierung 10 %, Infrastruktur 30 %, Assurance 10 %, Security 20 %, Automation 15 %). Die Auswertung kommt erst am Ende.
-- **Alle Fragen:** der komplette Pool in 180 Minuten.
-- **Üben:** eine Domäne, mit Erklärung direkt nach jeder Frage.
+- **Alle Fragen:** der komplette Pool unter Zeitdruck.
+- **Üben** mit Erklärung direkt nach jeder Frage: pro Domäne, nur Exhibits oder nur Ordnen und Zuordnen.
+- **Falsch beantwortete wiederholen:** Jede falsche Antwort, auch aus einer Prüfung, landet auf einer Liste. Eine Frage verschwindet davon, sobald du sie richtig beantwortest.
 
-Die Auswertung zeigt das Ergebnis pro Domäne und listet alle falschen oder offenen Fragen mit Erklärung. Die letzten Ergebnisse speichert der Browser lokal.
+Die Auswertung zeigt das Ergebnis pro Domäne und listet alle falschen oder offenen Fragen mit Erklärung. Ergebnisse und Wiederholungsliste speichert der Browser lokal.
+
+## Ordnen und Zuordnen
+
+Wie in der echten Prüfung gibt es Fragen, bei denen du Elemente in eine Reihenfolge bringst oder Begriffe zuordnest. Am Rechner ziehst du sie mit der Maus. Auf Tablet und Handy tippst du erst die Karte und dann das Feld an, die Reihenfolge änderst du mit den Pfeilen. Gewertet wird nur die vollständig richtige Lösung.
 
 ## So nutzt du sie
 
 1. Erst im Modus **Üben** pro Domäne durcharbeiten und jede Erklärung lesen, auch bei richtigen Antworten.
-2. Dann eine **Prüfung** unter Zeitdruck. Schwache Domänen mit den passenden Anki-Karten und Labs nacharbeiten.
+2. Dann eine **Prüfung** unter Zeitdruck. Danach **Falsch beantwortete wiederholen**, bis die Liste leer ist.
 3. Über 80 % in mehreren Läufen ist ein gutes Zeichen. Weil sich die Fragen bei mehreren Läufen wiederholen, ersetzt das aber nicht das Verstehen.
 
-Die Fragen sind eigene Übungsfragen, keine Original-Prüfungsfragen. Die Antworten werden bei jedem Start neu gemischt. Wireless gehört in v1.2 nicht zu 350-401 und kommt deshalb nicht vor.
+Die Fragen sind eigene Übungsfragen, keine Original-Prüfungsfragen. Antworten und Elemente werden bei jedem Start neu gemischt.
+
+Wireless gehört in v1.2 nicht zu 350-401 und kommt deshalb nicht vor.
+
+## Eigene Fragen laden
+
+Die Simulation ist zugleich ein Player für eigene Fragenpools. Unter **Eigene Fragen** speicherst du den eingebauten Pool als JSON-Datei. Die nimmst du als Vorlage, ergänzt oder ersetzt Fragen und lädst die Datei mit **Fragenpool laden** wieder. Ergebnisse und Wiederholungsliste eines eigenen Pools werden getrennt gespeichert, der eingebaute Pool bleibt unverändert.
+
+Eine Datei ist ein JSON-Objekt mit `questions` (Pflicht) und optional `title`, `domains` (Nummer → Name), `weights` (Nummer → Prozent) und `examN` (Fragen im Prüfungsmodus). Drei Fragetypen:
+
+```json
+{
+  "title": "Mein Pool",
+  "questions": [
+    {"d": 1, "q": "Welcher Port nutzt SSH?", "o": ["22", "23", "443"], "c": [0],
+     "e": "22. Telnet nutzt 23."},
+    {"d": 1, "t": "order", "q": "Bring DORA in die richtige Reihenfolge.",
+     "o": ["Discover", "Offer", "Request", "Acknowledge"], "e": "Erklärung"},
+    {"d": 1, "t": "match", "q": "Ordne die Ports zu.", "l": ["SSH", "DNS"],
+     "o": ["22", "53"], "c": [0, 1], "e": "Erklärung"}
+  ]
+}
+```
+
+- **Auswahl** (Standard): `o` sind die Antworten, `c` die Indizes der richtigen (mehrere = „Wähle zwei“). `x` nimmt ein Exhibit auf, etwa eine `show`-Ausgabe.
+- **Reihenfolge** (`"t": "order"`): `o` steht in der richtigen Reihenfolge, die Simulation mischt selbst.
+- **Zuordnung** (`"t": "match"`): `l` sind die Begriffe links, `o` die Karten, `c` gibt für jeden Begriff den Index der passenden Karte an. Gibt es weniger Karten als Begriffe, darf eine Karte mehrfach passen.
+
+In `q`, `o` und `e` sind `<code>` und `<b>` erlaubt. Fehler in der Datei meldet der Player mit der Nummer der Frage.
+
+.vce-Dateien lädt er nicht: Das Format ist proprietär und verschlüsselt, und in Umlauf sind damit fast nur Dumps echter Prüfungsfragen.
