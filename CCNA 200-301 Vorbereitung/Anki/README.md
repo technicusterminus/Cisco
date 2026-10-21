@@ -1,13 +1,30 @@
 # CCNA 200-301 v1.1: Anki-Deck (Deutsch)
 
-`CCNA_200-301_v1.1_Kompendium_1.0_DE.apkg` enthält **621 Karten** zu allen 53 Prüfungszielen, verteilt auf sechs Unterdecks (eines je Domäne).
+Datei: [`CCNA_200-301_v1.1_Kompendium_1.1_DE.apkg`](CCNA_200-301_v1.1_Kompendium_1.1_DE.apkg) · **621 Karten** zu allen 53 Prüfungszielen, in sechs Unterdecks (eines pro Domäne).
 
-- Aufbau wie beim ENCOR-Deck: Felder ID, Ziel, Thema, Typ, Frage, Antwort, Hinweis, Quellen.
-- Typen: Wissen, Szenario, CLI, Interpretation, Vergleich, Exhibit (35 Karten mit echten `show`-Ausgaben zum Lesen), Rechnen (Subnetting, IPv6-Kürzen, EUI-64, Wildcard) und Prüfungsfalle (53 Karten, Tag `Fokus::Falle` zum gezielten Wiederholen).
-- Tags: `CCNA_200_301`, `Ziel::2.5`, `Domaene::2`, `Typ::…`, `Stufe::…`, `Kompendium::1_0`.
-- IDs der Form `C11-<Ziel>-<nnn>` und feste GUIDs: ein erneuter Import einer späteren Version aktualisiert die Karten, statt Duplikate anzulegen.
-- Import: Anki → Datei → Importieren → die `.apkg` wählen.
+## So ist eine Karte aufgebaut
 
-Hinweis zur Qualität: Die Karten sind aus eigenem Fachwissen geschrieben und nicht Karte für Karte gegen die Cisco-Dokumentation geprüft. Stichprobenartig gegen Cisco-Seiten bestätigt: HSRP-Timer und virtuelle MAC, PoE-Leistungen (15,4 / 30 / 60 / 90 W), Passworttypen 0/5/7/8/9, STP-Kosten (100 / 19 / 4) und LLDP-Timer, außerdem DHCP-Timer T1/T2 (RFC 2131), DHCP-/NTP-Ports und NTP-Stratum 16 sowie die Portnummern von DNS, TFTP, SNMP, Syslog, RADIUS, TACACS+, CAPWAP und IPsec. Die OSPF-Zahlen (Hello/Dead 10/40 und 30/120, DR-Wahl, Multicast-Adressen) beruhen auf Standardwissen, nicht auf einer abgerufenen Quelle. Im Zweifel gilt die Cisco-Doku. Die Quellenlinks zeigen auf die Prüfungsthemen und passende RFCs bzw. Konfigurationsleitfäden.
+- **Frage:** konkret und mit Kontext, z. B. „Wie lautet die Broadcastadresse von 192.168.1.64/26?“
+- **Antwort:** beginnt fett mit dem Kern (**192.168.1.127.**). Danach folgt kurz, warum: „/26 hat die Blockgröße 64. Das Subnetz reicht von .64 bis .127.“ Rechenwege stehen ausgeschrieben da.
+- **Hinweis** (nicht immer vorhanden): eine Merkhilfe oder eine typische Falle.
+- **Quellen:** Links zu den Prüfungsthemen von Cisco und den passenden RFCs.
 
-Passende Übungen: [Packet-Tracer-Labs](../Packet-Tracer-Labs/), [Subnetting-Trainer](../Trainer/), [Prüfungssimulation](../Pruefungssimulation/) und der [Lernplan](../LERNPLAN.md).
+## Kartentypen und Tags
+
+- Typen: Wissen, Szenario, CLI, Interpretation, Vergleich, Exhibit (35 Karten mit echten `show`-Ausgaben), Rechnen (Subnetting, IPv6 kürzen, EUI-64, Wildcards) und Prüfungsfalle (53 Karten).
+- Tags zum Filtern: `Ziel::2.5`, `Domaene::2`, `Typ::…`, `Stufe::…`, `Fokus::Falle`, `Modus::Zug`.
+
+## Import und Update
+
+Anki → Datei → Importieren → die `.apkg` wählen. Die Karten haben feste IDs (`C11-<Ziel>-<Nr>`). Ein Import über die Version 1.0 aktualisiert deshalb die Karten und behält deinen Lernfortschritt.
+
+## Versionen
+
+| Version | Änderung |
+|---|---|
+| 1.1 | Alle Karten didaktisch überarbeitet: konkrete Fragen, Antworten beginnen mit dem Kern und erklären das Warum, Merkhilfen und Fallen als Hinweis. Lernfortschritt bleibt erhalten (Tag `Didaktik::1_1`) |
+| 1.0 | Erste Version (621 Karten) |
+
+Im Zweifel gilt die Dokumentation von Cisco. Fehler bitte als Issue melden, mit Karten-ID.
+
+Passend dazu: [Packet-Tracer-Labs](../Packet-Tracer-Labs/), [Subnetting-Trainer](../Trainer/), [Prüfungssimulation](../Pruefungssimulation/) und der [Lernplan](../LERNPLAN.md).
