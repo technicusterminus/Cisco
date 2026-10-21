@@ -10,10 +10,15 @@
 | [`Trainer/`](Trainer/) | Subnetting-Trainer (HTML, offline) mit Lösungsweg, IPv6 und EUI-64 |
 | [`Pruefungssimulation/`](Pruefungssimulation/) | 263 Übungsfragen mit Zeitlimit, Domänengewicht und Auswertung (HTML, offline) |
 | [`LERNPLAN.md`](LERNPLAN.md) | 8-Wochen-Plan, der Deck, Labs, Trainer und Simulation verbindet |
-| [`CCNA-Cheatsheet.pdf`](CCNA-Cheatsheet.pdf) | 5 Seiten: Rechenwege, Exhibits (show-Ausgaben), VLAN, STP, OSPF, ACL, NAT, Security, Automation, Fehlerbilder |
+| [`CCNA-Cheatsheet.pdf`](CCNA-Cheatsheet.pdf) | 4 Seiten: Rechenwege, Befehle und Exhibits zu allen sechs Bereichen, Fehlerbilder mit erstem Prüfbefehl |
 
-Einstieg: [`Packet-Tracer-Labs/README.md`](Packet-Tracer-Labs/README.md) (Arbeitsweise, Übersicht, Reihenfolge, ehrlicher Teststand).
+## So fängst du an
 
-Die Labs richten sich direkt nach dem Prüfungsplan von Cisco. Wer strukturiert lernen will, startet mit dem [Lernplan](LERNPLAN.md).
+1. Lies den [Lernplan](LERNPLAN.md). Er verteilt alles auf 8 Wochen.
+2. Importiere das [Anki-Deck](Anki/) und lies, wie die Karten aufgebaut sind.
+3. Starte mit [Lab 01](Packet-Tracer-Labs/01-Komponenten-Topologien-Kabel/). Wie ein Lab abläuft, steht in der [Lab-Übersicht](Packet-Tracer-Labs/README.md).
+4. Ab Woche 2 jeden Tag ein paar Minuten [Subnetting-Trainer](Trainer/).
+
+Alle Materialien folgen demselben Muster: Die Antwort steht zuerst, danach die Begründung. In den Labs prüfst du jeden Schritt, bevor du weitergehst.
 
 > Kein offizielles Cisco-Material. Cisco, CCNA und Packet Tracer sind Marken von Cisco Systems, Inc.
