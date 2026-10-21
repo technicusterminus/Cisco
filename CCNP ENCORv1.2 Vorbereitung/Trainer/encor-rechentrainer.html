@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ENCOR Rechentrainer</title>
+<style>
+:root{--bg:#f4f7fb;--card:#fff;--ink:#183047;--mut:#5b7080;--acc:#177f79;--ok:#1b9b87;--bad:#c0392b;--line:#dce5ec;--chip:#edf3f6}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1a24;--card:#17232f;--ink:#e3edf4;--mut:#93a8b7;--acc:#4fc3b7;--ok:#3ec9a7;--bad:#ff7b6b;--line:#2a3b49;--chip:#213242}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.55 -apple-system,Segoe UI,Roboto,sans-serif;padding:16px}
+main{max-width:800px;margin:0 auto}h1{font-size:1.4rem;margin:.2em 0}
+.sub{color:var(--mut);margin:0 0 14px;font-size:.95rem}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;margin:14px 0}
+.modes{display:flex;flex-wrap:wrap;gap:8px}
+.modes button{border:1px solid var(--line);background:var(--chip);color:var(--ink);border-radius:8px;padding:7px 12px;cursor:pointer;font:inherit;font-size:.9rem}
+.modes button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+.q{font-weight:600;font-size:1.05rem;margin-bottom:12px}
+code{background:var(--chip);padding:1px 6px;border-radius:4px;font-family:Menlo,Consolas,monospace;font-size:.9em}
+pre{background:var(--chip);border-radius:8px;padding:10px 12px;overflow-x:auto;font:.84rem/1.45 Menlo,Consolas,monospace;margin:8px 0 12px}
+.tw{overflow-x:auto}
+table.t{border-collapse:collapse;font-size:.88rem;margin:4px 0 12px;width:100%}
+table.t th,table.t td{border-bottom:1px solid var(--line);padding:5px 7px;text-align:left;white-space:nowrap}
+table.t th{color:var(--mut);font-weight:600}
+.row{display:grid;grid-template-columns:200px 1fr auto;gap:8px;align-items:center;margin:8px 0}
+.row>label{color:var(--mut);font-size:.9rem}
+input[type=text],select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;font-size:.95rem}
+input[type=text]{font-family:Menlo,Consolas,monospace}
+.checks{display:flex;flex-wrap:wrap;gap:6px 14px}.checks label{display:flex;gap:6px;align-items:center;font-size:.95rem}
+.ok{border-color:var(--ok)!important}.bad{border-color:var(--bad)!important}
+.mark{width:1.4em;text-align:center;font-weight:700}.mark.ok{color:var(--ok)}.mark.bad{color:var(--bad)}
+.sol{color:var(--mut);font-size:.85rem;grid-column:2/3}
+.actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.actions button{border:0;border-radius:8px;padding:9px 16px;font:inherit;cursor:pointer;background:var(--acc);color:#fff}
+.actions button.sec{background:var(--chip);color:var(--ink);border:1px solid var(--line)}
+.steps{margin-top:14px;border-top:1px dashed var(--line);padding-top:12px;font-size:.95rem}
+.steps ol{padding-left:20px;margin:6px 0}.steps li{margin:3px 0}
+.stat{color:var(--mut);font-size:.9rem;margin-top:10px}
+.hide{display:none}
+@media(max-width:600px){.row{grid-template-columns:1fr auto}.row>label{grid-column:1/-1}.sol{grid-column:1/-1}}
+</style>
+</head>
+<body>
+<main>
+<h1>Rechentrainer · CCNP ENCOR 350-401</h1>
+<p class="sub">Zufallsaufgaben zu BGP, STP, OSPF, EIGRP und QoS, jeweils mit Lösungsweg. Läuft offline im Browser.</p>
+<div class="card"><div class="modes" id="modes"></div></div>
+<div class="card" id="task"></div>
+<div class="stat" id="stat"></div>
+</main>
+<script>
+// ---------- Hilfsfunktionen ----------
+const rnd=(a,b)=>a+Math.floor(Math.random()*(b-a+1));
+const pick=a=>a[rnd(0,a.length-1)];
+const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const table=(head,rows)=>`<div class="tw"><table class="t"><tr>${head.map(h=>`<th>${h}</th>`).join('')}</tr>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</table></div>`;
+const L='ABCDE';
+
+// ---------- BGP Best Path ----------
+const ORIG={i:0,e:1,'?':2};
+const BGP_STEPS=['Weight','Local Preference','AS-Pfad-Länge','Origin','MED','eBGP vor iBGP','IGP-Metrik zum Next Hop','Ältester eBGP-Pfad','Niedrigste Router-ID'];
+// Liefert {best, step, log[]} nach dem Cisco-Ablauf (ohne lokal erzeugte Pfade)
+function bgpBest(P){let c=P.map((_,i)=>i);const log=[];
+  const keep=(name,val,better,show)=>{if(c.length<2)return false;
+    const vals=c.map(i=>val(P[i]));const b=vals.reduce((x,y)=>better(y,x)?y:x);
+    const nc=c.filter((i,k)=>vals[k]===b);
+    const txt=c.map(i=>`${L[i]} ${show?show(P[i]):val(P[i])}`).join(', ');
+    if(nc.length<c.length){log.push(`<b>${name}:</b> ${txt} → <b>${nc.map(i=>L[i]).join(', ')}</b> ${nc.length===1?'gewinnt':'bleiben'}.`);c=nc;return nc.length===1}
+    log.push(`<b>${name}:</b> ${txt} → gleich.`);return false};
+  const steps=[
+   ()=>keep(BGP_STEPS[0],p=>p.w,(a,b)=>a>b),
+   ()=>keep(BGP_STEPS[1],p=>p.lp,(a,b)=>a>b),
+   ()=>keep(BGP_STEPS[2],p=>p.as.length,(a,b)=>a<b),
+   ()=>keep(BGP_STEPS[3],p=>ORIG[p.o],(a,b)=>a<b,p=>p.o),
+   ()=>{if(c.length<2)return false;const first=new Set(c.map(i=>P[i].as[0]));
+     if(first.size>1){log.push(`<b>MED:</b> Die Pfade kommen aus verschiedenen Nachbar-AS (${c.map(i=>L[i]+' '+P[i].as[0]).join(', ')}), MED wird nicht verglichen.`);return false}
+     return keep(BGP_STEPS[4],p=>p.med,(a,b)=>a<b)},
+   ()=>keep(BGP_STEPS[5],p=>p.ebgp?0:1,(a,b)=>a<b,p=>p.ebgp?'eBGP':'iBGP'),
+   ()=>keep(BGP_STEPS[6],p=>p.igp,(a,b)=>a<b),
+   ()=>{if(c.length<2)return false;if(!c.every(i=>P[i].ebgp)){log.push('<b>Ältester Pfad:</b> gilt nur, wenn alle verbleibenden Pfade eBGP sind. Übersprungen.');return false}
+     return keep(BGP_STEPS[7],p=>p.age,(a,b)=>a>b,p=>p.age+' min')},
+   ()=>keep(BGP_STEPS[8],p=>p.ridN,(a,b)=>a<b,p=>p.rid)];
+  for(let k=0;k<steps.length;k++){if(steps[k]())return{best:c[0],step:k,log};}
+  return{best:c.length===1?c[0]:-1,step:-1,log};}
+const ridN=r=>r.split('.').reduce((a,b)=>a*256+(+b),0);
+function genBgp(){for(let tries=0;tries<500;tries++){
+  const n=pick([2,2,3]),d=rnd(0,8),win=rnd(0,n-1);
+  // Typ je Pfad
+  let eb;
+  if(d<5)eb=Array.from({length:n},()=>Math.random()<.6);
+  else if(d===5)eb=Array.from({length:n},(_,i)=>i===win);
+  else if(d===6)eb=Array(n).fill(false);
+  else if(d===7)eb=Array(n).fill(true);
+  else eb=Array(n).fill(Math.random()<.5);
+  const A=[ // [gleich, zufällig, Gewinner, Verlierer]
+   ['w',()=>0,()=>pick([0,0,100]),()=>pick([100,200]),()=>pick([0,50])],
+   ['lp',()=>100,()=>pick([100,100,150,200]),()=>pick([150,200]),()=>pick([100,120])],
+   ['len',null,()=>rnd(2,4),()=>2,()=>pick([3,4])],
+   ['o',()=>'i',()=>pick(['i','i','e','?']),()=>'i',()=>pick(['e','?'])],
+   ['med',()=>0,()=>pick([0,10,50,100]),()=>pick([0,10]),()=>pick([50,100])]];
+  const eqLen=rnd(2,3);const P=Array.from({length:n},(_,i)=>({ebgp:eb[i]}));
+  A.forEach(([k,eq,rd,wn,ls],idx)=>P.forEach((p,i)=>{p[k]=idx<d?(k==='len'?eqLen:eq()):idx===d?(i===win?wn():ls()):rd()}));
+  // IGP-Metrik: eBGP-Next-Hops sind direkt angeschlossen (0)
+  P.forEach((p,i)=>{p.igp=p.ebgp?0:(d===6?(i===win?10:pick([20,30])):d>6?20:pick([10,20,30]))});
+  // Alter
+  const eqAge=rnd(20,80);P.forEach((p,i)=>{p.age=d===7?(i===win?rnd(60,120):rnd(5,50)):d===8?eqAge:rnd(5,120)});
+  // AS-Pfade
+  const origin=pick([65100,65200]);const nbs=shuffle([65010,65020,65030,64512]);const same=d===4?nbs[0]:null;
+  P.forEach((p,i)=>{const path=[same||nbs[i]];const mids=shuffle([65300,65400,65500]);while(path.length<p.len-1)path.push(mids.pop());path.push(origin);p.as=path});
+  // Router-IDs
+  let rids=shuffle(['1.1.1.1','2.2.2.2','3.3.3.3','4.4.4.4','10.0.0.5','10.0.0.9','192.168.1.1']).slice(0,n);
+  if(d===8){rids.sort((x,y)=>ridN(x)-ridN(y));const lo=rids.shift();rids=shuffle(rids);rids.splice(win,0,lo);}
+  P.forEach((p,i)=>{p.rid=rids[i];p.ridN=ridN(rids[i])});
+  const r=bgpBest(P);if(r.step!==d||r.best!==win)continue;
+  const rows=P.map((p,i)=>[`<b>${L[i]}</b>`,p.w,p.lp,p.as.join(' '),p.o,p.med,p.ebgp?'eBGP':'iBGP',p.igp,p.ebgp?p.age+' min':'–',p.rid]);
+  return{q:`Ein Router kennt diese Pfade zu <code>198.51.100.0/24</code>. Alle Next Hops sind erreichbar, kein Pfad ist lokal erzeugt.`,
+   x:table(['Pfad','Weight','LocPrf','AS-Pfad','Origin','MED','Typ','IGP-Metrik','empfangen vor','Router-ID'],rows),
+   fields:[{l:'Bester Pfad',sel:L.slice(0,n).split(''),a:L[r.best]},{l:'Entscheidendes Kriterium',sel:BGP_STEPS,a:BGP_STEPS[r.step]}],
+   steps:`<ol>${r.log.map(x=>`<li>${x}</li>`).join('')}</ol>Merkhilfe für die Reihenfolge: „<b>W</b>e <b>L</b>ove <b>O</b>ranges <b>AS</b> <b>O</b>ranges <b>M</b>ean <b>P</b>ure <b>R</b>efreshment“ (Weight, LocPrf, Originate, AS-Path, Origin, MED, Paths eBGP/iBGP, Router-ID).`};}
+  throw new Error('BGP-Generator');}
+
+// ---------- STP ----------
+const SPEED={'100 Mbit/s':19,'1 Gbit/s':4,'10 Gbit/s':2};
+function genStp(){for(let tries=0;tries<500;tries++){
+  const n=pick([3,4]);const names=['SW1','SW2','SW3','SW4'].slice(0,n);
+  const sw=names.map(nm=>({nm,prio:pick([32768,32768,32768,24576,28672,4096]),ports:[]}));
+  sw.forEach(s=>{s.mac=['00'+rnd(16,255).toString(16).padStart(2,'0'),rnd(0,65535).toString(16).padStart(4,'0'),rnd(0,65535).toString(16).padStart(4,'0')].join('.');
+    s.bid=String(s.prio).padStart(5,'0')+s.mac.replace(/\./g,'');});
+  if(Math.random()<.4){const lo=Math.min(...sw.map(s=>s.prio));sw.forEach(s=>{if(Math.random()<.6)s.prio=lo;s.bid=String(s.prio).padStart(5,'0')+s.mac.replace(/\./g,'')})}
+  const pairs=n===3?[[0,1],[1,2],[0,2]]:[[0,1],[1,2],[2,3],[3,0]];
+  const links=pairs.map(([a,b])=>{const sp=pick(['1 Gbit/s','1 Gbit/s','10 Gbit/s','100 Mbit/s']);
+    const pa={sw:a,num:sw[a].ports.length+1},pb={sw:b,num:sw[b].ports.length+1};
+    pa.name=`Gi1/0/${pa.num}`;pb.name=`Gi1/0/${pb.num}`;sw[a].ports.push(pa);sw[b].ports.push(pb);
+    const l={a:pa,b:pb,sp,cost:SPEED[sp]};pa.link=l;pb.link=l;pa.peer=pb;pb.peer=pa;return l});
+  // Root
+  const root=sw.reduce((x,y)=>y.bid<x.bid?y:x);const ri=sw.indexOf(root);
+  const cmp=(x,y)=>x<y?-1:x>y?1:0;
+  // Root-Pfadkosten
+  const rpc=sw.map((_,i)=>i===ri?0:Infinity);
+  for(let k=0;k<n;k++)links.forEach(l=>{const a=l.a.sw,b=l.b.sw;rpc[a]=Math.min(rpc[a],rpc[b]+l.cost);rpc[b]=Math.min(rpc[b],rpc[a]+l.cost)});
+  const pid=p=>128*1000+p.num;
+  // Root Ports
+  const rp={};const why={};
+  sw.forEach((s,i)=>{if(i===ri)return;
+    const cand=s.ports.map(p=>({p,c:rpc[p.peer.sw]+p.link.cost,nb:sw[p.peer.sw].bid,np:pid(p.peer),op:pid(p)}));
+    cand.sort((x,y)=>x.c-y.c||cmp(x.nb,y.nb)||x.np-y.np||x.op-y.op);rp[i]=cand[0].p;
+    const tie=cand.length>1&&cand[0].c===cand[1].c;why[i]={cand,tie};});
+  // Designated je Link
+  const des=new Set();links.forEach(l=>{const off=p=>[rpc[p.sw],sw[p.sw].bid,pid(p)];
+    const A=off(l.a),B=off(l.b);const aw=A[0]<B[0]||(A[0]===B[0]&&(A[1]<B[1]||(A[1]===B[1]&&A[2]<B[2])));des.add(aw?l.a:l.b);l.des=aw?l.a:l.b;});
+  const blocked=[];sw.forEach((s,i)=>s.ports.forEach(p=>{if(!des.has(p)&&rp[i]!==p)blocked.push(p)}));
+  if(blocked.length!==1)continue;
+  const ask=pick(Object.keys(rp).map(Number));
+  // Root-Port-Frage soll interessant sein: bevorzugt ein Switch mit zwei Kandidaten
+  const pn=p=>`${sw[p.sw].nm} ${p.name}`;
+  const allPorts=[];sw.forEach(s=>s.ports.forEach(p=>allPorts.push(pn(p))));
+  const bl=blocked[0];const bl_l=bl.link;
+  let st=`<li><b>Root Bridge:</b> kleinste Bridge-ID gewinnt, zuerst Priorität, bei Gleichstand MAC. ${sw.map(s=>`${s.nm} ${s.prio}/${s.mac}`).join(', ')} → <b>${root.nm}</b>.</li>`;
+  st+=`<li><b>Root-Pfadkosten</b> (100 Mbit/s = 19, 1 Gbit/s = 4, 10 Gbit/s = 2): ${sw.map((s,i)=>`${s.nm} ${rpc[i]}`).join(', ')}.</li>`;
+  const w=why[ask];st+=`<li><b>Root Port von ${sw[ask].nm}:</b> ${w.cand.map(c=>`${c.p.name} über ${sw[c.p.peer.sw].nm} = ${rpc[c.p.peer.sw]} + ${c.p.link.cost} = ${c.c}`).join(', ')}. `+
+    (w.tie?`Gleiche Kosten, also entscheidet die kleinere Bridge-ID des Nachbarn${w.cand[0].nb===w.cand[1].nb?', dann die Port-ID des Nachbarn':''}. `:'Die niedrigsten Kosten gewinnen. ')+`→ <b>${rp[ask].name}</b>.</li>`;
+  const o=bl===bl_l.a?bl_l.b:bl_l.a;
+  st+=`<li><b>Blockierter Port:</b> Auf dem Link ${pn(bl_l.a)} – ${pn(bl_l.b)} ist keiner der beiden Ports Root Port, also wird verglichen: Root-Pfadkosten ${sw[o.sw].nm} ${rpc[o.sw]} gegen ${sw[bl.sw].nm} ${rpc[bl.sw]}`+
+     (rpc[o.sw]===rpc[bl.sw]?`, gleich, also entscheidet die Bridge-ID (${sw[o.sw].nm} ist kleiner)`:'')+`. ${pn(o)} wird Designated, <b>${pn(bl)}</b> blockiert (Alternate).</li>`;
+  return{q:`Rapid PVST+, VLAN 1. Kosten nach Kurzmethode (100 Mbit/s = 19, 1 Gbit/s = 4, 10 Gbit/s = 2). Alle Port-Prioritäten stehen auf 128.`,
+   x:table(['Switch','Priorität','MAC'],sw.map(s=>[s.nm,s.prio,`<code>${s.mac}</code>`]))+table(['Link','Geschwindigkeit'],links.map(l=>[`${pn(l.a)} – ${pn(l.b)}`,l.sp])),
+   fields:[{l:'Root Bridge',sel:names,a:root.nm},{l:`Root Port von ${sw[ask].nm}`,sel:sw[ask].ports.map(p=>p.name),a:rp[ask].name},{l:'Blockierter Port',sel:allPorts,a:pn(bl)}],
+   steps:`<ol>${st}</ol>`};}
+  throw new Error('STP-Generator');}
+
+// ---------- DSCP ----------
+const PHB=[];for(let x=1;x<=4;x++)for(let y=1;y<=3;y++)PHB.push({n:`AF${x}${y}`,v:8*x+2*y,x,y});
+PHB.push({n:'EF',v:46});for(let k=0;k<=7;k++)PHB.push({n:`CS${k}`,v:8*k});
+const bin6=v=>v.toString(2).padStart(6,'0');
+const DROP={1:'niedrig',2:'mittel',3:'hoch'};
+function phbSteps(p){
+  if(p.y)return `<li><b>AF${p.x}${p.y}:</b> Klasse ${p.x}, Drop-Wahrscheinlichkeit ${p.y} (${DROP[p.y]}). Formel: 8 × ${p.x} + 2 × ${p.y} = <code>${p.v}</code>.</li><li><b>Binär:</b> Klasse ${p.x} = ${p.x.toString(2).padStart(3,'0')}, Drop ${p.y} = ${p.y.toString(2).padStart(2,'0')}, letztes Bit 0 → <code>${bin6(p.v)}</code>.</li>`;
+  if(p.n==='EF')return `<li><b>EF</b> (Expedited Forwarding) ist fest <code>46</code> = <code>101110</code>, die Klasse für Sprache.</li>`;
+  return `<li><b>${p.n}:</b> Class Selector = Klasse × 8 = <code>${p.v}</code>, binär <code>${bin6(p.v)}</code>. Die ersten drei Bits entsprechen der alten IP Precedence.</li>`;}
+function genDscp(){const p=pick(PHB.filter(x=>x.n!=='CS0'));const mode=rnd(0,2);
+  const prec=p.v>>3;
+  if(mode===0)return{q:`Welche Werte gehören zu <code>${p.n}</code>?`,
+    fields:[{l:'DSCP dezimal',a:String(p.v)},{l:'DSCP binär (6 Bit)',a:bin6(p.v)},{l:'IP Precedence',a:String(prec)}],
+    steps:`<ol>${phbSteps(p)}<li><b>IP Precedence</b> = die ersten 3 Bit = ${bin6(p.v).slice(0,3)} = <code>${prec}</code>.</li></ol>`};
+  if(mode===1)return{q:`Ein Paket trägt DSCP <code>${p.v}</code>. Welcher PHB ist das?`,
+    fields:[{l:'PHB (z. B. AF21, EF, CS3)',a:p.n,norm:true}].concat(p.y?[{l:'Drop-Wahrscheinlichkeit',sel:['niedrig','mittel','hoch'],a:DROP[p.y]}]:[]),
+    steps:`<ol><li><b>Binär:</b> ${p.v} = <code>${bin6(p.v)}</code>. Die ersten 3 Bit sind die Klasse (${bin6(p.v).slice(0,3)} = ${prec}), die nächsten 2 Bit die Drop-Stufe (${bin6(p.v).slice(3,5)} = ${parseInt(bin6(p.v).slice(3,5),2)}).</li>${p.y?`<li>Klasse ${p.x} mit Drop ${p.y} ist <b>AF${p.x}${p.y}</b>, Drop-Wahrscheinlichkeit ${DROP[p.y]}. Je höher die zweite Ziffer, desto eher wird das Paket bei Stau verworfen.</li>`:p.n==='EF'?`<li>46 ist der feste Wert für <b>EF</b>.</li>`:`<li>Drop-Bits 00 und Vielfaches von 8: Class Selector <b>${p.n}</b>.</li>`}</ol>`};
+  return{q:`Welchen Wert hat das ganze ToS-Byte (DSCP plus 2 ECN-Bits auf 0) bei <code>${p.n}</code>?`,
+    fields:[{l:'ToS-Byte dezimal',a:String(p.v*4)},{l:'ToS-Byte hex (0x..)',a:'0x'+(p.v*4).toString(16).toUpperCase().padStart(2,'0'),norm:true}],
+    steps:`<ol>${phbSteps(p)}<li><b>ToS-Byte:</b> DSCP steht in den oberen 6 Bit, dahinter 2 ECN-Bits. Zwei Stellen nach links = × 4: ${p.v} × 4 = <code>${p.v*4}</code> = <code>0x${(p.v*4).toString(16).toUpperCase().padStart(2,'0')}</code>.</li></ol>`};}
+
+// ---------- OSPF Areatypen und LSAs ----------
+const AREAS={
+ 'Standard-Area (nicht 0)':{l:[1,2,3,4,5],def:'Nur wenn ein Router default-information originate nutzt (Typ 5)',why:'Eine normale Area bekommt alles: Intra-Area (1, 2), Summaries vom ABR (3), ASBR-Summary (4) und externe Routen (5).'},
+ 'Stub':{l:[1,2,3],def:'Automatisch vom ABR als Typ-3-Default',why:'Stub sperrt externe Routen: kein Typ 5, damit auch kein Typ 4. Der ABR ersetzt sie durch eine Typ-3-Default.'},
+ 'Totally Stubby':{l:[1,2,3],def:'Automatisch vom ABR als Typ-3-Default',why:'Wie Stub, zusätzlich ohne Inter-Area-Summaries. Typ 3 bleibt nur noch als Default-Route vom ABR.'},
+ 'NSSA':{l:[1,2,3,7],def:'Nicht automatisch, nur mit area … nssa default-information-originate (Typ 7)',why:'NSSA sperrt Typ 5 von außen, erlaubt aber einen eigenen ASBR. Dessen externe Routen kommen als Typ 7, der ABR übersetzt sie in Typ 5 für den Rest.'},
+ 'Totally NSSA':{l:[1,2,3,7],def:'Automatisch vom ABR als Typ-3-Default',why:'NSSA ohne Inter-Area-Summaries: Typ 3 nur als Default vom ABR, eigene externe Routen als Typ 7.'}};
+const LSA=[{t:1,n:'Router-LSA',g:'jeder Router',gd:'jedem Router',s:'die Links und Kosten des Routers innerhalb einer Area'},{t:2,n:'Network-LSA',g:'der DR',gd:'dem DR',s:'ein Multiaccess-Segment und seine angeschlossenen Router'},
+ {t:3,n:'Summary-LSA',g:'der ABR',gd:'dem ABR',s:'Netze aus anderen Areas'},{t:4,n:'ASBR-Summary-LSA',g:'der ABR',gd:'dem ABR',s:'den Weg zum ASBR in einer anderen Area'},
+ {t:5,n:'AS-External-LSA',g:'der ASBR',gd:'dem ASBR',s:'externe, redistributierte Routen'},{t:7,n:'NSSA-External-LSA',g:'der ASBR in einer NSSA',gd:'dem ASBR in einer NSSA',s:'externe Routen innerhalb einer NSSA'}];
+function genOspf(){
+  if(Math.random()<.6){const a=pick(Object.keys(AREAS)),A=AREAS[a];
+    return{q:`Eine Area ist als <b>${a}</b> konfiguriert und hat ein Multiaccess-Segment mit DR. Welche LSA-Typen gibt es in dieser Area?`,
+     fields:[{l:'LSA-Typen',multi:['1','2','3','4','5','7'],a:A.l.map(String)},{l:'Default-Route',sel:shuffle(['Automatisch vom ABR als Typ-3-Default','Nicht automatisch, nur mit area … nssa default-information-originate (Typ 7)','Nur wenn ein Router default-information originate nutzt (Typ 5)']),a:A.def}],
+     steps:`<ol><li><b>Typ 1 und 2</b> gibt es in jeder Area: Router-LSAs von allen Routern, Network-LSA vom DR.</li><li>${A.why}</li><li><b>Ergebnis:</b> Typ ${A.l.join(', ')}. Default: ${A.def}.</li></ol>`};}
+  const x=pick(LSA);const m=Math.random()<.5;
+  if(m)return{q:`Welcher LSA-Typ beschreibt ${x.s}, und wer erzeugt ihn?`,
+    fields:[{l:'LSA-Typ',sel:LSA.map(y=>`Typ ${y.t} – ${y.n}`),a:`Typ ${x.t} – ${x.n}`},{l:'Erzeugt von',sel:['jeder Router','der DR','der ABR','der ASBR','der ASBR in einer NSSA'],a:x.g}],
+    steps:`<ol><li><b>Typ ${x.t} (${x.n})</b> beschreibt ${x.s}.</li><li>Erzeugt wird er von <b>${x.gd}</b>.</li><li>Übersicht: 1 Router, 2 Network (DR), 3 Summary (ABR), 4 ASBR-Summary (ABR), 5 External (ASBR), 7 NSSA-External (ASBR in NSSA).</li></ol>`};
+  const areas=Object.keys(AREAS).filter(a=>!AREAS[a].l.includes(x.t));
+  return{q:`In welchen Area-Typen fehlt der LSA-Typ <b>${x.t} (${x.n})</b>?`,
+    fields:[{l:'Area-Typen',multi:Object.keys(AREAS).concat(['in keinem']),a:areas.length?areas:['in keinem']}],
+    steps:`<ol>${Object.keys(AREAS).map(a=>`<li><b>${a}:</b> Typ ${AREAS[a].l.join(', ')}${AREAS[a].l.includes(x.t)?'':` → Typ ${x.t} fehlt`}.</li>`).join('')}</ol>`+(areas.length?'':'Typ 1 und 2 gibt es überall, deshalb fehlt er in keinem Area-Typ.')};}
+
+// ---------- OSPF DR/BDR ----------
+function genDr(){const n=rnd(3,5);const rs=[];const rids=shuffle(['1.1.1.1','2.2.2.2','3.3.3.3','4.4.4.4','5.5.5.5','10.0.0.1','10.0.0.2','192.168.0.1']).slice(0,n);
+  for(let i=0;i<n;i++)rs.push({nm:'R'+(i+1),pr:pick([1,1,1,0,10,100,255]),rid:rids[i]});
+  if(rs.filter(r=>r.pr>0).length<2)rs[0].pr=1,rs[1].pr=1;
+  const late=Math.random()<.35?rnd(0,n-1):-1;
+  const order=(a,b)=>b.pr-a.pr||ridN(b.rid)-ridN(a.rid);
+  const elig=rs.filter((r,i)=>r.pr>0&&i!==late).sort(order);
+  let dr=elig[0],bdr=elig[1]||null;
+  const lr=late>=0?rs[late]:null;
+  if(!bdr&&lr&&lr.pr>0)bdr=lr;
+  if(!dr)return genDr();
+  const st=[`<li><b>Priorität 0</b> darf nie DR oder BDR werden${rs.some(r=>r.pr===0)?`: ${rs.filter(r=>r.pr===0).map(r=>r.nm).join(', ')} ${rs.filter(r=>r.pr===0).length>1?'scheiden':'scheidet'} aus`:''}.</li>`,
+    `<li><b>Reihenfolge:</b> höchste Priorität, bei Gleichstand höchste Router-ID. ${elig.map(r=>`${r.nm} (${r.pr}, ${r.rid})`).join(' > ')}.</li>`,
+    `<li><b>DR</b> = ${dr.nm}, <b>BDR</b> = ${bdr?bdr.nm:'keiner'}.</li>`];
+  if(lr)st.push(`<li><b>${lr.nm}</b> kommt erst später dazu. Die Wahl ist nicht preemptiv: Auch mit Priorität ${lr.pr} verdrängt er weder DR noch BDR${!elig[1]&&lr.pr>0?', er wird nur BDR, weil der Platz frei ist':''}.</li>`);
+  return{q:`OSPF auf einem Ethernet-Segment. Alle Router starten gleichzeitig${lr?`, nur <b>${lr.nm}</b> wird erst eingeschaltet, nachdem die Wahl abgeschlossen ist`:''}.`,
+   x:table(['Router','Priorität','Router-ID'],rs.map(r=>[r.nm,r.pr,r.rid])),
+   fields:[{l:'DR',sel:rs.map(r=>r.nm),a:dr.nm},{l:'BDR',sel:rs.map(r=>r.nm).concat(['keiner']),a:bdr?bdr.nm:'keiner'}],
+   steps:`<ol>${st.join('')}</ol>`};}
+
+// ---------- EIGRP Feasible Successor ----------
+function genEigrp(){for(let t=0;t<200;t++){const n=rnd(3,4);const nb=[];
+  for(let i=0;i<n;i++){const rd=pick([28160,30720,128256,156160,281600,2297856,2809856]);const link=pick([2816,25600,256000,2585600]);nb.push({ip:`10.0.${i+1}2.2`.replace('.12.','.1'+(i+2)+'.'),ifc:`Gi0/${i}`,rd,fd:rd+link})}
+  nb.forEach((x,i)=>x.ip=`10.0.1${i+2}.2`);
+  const fds=nb.map(x=>x.fd);if(new Set(fds).size<n)continue;
+  const s=nb.reduce((a,b)=>b.fd<a.fd?b:a);const fs=nb.filter(x=>x!==s&&x.rd<s.fd);
+  if(Math.random()<.5&&!fs.length)continue;
+  const out=`P 172.16.5.0/24, 1 successors, FD is ${s.fd}\n`+shuffle(nb).map(x=>`        via ${x.ip} (${x.fd}/${x.rd}), ${x.ifc}`).join('\n');
+  return{q:`Ausschnitt aus <code>show ip eigrp topology all-links</code>. In Klammern steht (Feasible Distance über diesen Nachbarn / Reported Distance).`,
+   x:`<pre>${esc(out)}</pre>`,
+   fields:[{l:'Successor',sel:nb.map(x=>x.ip),a:s.ip},{l:'Feasible Successors',multi:nb.map(x=>x.ip).concat(['keiner']),a:fs.length?fs.map(x=>x.ip):['keiner']}],
+   steps:`<ol><li><b>Successor</b> = kleinste Feasible Distance: <b>${s.ip}</b> mit ${s.fd}.</li><li><b>Feasibility Condition:</b> Ein anderer Nachbar ist Feasible Successor, wenn seine Reported Distance kleiner ist als die FD des Successors (${s.fd}). Dann kann sein Weg nicht über diesen Router zurückführen.</li>${nb.filter(x=>x!==s).map(x=>`<li>${x.ip}: RD ${x.rd} ${x.rd<s.fd?'&lt;':'≥'} ${s.fd} → ${x.rd<s.fd?'<b>Feasible Successor</b>':'kein FS'}.</li>`).join('')}</ol>`};}
+  throw new Error('EIGRP');}
+
+const gens={bgp:{name:'BGP Best Path',gen:genBgp},stp:{name:'STP: Root, Root Port, Blockade',gen:genStp},dr:{name:'OSPF DR/BDR',gen:genDr},
+ ospf:{name:'OSPF Areatypen und LSAs',gen:genOspf},eigrp:{name:'EIGRP Feasible Successor',gen:genEigrp},dscp:{name:'QoS: DSCP und PHB',gen:genDscp}};
+
+// ---------- UI ----------
+let cur='bgp',task=null,stats={r:0,t:0},counted=false;
+const modesEl=document.getElementById('modes'),taskEl=document.getElementById('task'),statEl=document.getElementById('stat');
+function renderModes(){modesEl.innerHTML='';Object.entries({all:{name:'Gemischt'},...gens}).forEach(([k,v])=>{const b=document.createElement('button');b.textContent=v.name;b.className=k===cur?'on':'';b.onclick=()=>{cur=k;renderModes();next()};modesEl.appendChild(b)});}
+function next(){counted=false;const k=cur==='all'?pick(Object.keys(gens)):cur;task=gens[k].gen();
+  let h=`<div class="q">${task.q}</div>${task.x||''}`;
+  task.fields.forEach((f,i)=>{let inp;
+    if(f.sel)inp=`<select id="f${i}"><option value="">– wählen –</option>${f.sel.map(o=>`<option>${esc(o)}</option>`).join('')}</select>`;
+    else if(f.multi)inp=`<div class="checks" id="f${i}">${f.multi.map(o=>`<label><input type="checkbox" value="${esc(o)}">${esc(o)}</label>`).join('')}</div>`;
+    else inp=`<input type="text" id="f${i}" autocomplete="off" spellcheck="false">`;
+    h+=`<div class="row"><label for="f${i}">${f.l}</label>${inp}<span class="mark" id="m${i}"></span><span class="sol hide" id="s${i}"></span></div>`});
+  h+=`<div class="actions"><button id="chk">Prüfen</button><button class="sec" id="sol">Lösung</button><button class="sec" id="nxt">Nächste Aufgabe</button></div><div class="steps hide" id="steps"></div>`;
+  taskEl.innerHTML=h;document.getElementById('chk').onclick=check;document.getElementById('sol').onclick=solve;document.getElementById('nxt').onclick=next;
+  taskEl.querySelectorAll('input[type=text]').forEach(el=>el.addEventListener('keydown',e=>{if(e.key==='Enter')check()}));}
+const nrm=s=>String(s).trim().toLowerCase().replace(/\s+/g,'');
+function val(f,i){const el=document.getElementById('f'+i);if(f.multi)return[...el.querySelectorAll('input:checked')].map(x=>x.value);return el.value;}
+function good(f,v){if(f.multi){const a=new Set(f.a);return v.length===a.size&&v.every(x=>a.has(x))}return nrm(v)===nrm(f.a);}
+function check(){let ok=0;task.fields.forEach((f,i)=>{const g=good(f,val(f,i));mark(i,g);if(g)ok++});
+  if(!counted){stats.t++;if(ok===task.fields.length)stats.r++;counted=true}
+  if(ok===task.fields.length)showSteps();updateStat();}
+function mark(i,g){const el=document.getElementById('f'+i),m=document.getElementById('m'+i);el.classList.remove('ok','bad');el.classList.add(g?'ok':'bad');m.className='mark '+(g?'ok':'bad');m.textContent=g?'✓':'✗';}
+function solve(){task.fields.forEach((f,i)=>{const g=good(f,val(f,i));mark(i,g);if(!g){const s=document.getElementById('s'+i);s.textContent='Richtig: '+(f.multi?f.a.join(', '):f.a);s.classList.remove('hide')}});
+  if(!counted){stats.t++;counted=true}showSteps();updateStat();}
+function showSteps(){const s=document.getElementById('steps');s.innerHTML='<strong>Lösungsweg</strong>'+task.steps;s.classList.remove('hide');}
+function updateStat(){statEl.textContent=`Gelöst ohne Hilfe: ${stats.r} von ${stats.t} Aufgaben`;}
+renderModes();next();updateStat();
+</script>
+</body>
+</html>
