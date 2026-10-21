@@ -2,8 +2,8 @@
 
 Ein deutschsprachiges Anki-Deck für die Prüfung **Cisco 350-401 ENCOR v1.2**. Es deckt die Blueprint-Themen vollständig ab und ist darauf ausgelegt, Verständnis aufzubauen, nicht nur Fakten abzufragen. Zum Lernen unterwegs gibt es kurze Karten ohne Code, zum Prüfungstraining Exhibits und Fallen.
 
-**Aktuelle Version:** 4.3 (Stand 19.10.2026) · **1.431 Karten**
-**Datei:** [`ENCOR_v1.2_Kompendium_4.3_DE.apkg`](ENCOR_v1.2_Kompendium_4.3_DE.apkg)
+**Aktuelle Version:** 4.4 (Stand 21.10.2026) · **1.431 Karten**
+**Datei:** [`ENCOR_v1.2_Kompendium_4.4_DE.apkg`](ENCOR_v1.2_Kompendium_4.4_DE.apkg)
 
 ## Weiteres Material
 
@@ -85,6 +85,7 @@ Ein konkreter 10-Wochen-Plan, der Deck und Labs verbindet, steht in [`LERNPLAN.m
 
 | Version | Änderung |
 |---|---|
+| 4.4 | Alle Karten didaktisch überarbeitet: Fragen mit Kontext, Antworten beginnen mit dem direkten Treffer und erklären den Mechanismus, Hinweise nur noch als „Merke“, „Falle“ oder nächster Prüfschritt. Gleiche GUIDs, Lernfortschritt bleibt erhalten (Tag `Didaktik::4_4`) |
 | 4.3 | Syntax- und Fachkorrekturen (u. a. Flexible NetFlow `match ipv4 protocol`, `ip sla schedule`, IKEv2-Begriffe, EEM-Label-Reihenfolge, NETCONF `discard-changes`), neue Virtualisierungs-, LISP-/VXLAN- und PBR-Karten |
 | 4.0 | +115 Karten: Vertiefung, weitere Exhibits, Security auf Blueprint-Niveau, Duplikate entfernt |
 | 3.0 | Schwache Karten entfernt, Exhibits mit `show`-Ausgaben, Prüfungsfallen, Lücken geschlossen (Security-Produkte, 802.1X, Automation) |
