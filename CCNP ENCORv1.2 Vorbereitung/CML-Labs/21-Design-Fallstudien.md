@@ -38,10 +38,10 @@ Warum ohne CML? SD-WAN, SD-Access, Hypervisor und Next-Generation-Firewalls brau
 
 <details><summary>Lösungsschlüssel</summary>
 
-1. 48 × 1 Gbit/s = 48 Gbit/s Nutzerbandbreite auf 20 Gbit/s Uplink → **2,4 : 1**. Für Access üblich sind etwa 20 : 1 (Access → Distribution), das Ergebnis ist komfortabel.
-2. 8 Switches × 20 Gbit/s = 160 Gbit/s. Für 4 : 1 gegenüber dem Core genügen rechnerisch 40 Gbit/s, praktisch zwei 40-Gbit/s-Uplinks (80 Gbit/s, 2 : 1) wegen Redundanz.
-3. Bei sechs Gebäuden und 2 km spricht viel für **3-Tier** (Distribution je Gebäude, Core für die Verbindung): Skalierung, Fehlerbegrenzung, Verkabelung. Collapsed Core genügt bei kleineren Campus (wenige Gebäude, kurze Wege).
-4. Layer-2-Domänen klein halten (Routed Access oder pro Gebäude), Redundanz per Gerät und Pfad, modulare Bausteine mit klaren Schnittstellen (Access/Distribution/Core).
+1. **2,4 : 1, also sehr komfortabel.** 48 × 1 Gbit/s ergeben 48 Gbit/s Nutzerbandbreite, die Uplinks liefern 2 × 10 = 20 Gbit/s. Üblich sind am Access bis etwa 20 : 1, weil nie alle Nutzer gleichzeitig Volllast senden.
+2. **160 Gbit/s zur Distribution, für 4 : 1 reichen 40 Gbit/s zum Core.** 8 Switches × 20 Gbit/s = 160 Gbit/s, geteilt durch 4 ergibt 40 Gbit/s. Praktisch nimmst du zwei 40-Gbit/s-Uplinks, damit ein Ausfall nicht sofort überlastet. Das ergibt 80 Gbit/s und damit 2 : 1.
+3. **3-Tier.** Sechs Gebäude brauchen je ein Distribution-Paar, und ein eigener Core verbindet sie, ohne dass jede Distribution mit jeder verkabelt werden muss. Fehler bleiben im Gebäude, und ein siebtes Gebäude hängst du einfach an den Core. Collapsed Core lohnt sich bei wenigen Gebäuden auf engem Raum.
+4. **Kleine Layer-2-Domänen, Redundanz auf Gerät und Pfad, modulare Bausteine.** Routed Access oder Layer 2 höchstens pro Gebäude begrenzt die Failure Domain. Doppelte Geräte und Links verhindern Single Points of Failure. Klare Schnittstellen zwischen Access, Distribution und Core machen Erweiterungen planbar.
 
 </details>
 
@@ -58,10 +58,10 @@ Warum ohne CML? SD-WAN, SD-Access, Hypervisor und Next-Generation-Firewalls brau
 
 <details><summary>Lösungsschlüssel</summary>
 
-1. Reihenschaltung: 0,999 × 0,999 = 0,998001 → 99,80 %. Ausfall ≈ 0,1999 % × 525 600 min ≈ **1050 min/Jahr ≈ 17,5 h**.
-2. Je Stufe parallel: 1 − 0,001² = 0,999999. Beide Stufen in Reihe: 0,999999² ≈ **99,9998 %** (ca. 1 min/Jahr). Die Forderung 99,99 % (52,6 min/Jahr) wird übertroffen.
-3. Gerät: FHRP (HSRP/VRRP), StackWise/VSS, SSO/NSF innerhalb des Chassis. Link: EtherChannel, ECMP. Standort: Dual-Site, Anycast-Dienste, getrennte Provider.
-4. Gemeinsame Stromversorgung, derselbe Kabelkanal/dieselbe Glasfaserstrecke, derselbe Software-Fehler auf beiden identischen Geräten, gemeinsames Management (zentraler Controller).
+1. **99,80 %, also rund 17,5 Stunden Ausfall im Jahr.** In Reihe multiplizierst du: 0,999 × 0,999 = 0,998001. Die Ausfallzeit ist 0,1999 % von 525 600 Minuten, das sind etwa 1050 Minuten.
+2. **Rund 99,9998 %, etwa eine Minute Ausfall im Jahr.** Je Stufe parallel: 1 − 0,001² = 0,999999. Beide Stufen in Reihe: 0,999999² ≈ 0,999998. Gefordert waren 99,99 % (52,6 min/Jahr), das ist deutlich übertroffen.
+3. **Gerät: FHRP, StackWise/VSS, SSO/NSF. Link: EtherChannel, ECMP. Standort: zweiter Standort, getrennte Provider.** Jede Technik deckt nur ihre Fehlerart ab, deshalb brauchst du alle drei Ebenen.
+4. **Überall, wo sich die doppelten Geräte etwas teilen.** Typisch sind dieselbe Stromversorgung, derselbe Kabelkanal oder dieselbe Glasfaserstrecke, ein Software-Fehler, der beide identischen Geräte trifft, und ein gemeinsamer Controller.
 
 </details>
 
@@ -77,9 +77,9 @@ Warum ohne CML? SD-WAN, SD-Access, Hypervisor und Next-Generation-Firewalls brau
 
 <details><summary>Lösungsschlüssel</summary>
 
-1. **Validator** (früher vBond) = Orchestration (Erstkontakt, Authentifizierung, Zuordnung). **Manager** (vManage) = Management Plane (Konfiguration, Monitoring, Policies). **Controller** (vSmart) = Control Plane (OMP, verteilt Routen/Policies). **WAN Edge** (cEdge/vEdge) = Data Plane.
-2. WAN Edges messen die Pfadqualität per **BFD** je Tunnel (Verlust, Latenz, Jitter). Eine App-Route-Policy definiert SLA-Klassen: Verletzt der aktuelle Pfad die Grenzen, wählt die Edge einen anderen Pfad. **OMP** transportiert Routen, TLOCs und Policies zwischen Edges und Controller. **TLOC** (Transport Locator) = Endpunkt eines Overlay-Tunnels (Edge-Adresse + Farbe + Encapsulation).
-3. Transportunabhängig (MPLS, Internet, LTE), zentrale Richtlinien, Zero-Touch-Provisioning, applikationsbewusste Pfadwahl, Segmentierung per VPNs.
+1. **Validator = Orchestration, Manager = Management, Controller = Control Plane, WAN Edge = Data Plane.** Der Validator (früher vBond) übernimmt Erstkontakt und Authentifizierung. Der Manager (vManage) verwaltet Konfiguration, Monitoring und Policies. Der Controller (vSmart) verteilt per OMP Routen und Policies. Die WAN Edges (cEdge/vEdge) leiten die Daten weiter.
+2. **BFD misst jeden Tunnel, Application-Aware Routing wechselt bei verletztem SLA.** Die Edges messen über BFD Verlust, Latenz und Jitter. Eine App-Route-Policy legt SLA-Klassen fest, etwa 1 % Verlust und 150 ms für Sprache. Wird die Grenze überschritten, wählt die Edge den anderen Pfad. OMP transportiert Routen, TLOCs und Policies zwischen Edges und Controller. Ein TLOC ist der Endpunkt eines Tunnels: Adresse, Farbe und Encapsulation.
+3. **Transportunabhängig, zentral gesteuert, Zero-Touch.** Du mischst MPLS, Internet und LTE frei, änderst Richtlinien an einer Stelle für alle 120 Filialen und bringst neue Filialen ohne Vor-Ort-Konfiguration ans Netz. Dazu kommen die Pfadwahl nach Anwendung und Segmentierung per VPN.
 
 </details>
 
@@ -94,8 +94,8 @@ Warum ohne CML? SD-WAN, SD-Access, Hypervisor und Next-Generation-Firewalls brau
 
 <details><summary>Lösungsschlüssel</summary>
 
-1. A: eher nein (Mehrwert gering, ein Pfad), B: nein (kein Transport, Isolationsanforderung), C: ja (Skalierung, Transportunabhängigkeit, Cloud-Zugriff).
-2. Kosten (Lizenz, Betrieb), Komplexität des Policy-Designs und der Fehlersuche (Overlay + Underlay), Abhängigkeit von Controller-Erreichbarkeit (bestehende Tunnel laufen weiter, Änderungen nicht), Reifegrad von Funktionen je Plattform.
+1. **A nein, B nein, C ja.** A hat nur einen Anschluss, es gibt also keinen Pfad zur Auswahl. B hat keinen Transport und muss isoliert bleiben. C profitiert von Skalierung, wechselnden Providern und direktem Cloud-Zugriff.
+2. **Kosten, Komplexität und die Abhängigkeit vom Controller.** Lizenzen und Betrieb kosten Geld. Policy-Design und Fehlersuche werden schwieriger, weil Overlay und Underlay zusammenspielen. Fällt der Controller aus, laufen bestehende Tunnel weiter, aber Änderungen sind nicht möglich. Außerdem unterscheidet sich der Funktionsumfang je Plattform.
 
 </details>
 
@@ -111,9 +111,9 @@ Warum ohne CML? SD-WAN, SD-Access, Hypervisor und Next-Generation-Firewalls brau
 
 <details><summary>Lösungsschlüssel</summary>
 
-1. **Catalyst Center** = Design, Policy, Automation, Assurance; **ISE** = Authentifizierung/Autorisierung, SGT-Zuweisung; **Control Plane Node** = LISP-Map-Server/-Resolver (Host-Tracking-Datenbank); **Border Node** = Verbindung ins Außen (Fabric-Edge zu Nicht-Fabric); **Edge Node** = Anschluss der Endgeräte, Anycast-Gateway, VXLAN-Kapselung; **Intermediate Node** = reines Layer-3-Underlay.
-2. Control Plane: **LISP**; Data Plane: **VXLAN** (Fabric-Header trägt VNI und SGT/GPO); Policy: **SGT/TrustSec** (SGACL-Durchsetzung). Der Anycast-Gateway liegt auf jedem Edge (gleiche IP/MAC im Fabric).
-3. Der Edge authentifiziert über ISE, erhält VN/VLAN und SGT, registriert die Endpunkt-EID (MAC/IP) beim Control Plane Node. Andere Edges fragen bei Bedarf den Control Plane Node nach dem RLOC (Map-Request) und kapseln per VXLAN.
+1. **Catalyst Center plant und automatisiert, ISE entscheidet über Zugang, die Fabric-Rollen transportieren.** Catalyst Center deckt Design, Policy, Automation und Assurance ab. ISE authentifiziert und vergibt die SGT. Der Control Plane Node ist LISP-Map-Server und -Resolver, also die Datenbank, wo welcher Host steht. Der Border Node verbindet die Fabric mit der Außenwelt. Der Edge Node schließt Endgeräte an, ist Anycast-Gateway und kapselt in VXLAN. Der Intermediate Node routet nur im Underlay.
+2. **Control Plane LISP, Data Plane VXLAN, Policy Plane SGT/TrustSec. Das Anycast-Gateway liegt auf jedem Edge.** Der VXLAN-Header trägt neben der VNI auch die SGT. Durchgesetzt wird per SGACL. Weil jedes Edge dieselbe Gateway-IP und -MAC hat, behält ein Endgerät sein Gateway, egal wo es steckt.
+3. **Authentifizieren, VN und SGT zuweisen, beim Control Plane registrieren.** Der Edge fragt ISE, bekommt VN/VLAN und SGT und meldet die EID (MAC/IP) des Geräts beim Control Plane Node an. Will ein anderer Edge das Gerät erreichen, fragt er per Map-Request nach dem RLOC und kapselt den Verkehr per VXLAN dorthin.
 
 </details>
 
@@ -128,8 +128,8 @@ Warum ohne CML? SD-WAN, SD-Access, Hypervisor und Next-Generation-Firewalls brau
 
 <details><summary>Lösungsschlüssel</summary>
 
-1. Dafür: einheitliche Policy bei Mobilität (SGT folgt dem Endgerät), Segmentierung per VN, Automatisierung/Assurance durch Catalyst Center. Dagegen: Lizenz-/Hardwarevoraussetzungen, Migrationsaufwand und neue Skills, Komplexität bei Fehlersuche (Overlay), Abhängigkeit von Catalyst Center und ISE.
-2. Klassisches Campus mit TrustSec/ISE (SGT ohne Fabric), EVPN-VXLAN-Campus als offener Fabric-Ansatz.
+1. **Dafür: Policy folgt dem Gerät, Segmentierung per VN, Automatisierung. Dagegen: Voraussetzungen, Migration, Komplexität.** Die SGT wandert mit dem umziehenden Gerät, die Regeln gelten überall gleich, und Catalyst Center entlastet das kleine Team. Dagegen sprechen Lizenz- und Hardwarevoraussetzungen, Migrationsaufwand mit neuen Skills, schwierigere Fehlersuche im Overlay und die Abhängigkeit von Catalyst Center und ISE.
+2. **Klassischer Campus mit TrustSec/ISE oder ein EVPN-VXLAN-Campus.** Die erste Variante bringt die SGT-Segmentierung ohne Fabric. Die zweite ist ein offener Fabric-Ansatz ohne Catalyst Center.
 
 </details>
 
@@ -146,10 +146,10 @@ Warum ohne CML? SD-WAN, SD-Access, Hypervisor und Next-Generation-Firewalls brau
 
 <details><summary>Lösungsschlüssel</summary>
 
-1. Typ 1: ESXi, Hyper-V, KVM (meist so eingeordnet). Typ 2: VirtualBox, VMware Workstation.
-2. Layer-2-Switch in Software; Portgruppen tragen VLAN-IDs; Uplinks sind Trunks. Der Standard-vSwitch führt kein STP aus und leitet keine BPDUs weiter, daher werden physische Ports typischerweise als Trunk mit PortFast betrieben (mit BPDU Guard).
-3. Statischer EtherChannel (`mode on`, kein LACP) am physischen Switch. Ohne ihn sieht der Switch dieselbe MAC auf mehreren Ports (MAC-Flapping).
-4. Paravirtualisierte vNICs sparen Hypervisor-CPU und bieten mehr Durchsatz als emulierte (E1000). Echtzeit-Paketverarbeitung leidet unter Overcommitment (Latenz/Jitter), deshalb Reservierungen.
+1. **Typ 1: ESXi, Hyper-V, KVM. Typ 2: VirtualBox, VMware Workstation.** Typ 1 läuft direkt auf der Hardware, Typ 2 als Programm auf einem Betriebssystem. KVM ordnet man meist Typ 1 zu, weil es Teil des Linux-Kernels ist.
+2. **Ein Layer-2-Switch in Software, ohne STP. Die Uplinks sind Trunks, die physischen Ports Edge-Ports.** Portgruppen tragen die VLAN-IDs. Der Standard-vSwitch nimmt nicht an STP teil und leitet keine BPDUs weiter, er bildet aber auch keine Schleife. Deshalb betreibst du die Switch-Ports als Trunk mit PortFast und BPDU Guard.
+3. **Ein statischer EtherChannel (`mode on`) auf dem physischen Switch.** Der Standard-vSwitch spricht kein LACP. Fehlt der Channel, sieht der Switch dieselbe MAC auf mehreren Ports und meldet MAC-Flapping.
+4. **Wegen Durchsatz und gleichmäßiger Latenz.** Paravirtualisierte vNICs sparen Hypervisor-CPU und schaffen mehr als emulierte Karten wie E1000. Paketverarbeitung leidet unter Overcommitment, weil die VM auf CPU-Zeit warten muss. Reservierungen verhindern Latenz und Jitter.
 
 </details>
 
@@ -165,9 +165,9 @@ Warum ohne CML? SD-WAN, SD-Access, Hypervisor und Next-Generation-Firewalls brau
 
 <details><summary>Lösungsschlüssel</summary>
 
-1. vCPU, RAM, vNIC, virtuelle Disks, Konfigurationsdatei. Ein Snapshot hält den Zustand zu einem Zeitpunkt, ist aber kein Backup (abhängig vom Basis-Disk, wächst, kein Schutz bei Datenverlust).
-2. SR-IOV/Passthrough umgehen den vSwitch: weniger Latenz, höherer Durchsatz. Nachteile: eingeschränkte Mobilität (kein Live-Migrate), keine vSwitch-Features (Port Mirroring, Policy).
-3. Frame der VM → vNIC → vSwitch/Portgruppe (VLAN-Tag) → Uplink-pNIC → Trunk zum Access-Switch.
+1. **vCPU, RAM, vNIC, virtuelle Disk und Konfigurationsdatei. Ein Snapshot ist kein Backup.** Ein Snapshot hält nur den Zustand zu einem Zeitpunkt fest und hängt an der Basis-Disk. Geht die verloren, ist auch der Snapshot wertlos.
+2. **Wenn Durchsatz und Latenz wichtiger sind als Flexibilität.** SR-IOV und Passthrough umgehen den vSwitch. Dafür verlierst du Live-Migration (vMotion) und die vSwitch-Funktionen wie Port Mirroring oder Policies.
+3. **VM → vNIC → vSwitch/Portgruppe (VLAN-Tag) → Uplink-pNIC → Trunk zum Access-Switch.** Das VLAN-Tag setzt die Portgruppe, die VM selbst sendet ungetaggt.
 
 </details>
 
@@ -183,9 +183,9 @@ Warum ohne CML? SD-WAN, SD-Access, Hypervisor und Next-Generation-Firewalls brau
 
 <details><summary>Lösungsschlüssel</summary>
 
-1. Design (Hierarchie, Einstellungen), Provision (PnP, Templates, SWIM), Policy (SD-Access/Segmentierung), Assurance (Health, Issues), Platform (APIs).
-2. Health Score: aggregierte Gesundheit je Gerät/Client/Anwendung. Path Trace: Hop-für-Hop-Analyse zwischen zwei Endpunkten inkl. ACL-/Routing-Sicht. Issues: erkannte Probleme mit Handlungsempfehlungen. KI-Analyse: Baselining und Korrelation (AI Network Analytics) sowie logische Ursachenketten (Machine Reasoning Engine).
-3. Authentifizierung per Token (POST auf /dna/system/api/v1/auth/token), danach Intent-API-Aufrufe mit Header `X-Auth-Token`, Ereignisse per Webhook an externe Systeme. Siehe Drills in Lab 20 (Mock-API).
+1. **Design, Provision, Policy, Assurance und Platform.** Design legt Hierarchie und Einstellungen fest. Provision deckt PnP, Templates und Image-Management (SWIM) ab. Policy steuert Segmentierung, Assurance zeigt den Zustand, Platform öffnet die APIs.
+2. **Health Score bewertet, Path Trace verfolgt, Issues melden. Die KI findet Muster und Ursachen.** Der Health Score fasst die Gesundheit je Gerät, Client oder Anwendung zusammen. Path Trace zeigt Hop für Hop den Weg zwischen zwei Endpunkten mit Routing und ACLs. Issues sind erkannte Probleme mit Empfehlung. AI Network Analytics lernt das Normalverhalten und korreliert Abweichungen, die Machine Reasoning Engine leitet logische Ursachenketten ab.
+3. **Token holen, dann die Intent API aufrufen, Ereignisse per Webhook empfangen.** Den Token bekommst du per POST auf `/dna/system/api/v1/auth/token`. Jeder weitere Aufruf trägt ihn im Header `X-Auth-Token`. Webhooks melden Ereignisse an externe Systeme. Die Drills in Lab 20 üben das an einer Mock-API.
 
 </details>
 
@@ -200,8 +200,8 @@ Warum ohne CML? SD-WAN, SD-Access, Hypervisor und Next-Generation-Firewalls brau
 
 <details><summary>Lösungsschlüssel</summary>
 
-1. Latenz-/Datenschutzanforderungen, Compliance, Kostenstruktur (Capex/Opex), Elastizität, vorhandene Skills, Abhängigkeiten.
-2. IPsec-VPN über Internet (günstig, schwankende Qualität), dedizierte Leitung (planbar, teurer), SD-WAN mit Cloud-Onramp für direkten Zugriff aus den Filialen.
+1. **Latenz, Compliance, Kosten, Skalierung und Betriebsmodell.** Dazu gehören Datenschutz, die Frage Capex oder Opex, Elastizität, vorhandene Skills und Abhängigkeiten zwischen den Anwendungen.
+2. **IPsec-VPN über Internet, dedizierte Leitung oder SD-WAN mit Cloud-Onramp.** Das VPN ist günstig, aber in der Qualität schwankend. Die dedizierte Leitung ist planbar und teurer. Cloud-Onramp lässt die Filialen direkt und mit Pfadwahl in die Cloud.
 
 </details>
 

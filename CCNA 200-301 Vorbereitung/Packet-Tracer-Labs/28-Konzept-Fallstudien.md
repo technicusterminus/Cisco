@@ -32,9 +32,9 @@ Ein Dienstleister betreibt für drei Kunden je eine Webanwendung und ein interne
 
 <details><summary>Musterantwort</summary>
 
-1. Typ 1 läuft direkt auf der Hardware (ESXi, KVM, Hyper-V), Typ 2 als Programm auf einem Betriebssystem (VirtualBox, VMware Workstation). Container teilen sich den Kernel des Hosts und isolieren Prozesse (Docker, Kubernetes). Eine VRF ist eine eigene Routingtabelle (und Forwardingtabelle) im selben Router.
-2. (a) VM (eigenes Gast-OS), (b) Container (klein, in Sekunden gestartet), (c) VRF pro Kunde, überlappende Adressen sind dann möglich.
-3. VM: größerer Ressourcenverbrauch und längere Startzeit. Container: schwächere Isolation (gemeinsamer Kernel). VRF: Verbindung zwischen VRFs braucht ein bewusstes Leaken (Route Leaking), Konfigurations- und Betriebsaufwand wächst.
+1. **Typ 1 läuft auf der Hardware, Typ 2 auf einem Betriebssystem. Container teilen sich den Kernel, eine VRF ist eine eigene Routing-Tabelle.** Beispiele für Typ 1 sind ESXi, KVM und Hyper-V, für Typ 2 VirtualBox und VMware Workstation. Container (Docker, Kubernetes) isolieren nur Prozesse, deshalb starten sie in Sekunden. Eine VRF trennt Routing- und Forwarding-Tabelle innerhalb desselben Routers.
+2. **(a) VM, (b) Container, (c) VRF pro Kunde.** Die VM bringt ein eigenes Gast-Betriebssystem mit, das trennt am stärksten. Container sind klein und schnell gestartet, ideal für viele gleiche Webdienste. Mit je einer VRF dürfen A und B beide 10.0.0.0/8 verwenden, ohne sich zu stören.
+3. **VM: schwer. Container: schwächer isoliert. VRF: Verbindungen müssen bewusst gebaut werden.** VMs brauchen mehr Ressourcen und starten langsamer. Container teilen den Kernel, eine Lücke dort trifft alle. Zwischen VRFs fließt nichts ohne Route Leaking, und der Betriebsaufwand wächst mit jeder VRF.
 
 </details>
 
@@ -51,10 +51,10 @@ Auf einem Webserver läuft eine veraltete Version mit bekannter Sicherheitslück
 
 <details><summary>Musterantwort</summary>
 
-1. Bedrohung: Angreifer/Ransomware. Schwachstelle: die ungepatchte Software. Exploit: das Skript, das die Lücke ausnutzt. Risiko: Wahrscheinlichkeit × Schaden (Datenverlust, Ausfall). Gegenmaßnahme: Patchen, Segmentierung, Backups, Endpoint-Schutz.
-2. Verfügbarkeit und Integrität (Verschlüsselung der Daten), bei Datendiebstahl auch Vertraulichkeit.
-3. Phishing → Awareness, E-Mail-Filter, MFA. DoS/DDoS → Rate Limiting, Scrubbing/CDN, Redundanz. Man-in-the-Middle → TLS/SSH, Zertifikatsprüfung, DAI. ARP-Spoofing → DAI und DHCP Snooping. Brute-Force → Lockout, starke Passwörter, MFA. Ransomware → Backups (offline), Patching, Segmentierung, Endpoint-Schutz.
-4. Mehrere unabhängige Schutzschichten, damit ein Fehler nicht genügt: z. B. Perimeter-Firewall, Segmentierung/VLANs/ACLs, Endpoint-Schutz, Authentisierung (MFA), Monitoring/Logging, Awareness.
+1. **Bedrohung = Angreifer mit Ransomware, Schwachstelle = ungepatchte Software, Exploit = das Skript, Risiko = Wahrscheinlichkeit × Schaden.** Die Gegenmaßnahmen sind Patchen, Segmentierung, Backups und Endpoint-Schutz. Ohne Schwachstelle hätte die Bedrohung keinen Ansatzpunkt.
+2. **Verfügbarkeit und Integrität, bei Datendiebstahl auch Vertraulichkeit.** Die verschlüsselten Daten sind nicht mehr nutzbar und verändert. Viele Ransomware-Gruppen kopieren die Daten vorher und drohen mit Veröffentlichung.
+3. **Jeder Angriff hat seine typische Gegenmaßnahme.** Phishing → Awareness, E-Mail-Filter, MFA. DoS/DDoS → Rate Limiting, Scrubbing/CDN, Redundanz. Man-in-the-Middle → TLS/SSH mit Zertifikatsprüfung. ARP-Spoofing → DAI mit DHCP Snooping. Brute Force → Sperre nach Fehlversuchen, lange Passwörter, MFA. Ransomware → Offline-Backups, Patchen, Segmentierung, Endpoint-Schutz.
+4. **Mehrere unabhängige Schutzschichten, damit ein einzelner Fehler nicht reicht.** Beispiele sind Perimeter-Firewall, Segmentierung mit VLANs und ACLs, Endpoint-Schutz, MFA, Monitoring und Awareness.
 
 </details>
 
@@ -70,9 +70,9 @@ Die IT eines Mittelstandsunternehmens hatte drei Vorfälle: ein Mitarbeitender k
 
 <details><summary>Musterantwort</summary>
 
-1. User Awareness (regelmäßige Sensibilisierung, Phishing-Simulationen), Training (rollenbasiert, z. B. für Admins), physische Zugangskontrolle (Badges, Schlösser, Mantraps, Kameras, Besucherregelung), dazu Richtlinien, Incident Response und Audits.
-2. Phishing: Awareness-Training mit Simulation, Mailfilter plus MFA. Serverraum: Badgesystem mit Protokoll, Besucher nur begleitet, Kamera/Alarm. Notebook: Festplattenverschlüsselung, Fernlöschung/MDM, Meldeprozess.
-3. Kennzahlen: Klickrate in Simulationen, Meldequote, Zeit bis zur Meldung, Zahl unbefugter Zutritte, Auditfeststellungen, Vorfallzahlen und Behebungszeit.
+1. **Awareness, Training und physische Zugangskontrolle, dazu Richtlinien, Incident Response und Audits.** Awareness heißt regelmäßige Sensibilisierung, etwa mit Phishing-Simulationen. Training richtet sich nach der Rolle, Admins brauchen mehr als Sachbearbeiter. Physische Kontrolle umfasst Badges, Schlösser, Schleusen, Kameras und eine Besucherregelung.
+2. **Phishing: Simulationstraining und MFA. Serverraum: Badge mit Protokoll und Begleitpflicht. Notebook: Verschlüsselung und Fernlöschung.** MFA macht ein abgefischtes Passwort wertlos. Ein Badgesystem zeigt, wer wann drin war. Eine verschlüsselte Festplatte macht den Verlust zum Hardwareschaden statt zum Datenleck.
+3. **Mit Kennzahlen.** Etwa Klickrate in Simulationen, Meldequote und Zeit bis zur Meldung, unbefugte Zutritte, Auditfeststellungen sowie Zahl und Behebungszeit der Vorfälle.
 
 </details>
 
@@ -82,17 +82,17 @@ Die IT eines Mittelstandsunternehmens hatte drei Vorfälle: ein Mitarbeitender k
 
 Ein Passwort-Audit zeigt: viele Konten nutzen `Sommer2024!`, Admins teilen sich ein Konto, VPN-Zugang geht nur mit Passwort.
 
-1. Welche Elemente enthält eine Passwortrichtlinie (Länge, Komplexität, Ablauf, Wiederverwendung, Sperre, Speicherung)? Was gilt heute als empfohlen (Länge vor Komplexität, kein erzwungener regelmässiger Wechsel ohne Anlass, Prüfung gegen Leak-Listen)?
+1. Welche Elemente enthält eine Passwortrichtlinie (Länge, Komplexität, Ablauf, Wiederverwendung, Sperre, Speicherung)? Was gilt heute als empfohlen (Länge vor Komplexität, kein erzwungener regelmäßiger Wechsel ohne Anlass, Prüfung gegen Leak-Listen)?
 2. Erkläre die drei Faktoren und gib ein Beispiel für MFA.
 3. Wofür sind Zertifikate gut, und was ist der Nachteil von Biometrie?
 4. Welche Maßnahmen würdest du für das VPN und für die Admin-Konten treffen?
 
 <details><summary>Musterantwort</summary>
 
-1. Länge (≥ 12–14 Zeichen), Komplexität bzw. Passphrasen, Wiederverwendungssperre, Sperre nach Fehlversuchen, sichere Speicherung (gesalzene Hashes), Ablauf nur bei Verdacht/Kompromittierung. Empfohlen werden lange Passphrasen, Passwortmanager und der Abgleich mit bekannten Leaks.
-2. Wissen (Passwort), Besitz (Token, Smartphone-App, Smartcard), Merkmal (Fingerabdruck, Gesicht). MFA kombiniert mindestens zwei, z. B. Passwort + Authenticator-App.
-3. Zertifikate beweisen die Identität kryptografisch (kein Passwort über das Netz), Gerät und Benutzer sind zuordenbar; sie brauchen eine PKI und Lebenszyklusverwaltung. Biometrie ist nicht widerrufbar (ein kompromittiertes Merkmal bleibt kompromittiert) und hat Fehlerraten.
-4. VPN: MFA oder Zertifikat plus Passwort, zentrale Authentisierung per RADIUS. Admins: persönliche Konten statt Sammelkonto, TACACS+/RADIUS mit Accounting, privilegierte Zugänge mit MFA und Protokollierung.
+1. **Länge, Wiederverwendungssperre, Sperre nach Fehlversuchen, sichere Speicherung, Wechsel nur bei Anlass.** Empfohlen sind heute lange Passphrasen ab 12 bis 14 Zeichen, ein Passwortmanager und der Abgleich mit bekannten Leaks. Erzwungene Wechsel ohne Anlass führen zu Mustern wie `Sommer2024!`. Gespeichert wird nur als gesalzener Hash.
+2. **Wissen, Besitz, Merkmal. MFA kombiniert mindestens zwei, z. B. Passwort und Authenticator-App.** Wissen ist das Passwort, Besitz ein Token, Smartphone oder eine Smartcard, Merkmal ein Fingerabdruck oder Gesicht. Zwei Faktoren derselben Art zählen nicht als MFA.
+3. **Zertifikate beweisen Identität kryptografisch, Biometrie lässt sich nicht widerrufen.** Mit Zertifikat geht kein Passwort über das Netz, und Gerät oder Benutzer sind eindeutig zuordenbar. Dafür brauchst du eine PKI. Ein kompromittierter Fingerabdruck bleibt kompromittiert, und biometrische Verfahren haben Fehlerraten.
+4. **VPN mit MFA oder Zertifikat, Admins mit persönlichen Konten über TACACS+.** Das VPN fragt den zweiten Faktor zentral per RADIUS ab. Persönliche Admin-Konten mit Accounting zeigen, wer was geändert hat, und privilegierte Zugänge bekommen zusätzlich MFA.
 
 </details>
 
@@ -107,8 +107,8 @@ Du verwaltest 200 Switches. Aktuell wird per Telnet mit einem gemeinsamen Passwo
 
 <details><summary>Musterantwort</summary>
 
-1. Console: lokal, Notfall/Erstkonfiguration, physischer Zugang nötig. Telnet: Klartext, nicht verwenden. SSH: verschlüsselt, Standard für CLI-Zugriff (Version 2). HTTP: Klartext, HTTPS: verschlüsselte Web-GUI. SNMP: Überwachung (v3 für Sicherheit). RADIUS/TACACS+: zentrale Authentisierung/Autorisierung/Accounting (TACACS+ für Geräteadministration). Cloud-managed: Verwaltung über eine Cloud-Plattform, Geräte bauen eine ausgehende Verbindung auf.
-2. (1) SSH statt Telnet, Telnet abschalten, Management-ACL/Management-VRF. (2) Zentrale Anmeldung über TACACS+/RADIUS mit persönlichen Konten und lokalem Notfallkonto. (3) Accounting/Logging an einen Syslog-Server, regelmäßige Konfigurations-Backups.
+1. **Console für den Notfall, SSH für die CLI, HTTPS für die GUI, SNMPv3 zur Überwachung, TACACS+/RADIUS für zentrale Anmeldung. Telnet und HTTP nie.** Die Console braucht physischen Zugang und dient der Erstkonfiguration. Telnet und HTTP übertragen alles im Klartext, SSH (Version 2) und HTTPS verschlüsseln. SNMP nur in Version 3 mit Authentisierung und Verschlüsselung. TACACS+ eignet sich besonders für Geräteadministration, weil es einzelne Befehle autorisiert. Cloud-managed Geräte (Meraki) bauen eine ausgehende Verbindung zur Cloud auf und werden dort verwaltet.
+2. **Erst SSH, dann zentrale Anmeldung, dann Protokollierung.** (1) SSH einschalten, Telnet abschalten und den Zugriff per Management-ACL oder Management-VRF begrenzen. (2) Anmeldung über TACACS+ oder RADIUS mit persönlichen Konten und einem lokalen Notfallkonto. (3) Accounting und Logging an einen Syslog-Server, regelmäßige Konfigurations-Backups.
 
 </details>
 
@@ -125,10 +125,10 @@ Ein neuer NTP-Server muss auf 200 Switches eingetragen werden. Bisher loggt sich
 
 <details><summary>Musterantwort</summary>
 
-1. Schneller und wiederholbar, weniger Tippfehler, einheitlicher Zustand, Änderungen sind im Code versioniert (wer/wann/was), Audits und Compliance-Prüfungen lassen sich automatisieren, Wissen liegt im Code statt in Köpfen.
-2. Drift = Abweichung der Ist- von der Soll-Konfiguration durch Handarbeit. Automatisierung erzwingt den Sollzustand idempotent und vergleicht regelmäßig.
-3. Risiken: ein Fehler wirkt breit und schnell; Skripte werden zur Sicherheitslücke (Zugangsdaten). Gegenmaßnahmen: Test im Lab, Rollout in Wellen mit Prüfpunkten, Rollback, Secrets im Vault, Review der Änderungen.
-4. Inventar (Switchliste) → Playbook/Vorlage mit `ntp server …` → Trockenlauf (`--check`) und Test auf 2 Switches → Rollout in Wellen → Verifikation (`show ntp status`) → Ergebnis protokollieren.
+1. **Schneller, einheitlicher, nachvollziehbar.** Ein Skript erledigt die 200 Switches in Minuten, ohne Tippfehler und ohne vergessene Geräte. Änderungen liegen versioniert im Code, also mit wer, wann und was. Compliance-Prüfungen laufen automatisch, und das Wissen steckt im Code statt in Köpfen.
+2. **Drift ist die Abweichung des Ist- vom Sollzustand. Automatisierung erzwingt den Sollzustand immer wieder.** Du erkennst Drift, indem du die laufende Konfiguration regelmäßig mit der Vorlage vergleichst. Ein idempotentes Werkzeug wie Ansible stellt bei jedem Lauf den Sollzustand her und ändert nur, was abweicht.
+3. **Ein Fehler wirkt sofort überall, und das Skript selbst wird zum Angriffsziel.** Dagegen helfen Tests im Lab, Rollout in Wellen mit Prüfpunkten, ein Rollback-Plan, Zugangsdaten im Vault und ein Review jeder Änderung.
+4. **Inventar → Vorlage → Trockenlauf → Pilot → Wellen → Prüfung.** Die Switchliste ist das Inventar. Das Playbook enthält `ntp server …`. `--check` zeigt, was sich ändern würde. Erst 2 Switches, dann Wellen. Am Ende prüft `show ntp status` jedes Gerät, und das Ergebnis wird protokolliert.
 
 </details>
 
@@ -145,10 +145,21 @@ Ein Unternehmen will 50 Standorte mit einem neuen WLAN-Profil und neuer Segmenti
 
 <details><summary>Musterantwort</summary>
 
-1. Traditionell: Konfiguration pro Gerät (CLI), Management pro Gerät/SNMP, verteilte Control Plane (jedes Gerät hat Routing/STP), Abweichungen häufig, Fehlersuche manuell. Controllerbasiert: Konfiguration über Absicht/Richtlinien zentral, Management per API/GUI, Control Plane teils zentralisiert (Policy) bzw. Fabric-Control (LISP), konsistent, Assurance mit Telemetrie, skaliert über Vorlagen, braucht neue Fähigkeiten.
-2. Underlay: physisches/IP-Transportnetz (Routing, Konnektivität). Overlay: logisches Netz darüber (VXLAN-Tunnel, Segmentierung). Fabric: Underlay + Overlay als einheitliches, automatisch verwaltetes Netz.
-3. Control Plane entscheidet (Wege, Policy), Data Plane leitet Pakete weiter. In SDN sitzt die Entscheidungslogik zentral im Controller, die Geräte leiten nur weiter. Nordschnittstelle (Controller ↔ Anwendungen/Orchestrierung): REST-API. Südschnittstelle (Controller ↔ Geräte): NETCONF, RESTCONF, SNMP, CLI, OpenFlow.
-4. REST-API an den Controller = Northbound. NETCONF zum Switch, CLI per SSH und OpenFlow = Southbound.
+1. **Traditionell konfigurierst du jedes Gerät einzeln, controllerbasiert beschreibst du zentral die Absicht.**
+
+| Merkmal | Traditionell | Controllerbasiert |
+|---|---|---|
+| Konfiguration | CLI pro Gerät | zentral über Absicht und Richtlinien |
+| Management | pro Gerät, SNMP | API und GUI am Controller |
+| Control Plane | verteilt, jedes Gerät entscheidet selbst | Policy zentral, Fabric-Control per LISP |
+| Konsistenz | Abweichungen häufig | einheitlich aus Vorlagen |
+| Fehlersuche | manuell, Gerät für Gerät | Assurance mit Telemetrie |
+| Skalierung | Aufwand wächst mit jedem Gerät | über Vorlagen |
+| Einarbeitung | bekanntes Wissen | neue Fähigkeiten nötig |
+
+2. **Underlay transportiert, Overlay trennt logisch, Fabric ist beides zusammen.** Das Underlay ist das IP-Netz mit Routing und Konnektivität. Das Overlay legt logische Netze darüber, etwa mit VXLAN-Tunneln. Eine Fabric verwaltet Underlay und Overlay als ein automatisiertes Ganzes.
+3. **Die Control Plane entscheidet, die Data Plane leitet weiter.** In SDN sitzt die Entscheidungslogik zentral im Controller, die Geräte setzen sie nur um. Die Northbound-Schnittstelle verbindet Controller und Anwendungen, typisch per REST-API. Die Southbound-Schnittstelle verbindet Controller und Geräte, etwa per NETCONF, RESTCONF, SNMP, CLI oder OpenFlow.
+4. **REST-API an den Controller = Northbound. NETCONF, CLI per SSH und OpenFlow = Southbound.** Northbound zeigt nach oben zu Anwendungen, Southbound nach unten zu den Geräten.
 
 </details>
 
@@ -164,9 +175,9 @@ Die Betriebsleitung fragt: „Wo kann uns KI im Netzbetrieb helfen, und wo nicht
 
 <details><summary>Musterantwort</summary>
 
-1. Prädiktiv/ML: Muster erkennen und vorhersagen (Anomalieerkennung im Verkehr, Kapazitätsplanung, Ausfallvorhersage, Root-Cause-Analyse). Generativ: neue Inhalte erzeugen (Konfigurationsentwürfe, Skripte, Dokumentation, Erklärungen, Assistenten für Troubleshooting in natürlicher Sprache).
-2. Chancen: schnellere Fehlereingrenzung, weniger Routinearbeit, bessere Prognosen. Grenzen: Ergebnisse nur so gut wie die Daten, Halluzinationen (plausible, aber falsche Befehle), vertrauliche Daten dürfen nicht unkontrolliert an externe Dienste, Entscheidungen schwer nachvollziehbar, Verantwortung bleibt beim Menschen.
-3. Als Entwurf behandeln: Befehle gegen die Dokumentation prüfen, im Lab testen, Änderung per Review und Wartungsfenster einspielen, Rollback bereithalten, keine Zugangsdaten oder interne Details in öffentliche Dienste geben.
+1. **Prädiktive KI erkennt Muster und sagt voraus, generative KI erzeugt neue Inhalte.** Prädiktiv: Anomalien im Verkehr erkennen, Kapazität planen, Ausfälle vorhersagen, Ursachen eingrenzen. Generativ: Konfigurationsentwürfe, Skripte und Dokumentation schreiben, Troubleshooting im Dialog unterstützen.
+2. **Chancen: schnellere Fehlersuche, weniger Routine, bessere Prognosen. Grenzen: Datenqualität, Halluzinationen, Datenschutz, Nachvollziehbarkeit.** Ein Modell ist nur so gut wie seine Daten. Generative KI erfindet plausible, aber falsche Befehle. Vertrauliche Daten dürfen nicht unkontrolliert an externe Dienste gehen. Die Verantwortung bleibt beim Menschen.
+3. **Als Entwurf behandeln, prüfen, testen, kontrolliert einspielen.** Gleiche die Befehle mit der Dokumentation ab, teste im Lab und spiele die Änderung nach Review im Wartungsfenster ein, mit Rollback-Plan. Zugangsdaten und interne Details gehören nicht in öffentliche Dienste.
 
 </details>
 
@@ -182,9 +193,9 @@ Drei Szenarien: (A) ein Büro mit 12 Personen, (B) ein Campus mit sechs Gebäude
 
 <details><summary>Musterantwort</summary>
 
-1. A: SOHO (ein Router/Firewall mit integrierter Switch- und WLAN-Funktion, Internet). B: 3-Tier oder 2-Tier mit Collapsed Core je Gebäude/Verteiler, je nach Größe; bei sechs Gebäuden und 3000 Endgeräten typisch 3-Tier (Access, Distribution, Core) für Skalierung und Fehlerbegrenzung. C: Spine-Leaf, weil jeder Leaf mit jedem Spine verbunden ist: gleichmäßige Latenz, viel Ost-West-Bandbreite, einfache Erweiterung.
-2. Access-Switches (L2, PoE) verbinden Endgeräte und APs; Distribution/Core (L3) routen zwischen VLANs und Gebäuden; Router/Firewall am Netzübergang, IPS inspiziert, WLC steuert die APs.
-3. On-Prem: Hardware und Betrieb liegen im eigenen Haus, Anbindung über WAN-Router, MPLS/VPN. Cloud: Dienste liegen beim Anbieter, das Internet bzw. Direktanbindungen werden kritisch (Redundanz, Bandbreite, Sicherheit, SD-WAN).
+1. **A: SOHO. B: 3-Tier. C: Spine-Leaf.** Für 12 Personen reicht ein Gerät, das Router, Firewall, Switch und WLAN vereint. Sechs Gebäude mit 3000 Endgeräten brauchen Access, Distribution und Core für Skalierung und Fehlerbegrenzung. Im Rechenzentrum ist jeder Leaf mit jedem Spine verbunden: gleiche Latenz zwischen allen Servern, viel Ost-West-Bandbreite, einfache Erweiterung.
+2. **Access verbindet, Distribution und Core routen, Router und Firewall bilden den Übergang, der WLC steuert die APs.** Access-Switches (Layer 2, PoE) schließen Endgeräte und APs an. Distribution und Core (Layer 3) routen zwischen VLANs und Gebäuden. Am Netzübergang stehen Router und Firewall, das IPS inspiziert den Verkehr.
+3. **On-Premises liegt alles im eigenen Haus, in der Cloud wird die Anbindung zum Anbieter kritisch.** On-Premises verbindest du Standorte über WAN-Router, MPLS oder VPN. Liegen die Dienste in der Cloud, brauchen Internet- oder Direktanbindung Redundanz, Bandbreite und Schutz, oft mit SD-WAN.
 
 </details>
 
