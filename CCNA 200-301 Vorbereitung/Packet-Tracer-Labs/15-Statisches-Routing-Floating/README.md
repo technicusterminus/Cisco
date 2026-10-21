@@ -106,7 +106,7 @@ Baue die Topologie wie oben (oder behalte deine aus Teil A), setze alle Geräte 
 
 **Ticket 1:** Der Backup-Link wird bereits im Normalbetrieb mitbenutzt (`show ip route` zeigt zwei Pfade, Last wird verteilt), obwohl er nur Reserve sein soll.
 
-**Ticket 2:** PC1 pingt PC2, bekommt aber keine Antwort.
+**Ticket 2:** Der Rückweg von PC2 zu PC1 läuft über den Backup-Link, obwohl der Hauptlink steht. `tracert` von PC2 zeigt 10.15.12.5 statt 10.15.12.1.
 
 **Ticket 3:** IPv4 funktioniert, IPv6 nicht: PC1 und PC2 können sich per IPv6 nicht erreichen, `show ipv6 route` ist leer.
 

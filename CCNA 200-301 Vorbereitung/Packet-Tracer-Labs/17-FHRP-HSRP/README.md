@@ -123,7 +123,7 @@ Baue die Topologie wie oben (oder behalte deine aus Teil A), setze alle Geräte 
 | PC1 | 10.17.1.11 | 255.255.255.0 | 10.17.1.1 |  |
 | PC2 | 10.17.1.12 | 255.255.255.0 | 10.17.1.2 |  |
 
-**Ticket 1:** `show standby brief` zeigt auf beiden Routern `Active`, unterschiedliche virtuelle IPs (…1 und …11); `%HSRP-4-DIFFVIP1` im Log.
+**Ticket 1:** Im Log steht `%HSRP-4-DIFFVIP1`. Solange R1 Active ist, läuft alles. Fällt R1 aus, wird R2 Active, aber die PCs verlieren trotzdem ihr Gateway.
 
 **Ticket 2:** Nach der Rückkehr von R1 bleibt R2 Active; R1 bleibt Standby, obwohl er höhere Priorität hat.
 

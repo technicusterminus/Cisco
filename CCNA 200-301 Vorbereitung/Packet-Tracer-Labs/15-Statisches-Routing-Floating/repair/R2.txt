@@ -12,7 +12,7 @@ interface GigabitEthernet0/1
 interface GigabitEthernet0/2
  ip address 172.16.20.1 255.255.255.0
  no shutdown
-ip route 192.168.15.0 255.255.255.0 10.15.12.3
+ip route 192.168.15.0 255.255.255.0 10.15.21.1
 ip route 192.168.15.0 255.255.255.0 10.15.12.5 200
 ipv6 unicast-routing
 interface GigabitEthernet0/0

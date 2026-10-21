@@ -104,7 +104,7 @@ Baue die Topologie wie oben (oder behalte deine aus Teil A), setze alle Geräte 
 
 **Ticket 2:** Meldungen von R1 erscheinen im Syslog-Server, solche von R2 nicht.
 
-**Ticket 3:** Auf dem Syslog-Server fehlen die Link-Up/Down-Meldungen (Level 5/6) von R1; nur Fehler ab Level 3 kommen an.
+**Ticket 3:** Auf dem Syslog-Server fehlen von R1 die Meldungen `%LINEPROTO-5-UPDOWN` und `%SYS-5-CONFIG_I`. `%LINK-3-UPDOWN` kommt an.
 
 **Ticket 4:** Der MIB-Browser erhält von R2 keine Antwort (Timeout), von R1 schon.
 

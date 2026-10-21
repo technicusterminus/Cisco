@@ -4,8 +4,8 @@
 
 ## Ticket 1 (R2)
 
-- **Symptom:** Phase 1 kommt nicht zustande: `show crypto isakmp sa` ist leer oder `MM_NO_STATE`/`AG_NO_STATE`, im Debug `pre-shared key mismatch`.
-- **So findest du es:** `show crypto isakmp sa` zeigt `MM_NO_STATE`. `debug crypto isakmp` meldet einen falschen Pre-Shared Key. Vergleiche die Schlüssel in beiden Konfigurationen.
+- **Symptom:** Phase 1 kommt nicht zustande: `show crypto isakmp sa` hängt in `MM_KEY_EXCH` oder `MM_NO_STATE`, das Log meldet `IKMP_BAD_MESSAGE … failed its sanity check or is malformed`.
+- **So findest du es:** `MM_KEY_EXCH` heißt: Die Verhandlung lief bis zum Schlüsseltausch, dann passte die Prüfung nicht. Das ist das typische Bild eines falschen Pre-Shared Keys. Vergleiche die Schlüssel in beiden Konfigurationen.
 - **Ursache:** Die Pre-Shared Keys unterscheiden sich (Groß-/Kleinschreibung).
 - **Fix:** Identischen Schlüssel auf beiden Peers.
 - **Eingebaut:**

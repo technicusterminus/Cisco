@@ -17,15 +17,15 @@
 
 ## Ticket 2 (R1)
 
-- **Symptom:** PC-A erreicht LAN-B, aber nicht LAN-C; `show ip route` zeigt die Route zu .96/28 mit dem eigenen Link-Interface als Next Hop.
-- **So findest du es:** `show ip route` auf R1 zeigt die Route zu 192.168.50.96/28 mit Next Hop 192.168.50.253, das ist R1 selbst.
-- **Ursache:** Der Next Hop zeigt auf die eigene Adresse (192.168.50.253) statt auf R2 (.254).
+- **Symptom:** PC-A erreicht LAN-B, aber nicht LAN-C. In `show ip route` auf R1 fehlt 192.168.50.96/28, obwohl die Route konfiguriert ist.
+- **So findest du es:** `show running-config | include ip route` zeigt für 192.168.50.96/28 den Next Hop 192.168.50.245. Diese Adresse liegt in keinem Netz, an das R1 angeschlossen ist.
+- **Ursache:** Zahlendreher im Next Hop (.245 statt .254). Einen Next Hop, den R1 nicht erreichen kann, nimmt er nicht in die Routing-Tabelle auf.
 - **Fix:** Next Hop auf 192.168.50.254 ändern.
 - **Eingebaut:**
 
 ```diff
 - ip route 192.168.50.96 255.255.255.240 192.168.50.254
-+ ip route 192.168.50.96 255.255.255.240 192.168.50.253
++ ip route 192.168.50.96 255.255.255.240 192.168.50.245
 ```
 
 ## Ticket 3 (PC-B)

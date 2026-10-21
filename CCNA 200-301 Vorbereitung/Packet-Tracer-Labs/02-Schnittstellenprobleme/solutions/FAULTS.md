@@ -4,10 +4,10 @@
 
 ## Ticket 1 (SW1)
 
-- **Symptom:** PC1 erreicht nichts hinter dem Trunk-Uplink; `show interfaces status` auf SW1 zeigt Fa0/24 mit `10`/`half` und Link down oder Probleme.
-- **So findest du es:** `show interfaces status` auf SW1 zeigt Fa0/24 mit `10` und `half`, SW2 mit `a-100` und `a-full`.
-- **Ursache:** SW1 hat Speed/Duplex fest auf 10/half eingestellt, SW2 verhandelt automatisch auf 100/full: Mismatch.
-- **Fix:** Auf SW1 Fa0/24 `speed auto`/`duplex auto`.
+- **Symptom:** Alles ist erreichbar, aber Übertragungen zwischen PC1 und PC2 sind auffällig langsam. `show interfaces status` auf SW1 zeigt Fa0/24 mit `10` und `half`.
+- **So findest du es:** `show interfaces status` auf SW1 zeigt Fa0/24 mit `10`/`half` ohne `a-`, also fest eingestellt. SW2 zeigt `a-10`/`a-half`: Er hat sich angepasst.
+- **Ursache:** SW1 hat Speed und Duplex fest auf 10/half eingestellt. SW2 steht auf Auto, bekommt keine Aushandlung und erkennt nur die Geschwindigkeit. Für das Duplex fällt er auf Halbduplex zurück. Der Uplink läuft, aber mit einem Zehntel der Bandbreite und Kollisionen.
+- **Fix:** Auf SW1 Fa0/24 `speed auto` und `duplex auto`. Danach zeigen beide Seiten `a-100`/`a-full`.
 - **Eingebaut:**
 
 ```diff
@@ -36,10 +36,10 @@
 
 ## Ticket 3 (R1)
 
-- **Symptom:** Zwischen PC und R1 stockt es nach einiger Last; `show interfaces gi0/0` zeigt Halbduplex gegen Vollduplex auf dem Switch.
-- **So findest du es:** `show interfaces gi0/0` auf R1 zeigt „Half-duplex“, `show interfaces status` auf SW2 den Port als `a-full`.
-- **Ursache:** R1 Gi0/0 ist auf `duplex half` fixiert, SW2 Fa0/2 steht auf Auto/Vollduplex.
-- **Fix:** `duplex auto` (oder beidseitig identisch fest).
+- **Symptom:** Zwischen den PCs und R1 stockt es bei Last, Pings verlieren einzelne Pakete. CDP meldet einen Duplex-Mismatch an Gi0/0.
+- **So findest du es:** `show interfaces gi0/0` auf R1 zeigt „Full-duplex, 100Mb/s“ fest eingestellt. `show interfaces status` auf SW2 zeigt Fa0/2 mit `a-100`/`a-half`, `show interfaces fa0/2` zählt Late Collisions.
+- **Ursache:** R1 Gi0/0 ist fest auf 100/full eingestellt und verhandelt nicht. SW2 Fa0/2 steht auf Auto, erkennt nur die Geschwindigkeit und fällt auf Halbduplex zurück. R1 sendet jederzeit, SW2 hält das für Kollisionen: Duplex-Mismatch.
+- **Fix:** Auf R1 `speed auto` und `duplex auto` (oder beide Seiten identisch fest einstellen).
 - **Eingebaut:**
 
 ```diff
@@ -47,7 +47,8 @@
 -  ip address 192.168.2.1 255.255.255.0
 + interface GigabitEthernet0/0
 +  ip address 192.168.2.1 255.255.255.0
-+  duplex half
++  speed 100
++  duplex full
 ```
 
 ## Ticket 4 (PC2)

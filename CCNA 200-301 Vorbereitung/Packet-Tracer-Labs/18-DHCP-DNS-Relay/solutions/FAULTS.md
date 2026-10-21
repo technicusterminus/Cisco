@@ -44,9 +44,9 @@
 
 ## Ticket 4 (R1)
 
-- **Symptom:** PC2 erhält nach PC1 keine Adresse mehr, `show ip dhcp pool` zeigt keine freien Adressen.
-- **So findest du es:** `show ip dhcp pool` zeigt keine freien Adressen. `show running-config | include excluded` schließt fast den ganzen Bereich aus.
-- **Ursache:** Der Ausschlussbereich deckt fast den ganzen Pool ab.
+- **Symptom:** Kein PC in LAN A erhält eine Adresse (169.254.x.x), `show ip dhcp pool` zeigt keine freien Adressen.
+- **So findest du es:** `show ip dhcp pool` zeigt keine freien Adressen. `show running-config | include excluded` schließt den ganzen Bereich .1 bis .254 aus.
+- **Ursache:** Der Ausschlussbereich deckt den ganzen Pool ab. Der Server hat nichts mehr zu vergeben und schweigt.
 - **Fix:** Ausschluss auf 10.18.1.1–10.18.1.10 begrenzen.
 - **Eingebaut:**
 

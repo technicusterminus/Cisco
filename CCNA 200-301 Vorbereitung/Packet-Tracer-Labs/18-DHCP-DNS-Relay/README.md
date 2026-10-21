@@ -114,7 +114,7 @@ Baue die Topologie wie oben (oder behalte deine aus Teil A), setze alle Geräte 
 
 **Ticket 3:** PC1 erreicht `www.lab.local` nicht per Namen, per IP schon.
 
-**Ticket 4:** PC2 erhält nach PC1 keine Adresse mehr, `show ip dhcp pool` zeigt keine freien Adressen.
+**Ticket 4:** Kein PC in LAN A erhält eine Adresse (169.254.x.x), `show ip dhcp pool` zeigt keine freien Adressen.
 
 ## Verifikation
 

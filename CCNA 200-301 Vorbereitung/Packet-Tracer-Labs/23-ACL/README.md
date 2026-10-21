@@ -105,7 +105,7 @@ Baue die Topologie wie oben (oder behalte deine aus Teil A), setze alle Geräte 
 
 **Ticket 1:** Der Gast (PC2) kann die Webseite des Servers öffnen, obwohl er gesperrt sein soll.
 
-**Ticket 2:** Die ACL greift nicht wie vorgesehen: Der Gast erreicht den Server, der Zähler von `LANA-IN` bleibt 0.
+**Ticket 2:** Aus LAN A geht nichts mehr: Kein PC bekommt Antworten, auch PC1 nicht. Die Treffer-Zähler in `show access-lists LANA-IN` bleiben 0.
 
 **Ticket 3:** Web per IP (`http://10.23.2.10`) geht für PC1, per Name nicht (`www.lab.local`).
 

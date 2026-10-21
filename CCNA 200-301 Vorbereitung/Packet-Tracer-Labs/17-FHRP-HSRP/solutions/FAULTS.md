@@ -4,9 +4,9 @@
 
 ## Ticket 1 (R2)
 
-- **Symptom:** `show standby brief` zeigt auf beiden Routern `Active`, unterschiedliche virtuelle IPs (…1 und …11); `%HSRP-4-DIFFVIP1` im Log.
+- **Symptom:** Im Log steht `%HSRP-4-DIFFVIP1`. Solange R1 Active ist, läuft alles. Fällt R1 aus, wird R2 Active, aber die PCs verlieren trotzdem ihr Gateway.
 - **So findest du es:** `show standby brief` auf R1 und R2 vergleichen: Die Spalte „Virtual IP“ zeigt .1 und .11.
-- **Ursache:** R2 verwendet eine andere virtuelle IP (10.17.1.11).
+- **Ursache:** R2 verwendet eine andere virtuelle IP (10.17.1.11). Die Wahl von Active und Standby läuft trotzdem normal nach Priorität. Wird R2 Active, übernimmt er aber nur .11, und das Gateway 10.17.1.1 der PCs antwortet nicht mehr.
 - **Fix:** Virtuelle IP 10.17.1.1 auf R2.
 - **Eingebaut:**
 

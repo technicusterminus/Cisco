@@ -19,9 +19,9 @@
 
 ## Ticket 2 (R1)
 
-- **Symptom:** Die ACL greift nicht wie vorgesehen: Der Gast erreicht den Server, der Zähler von `LANA-IN` bleibt 0.
+- **Symptom:** Aus LAN A geht nichts mehr: Kein PC bekommt Antworten, auch PC1 nicht. Die Treffer-Zähler in `show access-lists LANA-IN` bleiben 0.
 - **So findest du es:** `show ip interface gi0/0` meldet „Outgoing access list is LANA-IN“.
-- **Ursache:** ACL in der falschen Richtung (`out` statt `in`) angewendet: Sie betrachtet Verkehr zum LAN statt aus dem LAN.
+- **Ursache:** Die ACL hängt mit `out` am LAN-Interface. Dort prüft sie den Verkehr ins LAN, also die Antworten von Server und Internet. Keine Zeile passt auf diese Quellen, das implizite Deny verwirft alles.
 - **Fix:** `ip access-group LANA-IN in`.
 - **Eingebaut:**
 

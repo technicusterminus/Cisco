@@ -20,5 +20,4 @@ interface FastEthernet0/23
  switchport mode dynamic auto
  switchport trunk native vlan 99
  switchport trunk allowed vlan 10,99
- switchport nonegotiate
 end

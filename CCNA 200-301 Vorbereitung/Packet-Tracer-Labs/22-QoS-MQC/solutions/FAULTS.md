@@ -4,9 +4,9 @@
 
 ## Ticket 1 (R1)
 
-- **Symptom:** `show policy-map interface gi0/1` zeigt die Policy nur im Eingang: Die Priorisierung im Ausgang greift nicht; Sprache leidet bei Last.
-- **So findest du es:** `show policy-map interface gi0/1` zeigt die Policy als „Service-policy input“.
-- **Ursache:** Policy in der falschen Richtung angewendet (input statt output).
+- **Symptom:** Die Priorisierung greift nicht, Sprache leidet bei Last. `show policy-map interface gi0/1` zeigt keine Output-Policy.
+- **So findest du es:** `show running-config interface gi0/1` zeigt `service-policy input WAN-OUT`. Echtes IOS lehnt diese Zeile schon beim Einfügen ab, dann fehlt sie ganz.
+- **Ursache:** Die Policy hängt in der falschen Richtung (input statt output). `priority` und `bandwidth` sind Queuing, und eine Warteschlange gibt es nur im Ausgang.
 - **Fix:** `service-policy output WAN-OUT`.
 - **Eingebaut:**
 

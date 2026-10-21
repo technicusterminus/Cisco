@@ -56,13 +56,14 @@
 
 - **Symptom:** Der Link SW1–SW2 wird nicht zum Trunk (Access-Betrieb); PC1 erreicht PC2 nicht.
 - **So findest du es:** `show interfaces fa0/23 switchport` auf SW1 zeigt „Administrative Mode: dynamic auto“ und „Operational Mode: static access“. SW2 hat `nonegotiate`.
-- **Ursache:** SW1 steht auf `dynamic auto`, SW2 hat `nonegotiate` und sendet keine DTP-Frames: auto wartet passiv, es entsteht nie ein Trunk.
-- **Fix:** Auf SW1 `switchport mode trunk` setzen.
+- **Ursache:** SW1 steht auf `dynamic auto`, SW2 hat `nonegotiate` und sendet keine DTP-Frames. Auto wartet passiv auf eine Aufforderung, die nie kommt: Es entsteht kein Trunk. `nonegotiate` fehlt auf SW1, weil IOS es zusammen mit `dynamic` ablehnt.
+- **Fix:** Auf SW1 `switchport mode trunk`, danach wieder `switchport nonegotiate`.
 - **Eingebaut:**
 
 ```diff
 - interface FastEthernet0/23
 -  switchport mode trunk
+-  switchport nonegotiate
 + interface FastEthernet0/23
 +  switchport mode dynamic auto
 ```

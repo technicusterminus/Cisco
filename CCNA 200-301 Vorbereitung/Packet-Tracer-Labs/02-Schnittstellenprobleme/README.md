@@ -102,11 +102,11 @@ Baue die Topologie wie oben (oder behalte deine aus Teil A), setze alle Geräte 
 | PC1 | 192.168.2.11 | 255.255.255.0 | 192.168.2.1 |  |
 | PC2 | 192.168.20.12 | 255.255.255.0 | 192.168.2.1 |  |
 
-**Ticket 1:** PC1 erreicht nichts hinter dem Trunk-Uplink; `show interfaces status` auf SW1 zeigt Fa0/24 mit `10`/`half` und Link down oder Probleme.
+**Ticket 1:** Alles ist erreichbar, aber Übertragungen zwischen PC1 und PC2 sind auffällig langsam. `show interfaces status` auf SW1 zeigt Fa0/24 mit `10` und `half`.
 
 **Ticket 2:** Das Gateway R1 ist von PC2 aus nicht erreichbar, der Switch-Port zu R1 meldet `administratively down`.
 
-**Ticket 3:** Zwischen PC und R1 stockt es nach einiger Last; `show interfaces gi0/0` zeigt Halbduplex gegen Vollduplex auf dem Switch.
+**Ticket 3:** Zwischen den PCs und R1 stockt es bei Last, Pings verlieren einzelne Pakete. CDP meldet einen Duplex-Mismatch an Gi0/0.
 
 **Ticket 4:** PC2 erreicht PC1 nicht (ping `Destination host unreachable`), obwohl alles verbunden ist.
 

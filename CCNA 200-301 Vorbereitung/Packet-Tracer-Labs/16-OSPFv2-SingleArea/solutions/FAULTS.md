@@ -17,8 +17,8 @@
 
 ## Ticket 2 (R4)
 
-- **Symptom:** R4 wird nicht FULL zu R2; `show ip ospf neighbor` ist auf R2 und R4 leer, PC4 erreicht niemanden.
-- **So findest du es:** `show ip ospf interface gi0/1` auf R2 und R4 zeigt verschiedene Areas.
+- **Symptom:** R2 und R4 werden keine Nachbarn: Auf R4 bleibt `show ip ospf neighbor` leer, auf R2 fehlt R4. PC4 erreicht niemanden.
+- **So findest du es:** `show ip ospf interface` zeigt für den Link auf R2 (Gi0/1) und R4 (Gi0/0) verschiedene Areas. Das Log meldet `mismatched area ID`.
 - **Ursache:** Area-Mismatch am Link R2–R4 (Area 1 statt Area 0).
 - **Fix:** Area 0 setzen.
 - **Eingebaut:**
@@ -30,7 +30,7 @@
 
 ## Ticket 3 (R3)
 
-- **Symptom:** PC3 erreicht seine Nachbarn nicht und LAN 192.168.3.0/24 fehlt in den Routingtabellen der anderen Router.
+- **Symptom:** PC3 erreicht keine anderen LANs, und 192.168.3.0/24 fehlt in den Routing-Tabellen der anderen Router.
 - **So findest du es:** `show ip ospf interface brief` auf R3 listet das LAN-Interface nicht. Das `network`-Statement hat die Wildcard 0.0.0.0 mit einer Adresse, die das Interface nicht hat.
 - **Ursache:** Die Wildcard 0.0.0.0 passt nicht auf die Interface-Adresse 192.168.3.1: das Interface nimmt nicht an OSPF teil.
 - **Fix:** Wildcard 0.0.0.255 verwenden.

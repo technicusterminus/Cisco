@@ -119,9 +119,9 @@ Baue die Topologie wie oben (oder behalte deine aus Teil A), setze alle Geräte 
 
 **Ticket 1:** Im Log erscheint `%OSPF-4-DUP_RTRID_NBR`, LSAs werden inkonsistent, einzelne Routen verschwinden.
 
-**Ticket 2:** R4 wird nicht FULL zu R2; `show ip ospf neighbor` ist auf R2 und R4 leer, PC4 erreicht niemanden.
+**Ticket 2:** R2 und R4 werden keine Nachbarn: Auf R4 bleibt `show ip ospf neighbor` leer, auf R2 fehlt R4. PC4 erreicht niemanden.
 
-**Ticket 3:** PC3 erreicht seine Nachbarn nicht und LAN 192.168.3.0/24 fehlt in den Routingtabellen der anderen Router.
+**Ticket 3:** PC3 erreicht keine anderen LANs, und 192.168.3.0/24 fehlt in den Routing-Tabellen der anderen Router.
 
 **Ticket 4:** R2 und R4 bilden keine Nachbarschaft: `show ip ospf interface gi0/1` zeigt Hello 5, R4 hat 10.
 

@@ -112,7 +112,7 @@ Baue die Topologie wie oben (oder behalte deine aus Teil A), setze alle Geräte 
 
 **Ticket 1:** R1 und R2 sehen sich nicht, kein Ping über den Router-Link; die LANs erreichen sich nicht.
 
-**Ticket 2:** PC-A erreicht LAN-B, aber nicht LAN-C; `show ip route` zeigt die Route zu .96/28 mit dem eigenen Link-Interface als Next Hop.
+**Ticket 2:** PC-A erreicht LAN-B, aber nicht LAN-C. In `show ip route` auf R1 fehlt 192.168.50.96/28, obwohl die Route konfiguriert ist.
 
 **Ticket 3:** PC-B hat keine Verbindung außer lokal; `ipconfig` zeigt eine Adresse, die auf .95 endet.
 

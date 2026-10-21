@@ -92,7 +92,7 @@ Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, wor
 
 Baue die Topologie wie oben (oder behalte deine aus Teil A), setze alle Geräte zurück (`erase startup-config`, `reload` bzw. neues Gerät) und füge dann die Dateien aus `repair/` ein. Es stecken **3 Fehler** drin. Behandle jede Meldung als Ticket: erst Symptom nachstellen, dann Layer für Layer eingrenzen, beheben und beweisen. Ändere nur, was kaputt ist.
 
-**Ticket 1:** `show policy-map interface gi0/1` zeigt die Policy nur im Eingang: Die Priorisierung im Ausgang greift nicht; Sprache leidet bei Last.
+**Ticket 1:** Die Priorisierung greift nicht, Sprache leidet bei Last. `show policy-map interface gi0/1` zeigt keine Output-Policy.
 
 **Ticket 2:** Die Klasse VOICE zählt keine Treffer (`0 packets`), Sprache landet in class-default.
 

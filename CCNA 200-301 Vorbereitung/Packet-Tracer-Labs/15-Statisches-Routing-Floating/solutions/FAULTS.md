@@ -17,15 +17,15 @@
 
 ## Ticket 2 (R2)
 
-- **Symptom:** PC1 pingt PC2, bekommt aber keine Antwort.
-- **So findest du es:** `show ip route 192.168.15.0` auf R2 zeigt den Next Hop 10.15.12.3, das ist die Broadcast-Adresse des /30.
-- **Ursache:** R2 hat einen falschen Next Hop (10.15.12.3 = Broadcast des /30), Rückweg fehlt.
+- **Symptom:** Der Rückweg von PC2 zu PC1 läuft über den Backup-Link, obwohl der Hauptlink steht. `tracert` von PC2 zeigt 10.15.12.5 statt 10.15.12.1.
+- **So findest du es:** `show ip route 192.168.15.0` auf R2 zeigt die Floating Route mit `[200/0]` über 10.15.12.5. Die Hauptroute steht in der Konfiguration, aber mit Next Hop 10.15.21.1.
+- **Ursache:** Zahlendreher im Next Hop der Hauptroute (10.15.21.1 statt 10.15.12.1). R2 kann diesen Next Hop nicht erreichen, die Route ist ungültig. Deshalb springt die Floating Route ein, als wäre der Hauptlink ausgefallen.
 - **Fix:** Next Hop 10.15.12.1.
 - **Eingebaut:**
 
 ```diff
 - ip route 192.168.15.0 255.255.255.0 10.15.12.1
-+ ip route 192.168.15.0 255.255.255.0 10.15.12.3
++ ip route 192.168.15.0 255.255.255.0 10.15.21.1
 ```
 
 ## Ticket 3 (R1)

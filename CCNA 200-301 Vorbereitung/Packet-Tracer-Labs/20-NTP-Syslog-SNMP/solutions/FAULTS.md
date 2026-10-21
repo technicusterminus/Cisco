@@ -30,9 +30,9 @@
 
 ## Ticket 3 (R1)
 
-- **Symptom:** Auf dem Syslog-Server fehlen die Link-Up/Down-Meldungen (Level 5/6) von R1; nur Fehler ab Level 3 kommen an.
+- **Symptom:** Auf dem Syslog-Server fehlen von R1 die Meldungen `%LINEPROTO-5-UPDOWN` und `%SYS-5-CONFIG_I`. `%LINK-3-UPDOWN` kommt an.
 - **So findest du es:** `show logging` auf R1 zeigt „Trap logging: level errors“.
-- **Ursache:** Der Trap-Level ist `errors` (3): Notice/Informational werden nicht gesendet.
+- **Ursache:** Der Trap-Level ist `errors` (3). R1 schickt nur Meldungen mit Level 0 bis 3, Notifications (5) und Informational (6) bleiben im lokalen Log.
 - **Fix:** `logging trap informational`.
 - **Eingebaut:**
 

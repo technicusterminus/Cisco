@@ -100,7 +100,7 @@ Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, wor
 
 Baue die Topologie wie oben (oder behalte deine aus Teil A), setze alle Geräte zurück (`erase startup-config`, `reload` bzw. neues Gerät) und füge dann die Dateien aus `repair/` ein. Es stecken **5 Fehler** drin. Behandle jede Meldung als Ticket: erst Symptom nachstellen, dann Layer für Layer eingrenzen, beheben und beweisen. Ändere nur, was kaputt ist.
 
-**Ticket 1:** Phase 1 kommt nicht zustande: `show crypto isakmp sa` ist leer oder `MM_NO_STATE`/`AG_NO_STATE`, im Debug `pre-shared key mismatch`.
+**Ticket 1:** Phase 1 kommt nicht zustande: `show crypto isakmp sa` hängt in `MM_KEY_EXCH` oder `MM_NO_STATE`, das Log meldet `IKMP_BAD_MESSAGE … failed its sanity check or is malformed`.
 
 **Ticket 2:** Phase 1 steht, aber PC1 und PC2 erreichen sich nicht; Zähler von `show crypto ipsec sa` bleiben 0 oder Phase 2 scheitert.
 
