@@ -4,6 +4,12 @@
 
 Ein Edge-Router übersetzt private LAN-Adressen. Du baust PAT (Overload), dynamisches NAT mit Pool und statisches NAT für einen Server und liest die vier NAT-Adressbegriffe aus `show ip nat translations`.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- PAT, dynamisches NAT mit Pool und statisches NAT konfigurieren.
+- Die vier NAT-Adressbegriffe in einer Übersetzung zuordnen.
+- NAT-Fehler mit `show ip nat translations` und `statistics` eingrenzen.
+
 | CCNA-Ziel | Thema |
 |---|---|
 | 4.1 | Inside Source NAT |
@@ -65,12 +71,33 @@ graph LR
 
 ## Teil A – Bauen
 
-1. **Problem sehen.** PC1 pingt 8.8.8.8: erfolglos. Warum (private Quelladresse wird im Internet nicht zurückgeroutet)? `debug ip icmp` auf dem ISP zeigt die private Quelle.
-2. **PAT.** `ip nat inside`/`outside` an den Interfaces, ACL 1 für 192.168.19.0/24, `ip nat inside source list 1 interface Gi0/1 overload`. `show ip nat translations`: Wie erkennt man die einzelnen Verbindungen (Ports)?
-3. **Vier Adressbegriffe.** Ordne in einer Übersetzung *inside local*, *inside global*, *outside local*, *outside global* zu. Welche ändert NAT?
-4. **Statisches NAT.** `ip nat inside source static 192.168.19.100 203.0.113.10`. Vom ISP aus `ping 203.0.113.10` (er soll den Server im LAN erreichen). Bidirektional?
-5. **Dynamisches NAT mit Pool.** Ersetze PAT testweise: `ip nat pool POOL 203.0.113.20 203.0.113.22 netmask 255.255.255.0`, `ip nat inside source list 1 pool POOL`. Starte drei Hosts: Was passiert beim vierten (Pool erschöpft)? Warum löst `overload` das?
-6. **Aufräumen/Debug.** `clear ip nat translation *`, `show ip nat statistics`, `debug ip nat` (kurz). Welche Sitzungen unterbricht `clear`?
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
+
+1. **Problem sehen.** PC1 pingt 8.8.8.8.
+   - **Prüfen:** Der Ping scheitert. `debug ip icmp` auf dem ISP zeigt Anfragen mit privater Quelladresse.
+   - **Denkfrage:** Warum kommt keine Antwort zurück?
+2. **PAT.** Setze `ip nat inside` und `ip nat outside` an den Interfaces, eine ACL 1 für 192.168.19.0/24 und `ip nat inside source list 1 interface Gi0/1 overload`.
+   - **Prüfen:** PC1 und PC2 pingen 8.8.8.8. `show ip nat translations` zeigt beide unter 198.51.100.1 mit verschiedenen Ports.
+3. **Vier Adressbegriffe.** Nimm eine Zeile aus `show ip nat translations` und benenne Inside Local, Inside Global, Outside Local und Outside Global.
+   - **Denkfrage:** Welche davon ändert Inside-Source-NAT?
+4. **Statisches NAT.** `ip nat inside source static 192.168.19.100 203.0.113.10`.
+   - **Prüfen:** Vom ISP aus antwortet `ping 203.0.113.10`.
+   - **Denkfrage:** Warum klappt hier der Aufbau von außen, bei PAT aber nicht?
+5. **Dynamisches NAT mit Pool.** Ersetze PAT testweise durch `ip nat pool POOL 203.0.113.20 203.0.113.22 netmask 255.255.255.0` und `ip nat inside source list 1 pool POOL`. Lass vier Hosts nacheinander ins Internet.
+   - **Prüfen:** Der vierte Host kommt nicht hinaus, `show ip nat statistics` zählt Misses.
+   - **Denkfrage:** Warum, und wie löst `overload` das?
+6. **Aufräumen.** Probiere `clear ip nat translation *`, `show ip nat statistics` und kurz `debug ip nat`.
+   - **Denkfrage:** Was passiert mit laufenden Verbindungen bei `clear`?
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 1:** Private Adressen werden im Internet nicht geroutet. Der ISP kennt keinen Weg zurück zu 192.168.19.0/24.
+- **Zu 3:** Inside Local: private Adresse des PCs. Inside Global: öffentliche Adresse, unter der er draußen erscheint. Outside Global: Adresse des Ziels im Internet. Outside Local: das Ziel aus Sicht des LANs, meist gleich Outside Global. Inside-Source-NAT ändert nur Inside Local zu Inside Global.
+- **Zu 4:** Statisches NAT hat eine feste Zuordnung, die immer existiert. Bei PAT entsteht die Zuordnung erst, wenn ein innerer Host eine Verbindung startet.
+- **Zu 5:** Dynamisches NAT ohne Overload braucht pro Host eine eigene öffentliche Adresse, der Pool hat nur drei. `overload` unterscheidet die Verbindungen über Ports, so teilen sich alle Hosts eine Adresse.
+- **Zu 6:** Dynamische Einträge werden gelöscht. Laufende Verbindungen brechen ab und müssen neu aufgebaut werden. Statische Einträge bleiben.
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -92,50 +119,58 @@ show ip nat statistics
 show access-lists
 show running-config | include nat
 ```
-Erwartet: PC1/PC2 erscheinen als `198.51.100.1:Port` (PAT), der Server statisch auf 203.0.113.10. Statistik: Hits/Misses, Inside/Outside-Interfaces.
+
+| Prüfung | Das solltest du sehen |
+|---|---|
+| `show ip nat translations` | PC1 und PC2 als `198.51.100.1:<Port>`, der Server fest auf 203.0.113.10 |
+| `show ip nat statistics` | Gi0/0 als inside, Gi0/1 als outside, steigende Hits |
+| Ping PC1 → 8.8.8.8 | Antworten |
 
 ## Teil C – Üben
 
 Beantworte zuerst selbst, dann klappe die Antwort auf.
 
-1. Wie gross darf das Netz hinter PAT sein, wenn nur eine öffentliche Adresse existiert?
+1. Wie viele Verbindungen schafft PAT mit nur einer öffentlichen Adresse?
 <details><summary>Antwort</summary>
 
-Im Prinzip bis zu ca. 65 000 gleichzeitige Verbindungen pro Adresse (Portraum), unabhängig von der Hostzahl.
+**Bis zu etwa 65 000 gleichzeitig, begrenzt durch die Portnummern.** Wie viele Hosts dahinter stehen, ist egal.
 
 </details>
 
-2. Unterschied statisches NAT vs. dynamisches NAT?
+2. Was unterscheidet statisches von dynamischem NAT?
 <details><summary>Antwort</summary>
 
-Statisch: feste 1:1-Zuordnung, von aussen initiierbar. Dynamisch: Zuordnung bei Bedarf aus einem Pool, nur von innen angestossen.
+**Statisch ist eine feste 1:1-Zuordnung, die auch von außen erreichbar ist.** Dynamisch nimmt bei Bedarf eine Adresse aus einem Pool, und nur ein innerer Host kann die Verbindung starten.
 
 </details>
 
-3. Welche Adresse ist ‚Inside Global‘ eines Clients?
+3. Welche Adresse ist die Inside Global eines Clients?
 <details><summary>Antwort</summary>
 
-Die öffentliche Adresse (hier 198.51.100.1 bzw. aus dem Pool), unter der die Pakete nach aussen sichtbar sind.
+**Die öffentliche Adresse, unter der er draußen erscheint.** Hier 198.51.100.1 bzw. eine Adresse aus dem Pool.
 
 </details>
 
 4. Ein PC erreicht das Internet nicht. Welche vier NAT-Punkte prüfst du?
 <details><summary>Antwort</summary>
 
-`ip nat inside/outside` an den Interfaces, ACL-Match, Pool/Overload, Routing (Default und Rückroute des ISP).
+**Inside/Outside an den Interfaces, die ACL, Pool oder Overload und das Routing.** Beim Routing auch die Default-Route und ob der ISP den Rückweg zur öffentlichen Adresse kennt.
 
 </details>
 
 5. Was bedeutet `ip nat inside source list 1 interface Gi0/1 overload`?
 <details><summary>Antwort</summary>
 
-Adressen, die ACL 1 erlaubt, werden auf die Adresse von Gi0/1 übersetzt; `overload` unterscheidet Sitzungen über Ports (PAT).
+**Was ACL 1 erlaubt, wird auf die Adresse von Gi0/1 übersetzt.** `overload` unterscheidet die Verbindungen über Ports, das ist PAT.
 
 </details>
 
 ## Prüfungsbezug
 
-Inside Local = interne Adresse des Hosts, Inside Global = öffentliche Adresse des Hosts, Outside Global = Adresse des Ziels im Internet, Outside Local = Sicht des Ziels im internen Netz (meist gleich Outside Global). NAT-Arten: statisch (1:1), dynamisch mit Pool (n:m), PAT/Overload (n:1 mit Ports). `ip nat inside`/`outside` pro Interface, ACL bestimmt, was übersetzt wird. Ohne Overload ist der Pool schnell leer.
+- Inside Local = interne Adresse, Inside Global = öffentliche Adresse des Hosts, Outside Global = Ziel im Internet, Outside Local = Ziel aus Sicht des LANs (meist gleich).
+- Statisch 1:1, dynamisch mit Pool, PAT/Overload viele auf eine über Ports.
+- `ip nat inside`/`outside` an jedem Interface, die ACL legt fest, wer übersetzt wird.
+- Ohne Overload ist der Pool schnell leer.
 
 ## Lösungen
 

@@ -5,6 +5,7 @@
 ## Ticket 1 (R1)
 
 - **Symptom:** Ping 10.1.1.1 scheitert; `traceroute` endet an R3, das die Adresse nicht kennt (oder zurückgibt).
+- **So findest du es:** `show ip route 10.1.1.1` auf R1 zeigt das /24 mit Next Hop 192.168.14.6 (R3) statt .10 (R4).
 - **Ursache:** Die spezifischste Route /24 zeigt auf R3 statt R4.
 - **Fix:** Next Hop 192.168.14.10.
 - **Eingebaut:**
@@ -17,6 +18,7 @@
 ## Ticket 2 (R1)
 
 - **Symptom:** 10.1.5.5 landet nicht bei R3 sondern über /8 bei R2; `show ip route 10.1.5.5` zeigt 10.0.0.0/8.
+- **So findest du es:** `show ip route 10.1.5.5` zeigt 10.0.0.0/8. `show ip route static` enthält 10.1.0.0/23 statt /16.
 - **Ursache:** Falsche Maske (/23 statt /16): 10.1.5.5 liegt nicht mehr in 10.1.0.0/23.
 - **Fix:** Maske 255.255.0.0.
 - **Eingebaut:**
@@ -29,6 +31,7 @@
 ## Ticket 3 (R3)
 
 - **Symptom:** R1 kann 10.1.5.5 anpingen, bekommt aber keine Antwort (R3 kennt den Rückweg nicht).
+- **So findest du es:** `debug ip icmp` oder `show ip route` auf R3: R3 hat keine Route zurück zu R1.
 - **Ursache:** R3 hat keine Default-/Rückroute zu R1: Pakete kommen an, Antworten verschwinden.
 - **Fix:** `ip route 0.0.0.0 0.0.0.0 192.168.14.5` auf R3.
 - **Eingebaut:**
@@ -40,6 +43,7 @@
 ## Ticket 4 (R1)
 
 - **Symptom:** 8.8.8.8 und 172.16.0.1 erreichen R2 nicht; `show ip route` zeigt den Default via R4.
+- **So findest du es:** `show ip route` auf R1 zeigt „Gateway of last resort is 192.168.14.10“.
 - **Ursache:** Default-Route zeigt auf R4 (192.168.14.10) statt R2.
 - **Fix:** Next Hop 192.168.14.2.
 - **Eingebaut:**

@@ -4,7 +4,7 @@ line con 0
  logging synchronous
  exit
 interface GigabitEthernet0/0
- ip address 10.26.1.1 255.255.255.128
+ ip address 10.26.1.1 255.255.255.192
  no shutdown
 aaa new-model
 radius-server host 10.26.1.100 key RadKey2O26

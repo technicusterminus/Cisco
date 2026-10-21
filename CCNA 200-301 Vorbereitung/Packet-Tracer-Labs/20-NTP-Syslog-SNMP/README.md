@@ -4,6 +4,12 @@
 
 Ein Router liefert die Zeit (NTP-Server), der zweite synchronisiert sich, beide senden Syslog-Meldungen an einen Server und lassen sich per SNMP abfragen. Du ordnest Severity-Level zu und liest SNMP-Grundbegriffe (Manager, Agent, MIB, Community, Trap).
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- NTP mit Server und Client aufbauen und den Synchronisationszustand lesen.
+- Syslog an einen Server senden und Severity-Level gezielt filtern.
+- SNMP abfragen und erklären, was v3 gegenüber v2c besser macht.
+
 | CCNA-Ziel | Thema |
 |---|---|
 | 4.2 | NTP (Client und Server) |
@@ -62,12 +68,33 @@ graph LR
 
 ## Teil A – Bauen
 
-1. **Basis.** Verkabeln, `build/` einfügen. Prüfe: `show clock` auf R1 und R2 (Zeitunterschied?).
-2. **NTP.** R1: `ntp master 3` (Stratum 3), R2: `ntp server 10.20.1.1`. `show ntp status` / `show ntp associations`: Wann ist R2 `synchronized`? Was ist Stratum?
-3. **Syslog.** Auf beiden Routern: `service timestamps log datetime msec`, `logging host 10.20.1.100`, `logging trap informational`, `logging buffered 8192`. Löse ein Ereignis aus (Interface `shutdown`/`no shutdown`): Meldung im Syslog-Server unter Services → SYSLOG. Wie lautet das Format (`%FACILITY-SEVERITY-MNEMONIC: text`)?
-4. **Severity.** Ordne 0–7 (Emergency, Alert, Critical, Error, Warning, Notice, Informational, Debug). Welche Stufen sendet `logging trap warnings`?
-5. **SNMP.** `snmp-server community LabRO RO`, `snmp-server location Lab`, `snmp-server contact admin@lab.local`. Frage mit dem MIB Browser `sysName`/`sysUpTime` (OID 1.3.6.1.2.1.1.5.0 / 1.3.6.1.2.1.1.3.0) ab. Was ist der Unterschied zwischen GET, GETNEXT, SET und Trap?
-6. **Sicherheit.** Warum ist SNMPv2c mit Community unsicher, und was bringt SNMPv3 (Authentisierung `authNoPriv`, Verschlüsselung `authPriv`)?
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
+
+1. **Basis.** Verkabeln und `build/` einfügen.
+   - **Prüfen:** `show clock` auf R1 und R2 zeigt verschiedene Zeiten.
+2. **NTP.** R1: `ntp master 3`. R2: `ntp server 10.20.1.1`.
+   - **Prüfen:** Nach einigen Minuten meldet `show ntp status` auf R2 „Clock is synchronized, stratum 4“.
+   - **Denkfrage:** Was ist Stratum, und warum hat R2 Stratum 4?
+3. **Syslog.** Auf beiden Routern: `service timestamps log datetime msec`, `logging host 10.20.1.100`, `logging trap informational`, `logging buffered 8192`. Schalte ein Interface aus und wieder ein.
+   - **Prüfen:** Auf dem Server erscheint unter Services → SYSLOG die Meldung mit Zeitstempel.
+   - **Denkfrage:** Wie ist eine Syslog-Meldung aufgebaut?
+4. **Severity.** Ordne die Level 0 bis 7 ihren Namen zu.
+   - **Denkfrage:** Welche Level sendet `logging trap warnings`?
+5. **SNMP.** `snmp-server community LabRO RO`, `snmp-server location Lab`, `snmp-server contact admin@lab.local`. Frag im MIB Browser auf PC1 `sysName` (1.3.6.1.2.1.1.5.0) und `sysUpTime` (1.3.6.1.2.1.1.3.0) ab.
+   - **Prüfen:** Der MIB Browser zeigt `R1` bzw. `R2` und die Laufzeit.
+   - **Denkfrage:** Was unterscheidet GET, GETNEXT, SET und Trap?
+6. **Sicherheit.** Überlege, was ein Angreifer mit v2c anfangen kann.
+   - **Denkfrage:** Was bringt SNMPv3 mit `authNoPriv` und mit `authPriv`?
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 2:** Stratum zählt die Stufen bis zur Referenzuhr. R1 ist mit `ntp master 3` Stratum 3, R2 bezieht seine Zeit von R1 und ist damit eine Stufe darunter, also 4.
+- **Zu 3:** Zeitstempel, dann `%FACILITY-SEVERITY-MNEMONIC: Text`, z. B. `%LINEPROTO-5-UPDOWN: Line protocol on Interface …, changed state to down`.
+- **Zu 4:** 0 Emergency, 1 Alert, 2 Critical, 3 Error, 4 Warning, 5 Notice, 6 Informational, 7 Debug. `logging trap warnings` sendet die Level 0 bis 4.
+- **Zu 5:** GET fragt einen Wert ab, GETNEXT den nächsten in der MIB (zum Durchlaufen), SET schreibt einen Wert. Ein Trap kommt ungefragt vom Agenten an den Manager.
+- **Zu 6:** Bei v2c steht die Community im Klartext im Paket. Wer mitliest, kann alles abfragen, bei einer RW-Community sogar ändern. `authNoPriv` prüft Benutzer und Unverfälschtheit, `authPriv` verschlüsselt zusätzlich den Inhalt.
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -91,7 +118,12 @@ show logging
 show snmp
 show snmp community
 ```
-Erwartet: R2 `Clock is synchronized, stratum 4`, Syslog-Meldungen beim Server, MIB-Browser liefert `sysName = R2`.
+
+| Prüfung | Das solltest du sehen |
+|---|---|
+| `show ntp status` auf R2 | „Clock is synchronized, stratum 4“ |
+| Syslog-Server | Meldungen von R1 und R2 mit Zeitstempel |
+| MIB Browser, `sysName` von R2 | `R2` |
 
 ## Teil C – Üben
 
@@ -100,41 +132,43 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. Was bedeutet `logging trap warnings`?
 <details><summary>Antwort</summary>
 
-Alle Meldungen bis Level 4 (Warning) und darunter (0–4) werden an den Syslog-Server gesendet, Level 5–7 nicht.
+**Der Router schickt die Level 0 bis 4 an den Syslog-Server.** Notice, Informational und Debug (5 bis 7) bleiben draußen.
 
 </details>
 
 2. Wozu dient Stratum bei NTP?
 <details><summary>Antwort</summary>
 
-Es gibt den Abstand zur Referenzuhr an; niedrigere Stratum-Zahlen sind genauer, Clients synchronisieren sich auf die niedrigste verfügbare.
+**Es zeigt, wie weit eine Uhr von der Referenzuhr entfernt ist.** Jede Stufe zählt eins hoch. Clients bevorzugen die Quelle mit dem kleinsten Stratum. 16 heißt nicht synchronisiert.
 
 </details>
 
 3. Warum sind korrekte Zeitstempel für Syslog wichtig?
 <details><summary>Antwort</summary>
 
-Zur Korrelation von Ereignissen über mehrere Geräte und für Forensik/Compliance.
+**Damit du Ereignisse auf mehreren Geräten zeitlich zuordnen kannst.** Ohne gemeinsame Zeit lässt sich bei einer Störung oder einem Angriff nicht nachvollziehen, was zuerst passiert ist.
 
 </details>
 
-4. Trap vs. Poll bei SNMP?
+4. Was ist der Unterschied zwischen Trap und Poll bei SNMP?
 <details><summary>Antwort</summary>
 
-Poll: Manager fragt den Agenten (GET). Trap: Agent meldet selbständig ein Ereignis an den Manager (UDP 162).
+**Beim Poll fragt der Manager, beim Trap meldet sich der Agent selbst.** Polls gehen an UDP 161 des Agenten, Traps an UDP 162 des Managers.
 
 </details>
 
-5. Wie lautet das Syslog-Format der Meldung `%LINK-3-UPDOWN: Interface Gi0/0, changed state to down`?
+5. Wie liest du `%LINK-3-UPDOWN: Interface Gi0/0, changed state to down`?
 <details><summary>Antwort</summary>
 
-Facility LINK, Severity 3 (Error), Mnemonic UPDOWN, danach Text.
+**Facility LINK, Severity 3 (Error), Mnemonic UPDOWN, danach der Text.**
 
 </details>
 
 ## Prüfungsbezug
 
-NTP: UDP/123, Stratum-Hierarchie (Stratum 0 = Referenzuhr, jeder Hop +1, 16 = nicht synchronisiert), `ntp server` (Client), `ntp master` (Server ohne externe Quelle). Syslog: UDP/514, Severity 0–7 (0 Emergency, 1 Alert, 2 Critical, 3 Error, 4 Warning, 5 Notice, 6 Informational, 7 Debug); `logging trap <level>` sendet diese Stufe und alle niedrigeren Zahlen (schwerere). SNMP: Manager, Agent, MIB/OID; v1/v2c mit Community (Klartext), v3 mit Benutzer, Authentisierung und Verschlüsselung; Traps/Informs asynchron, GET/SET pull (UDP 161, Traps 162).
+- NTP: UDP 123. Stratum 0 = Referenzuhr, jede Stufe +1, 16 = nicht synchronisiert. `ntp server` = Client, `ntp master` = Server ohne externe Quelle.
+- Syslog: UDP 514, Level 0 bis 7. `logging trap <Level>` sendet dieses Level und alle kleineren Zahlen.
+- SNMP: Manager, Agent, MIB/OID. v1/v2c mit Community im Klartext, v3 mit Benutzer, Authentisierung und Verschlüsselung. Abfragen UDP 161, Traps UDP 162.
 
 ## Lösungen
 

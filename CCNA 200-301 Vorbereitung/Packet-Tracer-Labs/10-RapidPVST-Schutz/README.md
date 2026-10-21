@@ -4,6 +4,12 @@
 
 Drei Switches im Dreieck. Du steuerst die Root Bridge per Priorität, liest Port-Rollen und -Zustände, aktivierst PortFast, BPDU Guard und Root Guard und reparierst typische STP-Fehler.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- Die Root Bridge und alle Port-Rollen vorhersagen, bevor du sie prüfst.
+- Rapid PVST+ einschalten und die Root per Priorität festlegen.
+- PortFast, BPDU Guard, Root Guard und Loop Guard richtig einsetzen.
+
 | CCNA-Ziel | Thema |
 |---|---|
 | 2.5 | Rapid PVST+ (Root Bridge, Port-Rollen und -Zustände, PortFast, Guards) |
@@ -58,12 +64,30 @@ graph LR
 
 ## Teil A – Bauen
 
-1. **Basis.** Verkabeln (Dreieck), `build/` einfügen, PCs setzen. Standard-STP: `show spanning-tree` auf allen Switches. Wer ist Root (kleinste Bridge-ID = Priorität + MAC)?
-2. **Rapid PVST+.** Auf allen drei Switches `spanning-tree mode rapid-pvst`. Unterschiede zu PVST+ (Konvergenz in Sekunden, Proposal/Agreement)?
-3. **Root festlegen.** SW1: `spanning-tree vlan 1,10 priority 4096` (oder `root primary`), SW2: `8192` als Backup. Bestimme vor dem Prüfen mit `show spanning-tree vlan 10`, welche Ports Root/Designated/Alternate sind. Kostenwerte (Fa = 19, Gi = 4).
-4. **Edge-Ports.** PC-Ports: `spanning-tree portfast` und `spanning-tree bpduguard enable`. Teste, was passiert, wenn du einen Switch an einen solchen Port steckst (err-disabled).
-5. **Root Guard.** Auf SW2 Fa0/2 (Richtung SW3): `spanning-tree guard root`. Wann erscheint `root-inconsistent`?
-6. **Weitere Schutzfunktionen.** Loop Guard (`spanning-tree guard loop`), BPDU Filter (Gefahr: Loops), `spanning-tree portfast default`. Wo passt welche?
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
+
+1. **Ausgangslage.** Verkabeln (Dreieck), `build/` einfügen und die PCs einstellen. Sieh dir auf allen Switches `show spanning-tree` an.
+   - **Prüfen:** Ein Switch nennt sich „This bridge is the root“.
+   - **Denkfrage:** Warum wird ausgerechnet dieser Switch Root, obwohl du nichts eingestellt hast?
+2. **Rapid PVST+.** Setze auf allen drei Switches `spanning-tree mode rapid-pvst`.
+   - **Prüfen:** `show spanning-tree` meldet „protocol rstp“.
+   - **Denkfrage:** Was macht RSTP schneller als das klassische STP?
+3. **Root festlegen.** SW1 bekommt `spanning-tree vlan 1,10 priority 4096`, SW2 als Backup `8192`. Bestimme vorher auf Papier, welche Ports Root, Designated und Alternate werden (Kosten: Fa 19, Gi 4).
+   - **Prüfen:** `show spanning-tree vlan 10` bestätigt deine Vorhersage: SW1 ist Root, auf SW3 ist ein Port Alternate.
+4. **Edge-Ports.** Setze an den PC-Ports `spanning-tree portfast` und `spanning-tree bpduguard enable`. Stecke testweise einen Switch an einen solchen Port.
+   - **Prüfen:** Der Port geht in den Zustand err-disabled.
+5. **Root Guard.** Setze auf SW2 an Fa0/2 (Richtung SW3) `spanning-tree guard root`. Gib SW3 testweise Priorität 0.
+   - **Prüfen:** SW2 meldet Fa0/2 als `root-inconsistent`. Nimm die Priorität auf SW3 danach zurück.
+6. **Weitere Schutzfunktionen.** Lies nach, was Loop Guard, BPDU Filter und `spanning-tree portfast default` tun.
+   - **Denkfrage:** Wo passt welche Funktion, und welche ist gefährlich?
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 1:** Alle haben dieselbe Standardpriorität 32768 plus VLAN-ID. Dann entscheidet die kleinste MAC-Adresse. Das ist oft ein altes Gerät, also nicht unbedingt der beste Switch für die Rolle.
+- **Zu 2:** RSTP wartet nicht auf Timer. Zwei Switches einigen sich per Proposal und Agreement in Bruchteilen von Sekunden. Für jeden Root Port steht außerdem ein Alternate Port bereit, der sofort übernimmt.
+- **Zu 6:** Loop Guard an Ports, die BPDUs empfangen sollen (Root- und Alternate-Ports zwischen Switches): Bleiben BPDUs aus, wird der Port nicht zum Forwarding. BPDU Filter ist gefährlich: Der Port sendet und verarbeitet keine BPDUs mehr, Schleifen bleiben unbemerkt. `portfast default` setzt PortFast an allen Access-Ports, sinnvoll zusammen mit `bpduguard default`.
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -86,7 +110,12 @@ show spanning-tree summary
 show spanning-tree interface fa0/10 detail
 show errdisable recovery
 ```
-Erwartet: SW1 ist Root für VLAN 1 und 10 (alle Ports Designated), SW2 hat Root Port Fa0/1, SW3 Root Port Fa0/1 und Fa0/2 als Alternate (Discarding).
+
+| Prüfung | Das solltest du sehen |
+|---|---|
+| `show spanning-tree vlan 10` auf SW1 | „This bridge is the root“, alle Ports Designated |
+| auf SW2 | Root Port Fa0/1 |
+| auf SW3 | Root Port Fa0/1, Fa0/2 als Alternate (Discarding) |
 
 ## Teil C – Üben
 
@@ -95,41 +124,44 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. Wie wird der Root Port bestimmt?
 <details><summary>Antwort</summary>
 
-Niedrigste Gesamtkosten zur Root Bridge; bei Gleichstand kleinste Bridge-ID des Nachbarn, dann kleinste Port-ID des Nachbarn.
+**Über die niedrigsten Gesamtkosten zur Root Bridge.** Bei Gleichstand gewinnt die kleinere Bridge-ID des Nachbarn, danach dessen kleinere Port-ID.
 
 </details>
 
-2. Welche Port-Rollen kennt RSTP und welche Zustände?
+2. Welche Port-Rollen und Zustände kennt RSTP?
 <details><summary>Antwort</summary>
 
-Rollen: Root, Designated, Alternate, Backup, Disabled. Zustände: Discarding, Learning, Forwarding.
+**Rollen: Root, Designated, Alternate, Backup, Disabled. Zustände: Discarding, Learning, Forwarding.**
 
 </details>
 
-3. BPDU Guard vs. Root Guard?
+3. Was unterscheidet BPDU Guard von Root Guard?
 <details><summary>Antwort</summary>
 
-BPDU Guard sperrt einen Edge-Port, sobald irgendeine BPDU eintrifft. Root Guard erlaubt BPDUs, verweigert aber überlegene (würde den Port zum Root Port machen) und setzt den Port root-inconsistent.
+**BPDU Guard sperrt bei jeder BPDU, Root Guard nur bei einer besseren.** BPDU Guard schaltet einen Edge-Port ab, sobald überhaupt eine BPDU kommt. Root Guard lässt normale BPDUs zu, blockiert den Port aber (root-inconsistent), wenn darüber eine neue Root erscheinen würde.
 
 </details>
 
 4. Warum ist `spanning-tree bpdufilter enable` gefährlich?
 <details><summary>Antwort</summary>
 
-Der Port sendet/verarbeitet keine BPDUs mehr; STP erkennt Schleifen nicht, ein versehentlich angeschlossener Switch erzeugt einen Loop.
+**Weil STP an diesem Port blind wird.** Der Port sendet und verarbeitet keine BPDUs mehr. Steckt jemand einen Switch an, entsteht eine Schleife, die STP nicht erkennt.
 
 </details>
 
-5. Was bewirkt PortFast an einem Trunk-Port?
+5. Was passiert mit PortFast an einem Trunk zu einem Switch?
 <details><summary>Antwort</summary>
 
-Der Trunk geht sofort in Forwarding und kann bei Loops Schaden anrichten; PortFast gehört an Edge-Ports (Hosts).
+**Der Port geht sofort auf Forwarding und kann kurzzeitig eine Schleife bilden.** PortFast gehört an Ports zu Endgeräten.
 
 </details>
 
 ## Prüfungsbezug
 
-Root Bridge = niedrigste Bridge-ID (Priorität in 4096er-Schritten + VLAN-ID als Extended System ID + MAC). Rollen: Root, Designated, Alternate, Backup, Disabled. RSTP-Zustände: Discarding, Learning, Forwarding. Wahl des Root Ports: niedrigste Root-Path-Cost, dann niedrigste Sender-Bridge-ID, dann niedrigste Sender-Port-ID. PortFast überspringt Wartezeiten für Edge-Ports; BPDU Guard schaltet den Port bei BPDU ab (err-disable); Root Guard verhindert, dass ein Port Root-Port wird; Loop Guard schützt vor unidirektionalen Links; BPDU Filter unterdrückt BPDUs.
+- Root Bridge = kleinste Bridge-ID: Priorität (Schritte 4096) + VLAN-ID + MAC.
+- Root Port: kleinste Pfadkosten, dann kleinste Bridge-ID des Senders, dann kleinste Port-ID des Senders.
+- RSTP-Rollen: Root, Designated, Alternate, Backup, Disabled. Zustände: Discarding, Learning, Forwarding.
+- PortFast für Edge-Ports. BPDU Guard → err-disabled. Root Guard → root-inconsistent. Loop Guard gegen einseitige Links. BPDU Filter schaltet STP am Port praktisch ab.
 
 ## Lösungen
 

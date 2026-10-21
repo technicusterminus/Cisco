@@ -4,6 +4,12 @@
 
 Typische Layer-1/2-Störungen finden: administrativ down, Speed- und Duplex-Mismatch, falsche Maske am Endgerät. Du liest `show interfaces`, `show interfaces status` und die Zähler (Kollisionen, CRC, Runts, Giants).
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- Die Statuszeile von `show interfaces` lesen und Layer 1 von Layer 2 trennen.
+- Speed- und Duplex-Mismatch erzeugen, erkennen und beheben.
+- Fehlerzähler (CRC, Runts, Giants, Late Collisions) einer Ursache zuordnen.
+
 | CCNA-Ziel | Thema |
 |---|---|
 | 1.4 | Schnittstellen- und Kabelprobleme (Kollisionen, Fehler, Duplex, Speed) |
@@ -60,12 +66,30 @@ graph LR
 
 ## Teil A – Bauen
 
-1. **Basis aufbauen.** Verkabeln, Config aus `build/` einfügen, Hosts laut Tabelle einstellen. Alle Interfaces mit `no shutdown` und Auto-Negotiation. Ping PC1 → PC2 und PC1 → R1.
-2. **Statuszeile lesen.** `show interfaces fa0/24` auf SW1: Was bedeuten `up/up`, `up/down`, `down/down`, `administratively down`?
-3. **Mismatch erzeugen.** Setze auf SW1 Fa0/24 `speed 10` und `duplex half`, SW2 bleibt auto. Wie reagiert der Link? Welche Zeilen in `show interfaces` verraten es?
-4. **Mismatch beheben.** Beide Seiten auf `speed auto`/`duplex auto` oder identisch fest einstellen. Warum ist Auto/Auto besser als einseitig fest?
-5. **Zähler.** Welche Fehlerzähler gibt es (input errors, CRC, runts, giants, collisions, late collisions) und was zeigt jeder an?
-6. **Layer-1-Checkliste** schreiben: Kabeltyp/-länge, LED, Port-Status, Speed/Duplex, Fehlerzähler, Port-Security-Shutdown (err-disabled).
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
+
+1. **Basis aufbauen.** Verkabeln, die Konfiguration aus `build/` einfügen und die Hosts nach der Tabelle einstellen. Alle Interfaces mit `no shutdown` und Auto-Negotiation.
+   - **Prüfen:** PC1 pingt PC2 und R1.
+2. **Statuszeile lesen.** Führe auf SW1 `show interfaces fa0/24` aus und sieh dir die erste Zeile an.
+   - **Denkfrage:** Was bedeuten `up/up`, `up/down`, `down/down` und `administratively down`?
+3. **Mismatch erzeugen.** Setze auf SW1 an Fa0/24 `speed 10` und `duplex half`. SW2 bleibt auf Auto.
+   - **Prüfen:** `show interfaces fa0/24` und `show interfaces status` zeigen auf beiden Seiten unterschiedliche Werte für Speed und Duplex.
+   - **Denkfrage:** Woran erkennst du einen Duplex-Mismatch, wenn der Link trotzdem oben ist?
+4. **Mismatch beheben.** Stelle beide Seiten auf `speed auto` und `duplex auto`.
+   - **Prüfen:** `show interfaces status` zeigt `a-full` und `a-100`.
+   - **Denkfrage:** Warum ist Auto auf beiden Seiten besser, als nur eine Seite fest einzustellen?
+5. **Zähler kennenlernen.** Sieh dir `show interfaces counters errors` an.
+   - **Denkfrage:** Was zeigen input errors, CRC, Runts, Giants, Collisions und Late Collisions jeweils an?
+6. **Checkliste schreiben.** Schreib deine eigene Layer-1-Checkliste: Kabeltyp und -länge, LED, Port-Status, Speed/Duplex, Fehlerzähler, err-disabled.
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 2:** Der erste Wert ist Layer 1 (Signal da?), der zweite Layer 2 (Protokoll läuft?). `up/up`: alles gut. `up/down`: Kabel ok, aber Layer 2 klappt nicht, z. B. Encapsulation oder Keepalives. `down/down`: kein Signal, z. B. Kabel, Gegenseite aus, Speed-Mismatch. `administratively down`: Jemand hat `shutdown` gesetzt.
+- **Zu 3:** An den Zählern. Auf der Halbduplex-Seite steigen Late Collisions, auf der Vollduplex-Seite CRC-Fehler und Runts. Dazu kommt schlechte Leistung unter Last.
+- **Zu 4:** Ist nur eine Seite fest eingestellt, erkennt die Auto-Seite zwar die Geschwindigkeit, aber nicht das Duplex. Sie fällt dann bei 10 und 100 Mbit/s auf Halbduplex zurück, und es entsteht genau der Mismatch.
+- **Zu 5:** Input errors: Summe aller Empfangsfehler. CRC: Prüfsumme falsch (Kabel, Störungen, Duplex). Runts: Frames unter 64 Byte. Giants: Frames über 1518 Byte. Collisions: normal bei Halbduplex. Late Collisions: Kollision nach den ersten 64 Byte, typisch für Duplex-Mismatch oder zu lange Kabel.
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -76,7 +100,7 @@ Baue die Topologie wie oben (oder behalte deine aus Teil A), setze alle Geräte 
 | Gerät | IP | Maske | Gateway | DNS |
 |---|---|---|---|---|
 | PC1 | 192.168.2.11 | 255.255.255.0 | 192.168.2.1 |  |
-| PC2 | 192.168.2.12 | 255.255.255.128 | 192.168.2.1 |  |
+| PC2 | 192.168.20.12 | 255.255.255.0 | 192.168.2.1 |  |
 
 **Ticket 1:** PC1 erreicht nichts hinter dem Trunk-Uplink; `show interfaces status` auf SW1 zeigt Fa0/24 mit `10`/`half` und Link down oder Probleme.
 
@@ -94,43 +118,51 @@ show interfaces fa0/24
 show interfaces counters errors
 show ip interface brief
 ```
-Erwartet im Sollzustand: alle genutzten Ports `connected`, `a-full`/`a-100` (Auto-ausgehandelt), keine wachsenden Fehlerzähler.
+
+| Befehl | Das solltest du im Sollzustand sehen |
+|---|---|
+| `show interfaces status` | alle genutzten Ports `connected` mit `a-full` und `a-100` |
+| `show interfaces counters errors` | keine steigenden Fehlerzähler |
+| `show ip interface brief` | alle genutzten Interfaces `up/up` |
 
 ## Teil C – Üben
 
 Beantworte zuerst selbst, dann klappe die Antwort auf.
 
-1. Auf einem Port steigen late collisions. Was vermutest du?
+1. Auf einem Port steigen Late Collisions. Was vermutest du?
 <details><summary>Antwort</summary>
 
-Duplex-Mismatch (Gegenstelle Vollduplex, dieser Port Halbduplex) oder zu lange/falsche Verkabelung. Late collisions gibt es bei korrektem Vollduplex nicht.
+**Einen Duplex-Mismatch.** Dieser Port läuft halbduplex, die Gegenseite vollduplex. Seltener ist ein zu langes oder falsches Kabel. Bei korrektem Vollduplex gibt es keine Late Collisions.
 
 </details>
 
-2. Wofür stehen CRC-Fehler, Runts, Giants?
+2. Wofür stehen CRC-Fehler, Runts und Giants?
 <details><summary>Antwort</summary>
 
-CRC: Prüfsumme falsch (Kabel, EMV, Duplex). Runts: Frames < 64 Byte (Kollisionsfragmente). Giants: Frames > 1518 Byte (bzw. MTU-Überschreitung).
+**CRC: Prüfsumme falsch. Runts: zu kleine Frames. Giants: zu große Frames.** CRC-Fehler kommen von Kabeln, Störungen oder Duplex-Problemen. Runts sind kleiner als 64 Byte, meist Reste von Kollisionen. Giants sind größer als 1518 Byte bzw. die MTU.
 
 </details>
 
 3. `show interfaces` zeigt `GigabitEthernet0/1 is up, line protocol is down`. Wo suchst du?
 <details><summary>Antwort</summary>
 
-Layer 2: Encapsulation, Keepalives, fehlende Gegenstelle/andere Encapsulation, bei Ethernet z. B. Err-Disable oder Mismatch von Speed/Duplex-Parametern.
+**Auf Layer 2.** Das Signal ist da, aber das Protokoll läuft nicht. Prüfe Encapsulation und Keepalives und ob die Gegenseite passend eingestellt ist.
 
 </details>
 
 4. Warum ist ein Port `err-disabled`, und wie bringst du ihn zurück?
 <details><summary>Antwort</summary>
 
-Ein Schutzmechanismus (Port Security, BPDU Guard …) hat den Port abgeschaltet. Ursache beheben, dann `shutdown` / `no shutdown` oder `errdisable recovery`.
+**Eine Schutzfunktion hat ihn abgeschaltet, z. B. Port Security oder BPDU Guard.** Erst die Ursache beheben, dann `shutdown` und `no shutdown`. Alternativ holt `errdisable recovery` ihn automatisch nach einer Wartezeit zurück.
 
 </details>
 
 ## Prüfungsbezug
 
-Duplex-Mismatch: eine Seite Halb-, die andere Vollduplex: Verbindung steht, aber schlechte Leistung, späte Kollisionen auf der Halbduplex-Seite, CRC/Runts auf der Vollduplex-Seite. Speed-Mismatch: Link bleibt down (Elektrik/Optik). `up/down` bedeutet Layer 1 ok, Layer 2 nicht (z. B. Encapsulation, Keepalive); `administratively down` = `shutdown`.
+- Duplex-Mismatch: Der Link steht, aber die Leistung ist schlecht. Late Collisions auf der Halbduplex-Seite, CRC und Runts auf der Vollduplex-Seite.
+- Speed-Mismatch: Der Link bleibt down.
+- `up/down` = Layer 1 ok, Layer 2 nicht. `administratively down` = `shutdown`.
+- Ist nur eine Seite fest eingestellt, fällt die Auto-Seite bei 10/100 Mbit/s auf Halbduplex zurück.
 
 ## Lösungen
 

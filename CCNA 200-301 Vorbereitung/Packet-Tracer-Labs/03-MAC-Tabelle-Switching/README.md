@@ -4,6 +4,12 @@
 
 Du beobachtest im Simulationsmodus, wie Switches Quell-MAC-Adressen lernen, unbekannte Ziele fluten, Einträge altern lassen und wie sich statische MAC-Einträge auswirken.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- Erklären, wie ein Switch MAC-Adressen lernt, weiterleitet und flutet.
+- Aging und statische Einträge in der MAC-Tabelle einsetzen.
+- Kollisions- und Broadcast-Domänen in einer Topologie zählen.
+
 | CCNA-Ziel | Thema |
 |---|---|
 | 1.13 | Switching-Konzepte (MAC-Lernen, Aging, Flooding, MAC-Tabelle) |
@@ -65,12 +71,31 @@ graph LR
 
 ## Teil A – Bauen
 
-1. **Basis.** Verkabeln, Configs aus `build/` einfügen, PCs laut Tabelle. `show mac address-table` auf allen Switches: leer? (Nur dynamische Einträge, die gelernt werden.)
-2. **Lernen beobachten.** PC1 pingt PC3 im Simulationsmodus. Verfolge das ARP-Broadcast Schritt für Schritt: Welcher Switch lernt wann welche Quell-MAC auf welchem Port?
-3. **Flooding.** Welche Frames werden geflutet (unbekannte Ziel-MAC, Broadcast)? Wann wird gefiltert/weitergeleitet (bekannte Ziel-MAC)?
-4. **Aging.** `mac address-table aging-time 60` auf SW2 setzen. Warte, bis ein Eintrag verschwindet (`show mac address-table aging-time`). Standard: 300 s.
-5. **Statischer Eintrag.** Trage die MAC von PC3 statisch auf dem korrekten Port ein: `mac address-table static <MAC> vlan 1 interface fa0/3`. Welche Vor- und Nachteile hat das (Sicherheit vs. Pflegeaufwand)?
-6. **Kollisions-/Broadcast-Domänen.** Zähle für die Topologie die Kollisionsdomänen (pro Switch-Port) und Broadcast-Domänen (hier 1). Wie würde ein Hub die Zählung verändern?
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
+
+1. **Basis.** Verkabeln, die Konfigurationen aus `build/` einfügen und die PCs nach der Tabelle einstellen.
+   - **Prüfen:** `show mac address-table` ist auf allen Switches noch leer oder fast leer.
+2. **Lernen beobachten.** Lass PC1 im Simulationsmodus PC3 anpingen. Verfolge den ARP-Broadcast Schritt für Schritt.
+   - **Prüfen:** Nach dem Ping steht die MAC von PC1 auf jedem Switch am Port, der in Richtung PC1 zeigt.
+   - **Denkfrage:** Warum lernt der Switch aus der Quell-MAC und nie aus der Ziel-MAC?
+3. **Flooding und Filtern.** Beobachte im Simulationsmodus, an welche Ports ein Frame geht.
+   - **Denkfrage:** Welche Frames werden geflutet, und wann leitet der Switch gezielt an einen Port weiter?
+4. **Aging.** Setze auf SW2 `mac address-table aging-time 60` und warte, bis ein Eintrag verschwindet.
+   - **Prüfen:** `show mac address-table aging-time` zeigt 60. Nach einer Minute ohne Verkehr ist der Eintrag weg. Setze danach den Standard 300 s zurück.
+5. **Statischer Eintrag.** Trage die MAC von PC3 fest ein: `mac address-table static <MAC> vlan 1 interface fa0/3`.
+   - **Prüfen:** `show mac address-table` zeigt den Eintrag als `STATIC`.
+   - **Denkfrage:** Was spricht für statische Einträge, was dagegen?
+6. **Domänen zählen.** Zähle in der Topologie die Kollisions- und die Broadcast-Domänen.
+   - **Denkfrage:** Wie ändert sich die Zahl, wenn du einen Switch durch einen Hub ersetzt?
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 2:** Nur die Quelladresse verrät, über welchen Port ein Gerät erreichbar ist: Der Frame kommt ja von dort. Die Zieladresse sagt nur, wohin er will.
+- **Zu 3:** Geflutet werden Broadcasts, unbekannte Unicasts und ohne IGMP Snooping auch Multicasts, und zwar an alle Ports im VLAN außer dem Eingangsport. Kennt der Switch die Ziel-MAC, schickt er den Frame nur an diesen Port. Liegt das Ziel am Eingangsport, verwirft er ihn (Filtern).
+- **Zu 5:** Dafür: Niemand kann die MAC an einem anderen Port vortäuschen, und der Eintrag altert nicht. Dagegen: Jede Änderung musst du von Hand nachziehen. Steckt das Gerät um, ist es nicht mehr erreichbar.
+- **Zu 6:** Jeder Switch-Port ist eine eigene Kollisionsdomäne, alle Ports in VLAN 1 bilden eine Broadcast-Domäne. Ein Hub fasst alle seine Ports zu einer einzigen Kollisionsdomäne zusammen. An der Broadcast-Domäne ändert sich nichts.
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -100,7 +125,12 @@ show mac address-table address <MAC>
 show mac address-table aging-time
 clear mac address-table dynamic
 ```
-Erwartet: Nach dem Ping stehen die MACs auf den Ports Richtung Quelle; über den Uplink (`Fa0/24`) sieht SW1 die MACs der Hosts hinter SW2.
+
+| Befehl | Das solltest du sehen |
+|---|---|
+| `show mac address-table` nach dem Ping | die MACs jeweils am Port in Richtung Quelle |
+| `show mac address-table` auf SW1 | die MACs der Hosts hinter SW2 am Uplink Fa0/24 |
+| `show mac address-table aging-time` | 300 (Standard) |
 
 ## Teil C – Üben
 
@@ -109,41 +139,44 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. Was passiert, wenn der Switch die Ziel-MAC nicht kennt?
 <details><summary>Antwort</summary>
 
-Er flutet den Frame auf alle Ports im VLAN ausser dem Eingangsport (Unknown Unicast Flooding).
+**Er flutet den Frame an alle Ports im VLAN außer dem Eingangsport.** Das heißt Unknown Unicast Flooding. Antwortet das Ziel, lernt der Switch dessen Port, und ab dann geht es gezielt.
 
 </details>
 
-2. Wann lernt ein Switch eine MAC-Adresse und warum nie aus der Zieladresse?
+2. Wann lernt ein Switch eine MAC-Adresse, und warum nie aus der Zieladresse?
 <details><summary>Antwort</summary>
 
-Er lernt aus der Quelladresse jedes eingehenden Frames, weil nur die Quelle verrät, über welchen Port das Gerät erreichbar ist.
+**Bei jedem eingehenden Frame, und zwar aus der Quelladresse.** Nur die Quelle zeigt, über welchen Port das Gerät erreichbar ist.
 
 </details>
 
 3. Ein PC wird an einen anderen Port umgesteckt. Was geschieht mit dem alten Eintrag?
 <details><summary>Antwort</summary>
 
-Sobald ein Frame der MAC am neuen Port eintrifft, wird der Eintrag auf den neuen Port aktualisiert; sonst läuft er nach Aging-Time ab.
+**Er wird überschrieben, sobald der PC am neuen Port sendet.** Sendet der PC nicht, läuft der alte Eintrag nach der Aging-Time ab.
 
 </details>
 
 4. Wie viele Kollisions- und Broadcast-Domänen hat ein Switch mit 10 Hosts in einem VLAN?
 <details><summary>Antwort</summary>
 
-10 Kollisionsdomänen (pro Port), 1 Broadcast-Domäne.
+**10 Kollisionsdomänen, 1 Broadcast-Domäne.** Jeder Port ist eine eigene Kollisionsdomäne, ein VLAN ist eine Broadcast-Domäne.
 
 </details>
 
 5. Wie unterscheiden sich Store-and-Forward und Cut-Through?
 <details><summary>Antwort</summary>
 
-Store-and-Forward empfängt den ganzen Frame, prüft die FCS und leitet erst dann weiter (Fehlerfilterung, höhere Latenz). Cut-Through beginnt nach der Ziel-MAC (niedrige Latenz, keine Fehlerfilterung).
+**Store-and-Forward prüft den ganzen Frame, Cut-Through leitet sofort weiter.** Store-and-Forward liest den Frame komplett, prüft die FCS und verwirft fehlerhafte Frames, das kostet etwas Zeit. Cut-Through beginnt nach der Ziel-MAC: schneller, aber fehlerhafte Frames gehen mit durch.
 
 </details>
 
 ## Prüfungsbezug
 
-Switch lernt anhand der Quell-MAC, leitet anhand der Ziel-MAC weiter. Unbekannt-Unicast, Broadcast und (ohne Snooping) Multicast werden auf allen Ports ausser dem Eingangsport geflutet. Einträge altern standardmässig nach 300 Sekunden. Jeder Switch-Port ist eine eigene Kollisionsdomäne, alle Ports im selben VLAN bilden eine Broadcast-Domäne.
+- Lernen aus der Quell-MAC, weiterleiten nach der Ziel-MAC.
+- Geflutet werden Broadcast, Unknown Unicast und ohne Snooping auch Multicast, an alle Ports außer dem Eingangsport.
+- Einträge altern nach 300 s.
+- Jeder Switch-Port ist eine Kollisionsdomäne, ein VLAN eine Broadcast-Domäne.
 
 ## Lösungen
 

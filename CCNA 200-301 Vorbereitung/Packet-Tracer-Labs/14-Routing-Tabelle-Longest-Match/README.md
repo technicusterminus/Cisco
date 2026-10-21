@@ -4,6 +4,12 @@
 
 R1 hat überlappende Routen (/8, /16, /24, Default) zu drei Nachbarn. Du sagst voraus, welchen Next Hop ein Paket nimmt, prüfst mit `show ip route <Ziel>` und liest Codes, Administrative Distance, Metrik und das Gateway of Last Resort.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- Codes, Administrative Distanz und Metrik in der Routing-Tabelle lesen.
+- Für jede Zieladresse den Next Hop per Longest Match vorhersagen.
+- Erklären, wann das Gateway of Last Resort greift.
+
 | CCNA-Ziel | Thema |
 |---|---|
 | 3.1 | Routing-Tabelle lesen |
@@ -62,12 +68,33 @@ graph LR
 
 ## Teil A – Bauen
 
-1. **Basis.** Verkabeln, `build/` einfügen. Die Nachbarn R2–R4 haben je eine Loopback und einen Default zurück zu R1. Auf R1: `show ip route`. Was sind die Codes `C` und `L`?
-2. **Statische Routen auf R1.** `ip route 10.0.0.0 255.0.0.0 192.168.14.2`, `10.1.0.0/16 → 192.168.14.6`, `10.1.1.0/24 → 192.168.14.10`, `0.0.0.0/0 → 192.168.14.2`. Lies die Einträge: `S [1/0] via …`, was bedeuten `1` und `0` (AD/Metrik)?
-3. **Vorhersage.** Für jede Zieladresse notierst du den Next Hop, bevor du pingst: 10.1.1.1 – 10.1.5.5 – 10.9.9.9 – 8.8.8.8 – 172.16.0.1 (Default). Prüfe mit `show ip route 10.1.1.1` und per `traceroute`.
-4. **Regel.** Formuliere die Regeln: erst längster Präfix (Longest Match), bei gleicher Länge niedrigste AD, dann niedrigste Metrik. Was passiert bei zwei Routen gleicher Länge, AD und Metrik (ECMP)?
-5. **AD-Tabelle.** Ordne: Connected 0, Static 1, EIGRP 90, OSPF 110, RIP 120, External EIGRP 170, iBGP 200.
-6. **Gateway of Last Resort.** Wann zeigt die Tabelle `Gateway of last resort is … to network 0.0.0.0`? Entferne den Default und prüfe das Verhalten für 172.16.0.1 (`Destination net unreachable`).
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
+
+1. **Basis.** Verkabeln und `build/` einfügen. R2 bis R4 haben je eine Loopback und eine Default-Route zurück zu R1.
+   - **Prüfen:** `show ip route` auf R1 zeigt nur C- und L-Einträge.
+   - **Denkfrage:** Was bedeuten C und L?
+2. **Statische Routen auf R1.** Lege an: `ip route 10.0.0.0 255.0.0.0 192.168.14.2`, `ip route 10.1.0.0 255.255.0.0 192.168.14.6`, `ip route 10.1.1.0 255.255.255.0 192.168.14.10` und `ip route 0.0.0.0 0.0.0.0 192.168.14.2`.
+   - **Prüfen:** `show ip route static` zeigt vier Einträge der Form `S … [1/0] via …`.
+   - **Denkfrage:** Was bedeuten die beiden Zahlen in `[1/0]`?
+3. **Vorhersagen.** Schreib für jedes Ziel den Next Hop auf, bevor du testest: 10.1.1.1, 10.1.5.5, 10.9.9.9, 8.8.8.8, 172.16.0.1.
+   - **Prüfen:** `show ip route <Ziel>` und `traceroute` bestätigen deine Vorhersage.
+4. **Regel formulieren.** Schreib die Reihenfolge auf, nach der R1 entscheidet.
+   - **Denkfrage:** Was passiert, wenn zwei Routen in allem gleich sind?
+5. **AD-Werte.** Ordne zu: Connected, Static, eBGP, EIGRP, OSPF, RIP, externes EIGRP, iBGP.
+6. **Gateway of Last Resort.** Entferne die Default-Route und pinge 172.16.0.1.
+   - **Prüfen:** Die Zeile „Gateway of last resort“ meldet „not set“, der Ping endet mit `Destination net unreachable`.
+   - **Denkfrage:** Wann steht dort eine Adresse?
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 1:** C = das Netz, das direkt an einem Interface hängt. L = die eigene Adresse an diesem Interface als /32.
+- **Zu 2:** Die erste Zahl ist die Administrative Distanz (statisch = 1), die zweite die Metrik (bei statischen Routen 0).
+- **Zu 3:** 10.1.1.1 → R4 über das /24. 10.1.5.5 → R3 über das /16. 10.9.9.9 → R2 über das /8. 8.8.8.8 und 172.16.0.1 → R2 über die Default-Route.
+- **Zu 4:** Erst das längste passende Präfix, dann die kleinste AD, dann die kleinste Metrik. Sind zwei Routen in allem gleich, nutzt der Router beide (ECMP) und verteilt die Last.
+- **Zu 5:** Connected 0, Static 1, eBGP 20, EIGRP 90, OSPF 110, RIP 120, externes EIGRP 170, iBGP 200.
+- **Zu 6:** Sobald es eine Default-Route 0.0.0.0/0 gibt. Ihr Next Hop wird zum Gateway of Last Resort.
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -89,50 +116,59 @@ show ip route 10.1.1.1
 show ip route static
 traceroute 10.1.5.5
 ```
-Erwartet: 10.1.1.1 über R4 (/24), 10.1.5.5 über R3 (/16), 10.9.9.9 über R2 (/8), 8.8.8.8 über Default (R2).
+
+| Ziel | Das solltest du sehen |
+|---|---|
+| 10.1.1.1 | über R4 (192.168.14.10), Route /24 |
+| 10.1.5.5 | über R3 (192.168.14.6), Route /16 |
+| 10.9.9.9 | über R2 (192.168.14.2), Route /8 |
+| 8.8.8.8 | über R2, Default-Route |
 
 ## Teil C – Üben
 
 Beantworte zuerst selbst, dann klappe die Antwort auf.
 
-1. Routen: 10.0.0.0/8 (S), 10.1.0.0/16 (OSPF), 10.1.1.0/24 (RIP). Wohin geht ein Paket an 10.1.1.9?
+1. Routen: 10.0.0.0/8 (statisch), 10.1.0.0/16 (OSPF), 10.1.1.0/24 (RIP). Wohin geht ein Paket an 10.1.1.9?
 <details><summary>Antwort</summary>
 
-Zur /24-Route über RIP: Der längste Präfix gewinnt, AD ist irrelevant.
+**Über die RIP-Route 10.1.1.0/24.** Das längste Präfix gewinnt. Die AD zählt nur zwischen Routen mit gleich langem Präfix.
 
 </details>
 
-2. Wie unterscheiden sich AD und Metrik?
+2. Was unterscheidet AD und Metrik?
 <details><summary>Antwort</summary>
 
-AD bewertet die Vertrauenswürdigkeit der Quelle (zwischen Protokollen), die Metrik die Güte eines Pfads innerhalb eines Protokolls.
+**Die AD vergleicht Quellen, die Metrik vergleicht Wege.** Mit der AD entscheidet der Router, welchem Protokoll er mehr glaubt. Die Metrik bewertet mehrere Wege innerhalb eines Protokolls.
 
 </details>
 
 3. Was bedeuten `S*` und `0.0.0.0/0`?
 <details><summary>Antwort</summary>
 
-Eine statische Default-Route (Kandidat für das Gateway of Last Resort).
+**Eine statische Default-Route.** Das Sternchen markiert sie als Kandidat für das Gateway of Last Resort.
 
 </details>
 
-4. Was passiert ohne passende Route?
+4. Was passiert mit einem Paket, für das es keine Route gibt?
 <details><summary>Antwort</summary>
 
-Das Paket wird verworfen, der Router sendet ICMP `Destination Unreachable`.
+**Der Router verwirft es und schickt ICMP `Destination Unreachable` an den Absender.**
 
 </details>
 
 5. Wie liest du `O 10.2.0.0/16 [110/20] via 10.0.0.2, 00:03:10, Gi0/1`?
 <details><summary>Antwort</summary>
 
-OSPF-Route zu 10.2.0.0/16, AD 110, Metrik (Kosten) 20, Next Hop 10.0.0.2, seit 3 min 10 s, Ausgang Gi0/1.
+**OSPF-Route zu 10.2.0.0/16 mit AD 110 und Kosten 20 über 10.0.0.2.** Die Route ist seit 3 min 10 s bekannt, der Ausgang ist Gi0/1.
 
 </details>
 
 ## Prüfungsbezug
 
-Routingtabelle: Code (C, L, S, O, D, B), Präfix/Maske, `[AD/Metrik]`, Next Hop, Ausgangsinterface, Alter. Entscheidung: 1) längster passender Präfix, 2) niedrigste AD zwischen Protokollen, 3) niedrigste Metrik innerhalb eines Protokolls. Connected = 0, Static = 1, eBGP 20, EIGRP 90, OSPF 110, RIP 120, iBGP 200. Default-Route 0.0.0.0/0 (Gateway of Last Resort, Flag `*`).
+- Ein Eintrag besteht aus Code (C, L, S, O, D, B), Präfix, `[AD/Metrik]`, Next Hop, Alter und Ausgangsinterface.
+- Entscheidung: 1. längstes Präfix, 2. kleinste AD, 3. kleinste Metrik.
+- AD: Connected 0, Static 1, eBGP 20, EIGRP 90, OSPF 110, RIP 120, iBGP 200.
+- Default-Route 0.0.0.0/0 = Gateway of Last Resort, markiert mit `*`.
 
 ## Lösungen
 

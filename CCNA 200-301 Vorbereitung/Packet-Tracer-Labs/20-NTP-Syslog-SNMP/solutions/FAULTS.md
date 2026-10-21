@@ -5,6 +5,7 @@
 ## Ticket 1 (R2)
 
 - **Symptom:** `show ntp status` auf R2 meldet `Clock is unsynchronized`.
+- **So findest du es:** `show ntp associations` auf R2 zeigt 10.20.1.11 mit Reach 0. Den Server gibt es nicht.
 - **Ursache:** R2 fragt einen nicht existierenden NTP-Server (10.20.1.11) ab.
 - **Fix:** `ntp server 10.20.1.1`.
 - **Eingebaut:**
@@ -17,6 +18,7 @@
 ## Ticket 2 (R2)
 
 - **Symptom:** Meldungen von R1 erscheinen im Syslog-Server, solche von R2 nicht.
+- **So findest du es:** `show logging` auf R2 zeigt bei „Logging to“ eine andere Adresse als 10.20.1.100.
 - **Ursache:** Falsche Syslog-Zieladresse auf R2.
 - **Fix:** `logging host 10.20.1.100`.
 - **Eingebaut:**
@@ -29,6 +31,7 @@
 ## Ticket 3 (R1)
 
 - **Symptom:** Auf dem Syslog-Server fehlen die Link-Up/Down-Meldungen (Level 5/6) von R1; nur Fehler ab Level 3 kommen an.
+- **So findest du es:** `show logging` auf R1 zeigt „Trap logging: level errors“.
 - **Ursache:** Der Trap-Level ist `errors` (3): Notice/Informational werden nicht gesendet.
 - **Fix:** `logging trap informational`.
 - **Eingebaut:**
@@ -41,7 +44,8 @@
 ## Ticket 4 (R2)
 
 - **Symptom:** Der MIB-Browser erhält von R2 keine Antwort (Timeout), von R1 schon.
-- **Ursache:** Die Community unterscheidet sich in der Gross-/Kleinschreibung (`Labro` statt `LabRO`).
+- **So findest du es:** `show snmp community` auf R2 zeigt `Labro`. Communitys unterscheiden Groß- und Kleinschreibung.
+- **Ursache:** Die Community unterscheidet sich in der Groß-/Kleinschreibung (`Labro` statt `LabRO`).
 - **Fix:** `snmp-server community LabRO RO`.
 - **Eingebaut:**
 

@@ -4,6 +4,12 @@
 
 Mit einem Server-PT (HTTP, DNS, TFTP) und einem Router beobachtest du im Simulationsmodus TCP-Handshake, UDP-Anfragen und Portnummern. Ein kaputter ACL-Eintrag zeigt, dass die Namensauflösung (UDP/53) ausfallen kann, während Web (TCP/80) per IP weiter funktioniert.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- TCP und UDP an ihrem Verhalten im Simulationsmodus unterscheiden.
+- Die wichtigsten Well-known Ports und ihr Transportprotokoll aufzählen.
+- Erklären, warum Web per IP gehen kann, während die Namensauflösung ausfällt.
+
 | CCNA-Ziel | Thema |
 |---|---|
 | 1.5 | TCP und UDP im Vergleich |
@@ -62,12 +68,41 @@ graph LR
 
 ## Teil A – Bauen
 
-1. **Basis.** Verkabeln, Configs aus `build/` einfügen, Hosts laut Tabelle. Ping PC1 → SRV.
-2. **DNS (UDP).** DNS-Dienst auf SRV aktivieren, Eintrag `www.lab.local` → 10.4.2.10. PC1 öffnet im Browser `www.lab.local`. Beobachte im Simulationsmodus die DNS-Anfrage: Protokoll, Quellport (dynamisch), Zielport 53. Gibt es einen Verbindungsaufbau?
-3. **HTTP (TCP).** Danach der TCP-Handshake (SYN, SYN/ACK, ACK) zu Port 80, dann HTTP GET und die Antwort. Zähle die Segmente bis zur Anzeige der Webseite.
-4. **TFTP (UDP).** Kopiere von R1 die Konfiguration per `copy running-config tftp:` auf den Server. Welche Ports? Warum braucht TFTP keinen Handshake, aber eigene Fehlerbehandlung (Lock-Step per ACK-Block)?
-5. **Vergleich.** Erstelle eine Tabelle TCP vs. UDP: Verbindung, Zuverlässigkeit, Reihenfolge, Flusskontrolle, Header-Grösse, typische Dienste.
-6. **Well-known Ports.** Ordne zu: 20/21 FTP, 22 SSH, 23 Telnet, 25 SMTP, 53 DNS, 67/68 DHCP, 69 TFTP, 80 HTTP, 110 POP3, 123 NTP, 143 IMAP, 161/162 SNMP, 443 HTTPS, 514 Syslog. Welche nutzen UDP, welche TCP?
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
+
+1. **Basis.** Verkabeln, die Konfigurationen aus `build/` einfügen und die Hosts nach der Tabelle einstellen.
+   - **Prüfen:** PC1 pingt SRV (10.4.2.10).
+2. **DNS beobachten (UDP).** Schalte auf SRV den DNS-Dienst ein und lege `www.lab.local` → 10.4.2.10 an. Öffne auf PC1 im Browser `www.lab.local` und verfolge die DNS-Anfrage im Simulationsmodus.
+   - **Prüfen:** Die Anfrage nutzt UDP mit einem zufälligen Quellport und Zielport 53.
+   - **Denkfrage:** Gibt es vor der DNS-Anfrage einen Verbindungsaufbau?
+3. **HTTP beobachten (TCP).** Verfolge danach den Aufruf der Webseite.
+   - **Prüfen:** Vor dem HTTP-GET kommen SYN, SYN/ACK und ACK zu Port 80.
+   - **Denkfrage:** Wozu dient dieser Handshake?
+4. **TFTP beobachten (UDP).** Kopiere auf R1 die Konfiguration mit `copy running-config tftp:` auf den Server.
+   - **Prüfen:** Die Übertragung geht an UDP 69. Jeder Datenblock wird einzeln bestätigt.
+   - **Denkfrage:** TFTP hat keinen Handshake. Wie stellt es trotzdem sicher, dass nichts verloren geht?
+5. **Vergleichstabelle.** Fülle für TCP und UDP aus: Verbindung, Zuverlässigkeit, Reihenfolge, Flusskontrolle, Header-Größe, typische Dienste.
+6. **Ports zuordnen.** Ordne zu und markiere TCP oder UDP: 20/21 FTP, 22 SSH, 23 Telnet, 25 SMTP, 53 DNS, 67/68 DHCP, 69 TFTP, 80 HTTP, 110 POP3, 123 NTP, 143 IMAP, 161/162 SNMP, 443 HTTPS, 514 Syslog.
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 2:** Nein. UDP schickt die Anfrage sofort. Kommt keine Antwort, fragt der Client nach einer Wartezeit erneut.
+- **Zu 3:** Beide Seiten vereinbaren ihre Startnummern für die Sequenznummern. Erst danach kann TCP Verluste erkennen und Daten in der richtigen Reihenfolge zusammensetzen.
+- **Zu 4:** Im Lock-Step: Der Server schickt einen Block und wartet auf das ACK dafür, bevor der nächste kommt. Fehlt das ACK, schickt er den Block erneut. Die Zuverlässigkeit steckt also in der Anwendung, nicht in UDP.
+- **Zu 5:**
+
+| | TCP | UDP |
+|---|---|---|
+| Verbindung | ja, 3-Wege-Handshake | nein |
+| Zuverlässigkeit | Bestätigung, Wiederholung | keine |
+| Reihenfolge | ja, per Sequenznummer | nein |
+| Flusskontrolle | ja, per Window | nein |
+| Header | 20 Byte (mindestens) | 8 Byte |
+| Dienste | HTTP(S), SSH, FTP, SMTP | DNS, DHCP, TFTP, SNMP, Syslog, NTP, VoIP |
+
+- **Zu 6:** TCP: FTP 20/21, SSH 22, Telnet 23, SMTP 25, HTTP 80, POP3 110, IMAP 143, HTTPS 443. UDP: DHCP 67/68, TFTP 69, NTP 123, SNMP 161/162, Syslog 514. DNS nutzt beides: UDP für normale Anfragen, TCP für große Antworten und Zonentransfers.
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -94,50 +129,57 @@ show access-lists
 show ip interface gi0/0 | include access list
 ping 10.4.2.10
 ```
-Am PC: `nslookup www.lab.local`, `ping www.lab.local`. Erwartet: Name wird aufgelöst, Webseite lädt.
+
+| Prüfung | Das solltest du sehen |
+|---|---|
+| `nslookup www.lab.local` auf PC1 und PC2 | Antwort mit 10.4.2.10 |
+| Browser `www.lab.local` | die Webseite lädt |
+| `show access-lists` auf R1 | Treffer auf den Zeilen für UDP 53 und TCP 80 |
 
 ## Teil C – Üben
 
 Beantworte zuerst selbst, dann klappe die Antwort auf.
 
-1. Warum nutzt DNS normalerweise UDP, schaltet aber bei grossen Antworten auf TCP?
+1. Warum nutzt DNS normalerweise UDP, schaltet aber bei großen Antworten auf TCP?
 <details><summary>Antwort</summary>
 
-Eine einzelne kleine Anfrage/Antwort braucht keinen Handshake. Wird die Antwort zu gross (Truncation, Zonentransfer), wiederholt der Client per TCP/53.
+**Weil eine kleine Frage und eine kleine Antwort keinen Verbindungsaufbau brauchen.** Passt die Antwort nicht in ein UDP-Paket (Truncation) oder geht es um einen Zonentransfer, wiederholt der Client die Anfrage über TCP 53.
 
 </details>
 
-2. Was ist die Aufgabe der Sequenz- und Bestätigungsnummern?
+2. Wozu dienen Sequenz- und Bestätigungsnummern?
 <details><summary>Antwort</summary>
 
-Reihenfolge herstellen, Verluste erkennen und erneut übertragen (TCP).
+**Damit TCP die Reihenfolge herstellen und Verluste erkennen kann.** Fehlt eine Bestätigung, sendet der Absender die Daten erneut.
 
 </details>
 
 3. Wofür braucht man Quell- und Zielport?
 <details><summary>Antwort</summary>
 
-Sie adressieren die Anwendung auf dem Host; der Quellport (dynamisch) trennt parallele Sitzungen.
+**Der Zielport adressiert die Anwendung, der Quellport trennt parallele Sitzungen.** Öffnest du zwei Browser-Tabs zum selben Server, haben beide Zielport 443, aber verschiedene Quellports.
 
 </details>
 
-4. Ein Webserver ist per IP erreichbar, per Name nicht. Welcher Layer-4-Dienst ist verdächtig?
+4. Ein Webserver ist per IP erreichbar, per Name nicht. Welcher Dienst ist verdächtig?
 <details><summary>Antwort</summary>
 
-DNS (UDP/53): Server, Pfad oder ACL prüfen.
+**DNS auf UDP 53.** Prüfe den DNS-Server am Client, den Weg dorthin und ACLs, die UDP 53 blockieren könnten.
 
 </details>
 
 5. Was bedeutet das TCP-Fenster (Window)?
 <details><summary>Antwort</summary>
 
-Menge an Daten, die der Sender ohne Bestätigung senden darf; steuert die Flusskontrolle.
+**Wie viele Daten der Sender schicken darf, ohne auf eine Bestätigung zu warten.** So bremst der Empfänger den Sender, wenn er nicht mehr nachkommt (Flusskontrolle).
 
 </details>
 
 ## Prüfungsbezug
 
-TCP: verbindungsorientiert (3-Wege-Handshake SYN/SYN-ACK/ACK), zuverlässig, geordnet, Flusskontrolle per Fenster, 20 Byte Header. UDP: verbindungslos, ohne Zustellgarantie, 8 Byte Header, geringe Latenz (DNS, DHCP, TFTP, VoIP, SNMP, Syslog, NTP). Die Anwendung entscheidet, ob Zuverlässigkeit nötig ist.
+- TCP: verbindungsorientiert (SYN, SYN/ACK, ACK), zuverlässig, geordnet, Flusskontrolle per Window, 20 Byte Header.
+- UDP: verbindungslos, keine Zustellgarantie, 8 Byte Header, wenig Verzögerung. Typisch: DNS, DHCP, TFTP, VoIP, SNMP, Syslog, NTP.
+- Die Anwendung entscheidet, ob sie Zuverlässigkeit braucht. TFTP baut sie selbst ein.
 
 ## Lösungen
 

@@ -4,6 +4,12 @@
 
 Am Wireless-Router (WRT300N) und im WLC-Webinterface konfigurierst du SSID, Kanal, Sicherheitsmodus und Passphrase. In den Analyseaufgaben liest du Einstellungen und findest, warum Clients sich nicht verbinden.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- Ein WLAN mit SSID, Kanal und WPA2-PSK am Wireless-Router und im WLC einrichten.
+- Nicht überlappende Kanäle wählen und Störungen durch Überlappung erkennen.
+- Personal und Enterprise, WPA2 und WPA3 unterscheiden.
+
 | CCNA-Ziel | Thema |
 |---|---|
 | 1.11 | Wireless-Grundlagen (Kanäle, SSID, RF, Verschlüsselung) |
@@ -54,16 +60,36 @@ graph LR
 
 ## Teil A – Bauen
 
-1. **Basis.** Verkabeln (PC1 an Eth1), Laptops platzieren. WRT300N: Setup → Basic (IP 192.168.0.1, DHCP aktiv).
-2. **WLAN anlegen.** GUI → Wireless → Basic: SSID `LAB-WLAN`, Standard `Mixed`, Kanal 1. Verbinde Laptop1 per Wireless-Dialog. Welche Kanäle überlappen nicht (1/6/11 im 2,4-GHz-Band)?
-3. **WPA2-PSK.** Wireless Security: `WPA2 Personal`, Encryption `AES`, Passphrase `Lab#2026wlan`. Laptop neu verbinden. Warum ist AES (CCMP) besser als TKIP, und warum WPA2/WPA3 statt WEP?
-4. **SSID-Broadcast** ausschalten: Laptop findet das Netz nicht mehr in der Liste; was bringt das wirklich (kein Schutz, nur Verstecken)?
-5. **Zweites Netz.** Zweiter Router (Kanal 3): Welche Störung entsteht (Überlappung), und wie behebst du sie (Kanal 6 oder 11)?
-6. **WLC-GUI.** Im WLC (aus Lab 11) *WLANs → Create New*: Profile `Staff`, SSID `LAB-WLAN`, Security Layer 2 `WPA2+AES`, Auth Key Mgmt `PSK`, Interface/VLAN, Status Enabled. Wo stellst du QoS (Platinum/Gold/Silver/Bronze) ein?
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
+
+1. **Basis.** Verkabeln (PC1 an Eth1) und die Laptops platzieren. Prüfe am WRT300N unter Setup → Basic: IP 192.168.0.1, DHCP an.
+2. **WLAN anlegen.** GUI → Wireless → Basic: SSID `LAB-WLAN`, Standard `Mixed`, Kanal 1. Verbinde Laptop1.
+   - **Prüfen:** Laptop1 bekommt eine Adresse aus 192.168.0.0/24.
+   - **Denkfrage:** Welche Kanäle im 2,4-GHz-Band überlappen sich nicht?
+3. **WPA2-PSK.** Wireless Security: `WPA2 Personal`, Verschlüsselung `AES`, Passphrase `Lab#2026wlan`. Verbinde Laptop1 neu.
+   - **Prüfen:** Mit der richtigen Passphrase klappt es, mit einer falschen nicht.
+   - **Denkfrage:** Warum AES statt TKIP, und warum WPA2 oder WPA3 statt WEP?
+4. **SSID verstecken.** Schalte den SSID-Broadcast aus.
+   - **Prüfen:** Laptop1 findet das Netz nicht mehr in der Liste.
+   - **Denkfrage:** Macht das das WLAN sicherer?
+5. **Zweites WLAN.** Stell einen zweiten Router mit Kanal 3 daneben.
+   - **Denkfrage:** Welches Problem entsteht, und wie behebst du es?
+6. **WLAN im WLC.** Lege im WLC aus Lab 11 unter *WLANs → Create New* an: Profil `Staff`, SSID `LAB-WLAN`, Layer-2-Security `WPA2 + AES`, Auth Key Mgmt `PSK`, passendes Interface, Status Enabled.
+   - **Denkfrage:** Wo stellst du das QoS-Profil ein, und welches nimmst du für Sprache?
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 2:** 1, 6 und 11. Die Kanäle liegen 5 MHz auseinander, ein WLAN ist 20 MHz breit. Erst fünf Kanäle Abstand reichen.
+- **Zu 3:** AES-CCMP ist ein starkes, aktuelles Verfahren. TKIP war nur eine Übergangslösung für alte WEP-Hardware und gilt als gebrochen, WEP lässt sich in Minuten knacken. WPA3 ersetzt PSK durch SAE und schützt gegen Wörterbuchangriffe.
+- **Zu 4:** Nein. Die SSID steht weiter in den Frames der Clients und ist mit jedem Sniffer sichtbar. Das Netz ist nur aus der Liste verschwunden.
+- **Zu 5:** Kanal 3 überlappt mit Kanal 1 und mit 6. Beide Netze stören sich und werden langsamer. Lösung: den zweiten Router auf 6 oder 11 stellen.
+- **Zu 6:** Im WLAN-Profil unter *QoS*. Platinum ist für Sprache gedacht, Gold für Video, Silver ist Standard (Best Effort), Bronze für Hintergrundverkehr.
+
+</details>
 
 ## Teil B2 – Konfiguration interpretieren
 
-Diese Aufgaben brauchen keine Geräte: Lies die Einstellungen und beantworte die Frage, klappe dann die Antwort auf.
+Diese Aufgaben brauchen keine Geräte: Lies die Einstellungen, beantworte die Frage und klappe dann die Antwort auf.
 
 **1. Laptop findet das WLAN nicht**
 
@@ -76,15 +102,15 @@ Diese Aufgaben brauchen keine Geräte: Lies die Einstellungen und beantworte die
 | Kanal | 6 |
 | Security | WPA2 Personal, AES |
 
-Der Laptop zeigt in der Netzliste `LAB-WLAN` nicht an. Was ist die wahrscheinlichste Ursache, wie verbindest du dich trotzdem?
+Der Laptop zeigt `LAB-WLAN` in der Netzliste nicht an. Was ist die wahrscheinlichste Ursache, und wie verbindest du dich trotzdem?
 
 <details><summary>Antwort</summary>
 
-SSID-Broadcast ist aus. Das Netz ist vorhanden, aber nicht in der Liste: SSID manuell eintragen (verstecktes Netz) oder Broadcast aktivieren. Sicherheit gewinnt man dadurch nicht.
+**Der SSID-Broadcast ist aus.** Das Netz ist da, steht aber nicht in der Liste. Trag die SSID von Hand als verstecktes Netz ein oder schalte den Broadcast wieder an. Sicherer wird das Netz durch das Verstecken nicht.
 
 </details>
 
-**2. Verbindung scheitert nach Passphrase**
+**2. Verbindung scheitert nach Eingabe der Passphrase**
 
 | Einstellung | Router | Laptop-Profil |
 |---|---|---|
@@ -92,50 +118,50 @@ SSID-Broadcast ist aus. Das Netz ist vorhanden, aber nicht in der Liste: SSID ma
 | Security | WPA2-Personal, AES | WPA2-Personal, AES |
 | Passphrase | `Lab#2026wlan` | `lab#2026wlan` |
 
-Warum schlägt die Authentifizierung fehl?
+Warum schlägt die Anmeldung fehl?
 
 <details><summary>Antwort</summary>
 
-Die Passphrase unterscheidet sich in Gross-/Kleinschreibung (`L` vs. `l`). PSK ist case-sensitive; aus ihr wird der Schlüssel abgeleitet, der Vier-Wege-Handshake scheitert.
+**Die Passphrase unterscheidet sich in der Groß- und Kleinschreibung (`L` gegen `l`).** Aus der Passphrase wird der Schlüssel berechnet. Ist sie anders, passen die Schlüssel nicht, und der Vier-Wege-Handshake scheitert.
 
 </details>
 
 **3. Schlechte Leistung im Büro**
 
-| AP | Kanal | Band | Weite |
+| AP | Kanal | Band | Breite |
 |---|---|---|---|
 | AP-Eingang | 1 | 2,4 GHz | 20 MHz |
 | AP-Mitte | 3 | 2,4 GHz | 20 MHz |
 | AP-Hinten | 6 | 2,4 GHz | 20 MHz |
 
-Wo liegt das Problem und wie lautet die Lösung?
+Wo liegt das Problem, und wie lautet die Lösung?
 
 <details><summary>Antwort</summary>
 
-Kanal 3 überlappt mit 1 und 6 (Co-Channel/Adjacent-Channel-Interferenz). Lösung: nur 1, 6, 11 verwenden, z. B. 1/11/6, oder auf 5 GHz mit mehr nichtüberlappenden Kanälen ausweichen.
+**Kanal 3 überlappt mit 1 und mit 6.** Die APs stören sich gegenseitig. Lösung: nur 1, 6 und 11 verwenden, z. B. 1, 11, 6, oder auf 5 GHz mit mehr freien Kanälen ausweichen.
 
 </details>
 
-**4. WLC-GUI: Clients erhalten keine Adresse im VLAN der Mitarbeiter**
+**4. WLC: Clients landen im falschen Subnetz**
 
 | WLAN-Einstellung | Wert |
 |---|---|
-| Profile / SSID | Staff / LAB-STAFF |
+| Profil / SSID | Staff / LAB-STAFF |
 | Status | Enabled |
 | Layer-2-Security | WPA2 + AES |
 | Auth Key Mgmt | PSK |
 | QoS | Silver |
 | Interface/Interface Group | management |
 
-Die Clients landen im Management-Subnetz. Was ist falsch?
+Die Clients bekommen Adressen aus dem Management-Subnetz. Was ist falsch?
 
 <details><summary>Antwort</summary>
 
-Dem WLAN ist das Interface `management` zugeordnet statt der dynamischen Schnittstelle des Mitarbeiter-VLANs. Neues Interface (VLAN) anlegen, WLAN darauf abbilden, und der Switch-Trunk zum WLC muss das VLAN führen.
+**Das WLAN hängt am Interface `management` statt am Interface für das Mitarbeiter-VLAN.** Lege ein dynamisches Interface für dieses VLAN an und ordne das WLAN zu. Der Trunk zum WLC muss das VLAN ebenfalls erlauben.
 
 </details>
 
-**5. WLC-GUI: Enterprise gewünscht, aber nur eine Passphrase**
+**5. WLC: Enterprise gewünscht, aber nur eine Passphrase**
 
 | WLAN-Einstellung | Wert |
 |---|---|
@@ -143,62 +169,69 @@ Dem WLAN ist das Interface `management` zugeordnet statt der dynamischen Schnitt
 | Auth Key Mgmt | PSK |
 | RADIUS-Server | – |
 
-Die Firma will individuelle Zugänge pro Benutzer. Was ändert sich?
+Die Firma will einen eigenen Zugang pro Benutzer. Was änderst du?
 
 <details><summary>Antwort</summary>
 
-Auth Key Mgmt von `PSK` auf `802.1X` stellen und einen RADIUS-Server (z. B. ISE) hinterlegen; Clients melden sich mit Benutzernamen/Zertifikat an (WPA2-/WPA3-Enterprise).
+**Auth Key Mgmt von `PSK` auf `802.1X` umstellen und einen RADIUS-Server eintragen, z. B. ISE.** Dann meldet sich jeder Benutzer mit eigenem Namen und Passwort oder Zertifikat an (WPA2- bzw. WPA3-Enterprise).
 
 </details>
 
 ## Verifikation
 
-- Laptop1 zeigt `LAB-WLAN`, verbindet mit WPA2-PSK und erhält `192.168.0.x`.
-- Falsche Passphrase: Verbindung scheitert (Test).
-- Ping Laptop1 → PC1 funktioniert.
+| Prüfung | Das solltest du sehen |
+|---|---|
+| Netzliste auf Laptop1 | `LAB-WLAN` (solange der Broadcast an ist) |
+| Verbindung mit WPA2-PSK | Adresse aus 192.168.0.0/24 |
+| falsche Passphrase | Verbindung scheitert |
+| Ping Laptop1 → PC1 | Antworten |
 
 ## Teil C – Üben
 
 Beantworte zuerst selbst, dann klappe die Antwort auf.
 
-1. Warum 1/6/11 im 2,4-GHz-Band?
+1. Warum 1, 6 und 11 im 2,4-GHz-Band?
 <details><summary>Antwort</summary>
 
-Kanäle sind 5 MHz breit, ein WLAN belegt 20 MHz (≈ 4–5 Kanäle). 1, 6, 11 überlappen sich nicht.
+**Weil sich nur diese drei nicht überlappen.** Die Kanäle liegen 5 MHz auseinander, ein WLAN belegt aber 20 MHz, also etwa vier bis fünf Kanäle.
 
 </details>
 
-2. WPA2-Personal vs. Enterprise?
+2. Was unterscheidet WPA2-Personal von Enterprise?
 <details><summary>Antwort</summary>
 
-Personal: gemeinsamer Pre-Shared Key. Enterprise: individuelle Anmeldung per 802.1X gegen RADIUS.
+**Personal nutzt einen gemeinsamen Schlüssel, Enterprise eine eigene Anmeldung pro Benutzer.** Enterprise läuft über 802.1X gegen einen RADIUS-Server.
 
 </details>
 
 3. Wofür steht SAE bei WPA3?
 <details><summary>Antwort</summary>
 
-Simultaneous Authentication of Equals ersetzt den PSK-Handshake, schützt gegen Offline-Wörterbuchangriffe und bietet Forward Secrecy.
+**Simultaneous Authentication of Equals.** SAE ersetzt den PSK-Handshake, schützt gegen Offline-Wörterbuchangriffe und bietet Forward Secrecy: Ein später geknacktes Passwort entschlüsselt keinen alten Verkehr.
 
 </details>
 
 4. Was ist ein Rogue AP?
 <details><summary>Antwort</summary>
 
-Ein nicht autorisierter AP im eigenen Netz oder in der Nähe; WLC/Monitor-Modus kann ihn erkennen.
+**Ein nicht genehmigter Access Point im eigenen Netz oder in der Nähe.** Der WLC oder APs im Monitor-Modus können ihn erkennen.
 
 </details>
 
 5. Was bewirkt das QoS-Profil Platinum?
 <details><summary>Antwort</summary>
 
-Höchste Priorität im Funkbereich, gedacht für Sprache (Voice).
+**Die höchste Priorität auf der Funkstrecke, gedacht für Sprache.**
 
 </details>
 
 ## Prüfungsbezug
 
-2,4 GHz: Kanäle 1, 6, 11 sind nicht überlappend (je 20 MHz), 5 GHz hat mehr Kanäle ohne Überlappung. SSID = Netzname, BSSID = MAC des AP-Radios. WPA2: AES-CCMP; WPA3: SAE statt PSK, PMF Pflicht, 192-Bit-Suite bei Enterprise. Personal = PSK, Enterprise = 802.1X/RADIUS. WLC-WLAN: Layer-2-Security, Auth-Key-Mgmt (PSK/802.1X), Interface-Zuordnung, QoS-Profil, Status.
+- 2,4 GHz: nur 1, 6 und 11 überlappen sich nicht (je 20 MHz). 5 GHz hat viel mehr freie Kanäle.
+- SSID = Name des Netzes, BSSID = MAC-Adresse des AP-Funkmoduls.
+- WPA2: AES-CCMP. WPA3: SAE statt PSK, PMF Pflicht, 192-Bit-Modus bei Enterprise.
+- Personal = PSK, Enterprise = 802.1X mit RADIUS.
+- WLAN im WLC: Layer-2-Security, Auth Key Mgmt (PSK oder 802.1X), Interface, QoS-Profil, Status.
 
 ## Lösungen
 

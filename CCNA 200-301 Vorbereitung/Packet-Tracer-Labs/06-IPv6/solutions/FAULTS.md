@@ -5,6 +5,7 @@
 ## Ticket 1 (R1)
 
 - **Symptom:** PC1 erhält keine Adresse per SLAAC und erreicht nichts; `show ipv6 interface gi0/0` zeigt keine Router Advertisements.
+- **So findest du es:** `show running-config | include ipv6 unicast-routing` auf R1 bleibt leer. `show ipv6 interface gi0/0` erwähnt keine Router Advertisements.
 - **Ursache:** Auf R1 fehlt `ipv6 unicast-routing`: kein IPv6-Routing, keine Router Advertisements.
 - **Fix:** `ipv6 unicast-routing` global aktivieren.
 - **Eingebaut:**
@@ -16,6 +17,7 @@
 ## Ticket 2 (R1)
 
 - **Symptom:** PC1 erreicht R2 (Link), aber nicht LAN2; `show ipv6 route` zeigt die Route mit einem nicht erreichbaren Next Hop.
+- **So findest du es:** `show ipv6 route` auf R1 zeigt den Next Hop ::3. `show ipv6 neighbors` kennt diese Adresse nicht.
 - **Ursache:** Next Hop 2001:db8:acad:12::3 existiert nicht, R2 hat ::2.
 - **Fix:** Next Hop auf 2001:db8:acad:12::2 korrigieren.
 - **Eingebaut:**
@@ -28,6 +30,7 @@
 ## Ticket 3 (R2)
 
 - **Symptom:** PC2 bekommt eine Adresse aus einem unerwarteten Präfix (…:21::), Antworten an PC1 laufen ins Leere, da R1 …:20::/64 routet.
+- **So findest du es:** `show ipv6 interface brief` auf R2 zeigt am LAN2-Interface das Präfix :21:: statt :20::.
 - **Ursache:** Falsches Präfix am LAN2-Interface (21 statt 20).
 - **Fix:** Präfix 2001:db8:acad:20::/64 verwenden.
 - **Eingebaut:**
@@ -40,6 +43,7 @@
 ## Ticket 4 (R2)
 
 - **Symptom:** LAN2 erreicht nichts jenseits von R2 (auch nicht LAN1).
+- **So findest du es:** `show ipv6 route ::/0` auf R2 zeigt einen Next Hop, den R1 nicht hat.
 - **Ursache:** Default-Route mit falschem Next Hop.
 - **Fix:** Next Hop 2001:db8:acad:12::1.
 - **Eingebaut:**

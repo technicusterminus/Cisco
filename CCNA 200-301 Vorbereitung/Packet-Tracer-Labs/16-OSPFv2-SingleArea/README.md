@@ -4,6 +4,12 @@
 
 Vier Router in Area 0: drei an einem gemeinsamen Switch (Broadcast-Netz mit DR/BDR-Wahl), ein Router per Punkt-zu-Punkt-Link. Du setzt Router-IDs, steuerst die DR-Wahl per Priorität, stellst Passive Interfaces ein und findest typische Adjazenz-Fehler.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- OSPFv2 in einer Area mit festen Router-IDs und Passive Interfaces aufbauen.
+- Die DR/BDR-Wahl vorhersagen und steuern.
+- Adjazenz-Fehler (Router-ID, Area, Timer, `network`-Statement) finden.
+
 | CCNA-Ziel | Thema |
 |---|---|
 | 3.4 | OSPFv2 Single Area |
@@ -78,13 +84,34 @@ Soll-Zustand: R1 = DR (Priorität 200), R2 = BDR (100), R3 = DROther (0). Die Ve
 
 ## Teil A – Bauen
 
-1. **Basis.** Verkabeln, `build/` einfügen, PCs setzen.
-2. **OSPF aktivieren.** `router ospf 1`, `router-id` manuell (R1 1.1.1.1 … R4 4.4.4.4), `network … area 0` für die Link- und LAN-Netze. Warum ist die Router-ID wichtig (Wahlkriterium, Stabilität)?
-3. **Passive Interfaces.** LAN-Ports zu den PCs `passive-interface`, damit keine Hellos dorthin laufen, die Netze aber im OSPF bleiben.
-4. **DR/BDR.** `show ip ospf neighbor` auf R3: Welche Rollen siehst du (DR, BDR, DROTHER)? Setze `ip ospf priority 200` auf R1 und `100` auf R2, `0` auf R3 (Prioritätsänderung wirkt erst nach neuer Wahl: `clear ip ospf process` oder Interface bounce). Wer hat gewonnen?
-5. **Punkt-zu-Punkt.** `ip ospf network point-to-point` an beiden Seiten von R2–R4. Unterschied zu Broadcast (Hello 10 s/Dead 40 s, keine DR-Wahl, Hello an 224.0.0.5).
-6. **Kosten.** `auto-cost reference-bandwidth 1000` auf allen Routern (einheitlich!). Notiere den Pfad-Kostenwert PC1 → PC4 in `show ip route`.
-7. **Default.** (Bonus) R3 originiert mit `default-information originate` einen Default; wirkt, wenn R3 selbst eine Default-Route hat.
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
+
+1. **Basis.** Verkabeln, `build/` einfügen und die PCs einstellen.
+2. **OSPF aktivieren.** `router ospf 1`, Router-ID von Hand (R1 1.1.1.1 bis R4 4.4.4.4) und `network … area 0` für Links und LANs.
+   - **Prüfen:** `show ip ospf neighbor` zeigt auf R2 die Nachbarn R1, R3 und R4.
+   - **Denkfrage:** Warum setzt man die Router-ID von Hand?
+3. **Passive Interfaces.** Setze die LAN-Ports zu den PCs auf `passive-interface`.
+   - **Prüfen:** `show ip protocols` listet sie unter „Passive Interface(s)“, die LAN-Netze stehen trotzdem bei den anderen Routern in der Tabelle.
+4. **DR und BDR.** Sieh dir auf R3 `show ip ospf neighbor` an. Setze dann am LAN-Interface `ip ospf priority 200` auf R1, `100` auf R2 und `0` auf R3. Starte die Wahl mit `clear ip ospf process` neu.
+   - **Prüfen:** R1 ist DR, R2 BDR, R3 DROTHER.
+   - **Denkfrage:** Warum ändert sich ohne Neustart nichts?
+5. **Punkt-zu-Punkt.** Setze auf beiden Seiten von R2–R4 `ip ospf network point-to-point`.
+   - **Prüfen:** `show ip ospf neighbor` zeigt R4 als `FULL/-`.
+   - **Denkfrage:** Was ändert sich gegenüber Broadcast?
+6. **Kosten.** Setze auf allen Routern `auto-cost reference-bandwidth 1000`.
+   - **Prüfen:** `show ip route ospf` zeigt höhere Kosten als vorher.
+   - **Denkfrage:** Warum auf allen Routern gleich?
+7. **Bonus: Default verteilen.** R3 verteilt mit `default-information originate` eine Default-Route.
+   - **Prüfen:** Die anderen Router zeigen `O*E2 0.0.0.0/0`, sobald R3 selbst eine Default-Route hat.
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 2:** Die Router-ID identifiziert den Router in jedem LSA und entscheidet bei der DR-Wahl mit. Von Hand gesetzt bleibt sie stabil, auch wenn Interfaces dazukommen oder ausfallen.
+- **Zu 4:** Die DR-Wahl ist nicht präemptiv. Ein gewählter DR bleibt, bis er ausfällt oder OSPF neu startet.
+- **Zu 5:** Auf Punkt-zu-Punkt gibt es keine DR-Wahl, beide Router werden direkt FULL. Die Timer bleiben 10/40 s.
+- **Zu 6:** Mit der Standardreferenz von 100 Mbit/s haben FastEthernet und GigabitEthernet beide Kosten 1, OSPF unterscheidet sie also nicht. Ist die Referenz auf den Routern verschieden, rechnen sie mit verschiedenen Kosten, und die Pfadwahl wird uneinheitlich.
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -109,57 +136,67 @@ show ip ospf interface gi0/0
 show ip protocols
 show ip route ospf
 ```
-Erwartet: Auf R3 erscheinen R1 als `FULL/DR` und R2 als `FULL/BDR`. Auf R1 steht R2 als `FULL/BDR` und R3 als `FULL/DROTHER`; R2 und R4 sind `FULL/-` (Punkt-zu-Punkt). PC1, PC3 und PC4 pingen sich gegenseitig.
+
+| Prüfung | Das solltest du sehen |
+|---|---|
+| `show ip ospf neighbor` auf R3 | R1 als `FULL/DR`, R2 als `FULL/BDR` |
+| `show ip ospf neighbor` auf R1 | R2 als `FULL/BDR`, R3 als `FULL/DROTHER` |
+| `show ip ospf neighbor` auf R2 | R4 als `FULL/-` (Punkt-zu-Punkt) |
+| Ping zwischen PC1, PC3 und PC4 | Antworten |
 
 ## Teil C – Üben
 
 Beantworte zuerst selbst, dann klappe die Antwort auf.
 
-1. Warum wird nur im Broadcast-Segment ein DR gewählt?
+1. Warum gibt es nur in Broadcast-Segmenten einen DR?
 <details><summary>Antwort</summary>
 
-Um die Zahl der Adjazenzen von n(n−1)/2 auf Verbindungen zu DR/BDR zu begrenzen und Flooding zu bündeln. P2P-Links brauchen das nicht.
+**Damit nicht jeder Router mit jedem eine volle Adjazenz bilden muss.** Ohne DR wären das n(n−1)/2 Adjazenzen. Mit DR spricht jeder nur mit DR und BDR. Auf einem Punkt-zu-Punkt-Link gibt es ohnehin nur zwei Router.
 
 </details>
 
 2. Router A hat Hello 10, Router B Hello 5. Was passiert?
 <details><summary>Antwort</summary>
 
-Keine Nachbarschaft: Hello-/Dead-Timer müssen übereinstimmen.
+**Sie werden keine Nachbarn.** Hello- und Dead-Timer müssen auf beiden Seiten gleich sein.
 
 </details>
 
 3. Wie legt OSPF die Router-ID fest?
 <details><summary>Antwort</summary>
 
-Konfigurierter `router-id`, sonst höchste Loopback-IP, sonst höchste IP aktiver physischer Interfaces.
+**Erst `router-id`, sonst die höchste Loopback-Adresse, sonst die höchste Adresse eines aktiven Interfaces.**
 
 </details>
 
-4. Was bedeutet `2-WAY/DROTHER`?
+4. Was bedeutet `2WAY/DROTHER`?
 <details><summary>Antwort</summary>
 
-Beide Router sind keine DR/BDR: Sie bleiben im Zustand 2-Way und tauschen LSAs nur über DR/BDR aus (kein FULL).
+**Beide sind weder DR noch BDR und bleiben deshalb bei 2-Way.** Das ist korrekt. LSAs tauschen sie über DR und BDR aus.
 
 </details>
 
-5. Wann ändert eine Prioritätsänderung den DR?
+5. Wann ändert eine neue Priorität den DR?
 <details><summary>Antwort</summary>
 
-Nicht sofort: Der DR ist nicht präemptiv und bleibt, bis die Wahl neu stattfindet (OSPF-Neustart, Interface-Flap).
+**Erst bei der nächsten Wahl.** Die DR-Rolle ist nicht präemptiv. Neu gewählt wird nach einem OSPF-Neustart oder wenn der DR ausfällt.
 
 </details>
 
-6. Wie wird die Kosten-Metrik berechnet?
+6. Wie berechnet OSPF die Kosten?
 <details><summary>Antwort</summary>
 
-Cost = Referenzbandbreite / Interface-Bandbreite (Standard 10^8 bps); FastEthernet 1, GigabitEthernet 1 (gerundet), daher Referenz anpassen.
+**Referenzbandbreite ÷ Interface-Bandbreite.** Standard ist 100 Mbit/s. FastEthernet und GigabitEthernet bekommen beide 1, deshalb setzt man die Referenz höher.
 
 </details>
 
 ## Prüfungsbezug
 
-OSPF: Link-State, Dijkstra, Kosten = Referenzbandbreite/Bandbreite (Standard 100 Mbit/s), AD 110. Nachbarschaft braucht gleiche Area, Subnetz, Hello/Dead-Timer, Authentisierung, MTU, Stub-Flag. Router-ID: manuell > höchste Loopback > höchste aktive Interface-IP. Broadcast-Netze wählen DR/BDR (Priorität, dann Router-ID, nicht-präemptiv; Priorität 0 = kandidiert nicht). Hello 10 s/Dead 40 s (Broadcast/P2P), 30/120 (NBMA). Multicast 224.0.0.5 (alle OSPF-Router), 224.0.0.6 (DR/BDR).
+- OSPF: Link-State, SPF (Dijkstra), Kosten = Referenz ÷ Bandbreite (Standard 100 Mbit/s), AD 110.
+- Nachbarschaft braucht gleich: Area, Subnetz, Hello/Dead, Authentisierung, MTU, Stub-Flag. Die Router-ID muss eindeutig sein.
+- Router-ID: manuell, dann höchste Loopback, dann höchste aktive Interface-IP.
+- DR/BDR nur in Broadcast-Netzen: höchste Priorität, dann höchste Router-ID, nicht präemptiv. Priorität 0 = nie DR.
+- Hello/Dead 10/40 s (Broadcast, P2P), 30/120 s (NBMA). 224.0.0.5 alle OSPF-Router, 224.0.0.6 DR/BDR.
 
 ## Lösungen
 

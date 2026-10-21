@@ -3,6 +3,12 @@
 **CCNA-Ziele:** 6.5 REST-API (Authentisierung, CRUD, HTTP-Verben, Datenformate) · 6.6 Konfigurationsmanagement (Ansible, Terraform) · 6.7 JSON lesen
 **Dauer:** ca. 2 h · **Niveau:** leicht bis mittel · **Voraussetzung:** Python 3.9+, `pip install pyyaml`
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- JSON lesen, Fehler darin finden und gültiges JSON schreiben.
+- REST-Aufrufe mit Authentisierung bauen und HTTP-Methoden und Statuscodes zuordnen.
+- Ein einfaches Ansible-Playbook lesen und reparieren.
+
 Alles läuft lokal. Die Tests starten die Mock-API selbst (nur Standardbibliothek). **Die Tests wurden mit den Musterlösungen ausgeführt (grün).**
 
 | Aufgabe | Ziel | Inhalt |

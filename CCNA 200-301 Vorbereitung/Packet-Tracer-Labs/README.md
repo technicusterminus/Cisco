@@ -6,13 +6,13 @@ Hands-on-Übungen zu **allen 53 Prüfungszielen** der CCNA 200-301 v1.1 (6 Prüf
 
 ## Arbeiten mit den Dateien
 
-Packet-Tracer-Dateien (`.pkt`) liegen nicht bei: Ich kann sie ohne Packet Tracer weder erzeugen noch prüfen. Dafür beschreibt jedes Lab Geräte, Modelle, Ports und Kabel in Tabellen und liefert die Konfigurationen als Textdateien. Der Aufbau dauert pro Lab etwa 5 bis 10 Minuten; speichere ihn danach als eigene `.pkt`.
+Fertige `.pkt`-Dateien liegen nicht bei. Stattdessen beschreibt jedes Lab Geräte, Modelle, Ports und Kabel in Tabellen und liefert die Konfigurationen als Textdateien. Der Aufbau dauert pro Lab etwa 5 bis 10 Minuten; speichere ihn danach als eigene `.pkt`.
 
 1. **Topologie bauen.** Geräte laut Tabelle „Geräte“ platzieren (Modelle wie angegeben), Kabel laut Tabelle „Verkabelung“ **von Hand** wählen (Straight-Through, Cross-Over; das trainiert Ziel 1.3) und auf die genannten Ports stecken.
 2. **Ausgangszustand laden.** Pro Gerät: *CLI*-Tab → `enable` → `configure terminal`, dann den Inhalt von `build/<Gerät>.txt` einfügen. Lange Dateien in Blöcken einfügen, falls Zeilen verloren gehen, und danach `end` und `write memory`.
 3. **Endgeräte** (PC, Laptop, Server) setzen: *Desktop* → *IP Configuration* mit den Werten aus der Tabelle „Adressplan“.
-4. **Teil A** bearbeiten: Du ergänzt die Konfiguration selbst. Vergleiche danach mit `solutions/<Gerät>.cfg`.
-5. **Teil B (Reparieren).** Alle Geräte zurücksetzen (`erase startup-config`, `reload`, oder Geräte neu platzieren), dann `repair/<Gerät>.txt` einfügen und die Endgeräte laut Tabelle im README einstellen. Die Tickets abarbeiten, die Auflösung steht in `solutions/FAULTS.md`.
+4. **Teil A** bearbeiten: Du ergänzt die Konfiguration selbst und prüfst jeden Schritt. Erst am Ende vergleichst du mit `solutions/<Gerät>.cfg`.
+5. **Teil B (Reparieren).** Alle Geräte zurücksetzen (`erase startup-config`, `reload`, oder Geräte neu platzieren), dann `repair/<Gerät>.txt` einfügen und die Endgeräte laut Tabelle im README einstellen. Die Tickets wie im Betrieb abarbeiten: Symptom nachstellen, eingrenzen, beheben, verifizieren. Erst nach 20 Minuten ohne Fortschritt in `solutions/FAULTS.md` schauen. Dort steht pro Ticket zuerst, mit welchem Befehl du den Fehler gefunden hättest, dann Ursache und Lösung.
 6. **Teil C** (Transferfragen) erst selbst beantworten, dann aufklappen.
 
 Voraussetzung: Cisco Packet Tracer 8.2 oder neuer (kostenlos über Cisco Networking Academy).
@@ -72,13 +72,15 @@ Die komplette Tabelle mit Links zu Aufgaben und Lösungen steht in [ZIELE.md](ZI
 5. **Sicherheit (Bereich 5):** 13 → 23 → 24 → 26 → 25
 6. **Automatisierung (Bereich 6):** 27 → 28
 
-Faustregel: Teil A am ersten Tag, Teil B (Reparieren) am nächsten Tag ohne Blick in die Lösung, danach Teil C und die Prüfungsfragen.
+## So arbeitest du ein Lab durch
 
-## Ehrlicher Hinweis zum Teststand
+1. **Lernziele lesen.** Jedes Lab sagt am Anfang, was du danach können sollst.
+2. **Teil A: Bauen.** Jeder Schritt hat ein **Prüfen** (woran du den Erfolg erkennst) und oft eine **Denkfrage**. Beantworte sie, bevor du die Antworten am Ende von Teil A aufklappst.
+3. **Teil B: Reparieren.** Am besten an einem anderen Tag und ohne Blick in die Lösung.
+4. **Teil C: Üben.** Transferfragen, erst selbst antworten, dann aufklappen. Danach die passenden Karten im Anki-Deck wiederholen.
 
-- **Python-Paket (Lab 27):** Die Tests und Prüfskripte wurden mit den Musterlösungen ausgeführt (grün), die unfertigen Vorlagen schlagen absichtlich fehl.
-- **Packet-Tracer-Labs (01–26):** Die Konfigurationen sind per Skript erzeugt und automatisch auf folgende Punkte geprüft: Jeder verwendete Port existiert am angegebenen Gerätemodell, kein Port ist doppelt belegt, die Adressen von Router-zu-Router-Links liegen im selben Subnetz, jedes eingebaute Fehlermuster kommt in der Konfiguration vor. **Ich habe die Labs nicht in Packet Tracer gestartet.** Befehle sind für IOS 15.x geschrieben, wie Packet Tracer es nachbildet; einzelne Befehle, Portnamen oder Verhalten können in deiner Version abweichen.
-- **Mit grösserem Risiko:** Lab 11 und 12 (WLC/LAP und GUI, Menünamen je nach Version), Lab 08 (LLDP), Lab 22 (QoS-MQC wird in Packet Tracer nur teilweise simuliert), Lab 24 (Dynamic ARP Inspection fehlt je nach Version), Lab 25 (IPsec braucht die Security-Lizenz am 2911).
-- Wenn etwas nicht läuft: Fehlermeldung als Lernanlass behandeln, mit der Cisco-Dokumentation gegenprüfen und gern eine Korrektur melden.
+## Stand
 
-Alle Adressen stammen aus Privat- oder Dokumentationsbereichen (RFC 1918, 192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24, 2001:db8::/32), Passwörter sind reine Lab-Werte. Es stecken keine echten Netzdaten drin.
+- **Python-Paket (Lab 27):** Die Tests laufen mit den Musterlösungen grün. Die unfertigen Vorlagen schlagen absichtlich fehl.
+- **Packet-Tracer-Labs (01–26):** Die Konfigurationen sind per Skript erzeugt und geprüft: Jeder Port existiert am Gerätemodell, kein Port ist doppelt belegt, Router-Links liegen im selben Subnetz, jeder Fehler steckt in der Konfiguration. In Packet Tracer selbst sind die Labs noch nicht durchgespielt.
+- **Befehl wird nicht angenommen?** Die Befehle sind für IOS 15.x geschrieben, wie Packet Tracer es nachbildet. Einzelne Befehle oder Portnamen können je nach Version abweichen. Das ist dann eine Grenze der Software, kein Fehler von dir.

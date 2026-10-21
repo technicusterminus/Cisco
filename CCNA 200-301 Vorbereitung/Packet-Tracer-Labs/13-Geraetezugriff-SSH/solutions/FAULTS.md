@@ -5,6 +5,7 @@
 ## Ticket 1 (R1)
 
 - **Symptom:** `ssh -l admin 10.13.1.1` wird abgelehnt (`Connection refused`), Telnet geht stattdessen.
+- **So findest du es:** `show running-config | section line vty` zeigt `transport input telnet`.
 - **Ursache:** Die vty-Lines erlauben nur Telnet.
 - **Fix:** `transport input ssh` auf den vty-Lines.
 - **Eingebaut:**
@@ -17,6 +18,7 @@
 ## Ticket 2 (R1)
 
 - **Symptom:** Die Schlüsselerzeugung scheitert (`Please define a domain-name first`), `show ip ssh` meldet SSH disabled; SSH ist nicht möglich.
+- **So findest du es:** `show ip ssh` meldet „SSH Disabled“. `show running-config | include domain` bleibt leer.
 - **Ursache:** Ohne `ip domain-name` kann kein RSA-Schlüssel erzeugt werden, damit startet SSH nicht.
 - **Fix:** `ip domain-name lab.local`, dann `crypto key generate rsa modulus 2048`.
 - **Eingebaut:**
@@ -28,6 +30,7 @@
 ## Ticket 3 (R1)
 
 - **Symptom:** SSH baut die Verbindung auf, aber die Anmeldung wird immer abgelehnt (`Access denied`).
+- **So findest du es:** `show running-config | include username` bleibt leer, auf den vty-Lines steht aber `login local`.
 - **Ursache:** `login local` verlangt einen lokalen Benutzer; es existiert keiner.
 - **Fix:** `username admin privilege 15 secret …` anlegen.
 - **Eingebaut:**
@@ -39,6 +42,7 @@
 ## Ticket 4 (R1)
 
 - **Symptom:** Telnet/SSH zeigen `Password required, but none set` und trennen die Verbindung.
+- **So findest du es:** `show running-config | section line vty` zeigt `login` ohne `password` und ohne `login local`.
 - **Ursache:** `login` ohne `password` auf den vty-Lines (kein Passwort gesetzt).
 - **Fix:** `login local` (mit lokalem Benutzer) oder `password` setzen.
 - **Eingebaut:**

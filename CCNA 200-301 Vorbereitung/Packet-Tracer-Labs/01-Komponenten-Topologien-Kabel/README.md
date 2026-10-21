@@ -4,6 +4,12 @@
 
 Du baust ein SOHO-Netz und ein Campus-Netz in 2-Tier-Architektur, wählst jedes Kabel selbst (ohne die Auto-Verbindung von Packet Tracer) und ordnest jedem Gerät seine Rolle zu. Das Lab braucht fast keine Konfiguration; der Lerneffekt liegt in Entwurf, Kabelwahl und den Fragen.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- Für jede Geräteverbindung das richtige Kabel wählen und begründen.
+- Router, Switches, Firewall, AP, WLC und Server ihrer Rolle und ihrem Layer zuordnen.
+- 2-Tier, 3-Tier und Spine-Leaf unterscheiden und einem Einsatz zuordnen.
+
 | CCNA-Ziel | Thema |
 |---|---|
 | 1.1 | Rollen von Netzwerkkomponenten (Router, Switches, Firewall/IPS, AP, WLC, Endgeräte, Server, PoE) |
@@ -77,75 +83,102 @@ Oben das Campus-Netz (2-Tier, Collapsed Core), das SOHO-Netz mit WRT300N baust d
 
 ## Teil A – Bauen
 
-1. **Campus bauen.** Platziere die Geräte aus der Tabelle und verbinde sie **von Hand** mit dem passenden Kabel gemäss Verkabelungstabelle (Straight-Through bei ungleichen Geräteklassen, Cross-Over bei gleichen). Prüfe, dass alle Link-LEDs grün werden. Welche Kabel wären bei Auto-MDIX egal, und warum benutzt Cisco trotzdem die klassische Regel in Prüfungsfragen?
-2. **Rollen zuordnen.** Beschrifte jedes Gerät (Notiz-Funktion): Access-Layer, Distribution/Core, Edge-Router, Endgerät, Server. Welche Geräte arbeiten auf Layer 2, welche auf Layer 3?
-3. **SOHO bauen.** Zweites Netz: ein WRT300N (Wireless Router), zwei PCs per Kabel (Ports Eth1/Eth2), ein Laptop per WLAN. Wo steckt das Internet-Kabel (Port „Internet“)? Welche Funktionen bündelt das Gerät (Router, Switch, AP, DHCP, NAT)?
-4. **Topologie bewerten.** Zeichne auf Papier dasselbe Campus-Netz als 3-Tier und als Spine-Leaf. Wann lohnt sich die dritte Ebene, wann Spine-Leaf?
-5. **Glasfaser.** Tausche in Gedanken den Uplink ACC1–CORE1 gegen Glasfaser: Welche Module/Fasern brauchst du bei 300 m, welche bei 10 km?
-6. **Collapsed Core.** Warum sind CORE1 und CORE2 untereinander verbunden, und was geht verloren, wenn der Link fehlt?
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
+
+1. **Campus bauen.** Platziere die Geräte aus der Tabelle. Verbinde sie von Hand nach der Verkabelungstabelle, ohne die Auto-Verbindung (Blitz). Regel: Straight-Through zwischen verschiedenen Geräteklassen, Cross-Over zwischen gleichen.
+   - **Prüfen:** Alle Link-LEDs werden grün.
+   - **Denkfrage:** Bei welchen Verbindungen wäre der Kabeltyp dank Auto-MDIX egal? Und warum fragt Cisco trotzdem nach der klassischen Regel?
+2. **Rollen zuordnen.** Beschrifte jedes Gerät mit einer Notiz: Access-Layer, Distribution/Core, Edge-Router, Endgerät oder Server.
+   - **Denkfrage:** Welche Geräte arbeiten auf Layer 2, welche auf Layer 3?
+3. **SOHO bauen.** Baue ein zweites Netz: ein WRT300N, zwei PCs per Kabel an Eth1 und Eth2, ein Laptop per WLAN. Der Port „Internet“ führt nach außen.
+   - **Prüfen:** Die PCs bekommen per DHCP eine Adresse aus 192.168.0.0/24, der Laptop verbindet sich mit der SSID „SOHO“.
+   - **Denkfrage:** Welche Funktionen stecken in diesem einen Gerät?
+4. **Topologie bewerten.** Zeichne dasselbe Campus-Netz auf Papier einmal als 3-Tier und einmal als Spine-Leaf.
+   - **Denkfrage:** Wann lohnt sich die dritte Ebene, wann Spine-Leaf?
+5. **Glasfaser wählen.** Stell dir vor, der Uplink ACC1–CORE1 wird auf Glasfaser umgestellt.
+   - **Denkfrage:** Welche Faser nimmst du bei 300 m, welche bei 10 km?
+6. **Collapsed Core prüfen.** Sieh dir den Link zwischen CORE1 und CORE2 an.
+   - **Denkfrage:** Wozu dient er, und was fehlt ohne ihn?
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 1:** Auto-MDIX erkennt die Belegung und tauscht Senden und Empfangen selbst. Dann funktionieren auch Switch–Switch oder PC–Router mit Straight-Through. Die Prüfung fragt die Regel trotzdem ab, weil sie zeigt, ob du verstehst, welche Geräte auf welchen Adern senden.
+- **Zu 2:** Layer 2: Access-Switches. Layer 3: Router, Firewall und Multilayer-Switches im Core. Endgeräte und Server arbeiten auf allen Schichten, leiten aber nichts für andere weiter.
+- **Zu 3:** Router mit NAT, Switch für die LAN-Ports, Access Point für das WLAN, DHCP-Server und oft eine einfache Firewall.
+- **Zu 4:** Die dritte Ebene (Core) lohnt sich, sobald viele Distribution-Blöcke verbunden werden müssen, z. B. mehrere Gebäude. Spine-Leaf passt ins Rechenzentrum: Jeder Leaf hängt an jedem Spine, jeder Weg ist gleich lang. Das passt zu viel Ost-West-Verkehr zwischen Servern.
+- **Zu 5:** 300 m schafft Multimode-Faser (OM3/OM4). Für 10 km brauchst du Singlemode-Faser mit passenden Optiken (z. B. LR).
+- **Zu 6:** Er verbindet die beiden Core-Switches. Ohne ihn müsste Verkehr zwischen den Cores über einen Access-Switch laufen, und fällt ein Uplink aus, kann ein Teil des Netzes abgeschnitten werden.
+
+</details>
 
 ## Verifikation
 
-- Alle Links grün, jeder Port gemäss Tabelle belegt (Mouse-over zeigt Portnamen).
-- Zwei PCs im Campus erhalten manuell passende IPs (10.1.1.0/24) und pingen sich über CORE1/CORE2 (L2-Verbindung; Switches ohne VLAN-Konfiguration reichen).
-- WRT300N: Laptop verbindet per WLAN (SSID „SOHO“), PCs holen per DHCP eine Adresse (`192.168.0.x`).
+| Prüfung | Das solltest du sehen |
+|---|---|
+| Link-LEDs | alle grün, jeder Port wie in der Tabelle belegt (Mauszeiger zeigt den Portnamen) |
+| Ping zwischen zwei Campus-PCs (10.1.1.0/24, IP von Hand) | Antwort über CORE1/CORE2, ohne VLAN-Konfiguration |
+| SOHO | Laptop im WLAN „SOHO“, PCs mit einer Adresse aus 192.168.0.0/24 per DHCP |
 
 ## Teil C – Üben
 
 Beantworte zuerst selbst, dann klappe die Antwort auf.
 
-1. Welches Kabel verbindet (a) PC↔Switch, (b) Switch↔Switch, (c) Router↔Router, (d) PC↔Router, (e) Router↔Konsolenport des PCs?
+1. Welches Kabel verbindet (a) PC↔Switch, (b) Switch↔Switch, (c) Router↔Router, (d) PC↔Router, (e) PC↔Konsolenport des Routers?
 <details><summary>Antwort</summary>
 
-(a) Straight-Through, (b) Cross-Over, (c) Cross-Over, (d) Cross-Over, (e) Console/Rollover. Mit Auto-MDIX gehen (b)–(d) auch mit Straight.
+**(a) Straight-Through, (b) Cross-Over, (c) Cross-Over, (d) Cross-Over, (e) Konsolenkabel (Rollover).** Regel: gleiche Geräteklasse → Cross-Over, verschiedene → Straight-Through. PC und Router zählen dabei zur selben Klasse. Mit Auto-MDIX gehen (b) bis (d) auch mit Straight-Through.
 
 </details>
 
 2. Nenne drei Unterschiede zwischen Singlemode- und Multimode-Faser.
 <details><summary>Antwort</summary>
 
-SMF: kleiner Kern (~9 µm), Laser, Kilometer-Strecken, teurere Optik; MMF: grösserer Kern (50/62,5 µm), LED/VCSEL, Strecken bis einige hundert Meter, günstiger.
+**Kern, Lichtquelle und Reichweite.** Singlemode hat einen dünnen Kern (etwa 9 µm), nutzt einen Laser und schafft viele Kilometer, die Optiken sind teurer. Multimode hat einen dicken Kern (50 oder 62,5 µm), nutzt LED oder VCSEL und reicht nur einige hundert Meter, ist dafür günstiger.
 
 </details>
 
-3. Was ist ‚Shared Media‘ und was ‚Point-to-Point‘ bei Ethernet?
+3. Was ist Shared Media, was Point-to-Point bei Ethernet?
 <details><summary>Antwort</summary>
 
-Shared Media: mehrere Stationen am selben Medium (Hub, Koax), Halbduplex mit CSMA/CD und Kollisionen. Point-to-Point: Switch-Port zu Endgerät oder Switch zu Switch, Vollduplex, keine Kollisionen.
+**Shared Media: viele Stationen teilen ein Medium. Point-to-Point: genau zwei Geräte an einem Link.** Shared Media (Hub, Koax) läuft halbduplex mit CSMA/CD, Kollisionen sind normal. Point-to-Point (Switch-Port zu Gerät) läuft vollduplex, Kollisionen gibt es nicht.
 
 </details>
 
-4. Wofür steht PoE und welche Standards kennst du?
+4. Wofür steht PoE, und welche Standards kennst du?
 <details><summary>Antwort</summary>
 
-Power over Ethernet versorgt Geräte über das Datenkabel. 802.3af (PoE, bis 15,4 W am PSE), 802.3at (PoE+, 30 W), 802.3bt (PoE++, 60/90 W). Typisch für IP-Phones, APs, Kameras.
+**Power over Ethernet: Strom über das Datenkabel.** 802.3af (PoE, bis 15,4 W am Switch-Port), 802.3at (PoE+, 30 W), 802.3bt (PoE++, 60 bzw. 90 W). Typisch für IP-Telefone, Access Points und Kameras.
 
 </details>
 
 5. Was unterscheidet eine NGFW von einer klassischen Firewall, und wo steht ein IPS?
 <details><summary>Antwort</summary>
 
-NGFW prüft zusätzlich Anwendungen, Benutzer, Inhalte und enthält IPS/Malware-Schutz; ein IPS inspiziert Verkehr auf Angriffssignaturen/Anomalien und blockiert aktiv, wenn inline. Platzierung am Netzübergang oder vor schützenswerten Zonen.
+**Die NGFW erkennt zusätzlich Anwendungen, Benutzer und Inhalte.** Eine klassische Firewall sieht nur Adressen, Ports und Verbindungszustand. Ein IPS sucht im Datenstrom nach Angriffsmustern und blockiert sie, wenn es inline steht. Man setzt es an den Übergang ins Internet oder vor schützenswerte Zonen.
 
 </details>
 
-6. Wann nimmst du 2-Tier, 3-Tier und Spine-Leaf?
+6. Wann nimmst du 2-Tier, 3-Tier oder Spine-Leaf?
 <details><summary>Antwort</summary>
 
-2-Tier (Access + Collapsed Core) für kleine bis mittlere Standorte. 3-Tier (Access, Distribution, Core) bei vielen Gebäuden/Räumen, wenn Skalierung und Fehlerdomänen zählen. Spine-Leaf im Rechenzentrum: gleichmässige Latenz, viel Ost-West-Verkehr.
+**2-Tier für kleine und mittlere Standorte, 3-Tier für große Campus, Spine-Leaf im Rechenzentrum.** 2-Tier fasst Distribution und Core zusammen (Collapsed Core). 3-Tier trennt sie, damit viele Gebäude sauber skalieren. Spine-Leaf bietet gleich lange Wege für viel Verkehr zwischen Servern.
 
 </details>
 
-7. Was ist der Unterschied zwischen On-Premises- und Cloud-Betrieb, und was bedeutet das für die WAN-Anbindung?
+7. Was unterscheidet On-Premises- von Cloud-Betrieb, und was heißt das für die WAN-Anbindung?
 <details><summary>Antwort</summary>
 
-On-Prem: Hardware und Betrieb liegen im eigenen Haus. Cloud: Dienste liegen beim Anbieter; das WAN (Internet, VPN, Direktanbindung) wird zum kritischen Pfad, Bandbreite und Redundanz am Internet-Zugang zählen mehr.
+**On-Premises läuft im eigenen Haus, Cloud beim Anbieter. Mit der Cloud wird der Internetzugang zum kritischen Pfad.** Dann zählen Bandbreite und Redundanz am Übergang nach außen deutlich mehr, z. B. zwei Provider oder eine Direktanbindung.
 
 </details>
 
 ## Prüfungsbezug
 
-Router trennen Broadcast-Domänen und routen zwischen Netzen, L2-Switches schalten Frames per MAC-Tabelle, L3-Switches routen zusätzlich per SVI, Firewalls/IPS filtern und inspizieren, WLC steuert Lightweight-APs zentral, PoE versorgt Endgeräte über das Datenkabel. 2-Tier (Collapsed Core) für kleine/mittlere Campus, 3-Tier für grosse, Spine-Leaf im Rechenzentrum (jeder Leaf mit jedem Spine, Ost-West-Verkehr). Straight-Through: ungleiche Klassen (PC–Switch, Router–Switch); Cross-Over: gleiche Klassen (Switch–Switch, Router–Router, PC–Router). Multimode für kurze Strecken (Hunderte Meter), Singlemode für lange (km).
+- Router trennen Broadcast-Domänen und routen zwischen Netzen. L2-Switches leiten nach der MAC-Tabelle weiter, L3-Switches routen zusätzlich über SVIs.
+- Firewall und IPS filtern und prüfen Verkehr. Ein WLC steuert Lightweight-APs zentral. PoE versorgt Endgeräte über das Datenkabel.
+- 2-Tier (Collapsed Core) für kleine und mittlere Campus, 3-Tier für große, Spine-Leaf im Rechenzentrum.
+- Straight-Through zwischen verschiedenen Klassen (PC–Switch, Router–Switch), Cross-Over zwischen gleichen (Switch–Switch, Router–Router, PC–Router).
+- Multimode für Hunderte Meter, Singlemode für Kilometer.
 
 ## Lösungen
 

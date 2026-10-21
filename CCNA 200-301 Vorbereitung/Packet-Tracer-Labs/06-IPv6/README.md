@@ -4,6 +4,12 @@
 
 Zwei Router verbinden zwei IPv6-LANs. Du vergibst globale Unicast-, Link-Local- und EUI-64-Adressen, lässt PCs per SLAAC eine Adresse bilden und routest statisch (IPv6-Default und -Netzroute).
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- IPv6-Adressen verkürzen und ihren Typ am Präfix erkennen.
+- Eine EUI-64-Interface-ID aus einer MAC-Adresse berechnen.
+- SLAAC und statisches IPv6-Routing einrichten und prüfen.
+
 | CCNA-Ziel | Thema |
 |---|---|
 | 1.8 | IPv6-Adressierung und Präfix |
@@ -62,12 +68,32 @@ Adressen stammen aus dem Dokumentationsbereich 2001:db8::/32 und aus fd00::/8 (U
 
 ## Teil A – Bauen
 
-1. **Basis.** Verkabeln, Configs aus `build/` einfügen (IPv4 gibt es hier nicht). `ipv6 unicast-routing` aktivieren: Warum ist das auf einem Router zwingend für Weiterleitung und RA?
-2. **Adressen setzen.** Interface-Adressen laut Tabelle, Link-Local jeweils manuell (`ipv6 address FE80::1 link-local`). `show ipv6 interface brief`: Welche Adressen siehst du pro Interface?
-3. **EUI-64.** R2 Gi0/0 bildet die Host-ID aus der MAC. Berechne selbst: MAC 0060.5C2B.7A01 → EUI-64 (FFFE einfügen, 7. Bit der ersten Byte invertieren). Vergleiche mit `show ipv6 interface gi0/0`.
-4. **SLAAC.** PCs auf „Auto Config“: Welche Adresse und welchen Default-Gateway erhalten sie (RA des Routers)? Welche Rolle spielt das Präfix aus dem Router Advertisement?
-5. **Statisch routen.** R1: `ipv6 route 2001:db8:acad:20::/64 2001:db8:acad:12::2`. R2: Default `ipv6 route ::/0 2001:db8:acad:12::1`. Teste Ping PC1 → PC2. Warum geht das auch mit Link-Local als Next Hop nur zusammen mit Ausgangsinterface?
-6. **Adresstypen zuordnen.** Ordne zu: 2001:db8::1 (GUA), fd00::1 (ULA), FE80::1 (Link-Local), ::1 (Loopback), FF02::1 (All Nodes), FF02::2 (All Routers), FF02::5 (OSPF), 2001:db8::/32 (Dokumentation). Was ist Anycast?
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
+
+1. **Routing einschalten.** Verkabeln, die Konfigurationen aus `build/` einfügen (hier gibt es kein IPv4) und `ipv6 unicast-routing` aktivieren.
+   - **Denkfrage:** Was macht der Router ohne diesen Befehl nicht?
+2. **Adressen setzen.** Vergib die Adressen aus der Tabelle. Setze die Link-Local-Adressen von Hand, z. B. `ipv6 address FE80::1 link-local`.
+   - **Prüfen:** `show ipv6 interface brief` zeigt pro Interface eine Link-Local- und eine globale Adresse.
+3. **EUI-64 rechnen.** R2 bildet an Gi0/0 die Interface-ID aus der MAC. Berechne sie für 0060.5C2B.7A01 zuerst selbst: in der Mitte FFFE einfügen, im ersten Byte das 7. Bit umdrehen.
+   - **Prüfen:** Vergleiche dein Ergebnis mit `show ipv6 interface gi0/0`.
+4. **SLAAC.** Stelle die PCs auf „Auto Config“.
+   - **Prüfen:** `ipconfig /all` zeigt eine Adresse aus dem Präfix des LANs und eine Link-Local-Adresse des Routers als Gateway.
+   - **Denkfrage:** Woher kennt der PC das Präfix und sein Gateway?
+5. **Statisch routen.** R1: `ipv6 route 2001:db8:acad:20::/64 2001:db8:acad:12::2`. R2: `ipv6 route ::/0 2001:db8:acad:12::1`.
+   - **Prüfen:** PC1 pingt PC2.
+   - **Denkfrage:** Warum braucht eine Route mit Link-Local-Next-Hop zusätzlich das Ausgangsinterface?
+6. **Adresstypen zuordnen.** 2001:db8::1, fd00::1, FE80::1, ::1, FF02::1, FF02::2, FF02::5, 2001:db8::/32.
+   - **Denkfrage:** Was ist Anycast?
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 1:** Er leitet keine IPv6-Pakete weiter und sendet keine Router Advertisements. Ohne RA bekommen die PCs per SLAAC weder Präfix noch Gateway.
+- **Zu 3:** 0060.5C2B.7A01 → 0060:5CFF:FE2B:7A01. Das erste Byte 0x00 wird durch das umgedrehte U/L-Bit zu 0x02. Ergebnis: 0260:5CFF:FE2B:7A01.
+- **Zu 4:** Aus dem Router Advertisement. Der Router schickt es regelmäßig an FF02::1 oder auf Anfrage (Router Solicitation). Es enthält das Präfix, und die Link-Local-Adresse des Absenders wird zum Gateway.
+- **Zu 5:** Link-Local-Adressen gelten nur auf einem Link, und jedes Interface hat eine. FE80::1 kann es an mehreren Interfaces geben. Erst das Ausgangsinterface sagt, welche gemeint ist.
+- **Zu 6:** Global Unicast 2001:db8::1, Unique Local fd00::1, Link-Local FE80::1, Loopback ::1, alle Knoten FF02::1, alle Router FF02::2, OSPF-Router FF02::5, Dokumentationsbereich 2001:db8::/32. Anycast: Dieselbe Adresse liegt auf mehreren Geräten, das Paket geht an das nächste davon.
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -87,9 +113,13 @@ Baue die Topologie wie oben (oder behalte deine aus Teil A), setze alle Geräte 
 show ipv6 interface brief
 show ipv6 route
 show ipv6 neighbors
-ping 2001:db8:acad:20::...   (Adresse von PC2 per ipconfig)
 ```
-Erwartet: PC1 und PC2 pingen sich per IPv6 über beide Router.
+
+| Prüfung | Das solltest du sehen |
+|---|---|
+| `show ipv6 route` auf R1 | eine S-Route für 2001:db8:acad:20::/64 über ::2 |
+| `ipconfig /all` auf den PCs | eine Adresse aus :10::/64 bzw. :20::/64 und ein FE80-Gateway |
+| Ping PC1 → PC2 (Adresse aus `ipconfig`) | Antworten |
 
 ## Teil C – Üben
 
@@ -98,41 +128,45 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. Verkürze 2001:0db8:0000:0000:00ab:0000:0000:0001.
 <details><summary>Antwort</summary>
 
-2001:db8::ab:0:0:1 (das `::` nur einmal, hier für das längste Nullfeld am Anfang) oder 2001:db8:0:0:ab::1; beide sind gültig.
+**2001:db8::ab:0:0:1.** Führende Nullen fallen weg, `::` ersetzt einmal eine Folge von Nullgruppen. Hier gibt es zwei gleich lange Folgen. Gültig ist auch 2001:db8:0:0:ab::1, empfohlen (RFC 5952) wird bei Gleichstand die erste.
 
 </details>
 
-2. MAC 0060.5C2B.7A01: wie lautet die EUI-64-Interface-ID?
+2. MAC 0060.5C2B.7A01: Wie lautet die EUI-64-Interface-ID?
 <details><summary>Antwort</summary>
 
-0260:5CFF:FE2B:7A01 (FFFE eingefügt, 0x00 → 0x02 durch Invertieren des U/L-Bits).
+**0260:5CFF:FE2B:7A01.** In der Mitte kommt FFFE hinein, und das 7. Bit des ersten Bytes wird umgedreht: 0x00 wird 0x02.
 
 </details>
 
 3. Wozu dienen NDP, NS/NA und RS/RA?
 <details><summary>Antwort</summary>
 
-Neighbor Discovery ersetzt ARP (NS/NA: MAC-Auflösung und DAD) und liefert Präfix/Gateway per RS/RA für SLAAC.
+**NDP ersetzt ARP und liefert die Daten für SLAAC.** Neighbor Solicitation und Advertisement lösen IPv6 zu MAC auf und prüfen auf doppelte Adressen (DAD). Router Solicitation und Advertisement liefern Präfix und Gateway.
 
 </details>
 
 4. Was ist der Unterschied zwischen SLAAC und DHCPv6?
 <details><summary>Antwort</summary>
 
-SLAAC bildet die Adresse selbst aus Präfix+Interface-ID (zustandslos). DHCPv6 stateful vergibt Adressen zentral, stateless liefert nur Zusatzinfos wie DNS.
+**SLAAC bildet die Adresse selbst, DHCPv6 vergibt sie zentral.** Bei SLAAC setzt der Host Präfix und eigene Interface-ID zusammen. Stateful DHCPv6 vergibt die Adresse vom Server, stateless DHCPv6 liefert nur Zusätze wie DNS.
 
 </details>
 
-5. Warum braucht es keine NAT-Pflicht mehr in IPv6?
+5. Warum braucht IPv6 kein NAT mehr?
 <details><summary>Antwort</summary>
 
-Der Adressraum reicht für globale Adressen aller Geräte; Filterung geschieht per ACL/Firewall. NAT66/NPTv6 gibt es nur in Sonderfällen.
+**Weil genug Adressen da sind, damit jedes Gerät eine globale bekommt.** Geschützt wird mit Firewall und ACL statt durch versteckte Adressen. NAT66 oder NPTv6 gibt es nur für Sonderfälle.
 
 </details>
 
 ## Prüfungsbezug
 
-IPv6: 128 Bit, Hex, Verkürzung (führende Nullen weglassen, einmal `::`). Global Unicast 2000::/3, Unique Local FC00::/7 (praktisch FD00::/8), Link-Local FE80::/10, Multicast FF00::/8 (kein Broadcast). EUI-64: MAC halbieren, FFFE einfügen, U/L-Bit (Bit 7) invertieren. `ipv6 unicast-routing` aktiviert Routing und RAs. Anycast: dieselbe Adresse auf mehreren Geräten, Zustellung an das nächste.
+- 128 Bit in Hex. Führende Nullen weglassen, `::` nur einmal.
+- Global Unicast 2000::/3, Unique Local FC00::/7 (praktisch FD00::/8), Link-Local FE80::/10, Multicast FF00::/8. Broadcast gibt es nicht.
+- EUI-64: MAC teilen, FFFE einfügen, 7. Bit umdrehen.
+- `ipv6 unicast-routing` schaltet Weiterleitung und Router Advertisements ein.
+- Anycast: eine Adresse auf mehreren Geräten, Zustellung an das nächste.
 
 ## Lösungen
 

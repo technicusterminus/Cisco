@@ -274,7 +274,7 @@ Zu jedem der 53 Ziele der CCNA 200-301 v1.1 steht hier, **wo die Aufgaben liegen
   - Aufgaben: [Teil A Bauen](21-TFTP-FTP/README.md#teil-a--bauen) · [Teil B Reparieren](21-TFTP-FTP/README.md#teil-b--reparieren) · [Teil C Üben](21-TFTP-FTP/README.md#teil-c--üben)
   - Lösungen: [`solutions/`](21-TFTP-FTP/solutions/) · [`FAULTS.md`](21-TFTP-FTP/solutions/FAULTS.md) · [Antworten Teil C](21-TFTP-FTP/README.md#teil-c--üben)
 
-## 5.1 – Sicherheitskonzepte: Bedrohungen, Schwachstellen, Exploits, Gegenmassnahmen
+## 5.1 – Sicherheitskonzepte: Bedrohungen, Schwachstellen, Exploits, Gegenmaßnahmen
 
 - **Lab 28 – Konzept-Fallstudien**
   - Aufgaben und Musterantworten (aufklappbar) in [`28-Konzept-Fallstudien.md`](28-Konzept-Fallstudien.md)

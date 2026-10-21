@@ -4,6 +4,12 @@
 
 Drei Switches in einer Kette mit 802.1Q-Trunks, Native VLAN 99, ausgeschaltetem DTP und aktivem CDP/LLDP. Du findest Native-VLAN-Mismatch, DTP-Fehlaushandlung, fehlende erlaubte VLANs und verschwundene Nachbarn.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- Trunks mit eigenem Native VLAN, erlaubten VLANs und ohne DTP konfigurieren.
+- DTP-Kombinationen vorhersagen und Native-VLAN-Mismatches erkennen.
+- Nachbarn mit CDP und LLDP finden und wissen, wo man beide besser abschaltet.
+
 | CCNA-Ziel | Thema |
 |---|---|
 | 2.2 | Interswitch-Verbindungen (Trunk, 802.1Q, Native VLAN) |
@@ -60,12 +66,30 @@ graph LR
 
 ## Teil A – Bauen
 
-1. **Basis.** Verkabeln, `build/` einfügen, PCs setzen. Standardverhalten prüfen: `show cdp neighbors` auf SW2: Wen siehst du, welche Port-IDs?
-2. **VLANs.** VLAN 10 (USERS) und 99 (NATIVE) auf allen drei Switches. PCs in VLAN 10.
-3. **Trunks.** Beide Inter-Switch-Links: `switchport mode trunk`, `switchport trunk native vlan 99`, `switchport trunk allowed vlan 10,99`, `switchport nonegotiate`. Prüfe `show interfaces trunk`. Warum das native VLAN nicht auf VLAN 1 lassen?
-4. **DTP.** Probiere (testweise) `dynamic auto`/`dynamic desirable` auf beiden Seiten durch und notiere die Kombinationen, die einen Trunk bilden. Welche Einstellung schaltet DTP-Frames ab?
-5. **CDP.** `show cdp neighbors detail`: Welche Infos liefert CDP (Plattform, IP, Capabilities, Native VLAN, Duplex)? An Access-Ports mit `no cdp enable` abschalten. Warum?
-6. **LLDP.** `lldp run` aktivieren, `show lldp neighbors`. Unterschiede CDP (Cisco-proprietär, Layer 2, Multicast 01:00:0C:CC:CC:CC) und LLDP (IEEE 802.1AB, herstellerneutral).
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
+
+1. **Basis.** Verkabeln, `build/` einfügen und die PCs einstellen.
+   - **Prüfen:** `show cdp neighbors` auf SW2 zeigt SW1 und SW3 mit ihren Port-IDs.
+2. **VLANs.** Lege VLAN 10 (USERS) und 99 (NATIVE) auf allen drei Switches an und setze die PCs in VLAN 10.
+3. **Trunks.** Konfiguriere beide Links zwischen den Switches mit `switchport mode trunk`, `switchport trunk native vlan 99`, `switchport trunk allowed vlan 10,99` und `switchport nonegotiate`.
+   - **Prüfen:** `show interfaces trunk` zeigt Native VLAN 99 und die VLANs 10 und 99.
+   - **Denkfrage:** Warum lässt man das Native VLAN nicht auf VLAN 1?
+4. **DTP ausprobieren.** Stelle testweise beide Seiten eines Links auf verschiedene Kombinationen aus `dynamic auto` und `dynamic desirable`.
+   - **Prüfen:** `show interfaces fa0/23 switchport` zeigt bei „Operational Mode“, ob ein Trunk entstanden ist.
+   - **Denkfrage:** Welche Kombinationen ergeben einen Trunk? Welcher Befehl schaltet DTP ab?
+5. **CDP lesen.** Sieh dir `show cdp neighbors detail` an und schalte CDP danach an den Access-Ports mit `no cdp enable` ab.
+   - **Denkfrage:** Was verrät CDP, und warum schaltet man es an Access-Ports ab?
+6. **LLDP.** Aktiviere `lldp run` und sieh dir `show lldp neighbors` an.
+   - **Denkfrage:** Was unterscheidet LLDP von CDP?
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 3:** VLAN 1 ist überall Standard, und Steuerprotokolle laufen darüber. Ein ungenutztes Native VLAN erschwert VLAN Hopping per Double Tagging, weil ein Angreifer am Access-Port nicht im Native VLAN sitzt.
+- **Zu 4:** Trunk entsteht bei desirable–desirable, desirable–auto und wenn eine Seite fest `trunk` ist und die andere DTP spricht. auto–auto bleibt Access, weil keiner fragt. `switchport nonegotiate` schaltet DTP ab.
+- **Zu 5:** Hostname, Plattform, Software-Version, Management-IP, Port, Capabilities, Native VLAN und Duplex. Das hilft beim Dokumentieren, aber an einem Access-Port verrät es einem Angreifer zu viel. Ausnahme: IP-Telefone, die CDP für das Voice-VLAN brauchen.
+- **Zu 6:** LLDP ist ein offener Standard (IEEE 802.1AB) und funktioniert mit allen Herstellern. CDP ist Cisco-proprietär. Auf Cisco-Geräten ist CDP standardmäßig an, LLDP aus.
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -88,7 +112,12 @@ show cdp neighbors [detail]
 show lldp neighbors
 show vlan brief
 ```
-Erwartet: PC1 ↔ PC2 im VLAN 10 pingen sich über zwei Trunks; Native VLAN 99 stimmt an beiden Enden.
+
+| Prüfung | Das solltest du sehen |
+|---|---|
+| Ping PC1 ↔ PC2 | Antworten über beide Trunks (VLAN 10) |
+| `show interfaces trunk` auf allen Switches | Native VLAN 99 an beiden Enden, erlaubt 10 und 99 |
+| `show cdp neighbors` auf SW2 | SW1 und SW3 |
 
 ## Teil C – Üben
 
@@ -97,41 +126,43 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. Welche DTP-Kombinationen bilden einen Trunk?
 <details><summary>Antwort</summary>
 
-trunk↔trunk, trunk↔desirable, trunk↔auto, desirable↔desirable, desirable↔auto. Nicht: auto↔auto (beide passiv), access↔irgendwas (kein Trunk).
+**Alle, bei denen mindestens eine Seite aktiv fragt oder fest Trunk ist.** trunk–trunk, trunk–desirable, trunk–auto, desirable–desirable, desirable–auto. Nicht: auto–auto (beide warten) und alles mit access.
 
 </details>
 
-2. Wozu dient das Native VLAN und was geht bei Mismatch schief?
+2. Wozu dient das Native VLAN, und was geht bei einem Mismatch schief?
 <details><summary>Antwort</summary>
 
-Es trägt ungetaggte Frames. Unterschiedliche Native VLANs verbinden zwei VLANs, STP/CDP melden Fehler, Verkehr landet im falschen VLAN.
+**Es trägt die Frames ohne Tag. Bei einem Mismatch landen sie auf der anderen Seite im falschen VLAN.** Damit sind zwei VLANs ungewollt verbunden. CDP und STP melden den Fehler im Log.
 
 </details>
 
-3. Wie erkennt man, welches Gerät an Gi0/1 hängt, ohne Dokumentation?
+3. Wie findest du ohne Dokumentation heraus, welches Gerät an Gi0/1 hängt?
 <details><summary>Antwort</summary>
 
-`show cdp neighbors`/`show lldp neighbors` zeigen Gerät, Port, Modell, ggf. Management-IP.
+**Mit `show cdp neighbors` oder `show lldp neighbors`.** Du siehst Gerätename, Port, Modell und mit `detail` auch die Management-IP.
 
 </details>
 
-4. Warum CDP/LLDP an Access-Ports abschalten?
+4. Warum schaltet man CDP und LLDP an Access-Ports ab?
 <details><summary>Antwort</summary>
 
-Sie geben Plattform, Version und Adressen preis (Information Disclosure) und sind dort nutzlos, sofern kein IP-Phone/AP angeschlossen ist, das LLDP-MED/CDP nutzt.
+**Weil sie Plattform, Version und Adressen an jeden verraten, der dort einsteckt.** Ausnahme sind Ports mit IP-Telefonen oder APs, die CDP oder LLDP-MED nutzen.
 
 </details>
 
-5. Wie lange sendet CDP, wie lange gilt ein Eintrag?
+5. Wie oft sendet CDP, und wie lange gilt ein Eintrag?
 <details><summary>Antwort</summary>
 
-Update alle 60 s, Hold-Time 180 s (Default).
+**Alle 60 s, ein Eintrag gilt 180 s (Hold-Time).**
 
 </details>
 
 ## Prüfungsbezug
 
-Trunk: 802.1Q (Tag 4 Byte), Native VLAN ungetaggt, Mismatch erzeugt Fehlermeldungen/Fehlverhalten und ein Sicherheitsrisiko (VLAN Hopping). DTP-Modi: trunk, dynamic desirable, dynamic auto, access; `nonegotiate` unterdrückt DTP. CDP ist Cisco-proprietär (Standard an), LLDP IEEE-Standard (Standard aus; `lldp run`, `lldp transmit`/`receive` je Port).
+- 802.1Q-Tag 4 Byte, Native VLAN ohne Tag. Ein Mismatch erzeugt Meldungen, Fehlverhalten und das Risiko VLAN Hopping.
+- DTP-Modi: trunk, dynamic desirable, dynamic auto, access. `nonegotiate` unterdrückt DTP.
+- CDP ist Cisco-proprietär und standardmäßig an. LLDP ist IEEE 802.1AB und auf Cisco standardmäßig aus (`lldp run`, pro Port `lldp transmit`/`receive`).
 
 ## Lösungen
 

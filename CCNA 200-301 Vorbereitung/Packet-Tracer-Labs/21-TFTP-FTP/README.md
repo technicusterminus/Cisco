@@ -4,6 +4,12 @@
 
 Router sichern ihre Konfiguration und Dateien auf einem Server per TFTP und FTP und spielen sie wieder ein. Du vergleichst die beiden Protokolle (UDP/69 ohne Anmeldung vs. TCP/20/21 mit Benutzer und Passwort).
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- Konfigurationen und Images per TFTP und FTP sichern und zurückspielen.
+- Den Unterschied zwischen Merge in die running-config und Ersetzen der startup-config erklären.
+- TFTP, FTP und die sicheren Alternativen SCP und SFTP vergleichen.
+
 | CCNA-Ziel | Thema |
 |---|---|
 | 4.9 | TFTP und FTP |
@@ -56,12 +62,41 @@ graph LR
 
 ## Teil A – Bauen
 
-1. **Basis.** Verkabeln, `build/` einfügen. Pingen R1 → SRV.
-2. **TFTP-Sicherung.** `copy running-config tftp:` (Ziel 10.21.1.100, Dateiname `R1-confg`). Auf dem Server unter TFTP erscheint die Datei. Welche Informationen fehlen beim TFTP-Transfer (keine Anmeldung, keine Verschlüsselung)?
-3. **Wiederherstellung.** Ändere den Hostnamen, dann `copy tftp: running-config`. Welcher Unterschied zwischen `copy … running-config` (Merge) und `copy … startup-config` (Ersetzen beim Reload)?
-4. **FTP.** `ip ftp username cisco` und `ip ftp password cisco`, dann `copy running-config ftp:`. Beobachte Anmeldung und TCP-Verbindung (Port 21 Control, 20 Data) im Simulationsmodus.
-5. **IOS-Image.** `copy flash: tftp:` sichert das Image (in PT meist `c2900-…bin`). Wieso ist ein Image-Backup vor einem Upgrade Pflicht, und was prüft `verify /md5`?
-6. **Vergleich.** Tabelle TFTP vs. FTP: Port/Transport, Authentisierung, Zuverlässigkeit, Dateigrösse/Verzeichnisse, typische Nutzung (Boot/Config vs. Image/Archiv). Was wäre die sichere Alternative (SCP/SFTP über SSH)?
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
+
+1. **Basis.** Verkabeln und `build/` einfügen.
+   - **Prüfen:** R1 pingt SRV (10.21.1.100).
+2. **TFTP-Sicherung.** `copy running-config tftp:` mit Ziel 10.21.1.100 und Dateiname `R1-confg`.
+   - **Prüfen:** Die Datei erscheint auf dem Server unter Services → TFTP.
+   - **Denkfrage:** Was fehlt bei TFTP im Vergleich zu FTP?
+3. **Wiederherstellen.** Ändere den Hostnamen und spiele dann mit `copy tftp: running-config` die Sicherung ein.
+   - **Prüfen:** Der alte Hostname ist zurück.
+   - **Denkfrage:** Was ist der Unterschied zwischen `copy tftp: running-config` und `copy tftp: startup-config`?
+4. **FTP.** `ip ftp username cisco`, `ip ftp password cisco`, dann `copy running-config ftp:`.
+   - **Prüfen:** Im Simulationsmodus siehst du die Anmeldung über TCP 21 und die Datenverbindung.
+5. **IOS-Image sichern.** `copy flash: tftp:` mit dem Image aus `show flash:`.
+   - **Denkfrage:** Warum sichert man das Image vor einem Upgrade, und wozu dient `verify /md5`?
+6. **Vergleich.** Stell TFTP und FTP gegenüber: Port, Transport, Anmeldung, Zuverlässigkeit, Verzeichnisse, typische Nutzung.
+   - **Denkfrage:** Was nimmst du, wenn die Übertragung sicher sein soll?
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 2:** Anmeldung, Verzeichnisse und Verschlüsselung. Jeder, der den Server erreicht, kann je nach Einstellung Dateien lesen oder schreiben.
+- **Zu 3:** In die running-config wird die Datei eingemischt (Merge) und wirkt sofort. Was in der Datei fehlt, bleibt in der laufenden Konfiguration stehen. In die startup-config wird ersetzt, das wirkt erst nach dem nächsten Neustart.
+- **Zu 5:** Geht beim Upgrade etwas schief, brauchst du das alte Image, um zurückzugehen. `verify /md5` berechnet den Hash der Datei. Stimmt er mit dem Wert vom Hersteller überein, ist das Image vollständig und unverändert.
+- **Zu 6:**
+
+| | TFTP | FTP |
+|---|---|---|
+| Port | UDP 69 | TCP 21 (Steuerung), 20 (Daten im Active Mode) |
+| Anmeldung | keine | Benutzer und Passwort im Klartext |
+| Zuverlässigkeit | eigenes ACK pro Block | TCP |
+| Verzeichnisse | nein | ja |
+| Nutzung | Boot, Konfiguration, Telefone | Images, Archive |
+
+Sicher sind SCP oder SFTP über SSH, alternativ HTTPS.
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -79,9 +114,13 @@ Baue die Topologie wie oben (oder behalte deine aus Teil A), setze alle Geräte 
 show flash:
 show running-config | include ftp
 copy running-config tftp:
-dir tftp:     (je nach Version)
 ```
-Erwartet: Datei liegt auf dem Server; `copy tftp: running-config` liefert `[OK]`.
+
+| Prüfung | Das solltest du sehen |
+|---|---|
+| Services → TFTP bzw. FTP auf dem Server | die Dateien `R1-confg` bzw. `R2-confg` |
+| `copy tftp: running-config` | Meldung `[OK]` |
+| `show running-config | include ftp` | Benutzer und Passwort für FTP |
 
 ## Teil C – Üben
 
@@ -90,41 +129,44 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. Warum ist TFTP unsicher?
 <details><summary>Antwort</summary>
 
-Keine Authentisierung, keine Verschlüsselung; jeder, der den Server erreicht, kann Dateien lesen/schreiben (je nach Konfiguration).
+**Es kennt weder Anmeldung noch Verschlüsselung.** Wer den Server erreicht, kann je nach Einstellung Dateien lesen und schreiben, und alles geht im Klartext übers Netz.
 
 </details>
 
 2. Welche Ports nutzt FTP?
 <details><summary>Antwort</summary>
 
-TCP/21 für Befehle, TCP/20 im Active Mode für Daten (Passive Mode: hohe Ports).
+**TCP 21 für Befehle, TCP 20 für Daten im Active Mode.** Im Passive Mode öffnet der Server für die Daten einen hohen Port.
 
 </details>
 
-3. `copy tftp: running-config` vs. `copy tftp: startup-config`?
+3. `copy tftp: running-config` oder `copy tftp: startup-config`?
 <details><summary>Antwort</summary>
 
-Ersteres mischt die Datei in die laufende Konfiguration (Merge, wirkt sofort), zweiteres ersetzt die gespeicherte Konfiguration (wirkt nach Reload).
+**running-config mischt sofort ein, startup-config ersetzt und wirkt nach dem Neustart.**
 
 </details>
 
-4. Wofür TFTP typischerweise?
+4. Wofür nutzt man TFTP typischerweise?
 <details><summary>Antwort</summary>
 
-Einfache Übertragung von Konfigurationen/Images im Labor, PXE/Boot, VoIP-Telefon-Konfiguration.
+**Für einfache Übertragungen ohne Anmeldung.** Konfigurationen und Images im Labor, Booten übers Netz (PXE) und die Konfiguration von IP-Telefonen.
 
 </details>
 
-5. Wie sicherst du die Übertragung eines IOS-Images?
+5. Wie überträgst du ein IOS-Image sicher?
 <details><summary>Antwort</summary>
 
-Per SCP/SFTP oder HTTPS, Hash vergleichen (`verify /md5 flash:image.bin`).
+**Per SCP, SFTP oder HTTPS, und danach den Hash prüfen.** Mit `verify /md5 flash:<image>` vergleichst du den Hash mit dem Wert des Herstellers.
 
 </details>
 
 ## Prüfungsbezug
 
-TFTP: UDP/69, kein Login, keine Verzeichnisse, kleine Dateien, Boot/Config. FTP: TCP/21 (Steuerung) und 20 (Daten), Benutzer/Passwort im Klartext, zuverlässig. Beide unverschlüsselt; sicher sind SFTP/SCP über SSH oder FTPS/HTTPS. IOS: `copy <Quelle> <Ziel>`, Image liegt im Flash, `boot system` wählt es.
+- TFTP: UDP 69, keine Anmeldung, keine Verzeichnisse. Für Boot und Konfigurationen.
+- FTP: TCP 21 (Steuerung) und 20 (Daten), Benutzer und Passwort im Klartext, zuverlässig.
+- Beide sind unverschlüsselt. Sicher: SCP oder SFTP über SSH, FTPS, HTTPS.
+- `copy <Quelle> <Ziel>`. Das Image liegt im Flash, `boot system` wählt es aus.
 
 ## Lösungen
 

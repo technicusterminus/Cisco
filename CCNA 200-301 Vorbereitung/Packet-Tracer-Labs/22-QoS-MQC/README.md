@@ -4,6 +4,12 @@
 
 Auf einer WAN-Strecke bekommt Sprache Vorrang (LLQ), Geschäftsverkehr eine garantierte Bandbreite, der Rest Best Effort. Du klassifizierst per ACL, markierst DSCP und wendest die Policy am Ausgang an.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- Die Schritte von QoS benennen: klassifizieren, markieren, einreihen, begrenzen.
+- Eine MQC-Policy mit LLQ und CBWFQ bauen und am richtigen Interface anwenden.
+- Policing und Shaping sowie die wichtigsten DSCP-Werte unterscheiden.
+
 | CCNA-Ziel | Thema |
 |---|---|
 | 4.7 | QoS (Klassifizierung, Markierung, Queuing, Policing, Shaping) |
@@ -58,12 +64,29 @@ graph LR
 
 ## Teil A – Bauen
 
-1. **Konzept klären.** Fülle eine Tabelle: Klassifizierung (ACL, NBAR, DSCP/CoS), Markierung (CoS 802.1p, IP Precedence, DSCP), Queuing (FIFO, WFQ, CBWFQ, LLQ), Überlastvermeidung (Tail Drop, WRED), Policing (verwirft/remarkiert) vs. Shaping (puffert).
-2. **Basis.** Verkabeln, `build/` einfügen. Link R1–R2 ist der Engpass (WAN, simuliert 2 Mbit/s via `bandwidth 2000`).
-3. **Klassifizieren.** ACLs `VOICE` (UDP 16384–32767) und `BUSINESS` (TCP 443, 8080), `class-map match-any VOICE` bzw. `BUSINESS`.
-4. **Policy.** `policy-map WAN-OUT`: Klasse VOICE `priority percent 20` (+ `set dscp ef`), Klasse BUSINESS `bandwidth percent 40` (+ `set dscp af31`), `class class-default` `fair-queue`. Warum begrenzt `priority` den Sprachverkehr gleichzeitig (Policing im Überlastfall)?
-5. **Anwenden.** `interface Gi0/1` → `service-policy output WAN-OUT`. Warum `output`? (Queuing wirkt beim Senden.) `show policy-map interface gi0/1`.
-6. **Policing vs. Shaping.** Schreibe zwei Varianten: `police rate 1000000 bps` (Policing am Eingang) und `shape average 1000000` (Shaping am Ausgang). Welche puffert, welche verwirft?
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
+
+1. **Begriffe ordnen.** Fülle eine Tabelle mit den QoS-Werkzeugen: Klassifizieren, Markieren, Queuing, Überlastvermeidung, Policing, Shaping.
+   - **Denkfrage:** Welche Verfahren gehören jeweils dazu?
+2. **Basis.** Verkabeln und `build/` einfügen. Der Link R1–R2 ist der Engpass, simuliert mit `bandwidth 2000` (2 Mbit/s).
+3. **Klassifizieren.** Lege die ACLs `VOICE` (UDP 16384 bis 32767) und `BUSINESS` (TCP 443 und 8080) an und dazu `class-map match-any VOICE` und `class-map match-any BUSINESS`.
+   - **Prüfen:** `show class-map` zeigt beide Klassen mit ihrer ACL.
+4. **Policy bauen.** `policy-map WAN-OUT`: Klasse VOICE mit `priority percent 20` und `set dscp ef`, Klasse BUSINESS mit `bandwidth percent 40` und `set dscp af31`, `class class-default` mit `fair-queue`.
+   - **Denkfrage:** Warum begrenzt `priority` den Sprachverkehr gleichzeitig?
+5. **Anwenden.** `interface Gi0/1` und `service-policy output WAN-OUT`.
+   - **Prüfen:** `show policy-map interface gi0/1` zeigt die Policy in Richtung output und zählt Pakete pro Klasse.
+   - **Denkfrage:** Warum am Ausgang?
+6. **Policing und Shaping.** Schreib zwei Varianten auf: `police rate 1000000 bps` am Eingang und `shape average 1000000` am Ausgang.
+   - **Denkfrage:** Welche puffert, welche verwirft?
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 1:** Klassifizieren: ACL, NBAR, vorhandene DSCP- oder CoS-Werte. Markieren: CoS (802.1p, Layer 2), IP Precedence, DSCP (Layer 3). Queuing: FIFO, WFQ, CBWFQ, LLQ. Überlastvermeidung: Tail Drop, WRED. Policing: verwirft oder markiert um. Shaping: puffert und sendet später.
+- **Zu 4:** Damit Sprache die anderen Klassen nicht aushungert. Die Priority-Queue wird immer zuerst bedient. Ohne Grenze könnte sie bei Stau die ganze Bandbreite nehmen. Ein eingebauter Policer begrenzt sie deshalb auf die konfigurierte Rate, sobald es eng wird.
+- **Zu 5:** Warteschlangen entstehen beim Senden, wenn mehr hinaus will, als der Link schafft. Dort entscheidet das Queuing, was zuerst geht. Am Eingang ist das Paket schon da.
+- **Zu 6:** Shaping puffert den Überschuss und schickt ihn später, das glättet, kostet aber Verzögerung. Policing verwirft den Überschuss sofort oder markiert ihn um, ohne Verzögerung.
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -83,7 +106,12 @@ show policy-map
 show policy-map interface gi0/1
 show access-lists
 ```
-Erwartet: Klassen mit Zählern (Packets matched), Policy am Ausgang angewendet.
+
+| Prüfung | Das solltest du sehen |
+|---|---|
+| `show policy-map interface gi0/1` | Policy WAN-OUT in Richtung output |
+| dieselbe Ausgabe unter Last | steigende Zähler bei VOICE und BUSINESS |
+| `show access-lists` | Treffer in den ACLs VOICE und BUSINESS |
 
 ## Teil C – Üben
 
@@ -92,41 +120,45 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. Wie unterscheiden sich Policing und Shaping?
 <details><summary>Antwort</summary>
 
-Policing verwirft/remarkiert Überschuss sofort (keine Verzögerung, Burstverhalten sichtbar), Shaping puffert ihn und sendet später (Verzögerung, glatterer Fluss).
+**Policing verwirft den Überschuss sofort, Shaping puffert ihn.** Policing erzeugt keine Verzögerung, lässt aber Lastspitzen sichtbar. Shaping glättet den Fluss und kostet dafür Verzögerung.
 
 </details>
 
-2. Welche DSCP-Werte gehören typischerweise zu Sprache, Video und Best Effort?
+2. Welche DSCP-Werte gehören zu Sprache, Video und Best Effort?
 <details><summary>Antwort</summary>
 
-EF (46) für Sprache, AF41 für interaktives Video, 0 (Default) für Best Effort.
+**EF (46) für Sprache, AF41 (34) für interaktives Video, Default (0) für Best Effort.**
 
 </details>
 
 3. Wozu dient die Trust Boundary?
 <details><summary>Antwort</summary>
 
-Sie legt fest, ab wo Markierungen vertraut werden; Markierungen von Endgeräten wie PCs werden am Access-Switch überschrieben oder ignoriert, weil sonst jeder Priorität beanspruchen könnte.
+**Sie legt fest, ab wo der Switch Markierungen glaubt.** Markierungen vom IP-Telefon werden übernommen, die vom PC überschrieben. Sonst könnte sich jeder selbst Vorrang geben.
 
 </details>
 
 4. Was bewirkt LLQ?
 <details><summary>Antwort</summary>
 
-Eine strikte Prioritätswarteschlange für latenzempfindlichen Verkehr (Sprache) neben CBWFQ-Klassen; die Priorität wird begrenzt, damit andere Klassen nicht verhungern.
+**Eine strikte Prioritätswarteschlange für Sprache neben den CBWFQ-Klassen.** Sie wird immer zuerst bedient, ist aber begrenzt, damit die anderen Klassen nicht verhungern.
 
 </details>
 
-5. Warum sind Verzögerung, Jitter und Verlust bei VoIP kritisch?
+5. Warum sind Verzögerung, Jitter und Verlust für VoIP kritisch?
 <details><summary>Antwort</summary>
 
-Echtzeit-Medien tolerieren kaum Verzögerung (< 150 ms einseitig), Jitter (< 30 ms) und Verlust (< 1 %); sie werden daher priorisiert.
+**Weil Sprache in Echtzeit läuft und nichts nachholen kann.** Richtwerte: unter 150 ms Verzögerung in eine Richtung, unter 30 ms Jitter, unter 1 % Verlust.
 
 </details>
 
 ## Prüfungsbezug
 
-Per-Hop-Behavior: Klassifizieren → Markieren → Queuing → Überlast/Policing/Shaping. DSCP: EF = 46 (Sprache), AF41 (Video), AF31/AF21 (Geschäft), CS6 (Steuerung), Default 0. Trust Boundary: Markierungen nur von vertrauenswürdigen Geräten (IP-Phone) übernehmen. LLQ = strikte Priorität + CBWFQ für den Rest. Policing verwirft oder remarkiert überschüssigen Verkehr (Eingang oder Ausgang), Shaping puffert und glättet (nur Ausgang).
+- Ablauf: klassifizieren → markieren → einreihen → bei Überlast verwerfen, policen oder shapen.
+- DSCP: EF 46 (Sprache), AF41 34 (Video), AF31 26 und AF21 18 (Geschäft), CS6 (Steuerung), Default 0.
+- Trust Boundary: Markierungen nur von vertrauenswürdigen Geräten übernehmen, z. B. IP-Telefonen.
+- LLQ = Priority-Queue plus CBWFQ für den Rest.
+- Policing verwirft oder markiert um (ein- und ausgehend). Shaping puffert und glättet (nur ausgehend).
 
 ## Lösungen
 

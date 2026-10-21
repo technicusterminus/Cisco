@@ -5,6 +5,7 @@
 ## Ticket 1 (SW2)
 
 - **Symptom:** `show etherchannel summary` zeigt kein `Po1(SU)`, die Links bleiben stand-alone (`I`) oder suspendiert; STP blockiert einen Link, ggf. Err-Disable.
+- **So findest du es:** `show etherchannel summary` auf SW1 zeigt die Ports mit `(I)` oder `(s)`. Auf SW2 zeigt derselbe Befehl als Protokoll „-“, also `on`.
 - **Ursache:** SW2 verwendet statisches `on`, SW1 verhandelt per LACP `active`: die Modi sind inkompatibel.
 - **Fix:** Auf SW2 `channel-group 1 mode active` (oder passive).
 - **Eingebaut:**
@@ -17,6 +18,7 @@
 ## Ticket 2 (SW2)
 
 - **Symptom:** Der Channel steht (`Po1(SU)`), aber PC1 und PC2 erreichen sich nicht.
+- **So findest du es:** `show interfaces trunk` auf beiden Switches vergleichen: SW2 erlaubt an Po1 nur VLAN 20.
 - **Ursache:** Der Port-Channel auf SW2 lässt nur VLAN 20 zu, SW1 nur VLAN 10.
 - **Fix:** Auf SW2 `switchport trunk allowed vlan 10`.
 - **Eingebaut:**
@@ -33,6 +35,7 @@
 ## Ticket 3 (SW1)
 
 - **Symptom:** Nur ein Member (Fa0/21) ist gebündelt, Fa0/22 meldet `s` oder `I`; die Bandbreite des Channels ist nur 100 Mbit/s.
+- **So findest du es:** `show interfaces status` auf SW1 zeigt Fa0/22 mit Speed 10, Fa0/21 mit a-100.
 - **Ursache:** Fa0/22 hat eine abweichende Geschwindigkeit (10 Mbit/s) und passt nicht zum Channel.
 - **Fix:** `speed auto` (oder identisch zu Fa0/21) auf Fa0/22.
 - **Eingebaut:**
@@ -49,6 +52,7 @@
 ## Ticket 4 (SW1)
 
 - **Symptom:** PC1 erreicht PC2 nicht, obwohl der Channel steht.
+- **So findest du es:** `show vlan brief` auf SW1 listet den Port von PC1 bei VLAN 20.
 - **Ursache:** Der PC-Port an SW1 liegt in VLAN 20.
 - **Fix:** `switchport access vlan 10`.
 - **Eingebaut:**

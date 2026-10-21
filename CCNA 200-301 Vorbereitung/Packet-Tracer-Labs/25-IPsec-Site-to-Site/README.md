@@ -4,6 +4,12 @@
 
 Zwei Standorte verbinden ihre privaten LANs über ein simuliertes Internet. Der ISP kennt die privaten Netze nicht; erst der IPsec-Tunnel (IKE Phase 1, Phase 2, Crypto Map) macht sie erreichbar.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- Ein Site-to-Site-VPN mit IKE Phase 1, Phase 2 und Crypto Map aufbauen.
+- Die Parameter benennen, die auf beiden Seiten gleich sein müssen.
+- An `show crypto isakmp sa` und `show crypto ipsec sa` erkennen, welche Phase scheitert.
+
 | CCNA-Ziel | Thema |
 |---|---|
 | 5.5 | IPsec: Remote Access und Site-to-Site-VPN |
@@ -64,12 +70,31 @@ Interessanter Verkehr (ACL 110) = LAN1 ↔ LAN2. Peers: R1 198.51.100.1 ↔ R2 1
 
 ## Teil A – Bauen
 
-1. **Basis.** Verkabeln, `build/` einfügen, Lizenz aktivieren (siehe Hinweis), PCs setzen. Ohne VPN: PC1 pingt PC2? Warum nicht (ISP hat keine Route zu den privaten Netzen)?
-2. **Interessanter Verkehr.** ACL 110 auf beiden Routern (gespiegelt): R1 `permit ip 192.168.25.0 0.0.0.255 172.25.2.0 0.0.0.255`, R2 umgekehrt.
-3. **IKE Phase 1.** `crypto isakmp policy 10`: AES, SHA, `authentication pre-share`, `group 2`, `lifetime 86400`. Pre-Shared Key: `crypto isakmp key Lab2026vpnKey address <Peer>`. Phase 1 baut den gesicherten Verwaltungskanal (ISAKMP SA).
-4. **IKE Phase 2 / IPsec.** `crypto ipsec transform-set TS esp-aes esp-sha-hmac`, `crypto map CMAP 10 ipsec-isakmp` mit `set peer`, `set transform-set TS`, `match address 110`. Auf das WAN-Interface: `crypto map CMAP`.
-5. **Auslösen und prüfen.** PC1 → PC2 pingen (die ersten Pings können verloren gehen). `show crypto isakmp sa` (QM_IDLE), `show crypto ipsec sa` (Zähler encaps/decaps). Wie erkennst du im Simulationsmodus ESP?
-6. **Einordnung.** Site-to-Site vs. Remote Access (IPsec/SSL mit Client wie AnyConnect). Tunnel- vs. Transport-Modus, AH vs. ESP, IKEv1 vs. IKEv2, GRE over IPsec für Routing-Protokolle.
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
+
+1. **Basis.** Verkabeln, `build/` einfügen, die Lizenz aktivieren (siehe Hinweis) und die PCs einstellen.
+   - **Prüfen:** PC1 pingt PC2 noch nicht.
+   - **Denkfrage:** Warum nicht?
+2. **Interessanter Verkehr.** Lege auf beiden Routern ACL 110 an, gespiegelt: R1 `permit ip 192.168.25.0 0.0.0.255 172.25.2.0 0.0.0.255`, R2 genau umgekehrt.
+   - **Denkfrage:** Warum muss die ACL auf R2 das Spiegelbild sein?
+3. **IKE Phase 1.** `crypto isakmp policy 10` mit `encryption aes`, `hash sha`, `authentication pre-share`, `group 2`, `lifetime 86400`. Dazu der Schlüssel: `crypto isakmp key Lab2026vpnKey address <Peer>`.
+   - **Denkfrage:** Was baut Phase 1 auf?
+4. **IKE Phase 2.** `crypto ipsec transform-set TS esp-aes esp-sha-hmac`. Dann `crypto map CMAP 10 ipsec-isakmp` mit `set peer`, `set transform-set TS` und `match address 110`. Binde die Map mit `crypto map CMAP` an das WAN-Interface.
+5. **Auslösen und prüfen.** Pinge von PC1 zu PC2. Die ersten Pings dürfen verloren gehen.
+   - **Prüfen:** `show crypto isakmp sa` zeigt `QM_IDLE`, in `show crypto ipsec sa` steigen encaps und decaps.
+   - **Denkfrage:** Warum gehen die ersten Pings verloren?
+6. **Einordnen.** Vergleiche Site-to-Site mit Remote Access, Tunnel- mit Transportmodus, AH mit ESP.
+   - **Denkfrage:** Warum braucht man GRE über IPsec, wenn ein Routing-Protokoll durch den Tunnel soll?
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 1:** Der ISP kennt die privaten Netze nicht und verwirft die Pakete. Erst der Tunnel verpackt sie in Pakete zwischen den öffentlichen Adressen der Router.
+- **Zu 2:** Jede Seite beschreibt den Verkehr aus ihrer Sicht: Quelle ist das eigene LAN, Ziel das fremde. Passen die beiden Beschreibungen nicht genau zueinander, lehnt der Partner die Phase 2 ab.
+- **Zu 3:** Einen geschützten Kanal zwischen den beiden Routern (ISAKMP SA). Darüber handeln sie in Phase 2 die eigentlichen IPsec-SAs für die Nutzdaten aus.
+- **Zu 5:** Der Tunnel wird erst aufgebaut, wenn interessanter Verkehr kommt. Bis Phase 1 und 2 fertig sind, verwirft der Router die ersten Pakete.
+- **Zu 6:** Klassisches IPsec mit Crypto Map transportiert nur Unicast, der zur ACL passt. Routing-Protokolle nutzen Multicast. GRE verpackt das in Unicast, und IPsec verschlüsselt das GRE-Paket. Alternativ ein VTI.
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -94,50 +119,58 @@ show crypto map
 show access-lists 110
 ping 172.25.2.11 source 192.168.25.1
 ```
-Erwartet: ISAKMP SA `QM_IDLE`, IPsec-Zähler steigen bei Pings, PC1 ↔ PC2 funktionieren, `traceroute` zeigt keinen Zwischen-Hop des ISP-Innennetzes.
+
+| Prüfung | Das solltest du sehen |
+|---|---|
+| `show crypto isakmp sa` | Zustand `QM_IDLE` |
+| `show crypto ipsec sa` | steigende Zähler bei `encaps` und `decaps` |
+| Ping PC1 ↔ PC2 | Antworten, `traceroute` zeigt keine Zwischenstationen beim ISP |
 
 ## Teil C – Üben
 
 Beantworte zuerst selbst, dann klappe die Antwort auf.
 
-1. Welche Parameter müssen auf beiden Seiten identisch sein?
+1. Welche Parameter müssen auf beiden Seiten gleich sein?
 <details><summary>Antwort</summary>
 
-Phase 1: Verschlüsselung, Hash, Authentisierungsmethode/PSK, DH-Gruppe. Phase 2: Transform-Set (ESP/AH, Algorithmen), Modus, gespiegelte ACL/Proxy-Identitäten.
+**Phase 1: Verschlüsselung, Hash, Authentisierung bzw. PSK und DH-Gruppe. Phase 2: Transform-Set, Modus und die gespiegelte ACL.**
 
 </details>
 
-2. Unterschied ESP vs. AH?
+2. Was unterscheidet ESP von AH?
 <details><summary>Antwort</summary>
 
-ESP verschlüsselt und authentisiert, AH authentisiert nur und passt nicht zu NAT. Praktisch wird ESP verwendet.
+**ESP verschlüsselt und prüft die Echtheit, AH prüft nur die Echtheit.** AH verträgt sich außerdem nicht mit NAT. In der Praxis nimmt man ESP.
 
 </details>
 
-3. Tunnel- vs. Transportmodus?
+3. Was unterscheidet Tunnel- und Transportmodus?
 <details><summary>Antwort</summary>
 
-Tunnelmodus kapselt das gesamte IP-Paket mit neuem IP-Header (Site-to-Site), Transportmodus schützt nur die Nutzlast (Host-zu-Host).
+**Der Tunnelmodus verpackt das ganze IP-Paket mit neuem Header, der Transportmodus schützt nur die Nutzlast.** Tunnel ist typisch für Site-to-Site, Transport für Verbindungen zwischen zwei Hosts.
 
 </details>
 
-4. Warum kann ein Routing-Protokoll nicht direkt über reines IPsec laufen?
+4. Warum läuft ein Routing-Protokoll nicht direkt über reines IPsec?
 <details><summary>Antwort</summary>
 
-Klassisches IPsec transportiert nur Unicast und per ACL festgelegten Verkehr; für Multicast/Routing braucht man GRE oder VTI mit IPsec.
+**Weil klassisches IPsec nur Unicast transportiert.** Routing-Protokolle brauchen Multicast. Dafür nimmt man GRE über IPsec oder ein VTI.
 
 </details>
 
-5. Wie unterscheiden sich Site-to-Site und Remote-Access-VPN?
+5. Was unterscheidet Site-to-Site von Remote Access?
 <details><summary>Antwort</summary>
 
-Site-to-Site verbindet zwei Gateways und Netze dauerhaft, Remote Access baut pro Benutzer einen Tunnel (Client, SSL- oder IPsec-VPN).
+**Site-to-Site verbindet zwei Netze dauerhaft über ihre Gateways, Remote Access einzelne Benutzer.** Bei Remote Access baut jeder Client seinen eigenen Tunnel auf, per IPsec oder SSL.
 
 </details>
 
 ## Prüfungsbezug
 
-IPsec: Vertraulichkeit (ESP-Verschlüsselung), Integrität (HMAC), Authentisierung (PSK/Zertifikate), Anti-Replay. IKE Phase 1 (ISAKMP SA: Verschlüsselung, Hash, Authentisierung, DH-Gruppe, Lifetime), Phase 2 (IPsec SA: Transform-Set, Tunnel-/Transport-Modus). Interessanter Verkehr per ACL, Crypto Map am ausgehenden Interface. Site-to-Site verbindet Netze, Remote Access einzelne Benutzer. Parameter müssen auf beiden Peers übereinstimmen.
+- IPsec bietet Vertraulichkeit (ESP), Integrität (HMAC), Authentisierung (PSK oder Zertifikat) und Schutz gegen Wiederholung.
+- IKE Phase 1: ISAKMP SA mit Verschlüsselung, Hash, Authentisierung, DH-Gruppe, Lifetime. Phase 2: IPsec SA mit Transform-Set und Modus.
+- Interessanter Verkehr per ACL, Crypto Map am ausgehenden Interface.
+- Alle Parameter müssen auf beiden Seiten übereinstimmen.
 
 ## Lösungen
 

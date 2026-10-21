@@ -4,6 +4,12 @@
 
 Zwei Router teilen sich als virtuelles Gateway 10.17.1.1 (HSRP). Du konfigurierst Priorität, Preempt und Interface-Tracking und testest den Failover. VRRP und GLBP vergleichst du konzeptionell.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- HSRP mit Priorität, Preempt und Tracking konfigurieren.
+- Den Failover testen und die Rolle der virtuellen MAC erklären.
+- HSRP, VRRP und GLBP unterscheiden.
+
 | CCNA-Ziel | Thema |
 |---|---|
 | 3.5 | First Hop Redundancy Protocols |
@@ -71,12 +77,40 @@ R1 ist bevorzugter Active-Router (Priorität 110), R2 Standby (100). R3 simulier
 
 ## Teil A – Bauen
 
-1. **Basis.** Verkabeln, `build/` einfügen. PCs mit Gateway **10.17.1.1** (virtuelle Adresse!). Warum darf das Gateway nicht die reale Router-IP sein?
-2. **HSRP.** Auf Gi0/0 beider Router `standby version 2`, `standby 1 ip 10.17.1.1`, R1 `standby 1 priority 110` + `standby 1 preempt`, R2 Standard 100. `show standby brief`: wer ist Active?
-3. **Virtuelle MAC.** `show standby` zeigt `0000.0c9f.f001` (v2) bzw. `0000.0c07.ac01` (v1). Wozu eine virtuelle MAC (ARP-Cache der Hosts ändert sich beim Failover nicht)?
-4. **Failover testen.** Ping von PC1 zu 8.8.8.8 dauerhaft (`ping -t`), dann R1 Gi0/0 `shutdown`: R2 wird Active. Wie viele Pakete gehen verloren? Danach R1 wieder hoch: Warum übernimmt R1 mit `preempt` zurück?
-5. **Tracking.** `standby 1 track GigabitEthernet0/1 20` auf R1: Fällt der Uplink Gi0/1, sinkt die Priorität auf 90 und R2 (100) wird Active. Warum reicht ohne Tracking der Ausfall des Uplinks nicht aus?
-6. **Vergleich.** Tabelle HSRP (Cisco, Active/Standby, 224.0.0.2/224.0.0.102), VRRP (IETF, Master/Backup, 224.0.0.18), GLBP (Cisco, Lastverteilung pro Host über mehrere virtuelle MACs).
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
+
+1. **Basis.** Verkabeln, `build/` einfügen und den PCs als Gateway die virtuelle Adresse 10.17.1.1 geben.
+   - **Denkfrage:** Warum darf das Gateway nicht die echte Adresse eines Routers sein?
+2. **HSRP.** Auf Gi0/0 beider Router: `standby version 2`, `standby 1 ip 10.17.1.1`. R1 bekommt `standby 1 priority 110` und `standby 1 preempt`, R2 bleibt bei 100.
+   - **Prüfen:** `show standby brief` zeigt R1 als Active, R2 als Standby.
+3. **Virtuelle MAC.** Sieh dir `show standby` an.
+   - **Prüfen:** Die virtuelle MAC ist `0000.0c9f.f001` (Version 2) bzw. `0000.0c07.ac01` (Version 1).
+   - **Denkfrage:** Wozu braucht HSRP eine virtuelle MAC?
+4. **Failover testen.** Starte auf PC1 `ping -t 8.8.8.8` und schalte auf R1 Gi0/0 ab. Schalte es danach wieder an.
+   - **Prüfen:** R2 wird Active, es gehen nur wenige Pings verloren. Nach dem Einschalten holt sich R1 die Rolle zurück.
+   - **Denkfrage:** Warum holt sich R1 die Rolle zurück?
+5. **Tracking.** Setze auf R1 `standby 1 track GigabitEthernet0/1 20` und schalte den Uplink Gi0/1 ab.
+   - **Prüfen:** Die Priorität von R1 sinkt auf 90, R2 wird Active.
+   - **Denkfrage:** Was würde ohne Tracking passieren?
+6. **Vergleich.** Stell HSRP, VRRP und GLBP in einer Tabelle gegenüber: Hersteller, Rollen, Multicast-Adresse, Preempt, Lastverteilung.
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 1:** Fällt dieser Router aus, ist das Gateway weg. Die virtuelle Adresse zieht mit, egal welcher Router gerade aktiv ist.
+- **Zu 3:** Die Hosts haben die MAC ihres Gateways im ARP-Cache. Ist sie virtuell, übernimmt der neue Active-Router sie einfach, und die Hosts müssen nichts neu lernen.
+- **Zu 4:** Wegen `preempt`. Ohne Preempt bliebe R2 Active, bis er selbst ausfällt.
+- **Zu 5:** R1 bliebe Active, weil sein LAN-Port ja läuft. Er würde den Verkehr annehmen und ins Leere schicken.
+- **Zu 6:**
+
+| | HSRP | VRRP | GLBP |
+|---|---|---|---|
+| Hersteller | Cisco | offener Standard (RFC 5798) | Cisco |
+| Rollen | Active/Standby | Master/Backup | AVG/AVF |
+| Multicast | 224.0.0.2 (v1), 224.0.0.102 (v2) | 224.0.0.18 | 224.0.0.102 |
+| Preempt | standardmäßig aus | standardmäßig an | standardmäßig aus |
+| Lastverteilung | nur über mehrere Gruppen | nur über mehrere Gruppen | ja, pro Host |
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -102,9 +136,14 @@ Baue die Topologie wie oben (oder behalte deine aus Teil A), setze alle Geräte 
 ```
 show standby brief
 show standby
-show ip route         (R3)
+show ip route         ! R3
 ```
-Erwartet: R1 `Active`, R2 `Standby`, virtuelle IP 10.17.1.1. Nach Uplink-Ausfall auf R1 wechselt die Rolle.
+
+| Prüfung | Das solltest du sehen |
+|---|---|
+| `show standby brief` auf R1 | Active, Priorität 110, virtuelle IP 10.17.1.1 |
+| `show standby brief` auf R2 | Standby |
+| nach Ausfall des Uplinks von R1 | R1 Priorität 90, R2 Active |
 
 ## Teil C – Üben
 
@@ -113,41 +152,45 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. Was ist der Unterschied zwischen HSRP und VRRP?
 <details><summary>Antwort</summary>
 
-HSRP ist Cisco-proprietär (Active/Standby), VRRP offen (RFC 5798, Master/Backup); weitere Details: andere Multicast-Adressen und Default-Preempt-Verhalten.
+**HSRP ist Cisco-proprietär, VRRP ein offener Standard.** HSRP heißt Active/Standby, VRRP Master/Backup. Dazu kommen andere Multicast-Adressen, und bei VRRP ist Preempt standardmäßig an.
 
 </details>
 
 2. Wozu dient Preempt?
 <details><summary>Antwort</summary>
 
-Mit Preempt übernimmt ein Router mit höherer Priorität wieder die aktive Rolle, sobald er zurückkehrt.
+**Damit der Router mit der höheren Priorität die Rolle zurückholt, wenn er wieder da ist.**
 
 </details>
 
-3. Was passiert, wenn der Uplink ausfällt, aber der LAN-Port up bleibt?
+3. Was passiert, wenn der Uplink ausfällt, der LAN-Port aber up bleibt?
 <details><summary>Antwort</summary>
 
-Ohne Tracking bleibt der Router Active und wirft den Verkehr weg. Mit Tracking sinkt die Priorität, der Standby übernimmt.
+**Ohne Tracking bleibt der Router Active und verwirft den Verkehr.** Mit Tracking sinkt seine Priorität unter die des Standby, und dieser übernimmt.
 
 </details>
 
-4. Wie unterscheidet sich GLBP?
+4. Was ist bei GLBP anders?
 <details><summary>Antwort</summary>
 
-GLBP verteilt die Last: Der AVG antwortet auf ARP-Anfragen reihum mit verschiedenen virtuellen MACs der AVFs.
+**GLBP verteilt die Last auf mehrere Router.** Der AVG beantwortet ARP-Anfragen reihum mit verschiedenen virtuellen MACs, die zu verschiedenen AVFs gehören.
 
 </details>
 
 5. Warum zeigt ein HSRP-Paar manchmal zweimal `Active`?
 <details><summary>Antwort</summary>
 
-Hellos kommen nicht an (Layer-2-Problem, falsche Gruppe/Version/virtuelle IP): Jeder Router sieht sich allein.
+**Weil die Router ihre Hellos nicht sehen.** Ursachen: ein Layer-2-Problem dazwischen, unterschiedliche Gruppe, Version oder virtuelle IP. Jeder hält sich dann für allein.
 
 </details>
 
 ## Prüfungsbezug
 
-FHRP stellt eine virtuelle Gateway-IP/MAC bereit, damit Hosts bei Router-Ausfall unverändert bleiben. HSRP: Active/Standby, Default-Priorität 100, Hello 3 s/Hold 10 s, Preempt standardmässig aus. VRRP: offener Standard, Master/Backup, Preempt Standard an. GLBP: Active Virtual Gateway verteilt per ARP verschiedene virtuelle MACs an Clients (Lastverteilung). Tracking senkt die Priorität bei Uplink-Ausfall.
+- FHRP stellt eine virtuelle IP und MAC als Gateway bereit. Fällt ein Router aus, ändert sich für die Hosts nichts.
+- HSRP: Active/Standby, Priorität 100, Hello 3 s/Hold 10 s, Preempt aus.
+- VRRP: offener Standard, Master/Backup, Preempt an.
+- GLBP: Der AVG verteilt per ARP verschiedene virtuelle MACs, so teilen sich mehrere Router die Last.
+- Tracking senkt die Priorität, wenn der Uplink ausfällt. Der Abzug muss größer sein als der Abstand zum anderen Router.
 
 ## Lösungen
 

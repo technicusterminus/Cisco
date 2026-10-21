@@ -4,6 +4,12 @@
 
 Ein Router authentisiert Administratoren zentral gegen einen RADIUS-Server und fällt bei Ausfall auf einen lokalen Benutzer zurück. Du ordnest Authentication, Authorization und Accounting zu und vergleichst RADIUS mit TACACS+.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- AAA mit RADIUS und lokalem Fallback einrichten, ohne dich auszusperren.
+- Erklären, wann der Fallback greift und wann nicht.
+- RADIUS und TACACS+ vergleichen und dem passenden Einsatz zuordnen.
+
 | CCNA-Ziel | Thema |
 |---|---|
 | 5.8 | AAA: Authentication, Authorization, Accounting |
@@ -57,12 +63,37 @@ graph LR
 
 ## Teil A – Bauen
 
-1. **Basis.** Verkabeln, `build/` einfügen. PC1 verbindet sich per Telnet (`telnet 10.26.1.1`): Es gilt noch kein AAA.
-2. **AAA aktivieren.** `aaa new-model`, `radius-server host 10.26.1.100 key RadKey2026`. Warum `aaa new-model` zuerst (und vor dem Setzen der Method-Lists den Zugang absichern, sonst Aussperrung)?
-3. **Method Lists.** `aaa authentication login VTY-AUTH group radius local`, auf den vty-Lines: `login authentication VTY-AUTH`. Der Fallback `local` greift nur, wenn der RADIUS-Server nicht antwortet, nicht bei abgelehntem Passwort. Teste beides.
-4. **Notfallzugang.** Lokaler Benutzer `backup`. Konsole bleibt eigenständig (`login authentication CON-AUTH` mit `local`), damit du nicht ausgesperrt wirst.
-5. **Accounting.** `aaa accounting exec default start-stop group radius`: Im Server unter AAA → Accounting steht die Sitzung. Was protokolliert Accounting (Wer, wann, was)?
-6. **Vergleich.** Tabelle RADIUS (UDP 1812/1813 bzw. 1645/1646, Passwort verschlüsselt, Authentisierung+Authorization kombiniert) vs. TACACS+ (TCP 49, gesamtes Paket verschlüsselt, Authorization getrennt, Befehls-Autorisierung). Wann nimmst du welches (Netzzugang/802.1X → RADIUS, Geräteadministration → TACACS+)?
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
+
+1. **Basis.** Verkabeln und `build/` einfügen.
+   - **Prüfen:** PC1 kommt per `telnet 10.26.1.1` auf den Router. Es gilt noch kein AAA.
+2. **AAA aktivieren.** Lege zuerst einen lokalen Benutzer `backup` an. Dann `aaa new-model` und `radius-server host 10.26.1.100 key RadKey2026`.
+   - **Denkfrage:** Warum zuerst den lokalen Benutzer?
+3. **Methodenliste.** `aaa authentication login VTY-AUTH group radius local`, auf den vty-Lines `login authentication VTY-AUTH`.
+   - **Prüfen:** `admin` mit dem RADIUS-Passwort kommt hinein. Ein falsches Passwort wird abgelehnt, auch wenn lokal ein Benutzer existiert.
+   - **Denkfrage:** Wann greift `local`?
+4. **Notfallzugang an der Konsole.** Gib der Konsole eine eigene Liste: `aaa authentication login CON-AUTH local` und `login authentication CON-AUTH`.
+   - **Prüfen:** Schalte den RADIUS-Dienst ab. An der Konsole kommst du mit `backup` hinein.
+5. **Accounting.** `aaa accounting exec default start-stop group radius`.
+   - **Prüfen:** Auf dem Server unter AAA → Accounting steht die Sitzung.
+   - **Denkfrage:** Was protokolliert Accounting?
+6. **Vergleich.** Stell RADIUS und TACACS+ gegenüber: Transport, Verschlüsselung, Trennung der drei A, Einsatz.
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 2:** Nach `aaa new-model` gelten die AAA-Methoden sofort. Ist dann weder RADIUS erreichbar noch ein lokaler Benutzer da, sperrst du dich aus.
+- **Zu 3:** Nur wenn der RADIUS-Server nicht antwortet. Lehnt er das Passwort ab, ist das eine gültige Antwort, und der Router fragt nicht lokal nach. Merke: Fallback nur bei Schweigen, nicht bei Nein.
+- **Zu 5:** Wer sich wann an- und abgemeldet hat, wie lange die Sitzung lief und je nach Einstellung welche Befehle eingegeben wurden.
+- **Zu 6:**
+
+| | RADIUS | TACACS+ |
+|---|---|---|
+| Transport | UDP 1812/1813 (alt 1645/1646) | TCP 49 |
+| Verschlüsselung | nur das Passwort | das ganze Paket |
+| AAA | Authentisierung und Autorisierung zusammen | alle drei getrennt, Befehle einzeln autorisierbar |
+| Einsatz | Netzzugang, 802.1X, VPN, WLAN | Administration von Geräten |
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -82,9 +113,14 @@ Baue die Topologie wie oben (oder behalte deine aus Teil A), setze alle Geräte 
 show aaa servers
 show running-config | section aaa
 show users
-debug aaa authentication     (kurz)
+debug aaa authentication     ! nur kurz
 ```
-Erwartet: Telnet-Login als `admin` mit RADIUS-Passwort gelingt; bei abgeschaltetem Server meldet der Router RADIUS-Fehler und akzeptiert `backup` lokal.
+
+| Prüfung | Das solltest du sehen |
+|---|---|
+| Telnet als `admin` | Anmeldung mit dem RADIUS-Passwort klappt |
+| RADIUS-Dienst aus | Router meldet einen Timeout, `backup` kommt lokal hinein |
+| `show aaa servers` | Server 10.26.1.100 mit Zählern für Anfragen und Antworten |
 
 ## Teil C – Üben
 
@@ -93,41 +129,44 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. Wann greift der lokale Fallback?
 <details><summary>Antwort</summary>
 
-Nur wenn alle zuvor gelisteten Server nicht erreichbar sind (Timeout/Fehler). Lehnt der Server das Passwort ab, wird der Zugang verweigert.
+**Nur wenn kein Server aus der Liste antwortet.** Lehnt der Server das Passwort ab, bleibt der Zugang verweigert.
 
 </details>
 
-2. Wofür steht Accounting?
+2. Wofür ist Accounting da?
 <details><summary>Antwort</summary>
 
-Es protokolliert Sitzungen (Benutzer, Zeit, Befehle, Datenmenge) für Nachvollziehbarkeit und Abrechnung.
+**Es protokolliert, wer wann was getan hat.** Benutzer, Zeit, Dauer, je nach Einstellung Befehle und Datenmenge. Das dient der Nachvollziehbarkeit und der Abrechnung.
 
 </details>
 
-3. RADIUS vs. TACACS+: drei Unterschiede?
+3. Nenne drei Unterschiede zwischen RADIUS und TACACS+.
 <details><summary>Antwort</summary>
 
-Transport (UDP vs. TCP), Verschlüsselung (nur Passwort vs. ganzer Inhalt), Trennung von Authentication/Authorization/Accounting bei TACACS+ (Befehls-Autorisierung möglich).
+**Transport, Verschlüsselung und Trennung der drei A.** RADIUS nutzt UDP und verschlüsselt nur das Passwort. TACACS+ nutzt TCP, verschlüsselt alles und trennt Authentisierung, Autorisierung und Accounting, so lassen sich Befehle einzeln freigeben.
 
 </details>
 
-4. Wozu `aaa new-model`?
+4. Wozu dient `aaa new-model`?
 <details><summary>Antwort</summary>
 
-Es aktiviert das AAA-Framework und ersetzt die einfachen `login`-Mechanismen der Lines durch Method-Lists.
+**Es schaltet AAA ein.** Danach gelten Methodenlisten statt der einfachen `login`- und `password`-Befehle an den Lines.
 
 </details>
 
 5. Wie vermeidest du, dich selbst auszusperren?
 <details><summary>Antwort</summary>
 
-Lokalen Notfall-Benutzer anlegen, Konsole mit eigener Method-List (`local`), Änderungen zuerst in einer zweiten Session testen.
+**Mit einem lokalen Notfall-Benutzer, einer eigenen Methodenliste für die Konsole und einer zweiten offenen Sitzung zum Testen.**
 
 </details>
 
 ## Prüfungsbezug
 
-AAA: Authentication (wer bist du), Authorization (was darfst du), Accounting (was hast du getan). RADIUS: offener Standard, UDP 1812/1813, verschlüsselt nur das Passwort, typisch für Netzzugang/802.1X. TACACS+: Cisco, TCP 49, verschlüsselt den gesamten Inhalt, trennt AAA, ideal für Geräteadministration mit Befehlsautorisierung. Method-List: Reihenfolge der Quellen, `local` als Fallback; `aaa new-model` aktiviert das AAA-Modell.
+- AAA: Authentication (wer bist du), Authorization (was darfst du), Accounting (was hast du getan).
+- RADIUS: offener Standard, UDP 1812/1813, verschlüsselt nur das Passwort, typisch für Netzzugang und 802.1X.
+- TACACS+: Cisco, TCP 49, verschlüsselt alles, trennt die drei A, ideal für Geräte-Administration mit Befehlsautorisierung.
+- Methodenliste = Reihenfolge der Quellen. `local` am Ende greift nur, wenn kein Server antwortet.
 
 ## Lösungen
 

@@ -5,6 +5,7 @@
 ## Ticket 1 (R3)
 
 - **Symptom:** Im Log erscheint `%OSPF-4-DUP_RTRID_NBR`, LSAs werden inkonsistent, einzelne Routen verschwinden.
+- **So findest du es:** Das Log meldet `%OSPF-4-DUP_RTRID_NBR`. `show ip ospf` auf R1 und R3 zeigt dieselbe Router-ID.
 - **Ursache:** R3 verwendet dieselbe Router-ID wie R1.
 - **Fix:** Eindeutige Router-ID (3.3.3.3) setzen und `clear ip ospf process`.
 - **Eingebaut:**
@@ -17,6 +18,7 @@
 ## Ticket 2 (R4)
 
 - **Symptom:** R4 wird nicht FULL zu R2; `show ip ospf neighbor` ist auf R2 und R4 leer, PC4 erreicht niemanden.
+- **So findest du es:** `show ip ospf interface gi0/1` auf R2 und R4 zeigt verschiedene Areas.
 - **Ursache:** Area-Mismatch am Link R2–R4 (Area 1 statt Area 0).
 - **Fix:** Area 0 setzen.
 - **Eingebaut:**
@@ -29,6 +31,7 @@
 ## Ticket 3 (R3)
 
 - **Symptom:** PC3 erreicht seine Nachbarn nicht und LAN 192.168.3.0/24 fehlt in den Routingtabellen der anderen Router.
+- **So findest du es:** `show ip ospf interface brief` auf R3 listet das LAN-Interface nicht. Das `network`-Statement hat die Wildcard 0.0.0.0 mit einer Adresse, die das Interface nicht hat.
 - **Ursache:** Die Wildcard 0.0.0.0 passt nicht auf die Interface-Adresse 192.168.3.1: das Interface nimmt nicht an OSPF teil.
 - **Fix:** Wildcard 0.0.0.255 verwenden.
 - **Eingebaut:**
@@ -41,6 +44,7 @@
 ## Ticket 4 (R2)
 
 - **Symptom:** R2 und R4 bilden keine Nachbarschaft: `show ip ospf interface gi0/1` zeigt Hello 5, R4 hat 10.
+- **So findest du es:** `show ip ospf interface gi0/1` auf R2 zeigt „Hello 5“, auf R4 „Hello 10“.
 - **Ursache:** Hello-Intervall-Mismatch am P2P-Link.
 - **Fix:** Hello-Intervall entfernen (`no ip ospf hello-interval`).
 - **Eingebaut:**
@@ -56,6 +60,7 @@
 ## Ticket 5 (R1)
 
 - **Symptom:** Im Segment ist R2 DR, R1 nur DROTHER; die Rollen stimmen nicht mit dem Entwurf überein.
+- **So findest du es:** `show ip ospf interface gi0/0` auf R1 zeigt „Priority 0“ und „State DROTHER“.
 - **Ursache:** Priorität 0 auf R1: er darf nicht DR/BDR werden.
 - **Fix:** Priorität 200 setzen, danach OSPF-Prozess neu starten.
 - **Eingebaut:**

@@ -4,6 +4,12 @@
 
 Ein Access-Switch schützt sich gegen falsche MAC-Adressen, Rogue-DHCP-Server und ARP-Spoofing. Du konfigurierst Port Security (sticky), DHCP Snooping mit Trust-Port und Dynamic ARP Inspection und deutest die Fehlerbilder.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- DHCP Snooping einrichten und einen fremden DHCP-Server aussperren.
+- Port Security mit Sticky-MACs und den drei Violation-Modi einsetzen.
+- Erklären, wie DAI die Snooping-Tabelle gegen ARP-Spoofing nutzt.
+
 | CCNA-Ziel | Thema |
 |---|---|
 | 5.7 | Layer-2-Security (DHCP Snooping, DAI, Port Security) |
@@ -60,12 +66,32 @@ graph LR
 
 ## Teil A – Bauen
 
-1. **Basis.** Verkabeln, `build/` einfügen. R1 vergibt per DHCP 192.168.24.0/24. PC1 und PC2 auf DHCP: Erhalten sie Adressen (ohne Snooping)?
-2. **Rogue erzeugen.** Auf dem Rogue-Server (Fa0/4) den DHCP-Dienst mit Pool 192.168.66.0/24 einschalten. Lösche beim PC `ipconfig /renew`: Welche Adresse bekommt er (der schnellere Server gewinnt)?
-3. **DHCP Snooping.** `ip dhcp snooping`, `ip dhcp snooping vlan 1`, Trust-Port Richtung R1 (Fa0/24): `ip dhcp snooping trust`. Wiederhole den Test: Nur R1-Adressen. `show ip dhcp snooping binding` zeigt die Bindungstabelle (MAC, IP, Port).
-4. **Port Security.** An Fa0/1 und Fa0/2: `switchport mode access`, `switchport port-security`, `maximum 1`, `mac-address sticky`, `violation shutdown`. Stecke einen anderen PC an Fa0/1: Port geht `err-disabled` (Wiederherstellung: `shutdown`/`no shutdown`). Unterschiede der Violation-Modi (protect, restrict, shutdown)?
-5. **DAI.** `ip arp inspection vlan 1`, Trust an Fa0/24. DAI vergleicht ARP-Pakete mit der Snooping-Bindungstabelle: Was wird verworfen (Spoofing, Gratuitous ARP mit falscher Zuordnung)? Welcher Port muss trusted sein (Uplink, Router)?
-6. **Absichern.** Ungenutzte Ports `shutdown`, in ein Parking-VLAN, `switchport nonegotiate`. Warum zusammen mit BPDU Guard/PortFast?
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
+
+1. **Basis.** Verkabeln und `build/` einfügen. R1 vergibt per DHCP Adressen aus 192.168.24.0/24. Stell PC1 und PC2 auf DHCP.
+   - **Prüfen:** Beide bekommen eine Adresse aus 192.168.24.0/24.
+2. **Fremden DHCP-Server einschalten.** Schalte auf dem Rogue-Server an Fa0/4 den DHCP-Dienst mit Pool 192.168.66.0/24 ein. Hol auf einem PC mit `ipconfig /renew` eine neue Adresse.
+   - **Prüfen:** Manchmal kommt eine Adresse aus 192.168.66.0/24.
+   - **Denkfrage:** Warum mal der eine, mal der andere Server?
+3. **DHCP Snooping.** `ip dhcp snooping`, `ip dhcp snooping vlan 1` und an Fa0/24 (Richtung R1) `ip dhcp snooping trust`. Wiederhole den Test.
+   - **Prüfen:** Es kommen nur noch Adressen von R1. `show ip dhcp snooping binding` zeigt MAC, IP, VLAN und Port der PCs.
+4. **Port Security.** An Fa0/1 und Fa0/2: `switchport mode access`, `switchport port-security`, `switchport port-security maximum 1`, `switchport port-security mac-address sticky`, `switchport port-security violation shutdown`. Steck testweise einen anderen PC an Fa0/1.
+   - **Prüfen:** Fa0/1 geht in den Zustand err-disabled. Mit `shutdown` und `no shutdown` holst du ihn zurück.
+   - **Denkfrage:** Was unterscheidet protect, restrict und shutdown?
+5. **DAI.** `ip arp inspection vlan 1` und an Fa0/24 `ip arp inspection trust`.
+   - **Prüfen:** `show ip arp inspection` zählt geprüfte ARP-Pakete, die PCs erreichen weiter ihr Gateway.
+   - **Denkfrage:** Was verwirft DAI, und warum muss der Uplink trusted sein?
+6. **Absichern.** Schalte ungenutzte Ports ab, leg sie in ein Parkplatz-VLAN und setze `switchport nonegotiate`.
+   - **Denkfrage:** Warum dazu noch PortFast und BPDU Guard?
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 2:** Der PC nimmt das erste Angebot, das ankommt. Ohne Snooping antwortet jeder DHCP-Server im VLAN, und der schnellere gewinnt.
+- **Zu 4:** protect verwirft fremde Frames still. restrict verwirft, zählt und meldet per Syslog und SNMP. shutdown (Standard) setzt den Port auf err-disabled.
+- **Zu 5:** ARP-Pakete, deren Zuordnung von IP und MAC nicht zur Snooping-Tabelle passt, z. B. ein Angreifer, der sich als Gateway ausgibt. Der Router hat eine feste Adresse und steht nicht in der Tabelle. Am Uplink würde DAI seine ARP-Antworten sonst verwerfen.
+- **Zu 6:** PortFast lässt Endgeräte sofort arbeiten, BPDU Guard schaltet den Port ab, sobald dort jemand einen Switch ansteckt. So schützt du die Access-Ports auch gegen Schleifen und fremde Switches.
+
+</details>
 
 ## Teil B – Reparieren
 
@@ -89,50 +115,57 @@ show port-security interface fa0/1
 show interfaces status err-disabled
 show ip arp inspection
 ```
-Erwartet: PCs bekommen 192.168.24.x, Rogue-Offers werden verworfen, Port Security zeigt 1 sichere MAC je Port.
+
+| Prüfung | Das solltest du sehen |
+|---|---|
+| `ipconfig` auf den PCs | Adressen aus 192.168.24.0/24, nie aus .66 |
+| `show ip dhcp snooping` | Fa0/24 als trusted |
+| `show port-security` | eine sichere MAC pro Port |
 
 ## Teil C – Üben
 
 Beantworte zuerst selbst, dann klappe die Antwort auf.
 
-1. Wozu dient die DHCP-Snooping-Bindungstabelle?
+1. Wozu dient die Bindungstabelle von DHCP Snooping?
 <details><summary>Antwort</summary>
 
-Sie speichert MAC, IP, VLAN, Port und Lease der Clients; DAI und IP Source Guard prüfen damit ARP/IP-Pakete.
+**Sie merkt sich, welcher Client welche Adresse an welchem Port hat.** Gespeichert sind MAC, IP, VLAN, Port und Lease. DAI und IP Source Guard prüfen damit ARP- und IP-Pakete.
 
 </details>
 
-2. Was sind die drei Violation-Modi?
+2. Welche drei Violation-Modi gibt es?
 <details><summary>Antwort</summary>
 
-Protect (verwerfen, still), Restrict (verwerfen + Logging/SNMP), Shutdown (Port err-disabled, Standard).
+**protect, restrict und shutdown.** protect verwirft still, restrict verwirft und meldet, shutdown (Standard) schaltet den Port auf err-disabled.
 
 </details>
 
-3. Auf welchen Ports setzt du `ip dhcp snooping trust`?
+3. An welchen Ports setzt du `ip dhcp snooping trust`?
 <details><summary>Antwort</summary>
 
-Auf Ports in Richtung legitimer DHCP-Server (Uplink/Router), nie auf Access-Ports.
+**Nur an Ports in Richtung des echten DHCP-Servers, also am Uplink oder zum Router.** Nie an Access-Ports.
 
 </details>
 
 4. Was verhindert DAI?
 <details><summary>Antwort</summary>
 
-ARP-Spoofing/Poisoning und Man-in-the-Middle: ARP-Pakete, deren IP-MAC-Zuordnung nicht zur Bindungstabelle passt, werden verworfen.
+**ARP-Spoofing und damit Man-in-the-Middle.** ARP-Pakete, deren IP-MAC-Zuordnung nicht zur Snooping-Tabelle passt, werden verworfen.
 
 </details>
 
 5. Wie bringst du einen err-disabled Port zurück?
 <details><summary>Antwort</summary>
 
-Ursache beseitigen, dann `shutdown`/`no shutdown`, oder `errdisable recovery cause psecure-violation interval …`.
+**Erst die Ursache beheben, dann `shutdown` und `no shutdown`.** Oder automatisch mit `errdisable recovery cause psecure-violation` und einem Intervall.
 
 </details>
 
 ## Prüfungsbezug
 
-Port Security: begrenzt/erlaubt MACs pro Port (static, dynamic, sticky), Violation: protect (verwerfen), restrict (verwerfen + Log), shutdown (err-disabled, Standard). DHCP Snooping: untrusted Ports dürfen keine DHCP-Server-Nachrichten (Offer/Ack) senden; Bindungstabelle MAC–IP–Port–VLAN. DAI nutzt diese Tabelle zur Prüfung von ARP-Paketen. Trusted: Uplinks zum DHCP-Server/Router.
+- Port Security begrenzt die MACs pro Port (statisch, dynamisch, sticky). Violation: protect (still), restrict (mit Meldung), shutdown (err-disabled, Standard).
+- DHCP Snooping: An untrusted Ports dürfen keine Server-Nachrichten (Offer, Ack) ankommen. Bindungstabelle aus MAC, IP, Port und VLAN.
+- DAI prüft ARP gegen diese Tabelle. Trusted sind die Uplinks zum Router bzw. DHCP-Server.
 
 ## Lösungen
 
