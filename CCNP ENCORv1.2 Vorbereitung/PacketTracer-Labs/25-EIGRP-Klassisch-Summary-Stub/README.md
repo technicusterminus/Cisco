@@ -4,6 +4,12 @@
 
 EIGRP im klassischen Modus über vier Router: Nachbarschaftsbedingungen (AS, K-Werte, Authentifizierung), Summarisierung, Stub-Router und das Lesen der Topology Table (Feasible Successor, FD/RD). Dazu die Abgrenzung zu OSPF.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- Klassisches EIGRP mit Authentisierung aufbauen.
+- Mit Summary und Stub die Query-Reichweite begrenzen.
+- Nachbarschaftsfehler (AS, K-Werte, Key, passive) an ihren Meldungen unterscheiden.
+
 | ENCOR-Ziel (`Ziel::…`) | Thema |
 |---|---|
 | 3.2.a | EIGRP und OSPF vergleichen |
@@ -132,21 +138,21 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. Zwei EIGRP-Router bilden keine Nachbarschaft, obwohl alle Interfaces oben sind. Die ersten Prüfungen?
 <details><summary>Antwort</summary>
 
-`show ip eigrp neighbors` leer: AS-Nummer, K-Werte (`show ip protocols`), Authentifizierung, `passive-interface`, `network`-Statement (Interface wirklich im Prozess?), Subnetz/Maske. Hello-Timer müssen nicht gleich sein.
+**AS-Nummer, K-Werte, Authentisierung, passive Interfaces und das `network`-Statement.** `show ip protocols` zeigt AS und K-Werte, `show ip eigrp interfaces` zeigt, ob das Interface im Prozess ist. Außerdem müssen beide im selben Subnetz liegen. Die Hello-Timer dürfen dagegen verschieden sein.
 
 </details>
 
 2. Wann wird ein Pfad Feasible Successor?
 <details><summary>Antwort</summary>
 
-Wenn seine Reported Distance (die Distanz des Nachbarn zum Ziel) **kleiner** ist als die Feasible Distance des aktuellen Successors. Das garantiert Schleifenfreiheit und erlaubt Umschalten ohne Query.
+**Wenn seine Reported Distance kleiner ist als die Feasible Distance des Successors.** Der Nachbar ist dann näher am Ziel als man selbst über den besten Weg. Das schließt eine Schleife aus. Fällt der Successor aus, schaltet EIGRP ohne Query sofort um.
 
 </details>
 
 3. Was bewirkt `eigrp stub connected` und warum hilft es bei Stuck-in-Active?
 <details><summary>Antwort</summary>
 
-Der Router bewirbt nur direkt verbundene Netze und beantwortet Queries nicht weiterreichend: Nachbarn senden ihm keine Queries mehr, die Suche bleibt lokal und SIA wird unwahrscheinlicher.
+**Der Router kündigt nur seine direkt verbundenen Netze an und bekommt keine Queries mehr.** Die Nachbarn wissen, dass hinter einem Stub kein anderer Weg liegt. Die Suche nach einem Ersatzweg bleibt dadurch klein, und Stuck-in-Active wird unwahrscheinlicher.
 
 </details>
 

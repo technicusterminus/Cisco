@@ -4,6 +4,12 @@
 
 Standortvernetzung über ein unsicheres Transportnetz: GRE-Tunnel, OSPF darüber, IPsec Tunnel Protection (IKEv1), anschließend IKEv2 und VTI. Dazu MTU/MSS und das typische Rekursiv-Routing-Problem.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- Einen GRE-Tunnel mit IPsec schützen und OSPF darüber laufen lassen.
+- IKE Phase 1 und Phase 2 an ihren Zuständen unterscheiden.
+- Rekursives Routing über den eigenen Tunnel erkennen und vermeiden.
+
 | ENCOR-Ziel (`Ziel::…`) | Thema |
 |---|---|
 | 2.2.b | GRE und IPsec |
@@ -67,7 +73,7 @@ graph LR
 | CE2 | Gi0/0 / Lo0 / Lo100 (LAN2) | 203.0.113.1/30 / 2.2.2.2/32 / 192.168.2.1/24 |
 
 CE1/CE2 haben je eine Default-Route zum ISP. Der ISP kennt nur die zwei Transfernetze.
-> **Packet-Tracer-Hinweis:** **Eignung: teilweise.** Nach meinem Kenntnisstand zu Packet Tracer 8.x gilt: IPsec mit Crypto-Map: eingeschränkt. Braucht `securityk9`-Lizenz am 2911 (`license boot module c2900 technology-package securityk9`). IPsec-VTI (Tunnel Protection): nicht vorhanden. VTI/Profile gibt es nicht; stattdessen Crypto-Map (siehe Lab 14/25 im CCNA-Paket). Akzeptiert PT einen Befehl nicht, ist das ein PT-Limit und kein Fehler von dir; solche Schritte machst du in CML oder EVE-NG.
+> **Packet-Tracer-Hinweis:** **Eignung: teilweise.** Stand Packet Tracer 8.x: IPsec mit Crypto-Map: eingeschränkt. Braucht `securityk9`-Lizenz am 2911 (`license boot module c2900 technology-package securityk9`). IPsec-VTI (Tunnel Protection): nicht vorhanden. VTI/Profile gibt es nicht; stattdessen Crypto-Map (siehe Lab 14/25 im CCNA-Paket). Akzeptiert PT einen Befehl nicht, ist das ein PT-Limit und kein Fehler von dir; solche Schritte machst du in CML oder EVE-NG.
 
 ## Teil A – Bauen
 
@@ -113,21 +119,21 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. `show crypto isakmp sa` zeigt `MM_NO_STATE`. Was heißt das?
 <details><summary>Antwort</summary>
 
-Phase 1 kommt nicht zustande: Gegenstelle nicht erreichbar, ISAKMP-Policy passt nicht (Algorithmen/DH/Auth), oder Pre-Shared Key-Mismatch.
+**Phase 1 kommt nicht zustande.** Mögliche Gründe: Die Gegenstelle ist nicht erreichbar, die ISAKMP-Policies passen nicht (Verschlüsselung, Hash, DH-Gruppe, Authentisierung) oder der Pre-Shared Key ist verschieden.
 
 </details>
 
 2. Phase 1 steht (`QM_IDLE`), aber keine Daten. Was prüfst du?
 <details><summary>Antwort</summary>
 
-Phase 2: Transform-Set-Mismatch, Mode (Transport/Tunnel), Proxy-ACL/Profile, `encaps` ohne `decaps` deutet auf Rückrichtung oder ESP blockiert.
+**Phase 2.** Passen die Transform-Sets und der Modus (Tunnel oder Transport)? Stimmt das Profil oder die Crypto-ACL? Steigt auf einer Seite `encaps`, auf der anderen aber kein `decaps`, kommt der Verkehr nicht an: ESP blockiert oder Rückrichtung prüfen.
 
 </details>
 
 3. Warum fließt ohne GRE kein OSPF durch klassisches Crypto-Map-IPsec?
 <details><summary>Antwort</summary>
 
-IPsec transportiert nur Unicast. OSPF nutzt Multicast. Mit GRE (oder VTI) entsteht ein Interface, das Multicast tragen kann.
+**Weil klassisches IPsec mit Crypto-Map nur Unicast transportiert.** OSPF nutzt Multicast. GRE oder ein VTI schafft ein Interface, über das auch Multicast laufen kann.
 
 </details>
 

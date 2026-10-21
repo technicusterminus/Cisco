@@ -4,6 +4,12 @@
 
 Drei Switches, Router-on-a-Stick und drei Hosts: 802.1Q-Trunks (Native VLAN, Allowed VLANs, DTP, VTP) und EtherChannel mit LACP, PAgP und statischem Modus.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- VLANs, 802.1Q-Trunks und Router-on-a-Stick aufbauen.
+- EtherChannel mit LACP bündeln und Modus-Fehler erkennen.
+- Mit `show interfaces trunk` und `show etherchannel summary` systematisch Layer 2 prüfen.
+
 | Deck-Tag | Thema | Karten im Kompendium |
 |---|---|---|
 | `Ziel::3.1.a` | 802.1Q und Trunks | 31 |
@@ -71,21 +77,21 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. Zwei Switches stehen auf `dynamic auto`. Entsteht ein Trunk?
 <details><summary>Antwort</summary>
 
-Nein: Beide warten passiv, Ergebnis ist Access. Mindestens eine Seite muss `desirable` oder `trunk` sein.
+**Nein, es entsteht kein Trunk.** `dynamic auto` wartet nur und fragt selbst nicht. Zwei wartende Seiten bleiben Access-Ports. Mindestens eine Seite muss `dynamic desirable` oder `trunk` sein.
 
 </details>
 
 2. Ein Port ist in einem Channel gelistet, aber als `s` (suspended) markiert. Typische Ursache?
 <details><summary>Antwort</summary>
 
-Mismatch von Parametern oder Modi zur Gegenseite (z. B. `on` gegen `active`, andere VLAN-Liste, Speed/Duplex), sodass der Port nicht gebündelt wird.
+**Die Parameter oder der Modus passen nicht zur Gegenseite.** Zum Beispiel `on` gegen `active`, eine andere VLAN-Liste oder andere Speed- und Duplex-Werte. Der Switch nimmt den Port dann nicht ins Bündel auf.
 
 </details>
 
 3. Wozu `switchport nonegotiate`?
 <details><summary>Antwort</summary>
 
-Schaltet DTP-Frames ab: Verhindert, dass ein Angreifer einen Trunk aushandelt. Setzt voraus, dass der Port statisch auf `access` oder `trunk` steht.
+**Es schaltet DTP ab, also das Aushandeln eines Trunks.** So kann ein angeschlossenes Gerät keinen Trunk erzwingen. Voraussetzung: Der Port steht fest auf `access` oder `trunk`.
 
 </details>
 

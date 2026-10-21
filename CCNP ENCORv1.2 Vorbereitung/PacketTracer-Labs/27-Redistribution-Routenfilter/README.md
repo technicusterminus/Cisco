@@ -4,6 +4,12 @@
 
 Zwei Routing-Domänen (OSPF und EIGRP) werden an **zwei** Punkten gegenseitig verbunden. Ohne Schutz entstehen Routing-Schleifen und Rückkopplungen. Du lernst Metrik-Zuweisung, Route-Tags, Route-Maps und Prefix-Listen als Filter.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- Routen zwischen OSPF und EIGRP gegenseitig redistribuieren.
+- Seed-Metrik und `subnets` richtig setzen.
+- Rückkopplungen an zwei Redistributionspunkten mit Route-Tags verhindern.
+
 | ENCOR-Ziel (`Ziel::…`) | Thema |
 |---|---|
 | 3.2.a | EIGRP und OSPF vergleichen |
@@ -128,21 +134,21 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. R2 redistribuiert EIGRP nach OSPF, aber in OSPF erscheint nur das klassische Netz 10.0.0.0/8, nicht die /24. Ursache?
 <details><summary>Antwort</summary>
 
-`redistribute eigrp 100` ohne `subnets`: OSPF übernimmt nur klassenbehaftete Netze. Mit `subnets` kommen alle Subnetze.
+**`subnets` fehlt.** Ohne dieses Schlüsselwort übernimmt OSPF nur klassenbehaftete Netze. Mit `redistribute eigrp 100 subnets` kommen alle Subnetze.
 
 </details>
 
 2. Wozu setzt man beim Redistribuieren Route-Tags?
 <details><summary>Antwort</summary>
 
-Tags markieren die Herkunft einer Route (hier Domäne). Ein zweiter ASBR kann Routen mit fremdem Tag wieder verwerfen und so Rückkopplungen und Schleifen verhindern, ohne Prefix-Listen pflegen zu müssen.
+**Um zu markieren, woher eine Route stammt.** Ein zweiter Redistributionspunkt erkennt am Tag eine Route aus der anderen Domäne und gibt sie nicht zurück. So verhindert man Rückkopplungen, ohne Prefix-Lists pflegen zu müssen.
 
 </details>
 
 3. Warum ist gegenseitige Redistribution an zwei Punkten riskanter als an einem?
 <details><summary>Antwort</summary>
 
-Routen können einmal die Domäne verlassen und über den anderen ASBR mit schlechterer Metrik/AD wieder hinein (Feedback, Suboptimales Routing, Schleifen). Mit nur einem Punkt fehlt das Risiko, aber auch die Redundanz.
+**Weil Routen über den zweiten Punkt zurück in ihre Ursprungsdomäne fließen können.** Dort kommen sie mit schlechterer Metrik oder anderer AD an. Die Folge: Umwege oder Schleifen. Mit nur einem Punkt gibt es das nicht, dafür aber auch keine Redundanz.
 
 </details>
 

@@ -4,6 +4,12 @@
 
 Vier Switches im Dreiecksverbund plus „Rogue“-Switch: Rapid-PVST, Root-Platzierung und Lastverteilung, Umstieg auf MST, PortFast, BPDU Guard, Root Guard, Loop Guard und typische STP-Fehler.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- Die STP-Root-Wahl vorhersagen und gezielt steuern.
+- MST mit Region, Instanzen und Prioritäten konfigurieren.
+- PortFast, BPDU Guard und Root Guard sinnvoll einsetzen.
+
 | Deck-Tag | Thema | Karten im Kompendium |
 |---|---|---|
 | `Ziel::3.1.c` | RSTP, MST und Schutzfunktionen | 65 |
@@ -112,21 +118,21 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. Welcher Switch wird Root, wenn alle Prioritäten gleich sind?
 <details><summary>Antwort</summary>
 
-Der mit der niedrigsten MAC-Adresse (Bridge-ID = Priorität + MAC). Bei PVST+ steckt die VLAN-ID in der Extended System ID.
+**Der Switch mit der niedrigsten MAC-Adresse.** Die Bridge-ID besteht aus Priorität und MAC. Bei gleicher Priorität entscheidet die MAC. Bei PVST+ ist die VLAN-ID in der Priorität enthalten (Extended System ID).
 
 </details>
 
 2. Ein Switch hat Port-Zustand `BKN*`. Was bedeutet das?
 <details><summary>Antwort</summary>
 
-`Broken`: Der Port ist durch Root Guard (`ROOT_Inc`), Loop Guard (`LOOP_Inc`) oder Type-/PVID-Inconsistency blockiert. Die Details zeigt `show spanning-tree inconsistentports`.
+**Der Port ist durch eine Schutzfunktion blockiert (Broken).** Ursachen sind Root Guard (`ROOT_Inc`), Loop Guard (`LOOP_Inc`) oder eine Type- bzw. PVID-Inkonsistenz. Welche es ist, zeigt `show spanning-tree inconsistentports`.
 
 </details>
 
 3. Warum PortFast **und** BPDU Guard?
 <details><summary>Antwort</summary>
 
-PortFast überspringt die Wartezeit am Edge-Port. BPDU Guard stellt sicher, dass dort kein Switch hängt, da PortFast sonst Loops erlauben würde.
+**PortFast spart die Wartezeit, BPDU Guard sichert sie ab.** PortFast schaltet einen Edge-Port sofort auf Forwarding. Hängt dort doch ein Switch, könnte eine Schleife entstehen. BPDU Guard schaltet den Port ab, sobald eine BPDU ankommt.
 
 </details>
 

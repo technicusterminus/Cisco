@@ -4,6 +4,12 @@
 
 VXLAN, VTEP/VNI und Nexus-9000v-Geräte gibt es in Packet Tracer nicht.
 
+**Lernziele:** In CML oder EVE-NG lernst du mit diesem Lab:
+
+- Ein VXLAN-Segment mit VTEPs, VNI und Ingress Replication aufbauen.
+- Den Overhead von VXLAN berechnen und die nötige Underlay-MTU begründen.
+- Flood-and-Learn und EVPN als Control Plane unterscheiden.
+
 | ENCOR-Ziel | Thema |
 |---|---|
 | `Ziel::2.3.b` | VXLAN |

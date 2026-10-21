@@ -4,6 +4,12 @@
 
 Branch-Router mit schmaler WAN-Strecke (2 Mbit/s): Klassifizieren und Markieren am Rand, Hierarchical Shaping mit Child-Queueing (LLQ/CBWFQ) am WAN-Ausgang, Policing auf dem Gast-Netz und WRED. Verkehr erzeugst du mit Pings und DSCP-Werten (`tos`).
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- Verkehr mit MQC klassifizieren und markieren.
+- LLQ, Policing und Shaping konfigurieren und ihre Wirkung an den Zählern ablesen.
+- Die Trust Boundary begründen und Fehler in Klassen und Bindungen finden.
+
 | Deck-Tag | Thema | Karten im Kompendium |
 |---|---|---|
 | `Ziel::1.4` | QoS-Konfigurationen | 48 |
@@ -65,21 +71,21 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. Warum sind EF-Pakete in der LLQ trotzdem nicht unbegrenzt?
 <details><summary>Antwort</summary>
 
-Ein impliziter Policer begrenzt die Priority-Queue auf die konfigurierte Rate, sonst würde sie alle anderen Klassen aushungern.
+**Weil ein eingebauter Policer die Priority-Queue begrenzt.** Sie darf nur die konfigurierte Rate nutzen, wenn es eng wird. Sonst könnte Sprache alle anderen Klassen aushungern.
 
 </details>
 
 2. `show policy-map interface` zeigt in der Klasse VIDEO null Pakete, obwohl Video läuft. Was prüfst du?
 <details><summary>Antwort</summary>
 
-Die Match-Bedingung (match-all vs. match-any, DSCP-Wert), ob der Verkehr vor dem Ausgang noch umgeschrieben wird, und ob die Policy an der richtigen Schnittstelle in der richtigen Richtung hängt.
+**Die Match-Bedingung, die Bindung und ob vorher umgeschrieben wird.** Passt der DSCP-Wert? Steht da `match-all` mit mehreren Werten? Wird DSCP auf dem Weg überschrieben? Hängt die Policy am richtigen Interface in der richtigen Richtung?
 
 </details>
 
 3. Wann `police` statt `shape` für das Gästenetz?
 <details><summary>Antwort</summary>
 
-Wenn Überschuss ohne Puffer verworfen werden soll (Durchsetzung einer Obergrenze). Shaping würde Gast-Pakete puffern und Latenz hinzufügen.
+**Wenn Überschuss sofort verworfen werden soll.** Policing setzt eine harte Obergrenze ohne Puffer. Shaping würde Gast-Pakete zwischenspeichern und dadurch Verzögerung erzeugen.
 
 </details>
 

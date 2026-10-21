@@ -5,6 +5,7 @@
 ## Ticket 1 (R1)
 
 - **Symptom:** `show flow monitor MON cache` ist leer, obwohl Verkehr läuft; der Exporter zählt keine Pakete.
+- **So findest du es:** `show flow monitor MON cache` ist leer. `show flow interface` zeigt den Monitor an keinem Interface.
 - **Ursache:** Der Flow-Monitor ist auf keinem Interface aktiviert.
 - **Fix:** `ip flow monitor MON input|output` am Interface Gi0/0 setzen.
 - **Eingebaut:**
@@ -17,6 +18,7 @@
 ## Ticket 2 (R1)
 
 - **Symptom:** Im Flow-Cache stehen nur noch Einträge je Host-Paar und Protokoll, Anwendungen (Ports) lassen sich nicht unterscheiden.
+- **So findest du es:** `show flow record` zeigt keine `match transport`-Felder. Im Cache gibt es pro Host-Paar und Protokoll nur eine Zeile.
 - **Ursache:** Der Record enthält keine Transport-Port-Key-Felder, daher werden alle Flows zwischen zwei Hosts zusammengefasst.
 - **Fix:** `match transport source-port/destination-port` im Record ergänzen (Monitor-Zuordnung beachten: Record ändern geht nur ohne aktive Anwendung).
 - **Eingebaut:**
@@ -29,6 +31,7 @@
 ## Ticket 3 (SW2)
 
 - **Symptom:** ANA2 sieht nichts vom RSPAN-Verkehr von H2, lokales SPAN auf SW1 funktioniert.
+- **So findest du es:** `show interfaces trunk` auf SW2 zeigt VLAN 999 nicht bei den erlaubten VLANs.
 - **Ursache:** Das Remote-VLAN 999 ist am SW2-Trunk nicht erlaubt: Die gespiegelten Frames kommen nicht an.
 - **Fix:** VLAN 999 in der Allowed-Liste ergänzen.
 - **Eingebaut:**
@@ -47,6 +50,7 @@
 ## Ticket 4 (SW1)
 
 - **Symptom:** ANA1 sieht H1-Verkehr nicht, `show monitor session 1` zeigt ein anderes Ziel.
+- **So findest du es:** `show monitor session 1` auf SW1 zeigt einen anderen Zielport als den, an dem ANA1 hängt.
 - **Ursache:** Das SPAN-Ziel zeigt auf Gi1/3, ANA1 hängt aber an Gi1/2.
 - **Fix:** Ziel-Port auf Gi1/2 setzen.
 - **Eingebaut:**

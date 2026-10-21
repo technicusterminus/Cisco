@@ -4,6 +4,12 @@
 
 Layer-3/4-Filter mit Standard-, Extended- und benannten ACLs, `established`, Logging und vty-Schutz, dazu CoPP (MQC auf der Control-Plane) zur Begrenzung von ICMP und Management-Verkehr.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- Standard- und Extended-ACLs richtig aufbauen und platzieren.
+- Die Richtung (in/out) einer ACL am Interface begründen.
+- Control-Plane Policing einrichten und an den Zählern prüfen.
+
 | ENCOR-Ziel (`Ziel::…`) | Thema |
 |---|---|
 | 5.2.a | ACLs |
@@ -81,7 +87,7 @@ Alle Netze sind ohne NAT erreichbar (der ISP routet das Kundennetz statisch zur�
 
 ### Portzuordnung der Switches (CML → Packet Tracer)
 
-Die Aufgabentexte nennen Switch-Ports in der CML-Schreibweise (`Gi…`). Verkabelung, Konfigurationen und Fehlerlisten verwenden die Packet-Tracer-Ports. Umrechnung: `GiX/Y` → `Fa0/(X·4+Y+1)`.
+Aufgaben, Verkabelung, Konfigurationen und Fehlerlisten verwenden die Packet-Tracer-Ports. Die Tabelle zeigt, welcher Port der CML-Vorlage dazu gehört. Nur die Skizze nennt noch die CML-Ports. Umrechnung: `GiX/Y` → `Fa0/(X·4+Y+1)`.
 
 | Switch | CML-Port | PT-Port |
 |---|---|---|
@@ -89,7 +95,7 @@ Die Aufgabentexte nennen Switch-Ports in der CML-Schreibweise (`Gi…`). Verkabe
 | SW | Gi0/1 | Fa0/2 |
 | SW | Gi0/2 | Fa0/3 |
 
-> **Packet-Tracer-Hinweis:** **Eignung: teilweise.** Nach meinem Kenntnisstand zu Packet Tracer 8.x gilt: CoPP: nicht vorhanden. `control-plane` und `service-policy` darunter fehlen. QoS (MQC): eingeschränkt. Klassen und Richtlinien lassen sich anlegen, `police`/`shape`/`priority` je nach Gerät nur teilweise; Messwerte nicht aussagekräftig. Akzeptiert PT einen Befehl nicht, ist das ein PT-Limit und kein Fehler von dir; solche Schritte machst du in CML oder EVE-NG. Die CML-Switches (Gi-Ports) sind hier 3560-24PS bzw. 2960 mit FastEthernet-Ports: Die Portzuordnung steht unter dem Adressplan; die Aufgabentexte nennen noch die CML-Ports.
+> **Packet-Tracer-Hinweis:** **Eignung: teilweise.** Stand Packet Tracer 8.x: CoPP: nicht vorhanden. `control-plane` und `service-policy` darunter fehlen. QoS (MQC): eingeschränkt. Klassen und Richtlinien lassen sich anlegen, `police`/`shape`/`priority` je nach Gerät nur teilweise; Messwerte nicht aussagekräftig. Akzeptiert PT einen Befehl nicht, ist das ein PT-Limit und kein Fehler von dir; solche Schritte machst du in CML oder EVE-NG. Die CML-Switches (Gi-Ports) sind hier 3560-24PS bzw. 2960 mit FastEthernet-Ports: Die Portzuordnung steht unter dem Adressplan.
 
 ## Teil A – Bauen
 
@@ -132,21 +138,21 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. Eine ACL hat als letzte Zeile `permit ip any any`, ganz oben aber `deny ip any any`. Was passiert?
 <details><summary>Antwort</summary>
 
-Alles wird verworfen; spätere Zeilen werden nie erreicht (Shadowing).
+**Alles wird verworfen.** Eine ACL hört beim ersten Treffer auf. `deny ip any any` passt auf jedes Paket, die Zeilen darunter werden nie erreicht.
 
 </details>
 
 2. Wie unterscheidet sich `established` von einer zustandsbehafteten Firewall?
 <details><summary>Antwort</summary>
 
-`established` prüft nur ACK/RST-Flags im Paket und führt keine Verbindungstabelle: Gefälschte Pakete mit gesetztem ACK passieren.
+**`established` prüft nur Flags im Paket, eine Firewall kennt die Verbindung.** Die ACL lässt jedes TCP-Paket mit gesetztem ACK oder RST durch, auch ein gefälschtes. Eine zustandsbehaftete Firewall merkt sich jede Verbindung und lässt nur echte Antworten zurück.
 
 </details>
 
 3. Warum verwirft CoPP den Transit-Ping nicht?
 <details><summary>Antwort</summary>
 
-CoPP wirkt nur auf Pakete, die an die Control Plane (Router selbst) gerichtet sind. Transit-Pakete laufen über die Data Plane.
+**Weil CoPP nur Verkehr an den Router selbst prüft.** Ein Transit-Ping geht durch die Data Plane und erreicht die Control Plane nie.
 
 </details>
 

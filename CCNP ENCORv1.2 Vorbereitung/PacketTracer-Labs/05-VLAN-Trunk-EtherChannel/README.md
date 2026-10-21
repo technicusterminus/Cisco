@@ -4,6 +4,12 @@
 
 Drei Switches, Router-on-a-Stick und drei Hosts: 802.1Q-Trunks (Native VLAN, Allowed VLANs, DTP, VTP) und EtherChannel mit LACP, PAgP und statischem Modus.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- VLANs, 802.1Q-Trunks und Router-on-a-Stick aufbauen.
+- EtherChannel mit LACP bündeln und Modus-Fehler erkennen.
+- Mit `show interfaces trunk` und `show etherchannel summary` systematisch Layer 2 prüfen.
+
 | ENCOR-Ziel (`Ziel::…`) | Thema |
 |---|---|
 | 3.1.a | 802.1Q und Trunks |
@@ -82,11 +88,11 @@ graph LR
 | 20 | SERVERS | 10.10.20.0/24 | .1 (`Gi0/0.20`) |
 | 99 | NATIVE | – | ungenutzt |
 
-H1 10.10.10.11 (SW2 Gi1/0), H2 10.10.20.12 (SW3 Gi1/0), H3 10.10.10.13 (SW3 Gi1/1). Verkabelung: SW1 Gi0/0–0/1 ↔ SW2 Gi0/0–0/1, SW1 Gi0/2–0/3 ↔ SW3 Gi0/0–0/1, SW1 Gi1/0 ↔ R1 Gi0/0.
+H1 10.10.10.11 (SW2 Fa0/5), H2 10.10.20.12 (SW3 Fa0/5), H3 10.10.10.13 (SW3 Fa0/6). Verkabelung: SW1 Fa0/1–0/2 ↔ SW2 Fa0/1–0/2, SW1 Fa0/3–0/4 ↔ SW3 Fa0/1–0/2, SW1 Fa0/5 ↔ R1 Gi0/0.
 
 ### Portzuordnung der Switches (CML → Packet Tracer)
 
-Die Aufgabentexte nennen Switch-Ports in der CML-Schreibweise (`Gi…`). Verkabelung, Konfigurationen und Fehlerlisten verwenden die Packet-Tracer-Ports. Umrechnung: `GiX/Y` → `Fa0/(X·4+Y+1)`.
+Aufgaben, Verkabelung, Konfigurationen und Fehlerlisten verwenden die Packet-Tracer-Ports. Die Tabelle zeigt, welcher Port der CML-Vorlage dazu gehört. Nur die Skizze nennt noch die CML-Ports. Umrechnung: `GiX/Y` → `Fa0/(X·4+Y+1)`.
 
 | Switch | CML-Port | PT-Port |
 |---|---|---|
@@ -103,12 +109,12 @@ Die Aufgabentexte nennen Switch-Ports in der CML-Schreibweise (`Gi…`). Verkabe
 | SW3 | Gi1/0 | Fa0/5 |
 | SW3 | Gi1/1 | Fa0/6 |
 
-> **Packet-Tracer-Hinweis:** **Eignung: geeignet.** Alle verwendeten Funktionen gibt es in Packet Tracer; Ausgabeformate einzelner `show`-Befehle weichen leicht ab. Die CML-Switches (Gi-Ports) sind hier 3560-24PS bzw. 2960 mit FastEthernet-Ports: Die Portzuordnung steht unter dem Adressplan; die Aufgabentexte nennen noch die CML-Ports.
+> **Packet-Tracer-Hinweis:** **Eignung: geeignet.** Alle verwendeten Funktionen gibt es in Packet Tracer; Ausgabeformate einzelner `show`-Befehle weichen leicht ab. Die CML-Switches (Gi-Ports) sind hier 3560-24PS bzw. 2960 mit FastEthernet-Ports: Die Portzuordnung steht unter dem Adressplan.
 
 ## Teil A – Bauen
 
 1. **VLANs.** Lege VLAN 10 (USERS), 20 (SERVERS) und 99 (NATIVE) auf allen Switches an. Setze **VTP auf `transparent`** (`vtp mode transparent`). Warum ist VTP Server/Client auf einer neuen Switch mit höherer Revision gefährlich?
-2. **Trunk zum Router.** SW1 Gi1/0 als statischer Trunk (`switchport mode trunk`, `nonegotiate`), Native VLAN 99, erlaubte VLANs 10 und 20. R1 bekommt Subinterfaces `Gi0/0.10` und `.20` (`encapsulation dot1Q`, `ip address`). Prüfe, dass H1 sein Gateway erreicht.
+2. **Trunk zum Router.** SW1 Fa0/5 als statischer Trunk (`switchport mode trunk`, `nonegotiate`), Native VLAN 99, erlaubte VLANs 10 und 20. R1 bekommt Subinterfaces `Gi0/0.10` und `.20` (`encapsulation dot1Q`, `ip address`). Prüfe, dass H1 sein Gateway erreicht.
 3. **EtherChannel LACP.** SW1–SW2 als **Po1 mit LACP** (SW1 `active`, SW2 `passive`), als Trunk (10, 20, Native 99). Prüfe `show etherchannel summary` auf Flags `SU`/`P`. Welche Modus-Kombinationen bilden einen Channel und welche nicht (active/passive, passive/passive, on/active)?
 4. **EtherChannel PAgP.** SW1–SW3 als **Po2 mit PAgP** (SW1 `desirable`, SW3 `auto`). Vergleiche PAgP und LACP (Cisco-proprietär vs. IEEE 802.3ad, Mode-Namen, max. Ports pro Channel).
 5. **Hosts.** Ports H1 (VLAN 10), H2 (VLAN 20), H3 (VLAN 10) als Access, `spanning-tree portfast`. Teste: H1 → H3 (gleiches VLAN, nur Layer 2), H1 → H2 (inter-VLAN via R1).
@@ -139,7 +145,7 @@ show lacp neighbor
 show pagp neighbor
 show vtp status
 ```
-Erwartet: `Po1(SU)` mit `Gi0/0(P) Gi0/1(P)`, `Po2(SU)` mit PAgP, alle drei Hosts pingen ihr Gateway, H1 pingt H2 über R1.
+Erwartet: `Po1(SU)` mit `Fa0/1(P) Fa0/2(P)`, `Po2(SU)` mit PAgP, alle drei Hosts pingen ihr Gateway, H1 pingt H2 über R1.
 
 ## Teil C – Üben
 
@@ -148,21 +154,21 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. Zwei Switches stehen auf `dynamic auto`. Entsteht ein Trunk?
 <details><summary>Antwort</summary>
 
-Nein: Beide warten passiv, Ergebnis ist Access. Mindestens eine Seite muss `desirable` oder `trunk` sein.
+**Nein, es entsteht kein Trunk.** `dynamic auto` wartet nur und fragt selbst nicht. Zwei wartende Seiten bleiben Access-Ports. Mindestens eine Seite muss `dynamic desirable` oder `trunk` sein.
 
 </details>
 
 2. Ein Port ist in einem Channel gelistet, aber als `s` (suspended) markiert. Typische Ursache?
 <details><summary>Antwort</summary>
 
-Mismatch von Parametern oder Modi zur Gegenseite (z. B. `on` gegen `active`, andere VLAN-Liste, Speed/Duplex), sodass der Port nicht gebündelt wird.
+**Die Parameter oder der Modus passen nicht zur Gegenseite.** Zum Beispiel `on` gegen `active`, eine andere VLAN-Liste oder andere Speed- und Duplex-Werte. Der Switch nimmt den Port dann nicht ins Bündel auf.
 
 </details>
 
 3. Wozu `switchport nonegotiate`?
 <details><summary>Antwort</summary>
 
-Schaltet DTP-Frames ab: Verhindert, dass ein Angreifer einen Trunk aushandelt. Setzt voraus, dass der Port statisch auf `access` oder `trunk` steht.
+**Es schaltet DTP ab, also das Aushandeln eines Trunks.** So kann ein angeschlossenes Gerät keinen Trunk erzwingen. Voraussetzung: Der Port steht fest auf `access` oder `trunk`.
 
 </details>
 

@@ -4,6 +4,12 @@
 
 OSPF-Areas, ABR/ASBR, DR/BDR, Summarization, Stub/NSSA, Authentifizierung und typische OSPF-Fehler.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- OSPFv2 über mehrere Areas aufbauen und die Rolle von ABR und Backbone erklären.
+- Nachbarschaftsprobleme an ihrem Zustand erkennen (INIT, 2WAY, EXSTART) und gezielt beheben.
+- Routen am ABR mit `area range` zusammenfassen und das Ergebnis in der LSDB nachweisen.
+
 | ENCOR-Ziel (`Ziel::…`) | Thema |
 |---|---|
 | 3.2.a | EIGRP und OSPF vergleichen |
@@ -80,7 +86,7 @@ graph LR
 
 ### Portzuordnung der Switches (CML → Packet Tracer)
 
-Die Aufgabentexte nennen Switch-Ports in der CML-Schreibweise (`Gi…`). Verkabelung, Konfigurationen und Fehlerlisten verwenden die Packet-Tracer-Ports. Umrechnung: `GiX/Y` → `Fa0/(X·4+Y+1)`.
+Aufgaben, Verkabelung, Konfigurationen und Fehlerlisten verwenden die Packet-Tracer-Ports. Die Tabelle zeigt, welcher Port der CML-Vorlage dazu gehört. Nur die Skizze nennt noch die CML-Ports. Umrechnung: `GiX/Y` → `Fa0/(X·4+Y+1)`.
 
 | Switch | CML-Port | PT-Port |
 |---|---|---|
@@ -88,7 +94,7 @@ Die Aufgabentexte nennen Switch-Ports in der CML-Schreibweise (`Gi…`). Verkabe
 | SW | Gi0/1 | Fa0/2 |
 | SW | Gi0/2 | Fa0/3 |
 
-> **Packet-Tracer-Hinweis:** **Eignung: geeignet.** Alle verwendeten Funktionen gibt es in Packet Tracer; Ausgabeformate einzelner `show`-Befehle weichen leicht ab. Die CML-Switches (Gi-Ports) sind hier 3560-24PS bzw. 2960 mit FastEthernet-Ports: Die Portzuordnung steht unter dem Adressplan; die Aufgabentexte nennen noch die CML-Ports.
+> **Packet-Tracer-Hinweis:** **Eignung: geeignet.** Alle verwendeten Funktionen gibt es in Packet Tracer; Ausgabeformate einzelner `show`-Befehle weichen leicht ab. Die CML-Switches (Gi-Ports) sind hier 3560-24PS bzw. 2960 mit FastEthernet-Ports: Die Portzuordnung steht unter dem Adressplan.
 
 ## Teil A – Bauen
 
@@ -131,21 +137,21 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. Welche LSA-Typen sieht ein Router in einer Totally Stubby Area?
 <details><summary>Antwort</summary>
 
-Typ 1 und 2 (intern) plus eine Default-Route per Typ 3 vom ABR. Typ 3 (außer Default), 4 und 5 werden blockiert.
+**Typ 1 und Typ 2 aus der eigenen Area, dazu eine Default-Route als Typ 3 vom ABR.** Alle anderen Typ-3-LSAs sowie Typ 4 und 5 hält der ABR draußen. Deshalb ist die Tabelle in einer Totally Stubby Area so klein.
 
 </details>
 
 2. Zwei Router hängen im selben Subnetz, bleiben aber in `2WAY`. Ist das ein Fehler?
 <details><summary>Antwort</summary>
 
-Nein, wenn beide `DROTHER` sind: Nur DR/BDR bilden zu allen `FULL`-Adjazenzen, DROTHERs bleiben untereinander in 2WAY.
+**Nein, wenn beide DROTHER sind.** Auf Broadcast-Netzen bilden nur DR und BDR mit allen eine volle Adjazenz (FULL). Zwei DROTHERs bleiben untereinander bewusst in 2WAY. Ein Fehler wäre es erst, wenn auch DR oder BDR in 2WAY hängen bleiben.
 
 </details>
 
 3. Warum sieht man auf dem ABR nach `area range` trotzdem die Einzelnetze?
 <details><summary>Antwort</summary>
 
-Im Area-1-LSDB und der lokalen RIB bleiben sie bestehen. Nur Area 0 bekommt die Summary, und der ABR installiert eine Null0-Discard-Route für sie.
+**Weil die Zusammenfassung nur nach außen wirkt.** In der LSDB von Area 1 und in der Routing-Tabelle des ABR bleiben die Einzelnetze stehen. Nur Area 0 bekommt die Summary. Dazu legt der ABR eine Route nach Null0 an, damit Pakete an nicht vorhandene Teilnetze keine Schleife bilden.
 
 </details>
 

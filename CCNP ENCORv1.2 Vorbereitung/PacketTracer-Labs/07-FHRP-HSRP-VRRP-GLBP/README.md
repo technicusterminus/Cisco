@@ -4,6 +4,12 @@
 
 Zwei Distribution-Router, ein Access-Switch, drei VLANs mit je einem anderen FHRP-Protokoll. Dazu Tracking, Preemption, Timer und die Frage, welche Redundanzstufe (Link, Gerät, Standort) Hochverfügbarkeit wirklich liefert.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- HSRP, VRRP und GLBP konfigurieren und ihre Unterschiede erklären.
+- Mit Tracking und Preemption steuern, wann die Rolle wechselt.
+- Redundanz auf Link-, Geräte- und Chassis-Ebene (SSO/NSF) einordnen.
+
 | ENCOR-Ziel (`Ziel::…`) | Thema |
 |---|---|
 | 3.3.c | HSRP und VRRP |
@@ -105,7 +111,7 @@ Hosts: H1 10.10.10.11, H2 10.10.20.12, H3 10.10.30.13, H4 10.10.30.14 (Gateway =
 
 ### Portzuordnung der Switches (CML → Packet Tracer)
 
-Die Aufgabentexte nennen Switch-Ports in der CML-Schreibweise (`Gi…`). Verkabelung, Konfigurationen und Fehlerlisten verwenden die Packet-Tracer-Ports. Umrechnung: `GiX/Y` → `Fa0/(X·4+Y+1)`.
+Aufgaben, Verkabelung, Konfigurationen und Fehlerlisten verwenden die Packet-Tracer-Ports. Die Tabelle zeigt, welcher Port der CML-Vorlage dazu gehört. Nur die Skizze nennt noch die CML-Ports. Umrechnung: `GiX/Y` → `Fa0/(X·4+Y+1)`.
 
 | Switch | CML-Port | PT-Port |
 |---|---|---|
@@ -116,7 +122,7 @@ Die Aufgabentexte nennen Switch-Ports in der CML-Schreibweise (`Gi…`). Verkabe
 | SW | Gi1/2 | Fa0/7 |
 | SW | Gi1/3 | Fa0/8 |
 
-> **Packet-Tracer-Hinweis:** **Eignung: teilweise.** Nach meinem Kenntnisstand zu Packet Tracer 8.x gilt: IP SLA / Track: nicht vorhanden. IP SLA und Track-Objekte gibt es nicht; die Teile mit Tracking in CML oder EVE-NG machen. VRRP: nicht vorhanden. Nicht vorhanden. In CML oder EVE-NG üben. GLBP: nicht vorhanden. Nicht vorhanden. In CML oder EVE-NG üben. Akzeptiert PT einen Befehl nicht, ist das ein PT-Limit und kein Fehler von dir; solche Schritte machst du in CML oder EVE-NG. Die CML-Switches (Gi-Ports) sind hier 3560-24PS bzw. 2960 mit FastEthernet-Ports: Die Portzuordnung steht unter dem Adressplan; die Aufgabentexte nennen noch die CML-Ports.
+> **Packet-Tracer-Hinweis:** **Eignung: teilweise.** Stand Packet Tracer 8.x: IP SLA / Track: nicht vorhanden. IP SLA und Track-Objekte gibt es nicht; die Teile mit Tracking in CML oder EVE-NG machen. VRRP: nicht vorhanden. Nicht vorhanden. In CML oder EVE-NG üben. GLBP: nicht vorhanden. Nicht vorhanden. In CML oder EVE-NG üben. Akzeptiert PT einen Befehl nicht, ist das ein PT-Limit und kein Fehler von dir; solche Schritte machst du in CML oder EVE-NG. Die CML-Switches (Gi-Ports) sind hier 3560-24PS bzw. 2960 mit FastEthernet-Ports: Die Portzuordnung steht unter dem Adressplan.
 
 ## Teil A – Bauen
 
@@ -157,21 +163,21 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. HSRP-Priorität R1 = 110, R2 = 100, R1 verliert den Uplink, Track decrement 5. Wer ist Active?
 <details><summary>Antwort</summary>
 
-Immer noch R1 (105 > 100). Der Decrement muss größer als die Differenz zu R2 sein (mindestens 11).
+**Immer noch R1.** 110 − 5 = 105, und 105 ist größer als 100. Der Decrement muss größer sein als der Abstand zu R2, hier also mindestens 11.
 
 </details>
 
 2. Wozu GLBP, wenn HSRP genügt?
 <details><summary>Antwort</summary>
 
-GLBP verteilt Gateway-Last auf mehrere Router, ohne mehrere Gruppen/VLANs und per-Host-Konfiguration. HSRP/VRRP nutzen nur den Active/Master für alle Hosts je Gruppe.
+**Weil GLBP die Last auf mehrere Router verteilt.** Bei HSRP und VRRP leitet pro Gruppe nur der aktive Router weiter. GLBP gibt verschiedenen Hosts verschiedene virtuelle MAC-Adressen, ohne zusätzliche Gruppen oder Konfiguration pro Host.
 
 </details>
 
 3. Was ist der Unterschied zwischen SSO und FHRP?
 <details><summary>Antwort</summary>
 
-SSO schützt **innerhalb** eines Geräts (Supervisor-Failover, Zustandssynchronisation). FHRP schützt vor Ausfall eines **ganzen Geräts** durch einen zweiten Router mit gemeinsamer virtueller IP.
+**SSO schützt innerhalb eines Geräts, FHRP gegen den Ausfall eines ganzen Geräts.** SSO schaltet auf den zweiten Supervisor um und übernimmt den Zustand. FHRP lässt einen zweiten Router die gemeinsame virtuelle IP übernehmen.
 
 </details>
 

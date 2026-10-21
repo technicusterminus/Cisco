@@ -4,6 +4,12 @@
 
 Branch-Router mit zwei Providern: bestimmte Quelle per PBR über ISP2, Rest über ISP1. Der PBR-Next-Hop wird per IP SLA und Track überwacht. Dazu Local-PBR für routereigenen Verkehr.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- Policy-Based Routing für eine Quelle einrichten und an das richtige Interface binden.
+- Mit IP SLA und Tracking einen Next-Hop überwachen.
+- Mit `show route-map` und `show track` nachweisen, welchen Weg ein Paket nimmt.
+
 | Deck-Tag | Thema | Karten im Kompendium |
 |---|---|---|
 | `Ziel::3.2.d` | Policy-based Routing | 16 |
@@ -69,21 +75,21 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. Wie beeinflusst `set ip next-hop verify-availability` das Routing?
 <details><summary>Antwort</summary>
 
-Der Next-Hop wird nur benutzt, solange das verknüpfte Track-Objekt Up ist. Fällt es, wird die nächste Sequenz oder normales Routing verwendet.
+**Der Next-Hop wird nur benutzt, solange das zugehörige Track-Objekt Up ist.** Fällt es auf Down, prüft der Router die nächste Sequenz der Route-Map oder routet normal nach der Routing-Tabelle.
 
 </details>
 
 2. Ein IP-SLA-Echo gelingt nicht, obwohl Ping manuell geht. Was prüfst du?
 <details><summary>Antwort</summary>
 
-Quelladresse/Quell-Interface der Operation, `ip sla schedule`, Frequenz/Timeout, ACL/CoPP auf dem Zielpfad und die Frage, ob die Operation überhaupt gestartet ist (`show ip sla configuration`).
+**Ob die Operation überhaupt läuft und mit welchen Werten.** `show ip sla configuration` zeigt Quelladresse, Quell-Interface, Frequenz und Timeout, `show ip sla statistics` die Ergebnisse. Fehlt `ip sla schedule`, wird nie gemessen. Danach ACL oder CoPP auf dem Weg prüfen.
 
 </details>
 
 3. Wieso nutzt man PBR statt statischer Route mit Zeit-/AD-Spielereien?
 <details><summary>Antwort</summary>
 
-PBR kann nach Quelle, Protokoll oder Port unterscheiden, normales Routing nur nach Ziel.
+**Weil PBR nach Quelle, Protokoll oder Port entscheiden kann.** Normales Routing schaut nur auf die Zieladresse. Mit statischen Routen und AD-Tricks lässt sich nicht sagen: „Nur H1 über ISP2.“
 
 </details>
 

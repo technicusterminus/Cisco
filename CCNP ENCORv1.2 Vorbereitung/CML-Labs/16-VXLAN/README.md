@@ -4,6 +4,12 @@
 
 Zwei NX-OS-Leafs spannen VLAN 10 über ein geroutetes Underlay als VXLAN-Segment (VNI 10010). Statische Ingress Replication statt EVPN, damit die Grundmechanik sichtbar bleibt. **Ressourcenhungrig:** NX-OSv 9000 braucht mehrere GB RAM pro Node.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- Ein VXLAN-Segment mit VTEPs, VNI und Ingress Replication aufbauen.
+- Den Overhead von VXLAN berechnen und die nötige Underlay-MTU begründen.
+- Flood-and-Learn und EVPN als Control Plane unterscheiden.
+
 | Deck-Tag | Thema | Karten im Kompendium |
 |---|---|---|
 | `Ziel::2.3.b` | VXLAN | 14 |
@@ -65,21 +71,21 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. Wieso ist die Quell-Portnummer im äußeren UDP-Header pseudozufällig?
 <details><summary>Antwort</summary>
 
-Sie wird aus dem inneren Flow gehasht, damit ECMP im Underlay die Last auf mehrere Pfade verteilt.
+**Damit das Underlay die Last per ECMP verteilen kann.** Der Quellport wird aus dem inneren Flow berechnet. So nehmen verschiedene Flows verschiedene Pfade, ein Flow bleibt aber auf einem Pfad.
 
 </details>
 
 2. Welche MTU braucht das Underlay bei Host-MTU 1500?
 <details><summary>Antwort</summary>
 
-Mindestens 1550 (1500 + ca. 50 Byte VXLAN-Overhead), üblicherweise Jumbo-Frames im Underlay.
+**Mindestens 1550 Byte.** 1500 Byte Nutzlast plus etwa 50 Byte VXLAN-Overhead: 14 Ethernet + 20 IP + 8 UDP + 8 VXLAN. In der Praxis nimmt man im Underlay gleich Jumbo-Frames.
 
 </details>
 
 3. Was ist der Vorteil von EVPN gegenüber Flood-and-Learn?
 <details><summary>Antwort</summary>
 
-MAC- und IP-Adressen werden per BGP verteilt (Control Plane), ARP-Suppression reduziert Flooding, und es gibt Multi-Homing und saubere Mobilität.
+**EVPN verteilt MAC- und IP-Adressen per BGP, statt sie durch Fluten zu lernen.** Dadurch gibt es weniger Flooding (ARP-Suppression), Multi-Homing und saubere Mobilität von Hosts.
 
 </details>
 

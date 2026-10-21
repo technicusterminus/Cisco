@@ -4,6 +4,12 @@
 
 Ein ABR verbindet Area 0 mit einer Totally-Stubby-Area und einer NSSA. Dazu Zusammenfassung am ABR, Redistribution im NSSA und MD5-Authentifizierung. Du liest LSA-Typen und verstehst, warum Area-Typen auf beiden Seiten übereinstimmen müssen.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- Stub, Totally Stubby und NSSA unterscheiden und konfigurieren.
+- Inter-Area-Routen am ABR zusammenfassen.
+- OSPF-Authentisierung einrichten und Fehler daran erkennen.
+
 | Deck-Tag | Thema | Karten im Kompendium |
 |---|---|---|
 | `Ziel::3.2.b` | OSPFv2 und OSPFv3 | 86 |
@@ -43,7 +49,7 @@ Loopback0: R1 10.255.0.1, R2 10.255.0.2 (Area 0), R3 10.255.0.3 (Area 1), R4 10.
 
 Importiere `topology-repair.yaml`. Alle Geräte sind vollständig konfiguriert, aber es stecken **6 Fehler** drin. Behandle jede Meldung als Ticket: erst Symptom nachstellen, dann die Ursache eingrenzen (Layer für Layer), dann beheben und das Ergebnis beweisen. Ändere nur, was kaputt ist.
 
-**Ticket 1:** R2 und R3 bilden keine Nachbarschaft; im Log erscheint `Mismatch Authentication`-freie Meldung, `debug ip ospf adj` zeigt `Hello from … with mismatched Stub/Transit area option bit`.
+**Ticket 1:** R2 und R3 bilden keine Nachbarschaft; `debug ip ospf adj` zeigt `Hello from … with mismatched Stub/Transit area option bit`.
 
 **Ticket 2:** R1 sieht drei einzelne Routen 192.168.1.0/24, 192.168.2.0/24, 192.168.3.0/24 und nur 192.168.0.0/24 als Summary.
 
@@ -73,21 +79,21 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. R3 bildet keine Nachbarschaft zum ABR, beide Hello-Timer sind gleich. Was könnte falsch sein?
 <details><summary>Antwort</summary>
 
-Area-Typ: `area 1 stub` fehlt auf einer Seite (E-Bit-Mismatch). Außerdem Authentifizierung, Subnetz/Maske, MTU, Area-ID, passive Interface.
+**Der Area-Typ passt nicht.** Steht `area 1 stub` nur auf einer Seite, ist das E-Bit im Hello verschieden, und die Router ignorieren sich. Weitere Kandidaten: Authentisierung, Subnetz und Maske, Area-ID, passives Interface.
 
 </details>
 
 2. Warum kann eine Stub-Area keinen ASBR enthalten, die NSSA aber schon?
 <details><summary>Antwort</summary>
 
-Stub verbietet Typ-5-LSAs und damit externe Routen innerhalb der Area. Die NSSA transportiert externe Routen als Typ 7, die der ABR an der Grenze in Typ 5 umwandelt.
+**Weil Stub keine externen Routen erlaubt, NSSA aber schon.** Eine Stub-Area verbietet Typ-5-LSAs. Die NSSA transportiert externe Routen als Typ 7. Der ABR wandelt sie an der Grenze in Typ 5 um.
 
 </details>
 
 3. Was ändert `no-summary` bei einer Stub-Area?
 <details><summary>Antwort</summary>
 
-Der ABR sendet keine Typ-3-LSAs (Inter-Area-Routen) mehr in die Area, nur noch eine Default-Route: Totally Stubby, kleinste Tabelle.
+**Der ABR sendet keine Inter-Area-Routen mehr, nur noch eine Default-Route.** Ohne Typ-3-LSAs wird die Area zur Totally Stubby Area mit der kleinsten Tabelle.
 
 </details>
 

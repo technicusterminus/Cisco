@@ -4,6 +4,12 @@
 
 Management-Plane-Grundlagen: authentifizierte NTP-Hierarchie (Stratum, Server/Peer), Syslog mit Severity und Quell-Interface, SNMPv3 mit authPriv. PTP wird konzeptionell behandelt (Hardwareunterstützung nötig).
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- NTP mit Authentisierung aufbauen und den Synchronisationszustand lesen.
+- Syslog-Level gezielt einstellen.
+- SNMPv3 mit authPriv einrichten.
+
 | ENCOR-Ziel (`Ziel::…`) | Thema |
 |---|---|
 | 3.3.a | NTP und PTP |
@@ -63,7 +69,7 @@ graph LR
 | R3 | 3.3.3.3/32 | Gi0/0 10.0.23.2/30 |
 
 Routing: statisch vorgegeben (jeder Router kennt alle Loopbacks). NTP-Synchronisation dauert einige Minuten, geduldig prüfen mit `show ntp associations`.
-> **Packet-Tracer-Hinweis:** **Eignung: teilweise.** Nach meinem Kenntnisstand zu Packet Tracer 8.x gilt: NTP-Authentifizierung: eingeschränkt. Eingeschränkt; im Zweifel Authentifizierung weglassen. SNMPv3: nicht vorhanden. SNMPv3 (Gruppen, Benutzer, authPriv) fehlt. Akzeptiert PT einen Befehl nicht, ist das ein PT-Limit und kein Fehler von dir; solche Schritte machst du in CML oder EVE-NG.
+> **Packet-Tracer-Hinweis:** **Eignung: teilweise.** Stand Packet Tracer 8.x: NTP-Authentifizierung: eingeschränkt. Eingeschränkt; im Zweifel Authentifizierung weglassen. SNMPv3: nicht vorhanden. SNMPv3 (Gruppen, Benutzer, authPriv) fehlt. Akzeptiert PT einen Befehl nicht, ist das ein PT-Limit und kein Fehler von dir; solche Schritte machst du in CML oder EVE-NG.
 
 ## Teil A – Bauen
 
@@ -109,21 +115,21 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. R2 zeigt `Clock is unsynchronized`, obwohl `ntp server` gesetzt ist. Die ersten Prüfungen?
 <details><summary>Antwort</summary>
 
-`show ntp associations` (Reach 0 = keine Antwort?), Erreichbarkeit/ACL für UDP 123, Authentifizierung (`trusted-key`, Key-ID, Passwort), Stratum des Servers (16 = unsynchronisiert).
+**Zuerst `show ntp associations`.** Steht Reach auf 0, kommt keine Antwort: Erreichbarkeit und ACL für UDP 123 prüfen. Kommen Antworten, aber ohne Sync, sind Authentisierung (`trusted-key`, Key-ID, Passwort) oder Stratum 16 beim Server die üblichen Ursachen.
 
 </details>
 
 2. Was bedeutet Stratum 16?
 <details><summary>Antwort</summary>
 
-Ungültig/unsynchronisiert: Die Zeitquelle ist nicht vertrauenswürdig und wird nicht als Referenz akzeptiert.
+**Die Uhr ist nicht synchronisiert.** Ein Server mit Stratum 16 gilt als ungültige Zeitquelle. Kein Client übernimmt seine Zeit.
 
 </details>
 
 3. Wieso `authPriv` und nicht `authNoPriv`?
 <details><summary>Antwort</summary>
 
-`authNoPriv` schützt nur Integrität und Herkunft, `authPriv` zusätzlich die Vertraulichkeit der Nutzdaten (Verschlüsselung).
+**Weil authNoPriv nur Herkunft und Unverfälschtheit schützt, nicht den Inhalt.** authPriv verschlüsselt zusätzlich die Nutzdaten. Wer mitliest, sieht dann keine Werte mehr.
 
 </details>
 

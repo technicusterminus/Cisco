@@ -5,6 +5,12 @@
 
 Diese Drills laufen komplett lokal: Eine kleine Mock-API (Standardbibliothek) spielt einen Controller mit Token-Anmeldung, Pagination, Fehlercodes und asynchronen Tasks. **Alle Tests wurden mit den Musterlösungen ausgeführt (grün).**
 
+**Lernziele:** Nach diesen Drills kannst du …
+
+- Python-Code lesen und seine Ausgabe vorhersagen.
+- JSON-Bodies bauen und einen REST-Client mit Token, Pagination und Fehlercodes schreiben.
+- YANG-Module lesen sowie Jinja2-Templates und Ansible-Playbooks reparieren.
+
 | Aufgabe | Ziel | Was du tust |
 |---|---|---|
 | 1 `ex01_predict/` | 6.1 | Acht kurze Skripte: Ausgabe **vorhersagen**, dann ausführen und vergleichen |

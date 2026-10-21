@@ -4,6 +4,12 @@
 
 Zwei Kunden (RED, BLUE) teilen sich zwei Router und einen Link, nutzen aber dieselben IP-Bereiche. Mit VRF-Lite trennst du Routing-Tabellen, nutzt Subinterfaces als Trunk und OSPF pro VRF.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- VRF-Lite mit überlappenden Adressen aufbauen.
+- Pro VRF ein eigenes OSPF betreiben und die Tabellen getrennt prüfen.
+- Erklären, wofür Route Distinguisher in MPLS-VPNs nötig sind und warum VRF-Lite ohne sie auskommt.
+
 | Deck-Tag | Thema | Karten im Kompendium |
 |---|---|---|
 | `Ziel::2.2.a` | VRF | 26 |
@@ -69,21 +75,21 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. Zwei VRFs haben dasselbe Präfix 192.168.1.0/24. Warum entsteht kein Konflikt?
 <details><summary>Antwort</summary>
 
-Jede VRF führt ihre eigene Routing-Tabelle und FIB, die Präfixe liegen in getrennten Tabellen.
+**Weil jede VRF ihre eigene Routing-Tabelle hat.** Die beiden Präfixe liegen in getrennten Tabellen und getrennten FIBs. Sie begegnen sich nie.
 
 </details>
 
 2. Wozu dient der Route Distinguisher, wenn VRF-Lite ohne ihn auskommt?
 <details><summary>Antwort</summary>
 
-In MP-BGP müssen identische Präfixe verschiedener Kunden im selben BGP-Prozess eindeutig sein: RD (64 Bit) + Präfix = VPNv4-Adresse. VRF-Lite braucht das nicht, weil jede Tabelle getrennt bleibt.
+**Für MP-BGP in MPLS-VPNs.** Dort transportiert ein einziger BGP-Prozess die Routen aller Kunden. Gleiche Präfixe müssen unterscheidbar sein: RD (64 Bit) plus Präfix ergibt eine eindeutige VPNv4-Adresse. VRF-Lite braucht das nicht, weil die Tabellen getrennt bleiben.
 
 </details>
 
 3. Ping aus VRF RED zeigt `Success rate 0`, aber `show ip route vrf RED` hat die Route. Warum?
 <details><summary>Antwort</summary>
 
-Typisch: Quellinterface/-adresse fehlt (`source` nicht in der VRF), Rückroute im Gegenüber fehlt, oder die Gegenseite hat das Interface in der falschen VRF.
+**Meist fehlt der Rückweg oder die Quelle liegt in der falschen VRF.** Prüfe, ob der Ping mit einer Quelle aus der VRF gesendet wird (`ping vrf RED … source …`), ob die Gegenseite eine Route zurück hat und ob ihr Interface in derselben VRF liegt.
 
 </details>
 

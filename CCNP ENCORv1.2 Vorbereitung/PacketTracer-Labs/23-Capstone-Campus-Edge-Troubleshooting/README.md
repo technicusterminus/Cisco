@@ -4,6 +4,12 @@
 
 Ein komplettes kleines Campus-Netz mit Internet-Edge: Access-Switch mit EtherChannel, Distribution-Router mit HSRP, OSPF, NAT, ACL, NTP und SSH. Der Schwerpunkt liegt auf der Reparatur: Zehn Fehler aus allen Schichten, teils voneinander verdeckt, wie in einem echten Troubleshooting-Ticket der Prüfung.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- Ein Campus-Netz mit Layer 2, HSRP, OSPF, NAT und ACLs als Ganzes lesen.
+- Fehler systematisch von unten nach oben eingrenzen: erst Layer 2, dann Gateway, dann Routing, dann Dienste.
+- Mehrere Fehler lösen, bei denen einer den nächsten verdeckt.
+
 | ENCOR-Ziel (`Ziel::…`) | Thema |
 |---|---|
 | 3.1.a | 802.1Q und Trunks |
@@ -124,7 +130,7 @@ graph LR
 
 ### Portzuordnung der Switches (CML → Packet Tracer)
 
-Die Aufgabentexte nennen Switch-Ports in der CML-Schreibweise (`Gi…`). Verkabelung, Konfigurationen und Fehlerlisten verwenden die Packet-Tracer-Ports. Umrechnung: `GiX/Y` → `Fa0/(X·4+Y+1)`.
+Aufgaben, Verkabelung, Konfigurationen und Fehlerlisten verwenden die Packet-Tracer-Ports. Die Tabelle zeigt, welcher Port der CML-Vorlage dazu gehört. Nur die Skizze nennt noch die CML-Ports. Umrechnung: `GiX/Y` → `Fa0/(X·4+Y+1)`.
 
 | Switch | CML-Port | PT-Port |
 |---|---|---|
@@ -137,7 +143,7 @@ Die Aufgabentexte nennen Switch-Ports in der CML-Schreibweise (`Gi…`). Verkabe
 | SW2 | Gi1/0 | Fa0/5 |
 | SW2 | Gi1/1 | Fa0/6 |
 
-> **Packet-Tracer-Hinweis:** **Eignung: geeignet.** Alle verwendeten Funktionen gibt es in Packet Tracer; Ausgabeformate einzelner `show`-Befehle weichen leicht ab. Die CML-Switches (Gi-Ports) sind hier 3560-24PS bzw. 2960 mit FastEthernet-Ports: Die Portzuordnung steht unter dem Adressplan; die Aufgabentexte nennen noch die CML-Ports.
+> **Packet-Tracer-Hinweis:** **Eignung: geeignet.** Alle verwendeten Funktionen gibt es in Packet Tracer; Ausgabeformate einzelner `show`-Befehle weichen leicht ab. Die CML-Switches (Gi-Ports) sind hier 3560-24PS bzw. 2960 mit FastEthernet-Ports: Die Portzuordnung steht unter dem Adressplan.
 
 ## Teil A – Bauen
 
@@ -184,7 +190,7 @@ show ip route ospf | include O\*   show ip nat translations
 show access-lists                  show ntp status
 show ip ssh                        ping 8.8.8.8 source 10.10.10.2
 ```
-Erwartet: Po1 `SU` mit `Gi0/2(P) Gi0/3(P)`, SW1 Root, R1 Active für beide VLANs, EDGE hat zwei OSPF-Nachbarn, R1 und R2 haben eine `O*E2` Default-Route, NAT-Einträge für 10.10.x.x.
+Erwartet: Po1 `SU` mit `Fa0/3(P) Fa0/4(P)`, SW1 Root, R1 Active für beide VLANs, EDGE hat zwei OSPF-Nachbarn, R1 und R2 haben eine `O*E2` Default-Route, NAT-Einträge für 10.10.x.x.
 
 ## Teil C – Üben
 
@@ -193,21 +199,21 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. H20 erreicht sein Gateway nicht, H10 schon. Welche Kommandos in welcher Reihenfolge?
 <details><summary>Antwort</summary>
 
-`show vlan brief` und `show interfaces trunk` auf SW2 und SW1 (Allowed-Liste, Mitglied im Trunk, Native), dann `show spanning-tree vlan 20` (blockiert?), dann `show standby brief` auf R1. Erst wenn Layer 2 stimmt, lohnt der Blick auf die Router.
+**Von unten nach oben: erst Layer 2, dann der Router.** `show vlan brief` und `show interfaces trunk` auf SW2 und SW1 (ist VLAN 20 vorhanden und auf dem Trunk erlaubt?), dann `show spanning-tree vlan 20` (blockiert ein Port?), dann `show standby brief` auf R1. Erst wenn Layer 2 stimmt, lohnt der Blick auf die Router.
 
 </details>
 
 2. Wozu `passive-interface default` im Campus-Design, und was ist die Nebenwirkung eines vergessenen `no passive-interface`?
 <details><summary>Antwort</summary>
 
-Passiv unterdrückt Hellos auf LAN- und Edge-Ports, sodass sich keine unerwünschten Nachbarn bilden (Sicherheit, weniger CPU-Last). Vergisst man ein Uplink-Interface, fehlt die Nachbarschaft still: Alles läuft, bis der redundante Pfad gebraucht wird.
+**Damit sich nur dort Nachbarn bilden, wo sie gewollt sind.** Passive Interfaces senden keine Hellos. Das schützt LAN- und Edge-Ports und spart CPU. Vergisst man auf einem Uplink `no passive-interface`, fehlt die Nachbarschaft ohne Fehlermeldung. Auffallen tut das erst, wenn der Ersatzweg gebraucht wird.
 
 </details>
 
 3. Warum zeigt `show ip nat translations` nichts, obwohl `ip nat inside source` konfiguriert ist?
 <details><summary>Antwort</summary>
 
-Typisch: Inside-/Outside-Markierung auf Interfaces fehlt, die ACL passt nicht auf das Quellnetz oder die Default-Route fehlt, sodass das Paket das Outside-Interface nie erreicht.
+**Weil das Paket gar nicht übersetzt wird.** Typisch: Inside oder Outside fehlt an einem Interface, die ACL passt nicht auf das Quellnetz, oder es fehlt die Default-Route, sodass das Paket das Outside-Interface nie erreicht.
 
 </details>
 

@@ -5,6 +5,7 @@
 ## Ticket 1 (CE2)
 
 - **Symptom:** Tunnel0 ist up/up, aber OSPF-Nachbar bleibt aus. `show crypto isakmp sa` zeigt MM_NO_STATE bzw. nichts.
+- **So findest du es:** `show crypto isakmp sa` zeigt MM_NO_STATE. `debug crypto isakmp` meldet einen Fehler bei der Authentisierung. Die Keys vergleichst du in der Konfiguration (`crypto isakmp key` bzw. Keyring).
 - **Ursache:** Pre-Shared Keys unterscheiden sich: Phase 1 scheitert.
 - **Fix:** Key auf CE2 an CE1 angleichen.
 - **Eingebaut:**
@@ -17,6 +18,7 @@
 ## Ticket 2 (CE1)
 
 - **Symptom:** `QM_IDLE` steht, aber `encaps` steigt ohne `decaps` auf der Gegenseite; OSPF fällt aus.
+- **So findest du es:** `show crypto ipsec sa` auf CE1 zeigt steigendes `encaps`, auf CE2 kein `decaps`. `show crypto ipsec transform-set` zeigt AES-128 auf der einen, AES-256 auf der anderen Seite.
 - **Ursache:** Phase 2: Transform-Sets passen nicht zusammen (AES-128 vs. AES-256).
 - **Fix:** Transform-Set auf beiden Seiten gleich konfigurieren.
 - **Eingebaut:**
@@ -29,6 +31,7 @@
 ## Ticket 3 (CE1)
 
 - **Symptom:** Tunnel0 zeigt up/up (Keepalive nicht aktiv), aber nichts kommt an; `show crypto isakmp sa` bleibt leer.
+- **So findest du es:** `show interfaces Tunnel0` auf CE1 zeigt ein Tunnelziel, das es nicht gibt. Ein Ping auf diese Adresse scheitert.
 - **Ursache:** Tunnelziel zeigt auf eine nicht existierende Adresse.
 - **Fix:** Tunnelziel auf 203.0.113.1 setzen.
 - **Eingebaut:**
@@ -41,6 +44,7 @@
 ## Ticket 4 (CE2)
 
 - **Symptom:** Tunnel und IPsec stehen, aber OSPF-Nachbarschaft fehlt, LANs sind nicht erreichbar.
+- **So findest du es:** `show ip ospf interface brief` auf CE2 listet Tunnel0 nicht.
 - **Ursache:** OSPF auf CE2 enthält das Tunnelnetz nicht; Tunnel0 nimmt nicht am Routing teil.
 - **Fix:** Tunnelnetz 172.16.0.0/30 in OSPF aufnehmen (oder `ip ospf 1 area 0` am Interface).
 - **Eingebaut:**
@@ -52,6 +56,7 @@
 ## Ticket 5 (CE2)
 
 - **Symptom:** Tunnel flappt zyklisch, das Log zeigt `%TUN-5-RECURDOWN` (Tunnel Interface is Down, recursive routing).
+- **So findest du es:** Das Log zeigt `%TUN-5-RECURDOWN`. `show ip route <Tunnelziel>` auf CE1 zeigt einen Weg über Tunnel0, also über sich selbst.
 - **Ursache:** CE2 kündigt das Transfernetz im Overlay-OSPF an; CE1 lernt es über den Tunnel und routet das Tunnelziel durch den eigenen Tunnel.
 - **Fix:** Transfernetz aus OSPF nehmen, nur Overlay und LANs im IGP.
 - **Eingebaut:**

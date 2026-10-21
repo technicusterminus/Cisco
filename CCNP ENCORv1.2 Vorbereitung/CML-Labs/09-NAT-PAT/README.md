@@ -4,6 +4,12 @@
 
 Edge-Router mit LAN, DMZ und ISP: PAT (Overload), dynamisches NAT mit Pool, statisches NAT und Port-Forwarding. Du lernst die vier NAT-Adressbegriffe, die Reihenfolge der Operationen und die typischen Fehler.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- Statisches NAT, dynamisches NAT und PAT unterscheiden und konfigurieren.
+- Inside, Outside und die NAT-ACL korrekt zuordnen.
+- Mit `show ip nat translations` und `statistics` Übersetzungsprobleme eingrenzen.
+
 | Deck-Tag | Thema | Karten im Kompendium |
 |---|---|---|
 | `Ziel::3.3.b` | NAT und PAT | 29 |
@@ -70,21 +76,21 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. PC1 kann den ISP erreichen, PC2 nicht. Welche drei Dinge prüfst du?
 <details><summary>Antwort</summary>
 
-ACL 1 (Subnetz passend?), Interface-Zuordnung inside/outside, Pool/Overload (Erschöpfung `Misses` in `show ip nat statistics`).
+**Die NAT-ACL, die Inside/Outside-Zuordnung und ob `overload` gesetzt ist.** Passt die ACL auf das Subnetz von PC2? Sind die Interfaces richtig markiert? Steigen in `show ip nat statistics` die Misses, ist der Pool erschöpft oder `overload` fehlt.
 
 </details>
 
 2. Warum sieht man in `show ip nat translations` bei PAT mehrere Zeilen pro Host?
 <details><summary>Antwort</summary>
 
-Pro Flow (Protokoll + Quell-/Zielport) eine Übersetzung; die Verbindungstabelle trägt pro Sitzung eigene Einträge.
+**Weil PAT jede Verbindung einzeln übersetzt.** Jede Kombination aus Protokoll, Quell- und Zielport bekommt eine eigene Zeile. Ein Host mit mehreren offenen Verbindungen erscheint daher mehrfach.
 
 </details>
 
 3. Wozu braucht man `ip nat inside source static tcp … interface`?
 <details><summary>Antwort</summary>
 
-Port-Forwarding: Ein Dienst im Inneren wird über einen bestimmten Port der externen Interface-Adresse erreichbar, ohne eine eigene öffentliche Adresse zu verbrauchen.
+**Für Port-Forwarding.** Ein Dienst im inneren Netz wird über einen Port der äußeren Interface-Adresse erreichbar. Dafür braucht man keine eigene öffentliche Adresse.
 
 </details>
 

@@ -4,6 +4,12 @@
 
 Multicast-Verteilung über ein Routernetz: IGMP, PIM-SM mit statischem RP, Auto-RP/BSR im Vergleich, SSM, RPF-Check und typische Fehler. Quelle und Empfänger sind IOS-Hosts.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- Multicast mit IGMP und PIM Sparse Mode aufbauen.
+- Die Rolle des Rendezvous Points und den Wechsel auf den Shortest Path Tree erklären.
+- Multicast-Fehler mit `show ip mroute`, `show ip pim neighbor` und der RPF-Prüfung eingrenzen.
+
 | Deck-Tag | Thema | Karten im Kompendium |
 |---|---|---|
 | `Ziel::3.3.d` | Multicast-Verfahren | 46 |
@@ -71,21 +77,21 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. Welche MAC-Adresse gehört zur Gruppe 239.1.1.1?
 <details><summary>Antwort</summary>
 
-01-00-5E-01-01-01: Die 23 niedrigsten Bits der IP werden in 01-00-5E-0x übernommen (die oberen 5 Bits der Gruppe gehen verloren).
+**01-00-5E-01-01-01.** Die unteren 23 Bit der Gruppenadresse werden an das feste Präfix 01-00-5E angehängt. 239.1.1.1 endet auf 1.1.1, also 01.01.01. Weil 5 Bit verloren gehen, teilen sich 32 Gruppen dieselbe MAC.
 
 </details>
 
 2. Warum sieht ein Empfänger-Router nach dem ersten Datenpaket `(S,G)` mit Flag `T`?
 <details><summary>Antwort</summary>
 
-Er hat auf den Shortest Path Tree zur Quelle gewechselt und leitet jetzt auf dem direkten Weg weiter.
+**Er ist auf den Shortest Path Tree zur Quelle gewechselt.** Zuerst kommen die Daten über den RP (Shared Tree, `(*,G)`). Danach baut der letzte Router einen direkten Baum zur Quelle auf. Das Flag `T` zeigt, dass Daten auf diesem Baum ankommen.
 
 </details>
 
 3. Was löst ein `RPF failed` aus?
 <details><summary>Antwort</summary>
 
-Das Paket kommt nicht auf dem Interface an, das laut Unicast-Routing der Rückweg zur Quelle ist. Mögliche Ursachen: asymmetrisches Routing, fehlende Route, falsches statisches `mroute`.
+**Ein Paket kommt auf einem anderen Interface an als dem Rückweg zur Quelle.** Der Router prüft per Unicast-Routing, über welches Interface er die Quelle erreicht. Kommt das Paket woanders an, verwirft er es. Ursachen: asymmetrisches Routing, fehlende Route oder ein falsches statisches `ip mroute`.
 
 </details>
 

@@ -4,6 +4,12 @@
 
 Edge-Router mit LAN, DMZ und ISP: PAT (Overload), dynamisches NAT mit Pool, statisches NAT und Port-Forwarding. Du lernst die vier NAT-Adressbegriffe, die Reihenfolge der Operationen und die typischen Fehler.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- Statisches NAT, dynamisches NAT und PAT unterscheiden und konfigurieren.
+- Inside, Outside und die NAT-ACL korrekt zuordnen.
+- Mit `show ip nat translations` und `statistics` Übersetzungsprobleme eingrenzen.
+
 | ENCOR-Ziel (`Ziel::…`) | Thema |
 |---|---|
 | 3.3.b | NAT und PAT |
@@ -83,7 +89,7 @@ Der ISP kennt das Supernetz 203.0.113.0/24 (via R1), daher sind alle Adressen de
 
 ### Portzuordnung der Switches (CML → Packet Tracer)
 
-Die Aufgabentexte nennen Switch-Ports in der CML-Schreibweise (`Gi…`). Verkabelung, Konfigurationen und Fehlerlisten verwenden die Packet-Tracer-Ports. Umrechnung: `GiX/Y` → `Fa0/(X·4+Y+1)`.
+Aufgaben, Verkabelung, Konfigurationen und Fehlerlisten verwenden die Packet-Tracer-Ports. Die Tabelle zeigt, welcher Port der CML-Vorlage dazu gehört. Nur die Skizze nennt noch die CML-Ports. Umrechnung: `GiX/Y` → `Fa0/(X·4+Y+1)`.
 
 | Switch | CML-Port | PT-Port |
 |---|---|---|
@@ -91,7 +97,7 @@ Die Aufgabentexte nennen Switch-Ports in der CML-Schreibweise (`Gi…`). Verkabe
 | SW | Gi0/1 | Fa0/2 |
 | SW | Gi0/2 | Fa0/3 |
 
-> **Packet-Tracer-Hinweis:** **Eignung: geeignet.** Alle verwendeten Funktionen gibt es in Packet Tracer; Ausgabeformate einzelner `show`-Befehle weichen leicht ab. Die CML-Switches (Gi-Ports) sind hier 3560-24PS bzw. 2960 mit FastEthernet-Ports: Die Portzuordnung steht unter dem Adressplan; die Aufgabentexte nennen noch die CML-Ports.
+> **Packet-Tracer-Hinweis:** **Eignung: geeignet.** Alle verwendeten Funktionen gibt es in Packet Tracer; Ausgabeformate einzelner `show`-Befehle weichen leicht ab. Die CML-Switches (Gi-Ports) sind hier 3560-24PS bzw. 2960 mit FastEthernet-Ports: Die Portzuordnung steht unter dem Adressplan.
 
 ## Teil A – Bauen
 
@@ -133,21 +139,21 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. PC1 kann den ISP erreichen, PC2 nicht. Welche drei Dinge prüfst du?
 <details><summary>Antwort</summary>
 
-ACL 1 (Subnetz passend?), Interface-Zuordnung inside/outside, Pool/Overload (Erschöpfung `Misses` in `show ip nat statistics`).
+**Die NAT-ACL, die Inside/Outside-Zuordnung und ob `overload` gesetzt ist.** Passt die ACL auf das Subnetz von PC2? Sind die Interfaces richtig markiert? Steigen in `show ip nat statistics` die Misses, ist der Pool erschöpft oder `overload` fehlt.
 
 </details>
 
 2. Warum sieht man in `show ip nat translations` bei PAT mehrere Zeilen pro Host?
 <details><summary>Antwort</summary>
 
-Pro Flow (Protokoll + Quell-/Zielport) eine Übersetzung; die Verbindungstabelle trägt pro Sitzung eigene Einträge.
+**Weil PAT jede Verbindung einzeln übersetzt.** Jede Kombination aus Protokoll, Quell- und Zielport bekommt eine eigene Zeile. Ein Host mit mehreren offenen Verbindungen erscheint daher mehrfach.
 
 </details>
 
 3. Wozu braucht man `ip nat inside source static tcp … interface`?
 <details><summary>Antwort</summary>
 
-Port-Forwarding: Ein Dienst im Inneren wird über einen bestimmten Port der externen Interface-Adresse erreichbar, ohne eine eigene öffentliche Adresse zu verbrauchen.
+**Für Port-Forwarding.** Ein Dienst im inneren Netz wird über einen Port der äußeren Interface-Adresse erreichbar. Dafür braucht man keine eigene öffentliche Adresse.
 
 </details>
 

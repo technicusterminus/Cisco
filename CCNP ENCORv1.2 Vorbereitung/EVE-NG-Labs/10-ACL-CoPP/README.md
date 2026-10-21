@@ -4,6 +4,12 @@
 
 Layer-3/4-Filter mit Standard-, Extended- und benannten ACLs, `established`, Logging und vty-Schutz, dazu CoPP (MQC auf der Control-Plane) zur Begrenzung von ICMP und Management-Verkehr.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- Standard- und Extended-ACLs richtig aufbauen und platzieren.
+- Die Richtung (in/out) einer ACL am Interface begründen.
+- Control-Plane Policing einrichten und an den Zählern prüfen.
+
 | Deck-Tag | Thema | Karten im Kompendium |
 |---|---|---|
 | `Ziel::5.2.a` | ACLs | 52 |
@@ -99,21 +105,21 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. Eine ACL hat als letzte Zeile `permit ip any any`, ganz oben aber `deny ip any any`. Was passiert?
 <details><summary>Antwort</summary>
 
-Alles wird verworfen; spätere Zeilen werden nie erreicht (Shadowing).
+**Alles wird verworfen.** Eine ACL hört beim ersten Treffer auf. `deny ip any any` passt auf jedes Paket, die Zeilen darunter werden nie erreicht.
 
 </details>
 
 2. Wie unterscheidet sich `established` von einer zustandsbehafteten Firewall?
 <details><summary>Antwort</summary>
 
-`established` prüft nur ACK/RST-Flags im Paket und führt keine Verbindungstabelle: Gefälschte Pakete mit gesetztem ACK passieren.
+**`established` prüft nur Flags im Paket, eine Firewall kennt die Verbindung.** Die ACL lässt jedes TCP-Paket mit gesetztem ACK oder RST durch, auch ein gefälschtes. Eine zustandsbehaftete Firewall merkt sich jede Verbindung und lässt nur echte Antworten zurück.
 
 </details>
 
 3. Warum verwirft CoPP den Transit-Ping nicht?
 <details><summary>Antwort</summary>
 
-CoPP wirkt nur auf Pakete, die an die Control Plane (Router selbst) gerichtet sind. Transit-Pakete laufen über die Data Plane.
+**Weil CoPP nur Verkehr an den Router selbst prüft.** Ein Transit-Ping geht durch die Data Plane und erreicht die Control Plane nie.
 
 </details>
 

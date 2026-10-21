@@ -18,7 +18,7 @@ Diese Labs ergänzen das Anki-Kompendium (1.431 Karten). Die Karten bauen Wissen
 ## So arbeitest du ein Lab durch
 
 1. **Teil A: Bauen.** Lies zuerst das Ziel des Labs und die Skizze. Baue dann Schritt für Schritt und prüfe jeden Schritt mit den Befehlen aus „Verifikation“. Erst am Ende vergleichst du mit `solutions/`.
-2. **Teil B: Reparieren.** Am besten an einem anderen Tag. Lade die Reparatur-Topologie, lies das Ticket und gehe vor wie im Betrieb: Symptom nachstellen, eingrenzen, beheben, verifizieren. Erst nach 20 Minuten ohne Fortschritt in `solutions/FAULTS.md` schauen.
+2. **Teil B: Reparieren.** Am besten an einem anderen Tag. Lade die Reparatur-Topologie, lies das Ticket und gehe vor wie im Betrieb: Symptom nachstellen, eingrenzen, beheben, verifizieren. Erst nach 20 Minuten ohne Fortschritt in `solutions/FAULTS.md` schauen. Dort steht pro Ticket zuerst, mit welchem Befehl du den Fehler gefunden hättest, dann Ursache und Lösung.
 3. **Teil C: Üben.** Beantworte die Transferfragen erst selbst, dann klappst du die Antwort auf.
 4. **Nacharbeiten.** Wiederhole im Anki-Deck die Karten zum Ziel des Labs (`tag:Ziel::…`), besonders zu den Fehlern, die du nicht gefunden hast.
 

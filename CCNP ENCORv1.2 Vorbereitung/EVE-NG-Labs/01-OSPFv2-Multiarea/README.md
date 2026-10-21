@@ -4,6 +4,12 @@
 
 OSPF-Areas, ABR/ASBR, DR/BDR, Summarization, Stub/NSSA, Authentifizierung und typische OSPF-Fehler.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- OSPFv2 über mehrere Areas aufbauen und die Rolle von ABR und Backbone erklären.
+- Nachbarschaftsprobleme an ihrem Zustand erkennen (INIT, 2WAY, EXSTART) und gezielt beheben.
+- Routen am ABR mit `area range` zusammenfassen und das Ergebnis in der LSDB nachweisen.
+
 | Deck-Tag | Thema | Karten im Kompendium |
 |---|---|---|
 | `Ziel::3.2.a` | EIGRP und OSPF vergleichen | 45 |
@@ -91,21 +97,21 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. Welche LSA-Typen sieht ein Router in einer Totally Stubby Area?
 <details><summary>Antwort</summary>
 
-Typ 1 und 2 (intern) plus eine Default-Route per Typ 3 vom ABR. Typ 3 (außer Default), 4 und 5 werden blockiert.
+**Typ 1 und Typ 2 aus der eigenen Area, dazu eine Default-Route als Typ 3 vom ABR.** Alle anderen Typ-3-LSAs sowie Typ 4 und 5 hält der ABR draußen. Deshalb ist die Tabelle in einer Totally Stubby Area so klein.
 
 </details>
 
 2. Zwei Router hängen im selben Subnetz, bleiben aber in `2WAY`. Ist das ein Fehler?
 <details><summary>Antwort</summary>
 
-Nein, wenn beide `DROTHER` sind: Nur DR/BDR bilden zu allen `FULL`-Adjazenzen, DROTHERs bleiben untereinander in 2WAY.
+**Nein, wenn beide DROTHER sind.** Auf Broadcast-Netzen bilden nur DR und BDR mit allen eine volle Adjazenz (FULL). Zwei DROTHERs bleiben untereinander bewusst in 2WAY. Ein Fehler wäre es erst, wenn auch DR oder BDR in 2WAY hängen bleiben.
 
 </details>
 
 3. Warum sieht man auf dem ABR nach `area range` trotzdem die Einzelnetze?
 <details><summary>Antwort</summary>
 
-Im Area-1-LSDB und der lokalen RIB bleiben sie bestehen. Nur Area 0 bekommt die Summary, und der ABR installiert eine Null0-Discard-Route für sie.
+**Weil die Zusammenfassung nur nach außen wirkt.** In der LSDB von Area 1 und in der Routing-Tabelle des ABR bleiben die Einzelnetze stehen. Nur Area 0 bekommt die Summary. Dazu legt der ABR eine Route nach Null0 an, damit Pakete an nicht vorhandene Teilnetze keine Schleife bilden.
 
 </details>
 

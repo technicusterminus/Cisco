@@ -4,6 +4,12 @@
 
 Ein AS mit drei Routern und zwei Upstream-Providern: iBGP über Loopbacks mit Route Reflector, `next-hop-self`, Pfadsteuerung per Local Preference und Markierung per Community. Der OSPF-Underlay liefert die Loopback-Erreichbarkeit.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- iBGP mit Route Reflector und Loopback-Peering aufbauen.
+- Next-Hop-Probleme in iBGP erkennen und mit `next-hop-self` lösen.
+- Mit Local Preference und Communities den Ausgang des ganzen AS steuern.
+
 | Deck-Tag | Thema | Karten im Kompendium |
 |---|---|---|
 | `Ziel::3.2.c` | Direktes eBGP | 61 |
@@ -75,21 +81,21 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. R3 sieht Routen von ISP1, markiert als `inaccessible`. Ursache und Fix?
 <details><summary>Antwort</summary>
 
-Der Next-Hop (192.0.2.2) ist im OSPF nicht bekannt, iBGP lässt ihn unverändert. Fix: `next-hop-self` auf R2 zum RR oder die Provider-Links per passivem OSPF/`redistribute connected` einbinden.
+**Der Next-Hop 192.0.2.2 ist im IGP unbekannt.** iBGP gibt den eBGP-Next-Hop unverändert weiter, und R3 kann ihn nicht auflösen. Lösung: `next-hop-self` auf R2 zum RR, oder die Provider-Links ins IGP aufnehmen, z. B. als passives OSPF-Interface.
 
 </details>
 
 2. Warum reicht `route-reflector-client` allein nicht, wenn Communities beim Client ankommen sollen?
 <details><summary>Antwort</summary>
 
-Communities werden nur gesendet, wenn `send-community` für den Nachbarn konfiguriert ist (Standard: aus). Auch der RR muss sie zum Client senden.
+**Weil Communities ohne `send-community` gar nicht verschickt werden.** Das gilt pro Nachbar und ist standardmäßig aus. Auch der RR muss `send-community` zum Client gesetzt haben.
 
 </details>
 
 3. Zwei Pfade zum selben Prefix: Local-Pref 200 mit AS-Pfad 3 Hops, Local-Pref 100 mit 1 Hop. Wer gewinnt?
 <details><summary>Antwort</summary>
 
-Der Pfad mit Local-Pref 200: Das Attribut steht in der Entscheidungsreihenfolge vor der AS-Pfadlänge.
+**Der Pfad mit Local Preference 200.** Local Preference steht in der Best-Path-Reihenfolge vor der Länge des AS-Pfads. Die drei Hops spielen also keine Rolle mehr.
 
 </details>
 

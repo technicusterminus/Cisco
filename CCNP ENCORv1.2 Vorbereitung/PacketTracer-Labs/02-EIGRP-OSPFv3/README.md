@@ -4,6 +4,12 @@
 
 Dual-Stack-Dreieck: IPv4 mit EIGRP im Named Mode (inkl. Unequal-Cost-Load-Balancing, Summarization, Authentifizierung), IPv6 mit OSPFv3 Address-Families. So vergleichst du beide IGPs am selben Netz.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- EIGRP im Named Mode und OSPFv3 parallel betreiben.
+- Feasible Successors mit der Feasibility Condition bestimmen.
+- Nachbarschaftsfehler bei EIGRP (AS, Authentisierung, passive) und OSPFv3 (Area) unterscheiden.
+
 | ENCOR-Ziel (`Ziel::…`) | Thema |
 |---|---|
 | 3.2.a | EIGRP und OSPF vergleichen |
@@ -72,7 +78,7 @@ graph LR
 | R2 | 2.2.2.2/32, 2001:db8:ff::2/128 | Gi0/0 → R1 (.2), Gi0/1 → R3 (.1) | – |
 | R3 | 3.3.3.3/32, 2001:db8:ff::3/128 | Gi0/0 → R2 (.2), Gi0/1 → R1 (.3) | Lo10–13 = 10.3.0.0–3.0/24 |
 IPv6-Hosts-Teil jeweils `::1`, `::2` bzw. `::3` im jeweiligen /64.
-> **Packet-Tracer-Hinweis:** **Eignung: teilweise.** Nach meinem Kenntnisstand zu Packet Tracer 8.x gilt: EIGRP Named Mode: nicht vorhanden. Named Mode fehlt; klassischen Modus (`router eigrp <AS>`) verwenden. Akzeptiert PT einen Befehl nicht, ist das ein PT-Limit und kein Fehler von dir; solche Schritte machst du in CML oder EVE-NG.
+> **Packet-Tracer-Hinweis:** **Eignung: teilweise.** Stand Packet Tracer 8.x: EIGRP Named Mode: nicht vorhanden. Named Mode fehlt; klassischen Modus (`router eigrp <AS>`) verwenden. Akzeptiert PT einen Befehl nicht, ist das ein PT-Limit und kein Fehler von dir; solche Schritte machst du in CML oder EVE-NG.
 
 ## Teil A – Bauen
 
@@ -122,21 +128,21 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. Ein Pfad hat AD 100 und FD 150, der Successor hat FD 120. Ist der Pfad Feasible Successor?
 <details><summary>Antwort</summary>
 
-Ja: Die Bedingung vergleicht die AD des Nachbarn (100) mit der FD des Successors (120), 100 < 120. Die eigene FD (150) des Pfades ist dafür unerheblich, sie bestimmt nur, ob er mit Variance genutzt werden kann.
+**Ja.** Die Feasibility Condition vergleicht nur die Reported Distance des Nachbarn (100) mit der Feasible Distance des Successors (120): 100 < 120. Die eigene Distanz über diesen Pfad (150) spielt dafür keine Rolle. Sie entscheidet nur, ob der Pfad mit `variance` zusätzlich genutzt werden darf.
 
 </details>
 
 2. Welche K-Werte sind Default und warum müssen sie auf beiden Nachbarn identisch sein?
 <details><summary>Antwort</summary>
 
-K1=K3=1 (Bandwidth und Delay), K2=K4=K5=0. Unterschiedliche K-Werte verhindern die Nachbarschaft (`K-value mismatch`), weil die Metriken nicht vergleichbar wären.
+**K1 = K3 = 1 (Bandbreite und Delay), K2 = K4 = K5 = 0.** Unterschiedliche K-Werte verhindern die Nachbarschaft („K-value mismatch“). Sonst würden beide Router dieselbe Strecke mit verschiedenen Formeln bewerten, und die Metriken wären nicht vergleichbar.
 
 </details>
 
 3. Wie finden OSPFv3-Nachbarn einander, wenn es keine IPv4-Adresse gibt?
 <details><summary>Antwort</summary>
 
-Per Link-Local-IPv6-Adresse (fe80::) und Multicast FF02::5/FF02::6. Die Router-ID bleibt 32 Bit und muss manuell gesetzt werden, falls keine IPv4-Adresse existiert.
+**Über ihre Link-Local-Adressen (fe80::) und die Multicast-Adressen FF02::5 und FF02::6.** Die Router-ID bleibt aber eine 32-Bit-Zahl. Gibt es keine IPv4-Adresse, musst du sie mit `router-id` von Hand setzen, sonst startet der Prozess nicht.
 
 </details>
 

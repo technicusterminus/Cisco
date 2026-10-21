@@ -4,6 +4,12 @@
 
 Ein Unternehmensnetz mit OSPF (Area 0 und Stub-Area 1), einem EIGRP-Standort, eBGP zum Provider und Default-Route-Weitergabe. Acht Fehler quer durch alle Protokolle, teils voneinander verdeckt: Die Aufgabe ist reine Fehlersuche, wie in der Prüfung.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- Ein Netz mit BGP, OSPF (inklusive Stub-Area), EIGRP und Redistribution durchgängig verfolgen.
+- Hinweg und Rückweg getrennt prüfen.
+- Unter Zeitdruck Fehler in der richtigen Reihenfolge abarbeiten.
+
 | Deck-Tag | Thema | Karten im Kompendium |
 |---|---|---|
 | `Ziel::3.2.a` | EIGRP und OSPF vergleichen | 45 |
@@ -80,21 +86,21 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. Alle OSPF-Nachbarschaften sind `FULL`, aber R3 hat keine Default-Route. Prüfpunkte in Reihenfolge?
 <details><summary>Antwort</summary>
 
-R1: `show ip route 0.0.0.0` (kommt die Default per BGP an?), `default-information originate` vorhanden?; R2: Default als `O*E2` in der Tabelle?; Area 1 `stub` auf beiden Seiten (Default des ABR in die Stub-Area).
+**Den Weg der Default-Route verfolgen: BGP, dann OSPF, dann Stub.** Auf R1: `show ip route 0.0.0.0` (kommt die Default per BGP?) und ob `default-information originate` gesetzt ist. Auf R2: Steht die Default als `O*E2` in der Tabelle? Ist Area 1 auf beiden Seiten `stub`? Dann erzeugt der ABR die Default für R3.
 
 </details>
 
 2. Ping R4-Loopback → 203.0.113.1 scheitert, `traceroute` endet an R1. Wo liegt vermutlich das Problem?
 <details><summary>Antwort</summary>
 
-Hinweg bis R1 ist da. Hinter R1: BGP-Default fehlt, oder der **Rückweg** am ISP fehlt (ISP kennt 172.20.0.0/16 nicht): `show ip route` auf dem ISP prüfen.
+**Hinter R1, und zwar wahrscheinlich auf dem Rückweg.** Bis R1 ist der Hinweg da. Entweder fehlt die BGP-Default auf R1, oder der ISP kennt 172.20.0.0/16 nicht und schickt die Antwort nicht zurück. Prüfe `show ip route` auf dem ISP.
 
 </details>
 
 3. Warum ist die Redistribution an einem Punkt hier ohne Tags ungefährlich?
 <details><summary>Antwort</summary>
 
-Es gibt nur einen ASBR zwischen den Domänen, deshalb kann eine Route nicht an einem zweiten Punkt zurückfließen. Bei zwei Punkten braucht man Tags/Filter (Lab 27).
+**Weil es nur einen Punkt zwischen den Domänen gibt.** Eine Route kann nicht über einen zweiten Punkt zurückfließen. Erst bei zwei Redistributionspunkten braucht man Tags oder Filter (siehe Lab 27).
 
 </details>
 

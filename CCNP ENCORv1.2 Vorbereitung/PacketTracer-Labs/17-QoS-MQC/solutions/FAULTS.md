@@ -5,6 +5,7 @@
 ## Ticket 1 (R1)
 
 - **Symptom:** Die Klasse VOICE bleibt in `show policy-map interface` bei null Paketen, obwohl H1 mit DSCP 46 sendet.
+- **So findest du es:** `show policy-map interface` zeigt bei VOICE 0 Pakete. `show class-map VOICE` zeigt `match-all` mit zwei DSCP-Werten.
 - **Ursache:** `match-all` mit zwei verschiedenen DSCP-Werten kann nie zutreffen (ein Paket hat genau einen DSCP).
 - **Fix:** `match-any` verwenden oder nur `match dscp ef` behalten.
 - **Eingebaut:**
@@ -20,6 +21,7 @@
 ## Ticket 2 (R1)
 
 - **Symptom:** Der WAN-Link wird überfüllt, Voice leidet, `show policy-map interface Gi0/1` zeigt keine Policy.
+- **So findest du es:** `show policy-map interface Gi0/1` zeigt keine Policy. `show running-config | include service-policy` findet sie unter Gi0/0.
 - **Ursache:** Die Ausgangs-Policy hängt am LAN-Interface Gi0/0 statt am WAN-Interface Gi0/1; dort entsteht der Engpass.
 - **Fix:** Policy an Gi0/1 (output) binden.
 - **Eingebaut:**
@@ -34,6 +36,7 @@
 ## Ticket 3 (R1)
 
 - **Symptom:** Der Durchsatz Richtung SRV bricht auf einen winzigen Bruchteil ein, Pings dauern extrem lang.
+- **So findest du es:** `show policy-map interface Gi0/1` zeigt eine Shaping-Rate von 2000 bit/s.
 - **Ursache:** `shape average` erwartet bit/s: 2000 bps statt 2 000 000 bps (2 Mbit/s).
 - **Fix:** Rate auf 2000000 korrigieren.
 - **Eingebaut:**
@@ -46,6 +49,7 @@
 ## Ticket 4 (R1)
 
 - **Symptom:** Der Gast (H3) wird als Voice klassifiziert und nimmt der echten Sprache die Priority-Queue weg.
+- **So findest du es:** `show policy-map interface` am LAN zeigt in der Gast-Klasse `set dscp ef`. In der Voice-Klasse am WAN tauchen Pakete von H3 auf.
 - **Ursache:** Der Gast-Verkehr wird auf DSCP EF gesetzt statt auf Default und begrenzt: Missbrauch der Trust Boundary.
 - **Fix:** Auf `set dscp default` und einen Policer zurückstellen.
 - **Eingebaut:**

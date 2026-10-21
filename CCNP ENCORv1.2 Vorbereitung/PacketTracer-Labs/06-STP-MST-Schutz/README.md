@@ -4,6 +4,12 @@
 
 Vier Switches im Dreiecksverbund plus „Rogue“-Switch: Rapid-PVST, Root-Platzierung und Lastverteilung, Umstieg auf MST, PortFast, BPDU Guard, Root Guard, Loop Guard und typische STP-Fehler.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- Die STP-Root-Wahl vorhersagen und gezielt steuern.
+- MST mit Region, Instanzen und Prioritäten konfigurieren.
+- PortFast, BPDU Guard und Root Guard sinnvoll einsetzen.
+
 | ENCOR-Ziel (`Ziel::…`) | Thema |
 |---|---|
 | 3.1.c | RSTP, MST und Schutzfunktionen |
@@ -80,20 +86,20 @@ graph LR
 
 | Link | Ports |
 |---|---|
-| SW1–SW2 | Gi0/0 ↔ Gi0/0 |
-| SW1–SW3 | Gi0/1 ↔ Gi0/0 |
-| SW1–SW4 | Gi0/2 ↔ Gi0/0 |
-| SW2–SW3 | Gi0/1 ↔ Gi0/1 |
-| SW2–SW4 | Gi0/2 ↔ Gi0/1 |
-| SW3–SW4 | Gi0/2 ↔ Gi0/2 |
-| H1 / H2 | SW3 Gi1/0 / SW4 Gi1/0 (VLAN 10) |
-| SW5 | SW3 Gi1/1 ↔ SW5 Gi0/0 (SW5 ist ab Werk `shutdown`) |
+| SW1–SW2 | Fa0/1 ↔ Fa0/1 |
+| SW1–SW3 | Fa0/2 ↔ Fa0/1 |
+| SW1–SW4 | Fa0/3 ↔ Fa0/1 |
+| SW2–SW3 | Fa0/2 ↔ Fa0/2 |
+| SW2–SW4 | Fa0/3 ↔ Fa0/2 |
+| SW3–SW4 | Fa0/3 ↔ Fa0/3 |
+| H1 / H2 | SW3 Fa0/5 / SW4 Fa0/5 (VLAN 10) |
+| SW5 | SW3 Fa0/6 ↔ SW5 Fa0/1 (SW5 ist ab Werk `shutdown`) |
 
 VLANs 10 und 20 sind angelegt, die Inter-Switch-Links sind noch **nicht** als Trunks konfiguriert (Aufgabe 1). Hosts: H1 10.10.10.11, H2 10.10.10.12 (/24).
 
 ### Portzuordnung der Switches (CML → Packet Tracer)
 
-Die Aufgabentexte nennen Switch-Ports in der CML-Schreibweise (`Gi…`). Verkabelung, Konfigurationen und Fehlerlisten verwenden die Packet-Tracer-Ports. Umrechnung: `GiX/Y` → `Fa0/(X·4+Y+1)`.
+Aufgaben, Verkabelung, Konfigurationen und Fehlerlisten verwenden die Packet-Tracer-Ports. Die Tabelle zeigt, welcher Port der CML-Vorlage dazu gehört. Nur die Skizze nennt noch die CML-Ports. Umrechnung: `GiX/Y` → `Fa0/(X·4+Y+1)`.
 
 | Switch | CML-Port | PT-Port |
 |---|---|---|
@@ -114,7 +120,7 @@ Die Aufgabentexte nennen Switch-Ports in der CML-Schreibweise (`Gi…`). Verkabe
 | SW4 | Gi1/0 | Fa0/5 |
 | SW5 | Gi0/0 | Fa0/1 |
 
-> **Packet-Tracer-Hinweis:** **Eignung: teilweise.** Nach meinem Kenntnisstand zu Packet Tracer 8.x gilt: MST: eingeschränkt. MST nur in Grundzügen; Region/Instanzen anlegen geht, Feinheiten (z. B. `show spanning-tree mst`-Ausgabe) weichen ab. Akzeptiert PT einen Befehl nicht, ist das ein PT-Limit und kein Fehler von dir; solche Schritte machst du in CML oder EVE-NG. Die CML-Switches (Gi-Ports) sind hier 3560-24PS bzw. 2960 mit FastEthernet-Ports: Die Portzuordnung steht unter dem Adressplan; die Aufgabentexte nennen noch die CML-Ports.
+> **Packet-Tracer-Hinweis:** **Eignung: teilweise.** Stand Packet Tracer 8.x: MST: eingeschränkt. MST nur in Grundzügen; Region/Instanzen anlegen geht, Feinheiten (z. B. `show spanning-tree mst`-Ausgabe) weichen ab. Akzeptiert PT einen Befehl nicht, ist das ein PT-Limit und kein Fehler von dir; solche Schritte machst du in CML oder EVE-NG. Die CML-Switches (Gi-Ports) sind hier 3560-24PS bzw. 2960 mit FastEthernet-Ports: Die Portzuordnung steht unter dem Adressplan.
 
 ## Teil A – Bauen
 
@@ -122,8 +128,8 @@ Die Aufgabentexte nennen Switch-Ports in der CML-Schreibweise (`Gi…`). Verkabe
 2. **Rapid-PVST lesen.** Auf SW3: `show spanning-tree vlan 10`. Wer ist Root (niedrigste Bridge-ID = Priorität + MAC)? Welche Ports sind Root, Designated, Alternate? Warum sind Alternate-Ports in RSTP sofort einsatzbereit?
 3. **Root platzieren.** SW1 Root für VLAN 10, SW2 Root für VLAN 20 (jeweils Secondary für das andere) mit `spanning-tree vlan X root primary|secondary`. Welche Priorität wird gesetzt? Wie beeinflusst `spanning-tree cost` die Pfadwahl (Standardkosten Short-Metrik: 1 Gbit/s = 4, 100 Mbit/s = 19; Long-Metrik: 1 Gbit/s = 20000)?
 4. **Umstieg auf MST.** `spanning-tree mode mst`, Region `ENCOR`, Revision 1, Instanz 1 = VLAN 10, Instanz 2 = VLAN 20 auf **allen** Switches. Prioritäten: Instanz 0 und 1 SW1 (4096), Instanz 2 SW2 (4096), jeweils der andere als Backup (8192). Warum sind Name, Revision **und** VLAN-Mapping Teil des Region-Digests, und was passiert bei Abweichung (Boundary-Port, alle VLANs hängen am IST)?
-5. **Edge-Schutz.** Auf H1/H2-Ports und Gi1/1 (SW5): `portfast`, `bpduguard`. Aktiviere SW5 (`no shutdown`) mit niedriger Priorität und beobachte das Err-Disable. Dann zusätzlich `errdisable recovery cause bpduguard` mit Intervall 60 s. Wie unterscheidet sich **BPDU Filter** (still, gefährlich) von **BPDU Guard**?
-6. **Root Guard.** Setze Root Guard auf den Distribution→Access-Ports (SW1 Gi0/1, Gi0/2, SW2 Gi0/1, Gi0/2). Erkläre den Zustand `root-inconsistent` und warum Root Guard keine Nachbarn blockiert, sondern nur Superior BPDUs.
+5. **Edge-Schutz.** Auf H1/H2-Ports und Fa0/6 (SW5): `portfast`, `bpduguard`. Aktiviere SW5 (`no shutdown`) mit niedriger Priorität und beobachte das Err-Disable. Dann zusätzlich `errdisable recovery cause bpduguard` mit Intervall 60 s. Wie unterscheidet sich **BPDU Filter** (still, gefährlich) von **BPDU Guard**?
+6. **Root Guard.** Setze Root Guard auf den Distribution→Access-Ports (SW1 Fa0/2, Fa0/3, SW2 Fa0/2, Fa0/3). Erkläre den Zustand `root-inconsistent` und warum Root Guard keine Nachbarn blockiert, sondern nur Superior BPDUs.
 7. **Loop Guard und UDLD.** Aktiviere Loop Guard auf den Access-Uplinks (`spanning-tree guard loop` oder global `spanning-tree loopguard default`) und `udld enable`/`udld aggressive`. Welcher Fehler (unidirektionale Verbindung, BPDU-Verlust) entsteht ohne sie?
 8. **Konvergenz testen.** `ping 10.10.10.12 repeat 1000` von H1, dann Root-Link abschalten: Wie lange dauert der Ausfall bei Rapid-PVST/MST (Proposal/Agreement, `show spanning-tree summary`)?
 
@@ -135,7 +141,7 @@ Baue die Topologie wie oben (oder behalte deine aus Teil A), setze alle Geräte 
 
 **Ticket 2:** Instanz 2 hat dieselbe Root wie Instanz 1 (SW1), die VLAN-Lastverteilung fehlt.
 
-**Ticket 3:** Nachdem jemand an Gi1/1 einen kleinen Switch angeschlossen hat, wechselt die Root und das Netz flattert. SW3 zeigt eine neue Root über Gi1/1.
+**Ticket 3:** Nachdem jemand an Fa0/6 einen kleinen Switch angeschlossen hat, wechselt die Root und das Netz flattert. SW3 zeigt eine neue Root über Fa0/6.
 
 ## Verifikation
 
@@ -157,21 +163,21 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. Welcher Switch wird Root, wenn alle Prioritäten gleich sind?
 <details><summary>Antwort</summary>
 
-Der mit der niedrigsten MAC-Adresse (Bridge-ID = Priorität + MAC). Bei PVST+ steckt die VLAN-ID in der Extended System ID.
+**Der Switch mit der niedrigsten MAC-Adresse.** Die Bridge-ID besteht aus Priorität und MAC. Bei gleicher Priorität entscheidet die MAC. Bei PVST+ ist die VLAN-ID in der Priorität enthalten (Extended System ID).
 
 </details>
 
 2. Ein Switch hat Port-Zustand `BKN*`. Was bedeutet das?
 <details><summary>Antwort</summary>
 
-`Broken`: Der Port ist durch Root Guard (`ROOT_Inc`), Loop Guard (`LOOP_Inc`) oder Type-/PVID-Inconsistency blockiert. Die Details zeigt `show spanning-tree inconsistentports`.
+**Der Port ist durch eine Schutzfunktion blockiert (Broken).** Ursachen sind Root Guard (`ROOT_Inc`), Loop Guard (`LOOP_Inc`) oder eine Type- bzw. PVID-Inkonsistenz. Welche es ist, zeigt `show spanning-tree inconsistentports`.
 
 </details>
 
 3. Warum PortFast **und** BPDU Guard?
 <details><summary>Antwort</summary>
 
-PortFast überspringt die Wartezeit am Edge-Port. BPDU Guard stellt sicher, dass dort kein Switch hängt, da PortFast sonst Loops erlauben würde.
+**PortFast spart die Wartezeit, BPDU Guard sichert sie ab.** PortFast schaltet einen Edge-Port sofort auf Forwarding. Hängt dort doch ein Switch, könnte eine Schleife entstehen. BPDU Guard schaltet den Port ab, sobald eine BPDU ankommt.
 
 </details>
 

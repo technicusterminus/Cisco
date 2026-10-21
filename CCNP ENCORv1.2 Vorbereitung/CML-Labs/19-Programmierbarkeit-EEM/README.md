@@ -4,6 +4,12 @@
 
 Ein IOS-XE-Router wird programmierbar: RESTCONF und NETCONF aktivieren, YANG-Daten lesen und per HTTP-Methoden ändern, HTTP-Statuscodes lesen und ein EEM-Applet schreiben. Für die Python-Teile brauchst du Netzwerkzugang zu CSR1 (External Connector, Default NAT).
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- RESTCONF und NETCONF auf IOS XE aktivieren und abfragen.
+- YANG-Pfade lesen und PUT, PATCH und GET unterscheiden.
+- Ein EEM-Applet schreiben, das auf Syslog oder Tracking reagiert.
+
 | Deck-Tag | Thema | Karten im Kompendium |
 |---|---|---|
 | `Ziel::4.6` | NETCONF und RESTCONF | 40 |
@@ -76,21 +82,21 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. Was bedeutet HTTP 401, was 403?
 <details><summary>Antwort</summary>
 
-401: nicht authentifiziert (fehlende/falsche Zugangsdaten). 403: authentifiziert, aber nicht berechtigt (Privilege/Rolle).
+**401: nicht angemeldet. 403: angemeldet, aber nicht berechtigt.** Bei 401 fehlen die Zugangsdaten oder sie sind falsch. Bei 403 kennt der Server dich, dein Privileg oder deine Rolle reicht aber nicht.
 
 </details>
 
 2. Worin unterscheidet sich PUT von PATCH in RESTCONF?
 <details><summary>Antwort</summary>
 
-PUT ersetzt die Ressource vollständig (Ressource wird neu geschrieben), PATCH ändert nur die übergebenen Felder.
+**PUT ersetzt die ganze Ressource, PATCH ändert nur die mitgeschickten Felder.** Was bei PUT fehlt, wird gelöscht oder auf den Standard gesetzt. PATCH lässt alles andere unberührt.
 
 </details>
 
 3. Warum löst `event syslog pattern "Gi2"` nicht aus?
 <details><summary>Antwort</summary>
 
-Die Syslog-Meldung enthält den ausgeschriebenen Namen `GigabitEthernet2`. Das Pattern ist ein Regex gegen den Text, `Gi2` kommt dort nicht vor.
+**Weil die Syslog-Meldung den langen Namen enthält.** Dort steht `GigabitEthernet2`. Das Pattern ist ein regulärer Ausdruck gegen den Text, und `Gi2` kommt darin nicht vor.
 
 </details>
 

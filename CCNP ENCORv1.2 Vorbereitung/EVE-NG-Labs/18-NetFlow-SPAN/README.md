@@ -4,6 +4,12 @@
 
 Verkehr sichtbar machen: Flexible NetFlow auf einem Router (Record, Exporter, Monitor), lokales SPAN und RSPAN über einen Trunk zwischen zwei Switches. ERSPAN wird als Konfigurationsübung ohne CML-Test behandelt.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- Flexible NetFlow mit Record, Exporter und Monitor einrichten.
+- Lokales SPAN und RSPAN aufbauen.
+- Erklären, was NetFlow und SPAN zeigen und wo ihre Grenzen liegen.
+
 | Deck-Tag | Thema | Karten im Kompendium |
 |---|---|---|
 | `Ziel::4.2` | Flexible NetFlow | 24 |
@@ -107,24 +113,24 @@ Erwartet: Cache mit Flows H1 → SRV, Exporter-Statistik zählt Flow-Records, AN
 
 Beantworte zuerst selbst, dann klappe die Antwort auf.
 
-1. Welche zwei Felder sind in NetFlow zwingend Key-Felder und welche sind Non-Key?
+1. Was sind Key-Felder und Non-Key-Felder in einem NetFlow-Record?
 <details><summary>Antwort</summary>
 
-Key: z. B. Quell-/Ziel-IP, Protokoll, Ports (bestimmen den Flow). Non-Key (`collect`): Zähler wie Bytes/Pakete, Zeitstempel, Flags.
+**Key-Felder bestimmen, was ein Flow ist, Non-Key-Felder werden nur mitgezählt.** Key (`match`): z. B. Quell- und Ziel-IP, Protokoll, Ports. Pakete mit gleichen Key-Werten gehören zum selben Flow. Non-Key (`collect`): Bytes, Pakete, Zeitstempel, TCP-Flags.
 
 </details>
 
 2. RSPAN-Session steht, aber ANA2 sieht nichts. Typische Ursachen?
 <details><summary>Antwort</summary>
 
-Das Remote-VLAN fehlt als `remote-span`, ist im Trunk nicht erlaubt, oder Quell-/Ziel-Session ist falsch gesetzt (`source remote vlan` fehlt auf dem Ziel-Switch).
+**Das Remote-VLAN fehlt, ist nicht erlaubt oder die Sessions sind falsch.** Ist das VLAN als `remote-span` angelegt? Ist es auf allen Trunks dazwischen erlaubt? Hat der Ziel-Switch eine Session mit `source remote vlan`?
 
 </details>
 
 3. Warum kann man das Gerät bei hoher Last im SPAN-Betrieb falsch interpretieren?
 <details><summary>Antwort</summary>
 
-SPAN-Kopien haben niedrigere Priorität; bei Überlast werden Pakete verworfen. NetFlow liefert Statistik, kein vollständiges Abbild.
+**Weil SPAN bei Überlast Pakete verliert und NetFlow nur Statistik liefert.** SPAN-Kopien haben niedrige Priorität. Wird es eng, verwirft der Switch sie. NetFlow zählt Flows, zeigt aber keine Paketinhalte. Merke: Fehlt etwas im Mitschnitt, fehlt es nicht unbedingt im echten Verkehr.
 
 </details>
 

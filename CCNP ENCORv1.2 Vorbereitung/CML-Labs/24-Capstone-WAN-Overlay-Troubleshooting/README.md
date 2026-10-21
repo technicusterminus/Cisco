@@ -4,6 +4,12 @@
 
 Zwei Standorte sind per eBGP an einen ISP angebunden und über einen GRE-Tunnel mit IPsec-Schutz verbunden. Darüber läuft OSPF mit Authentifizierung. Dazu ein VRF-Lite für Gäste am Standort 1. Neun Fehler quer durch Underlay, Overlay und Virtualisierung.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- Underlay (eBGP), Overlay (GRE/IPsec) und Routing im Overlay (OSPF) getrennt prüfen.
+- Die Reihenfolge der Fehlersuche begründen: Underlay vor IPsec vor OSPF.
+- VRF-Lite zur Trennung eines Gastnetzes einsetzen.
+
 | Deck-Tag | Thema | Karten im Kompendium |
 |---|---|---|
 | `Ziel::2.2.a` | VRF | 26 |
@@ -80,24 +86,24 @@ Erwartet: R1 lernt `203.0.113.0/30` und R2 `198.51.100.0/30` per BGP, ISAKMP `QM
 
 Beantworte zuerst selbst, dann klappe die Antwort auf.
 
-1. Tunnel0 steht auf `up/up`, aber das OSPF-Nachbarschaftsfeld bleibt in `INIT`. Welche Ursachen kommen in Frage?
+1. Tunnel0 ist up/up, aber die OSPF-Nachbarschaft bleibt in INIT. Welche Ursachen kommen in Frage?
 <details><summary>Antwort</summary>
 
-Der Tunnel selbst trägt Pakete nur in eine Richtung (IPsec-Mismatch, ACL, Routing zurück), oder OSPF-Parameter passen nicht (Authentifizierung, Area, Hello/Dead, Netztyp). `INIT` heißt: Hellos kommen an, die eigene Router-ID ist beim Nachbarn nicht aufgeführt, also fehlt der Rückweg.
+**Hellos kommen nur in eine Richtung an.** INIT heißt: Der Router empfängt Hellos, findet seine eigene Router-ID darin aber nicht. Der Nachbar hört ihn also nicht. Ursachen: Der Tunnel trägt nur in eine Richtung (IPsec-Mismatch, ACL, Rückroute) oder OSPF-Parameter passen nicht (Authentisierung, Netztyp).
 
 </details>
 
 2. Warum ist `network 198.51.100.0 mask 255.255.255.252` im BGP wirkungslos, wenn das Interface heruntergefahren ist?
 <details><summary>Antwort</summary>
 
-BGP kündigt nur Prefixe an, die **exakt** in der Routing-Tabelle liegen. Ohne aktives Interface fehlt die verbundene Route, und der `network`-Befehl erzeugt keine Ankündigung.
+**Weil BGP nur Präfixe ankündigt, die genau so in der Routing-Tabelle stehen.** Ist das Interface down, fehlt die verbundene Route. Dann erzeugt das `network`-Statement keine Ankündigung.
 
 </details>
 
 3. Was ist der Unterschied zwischen VRF-Lite und MPLS-L3VPN?
 <details><summary>Antwort</summary>
 
-VRF-Lite trennt nur lokal Routing-Tabellen (Interfaces/Subinterfaces pro VRF, kein MPLS, Routing-Protokolle pro VRF). MPLS-L3VPN transportiert VRF-Routen zwischen PE-Routern über MP-BGP mit Route Distinguisher/Target und Labels.
+**VRF-Lite trennt nur lokal, MPLS-L3VPN transportiert die Trennung durchs Netz.** Bei VRF-Lite hat jedes Gerät eigene Tabellen, und jede VRF braucht eigene Interfaces bis zum Nachbarn. MPLS-L3VPN überträgt die VRF-Routen zwischen den PE-Routern per MP-BGP mit Route Distinguisher, Route Target und Labels.
 
 </details>
 

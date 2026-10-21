@@ -4,6 +4,12 @@
 
 Branch-Router mit zwei Providern: bestimmte Quelle per PBR über ISP2, Rest über ISP1. Der PBR-Next-Hop wird per IP SLA und Track überwacht. Dazu Local-PBR für routereigenen Verkehr.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- Policy-Based Routing für eine Quelle einrichten und an das richtige Interface binden.
+- Mit IP SLA und Tracking einen Next-Hop überwachen.
+- Mit `show route-map` und `show track` nachweisen, welchen Weg ein Paket nimmt.
+
 | ENCOR-Ziel (`Ziel::…`) | Thema |
 |---|---|
 | 3.2.d | Policy-based Routing |
@@ -93,7 +99,7 @@ Statisches Routing ist vorgegeben: R1 hat Default via ISP1; R2/R3 haben Default 
 
 ### Portzuordnung der Switches (CML → Packet Tracer)
 
-Die Aufgabentexte nennen Switch-Ports in der CML-Schreibweise (`Gi…`). Verkabelung, Konfigurationen und Fehlerlisten verwenden die Packet-Tracer-Ports. Umrechnung: `GiX/Y` → `Fa0/(X·4+Y+1)`.
+Aufgaben, Verkabelung, Konfigurationen und Fehlerlisten verwenden die Packet-Tracer-Ports. Die Tabelle zeigt, welcher Port der CML-Vorlage dazu gehört. Nur die Skizze nennt noch die CML-Ports. Umrechnung: `GiX/Y` → `Fa0/(X·4+Y+1)`.
 
 | Switch | CML-Port | PT-Port |
 |---|---|---|
@@ -101,7 +107,7 @@ Die Aufgabentexte nennen Switch-Ports in der CML-Schreibweise (`Gi…`). Verkabe
 | SW | Gi0/1 | Fa0/2 |
 | SW | Gi0/2 | Fa0/3 |
 
-> **Packet-Tracer-Hinweis:** **Eignung: teilweise.** Nach meinem Kenntnisstand zu Packet Tracer 8.x gilt: IP SLA / Track: nicht vorhanden. IP SLA und Track-Objekte gibt es nicht; die Teile mit Tracking in CML oder EVE-NG machen. Akzeptiert PT einen Befehl nicht, ist das ein PT-Limit und kein Fehler von dir; solche Schritte machst du in CML oder EVE-NG. Die CML-Switches (Gi-Ports) sind hier 3560-24PS bzw. 2960 mit FastEthernet-Ports: Die Portzuordnung steht unter dem Adressplan; die Aufgabentexte nennen noch die CML-Ports.
+> **Packet-Tracer-Hinweis:** **Eignung: teilweise.** Stand Packet Tracer 8.x: IP SLA / Track: nicht vorhanden. IP SLA und Track-Objekte gibt es nicht; die Teile mit Tracking in CML oder EVE-NG machen. Akzeptiert PT einen Befehl nicht, ist das ein PT-Limit und kein Fehler von dir; solche Schritte machst du in CML oder EVE-NG. Die CML-Switches (Gi-Ports) sind hier 3560-24PS bzw. 2960 mit FastEthernet-Ports: Die Portzuordnung steht unter dem Adressplan.
 
 ## Teil A – Bauen
 
@@ -143,21 +149,21 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. Wie beeinflusst `set ip next-hop verify-availability` das Routing?
 <details><summary>Antwort</summary>
 
-Der Next-Hop wird nur benutzt, solange das verknüpfte Track-Objekt Up ist. Fällt es, wird die nächste Sequenz oder normales Routing verwendet.
+**Der Next-Hop wird nur benutzt, solange das zugehörige Track-Objekt Up ist.** Fällt es auf Down, prüft der Router die nächste Sequenz der Route-Map oder routet normal nach der Routing-Tabelle.
 
 </details>
 
 2. Ein IP-SLA-Echo gelingt nicht, obwohl Ping manuell geht. Was prüfst du?
 <details><summary>Antwort</summary>
 
-Quelladresse/Quell-Interface der Operation, `ip sla schedule`, Frequenz/Timeout, ACL/CoPP auf dem Zielpfad und die Frage, ob die Operation überhaupt gestartet ist (`show ip sla configuration`).
+**Ob die Operation überhaupt läuft und mit welchen Werten.** `show ip sla configuration` zeigt Quelladresse, Quell-Interface, Frequenz und Timeout, `show ip sla statistics` die Ergebnisse. Fehlt `ip sla schedule`, wird nie gemessen. Danach ACL oder CoPP auf dem Weg prüfen.
 
 </details>
 
 3. Wieso nutzt man PBR statt statischer Route mit Zeit-/AD-Spielereien?
 <details><summary>Antwort</summary>
 
-PBR kann nach Quelle, Protokoll oder Port unterscheiden, normales Routing nur nach Ziel.
+**Weil PBR nach Quelle, Protokoll oder Port entscheiden kann.** Normales Routing schaut nur auf die Zieladresse. Mit statischen Routen und AD-Tricks lässt sich nicht sagen: „Nur H1 über ISP2.“
 
 </details>
 

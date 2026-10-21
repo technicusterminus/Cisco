@@ -4,6 +4,12 @@
 
 Szenarien zu den Security-Themen, die sich nicht sinnvoll im CML nachstellen lassen. Du bewertest Entwürfe, liest Konfigurationen und begründest Entscheidungen.
 
+**Lernziele:** Nach diesen Fällen kannst du …
+
+- REST-Zugriffe sicher gestalten: Tokens, TLS und keine Passwörter im Code.
+- Threat Defense, Endpoint Security und NGFW einordnen und ihre Aufgaben unterscheiden.
+- TrustSec (SGT klassifizieren, verteilen, durchsetzen) und MACsec mit MKA erklären.
+
 | Deck-Tag | Thema | Karten im Kompendium |
 |---|---|---|
 | `Ziel::5.3` | REST-API-Sicherheit | 22 |
@@ -12,7 +18,7 @@ Szenarien zu den Security-Themen, die sich nicht sinnvoll im CML nachstellen las
 | `Ziel::5.4.c` | Next-Generation Firewall | 22 |
 | `Ziel::5.4.d` | TrustSec und MACsec | 28 |
 
-Warum ohne CML? SD-WAN, SD-Access, Hypervisor und Next-Generation-Firewalls brauchen Controller, Lizenzen oder Hardware, die sich in einer kostenfreien Lab-Umgebung nicht sinnvoll nachbauen lassen. Du übst hier stattdessen das, was die Prüfung fragt: Komponenten zuordnen, Entwurf begründen, Konfigurationen und Ausgaben lesen, Fehler im Entwurf finden.
+Warum ohne CML? Threat Defense, Endpoint-Schutz, Next-Generation-Firewalls und TrustSec brauchen ISE, Firewalls, Lizenzen oder Hardware, die sich in einer kostenfreien Lab-Umgebung nicht sinnvoll nachbauen lassen. Du übst hier stattdessen das, was die Prüfung fragt: Komponenten zuordnen, Entwürfe begründen, Konfigurationen lesen und Schwachstellen finden.
 
 ## Fall 1: Ein API-Skript im Git-Repository
 

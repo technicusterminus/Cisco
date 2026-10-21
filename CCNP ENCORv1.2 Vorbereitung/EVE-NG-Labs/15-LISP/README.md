@@ -4,6 +4,12 @@
 
 Trennung von Identität (EID) und Ort (RLOC): zwei xTR-Standorte, ein kombinierter Map-Server/Map-Resolver und ein „Internet“-Core, der nur RLOCs kennt. Hinweis: Setzt voraus, dass dein IOSv-Image LISP unterstützt (klassisches IOS 15.x, `router lisp`).
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- LISP mit Map-Server, Map-Resolver und xTRs aufbauen.
+- Erklären, wie EID und RLOC zusammenhängen und wie ein Map-Request abläuft.
+- Registrierungsfehler auf dem Map-Server finden.
+
 | Deck-Tag | Thema | Karten im Kompendium |
 |---|---|---|
 | `Ziel::2.3.a` | LISP | 18 |
@@ -101,21 +107,21 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. Welchen Port verwendet LISP für Control-Plane und Data-Plane?
 <details><summary>Antwort</summary>
 
-Control UDP 4342, Daten UDP 4341.
+**Control Plane UDP 4342, Daten UDP 4341.**
 
 </details>
 
 2. Was bedeutet ein Negative Map-Cache-Eintrag?
 <details><summary>Antwort</summary>
 
-Das Mapping-System hat geantwortet, dass für dieses Präfix kein EID-zu-RLOC-Eintrag existiert. Der ITR cached das Ergebnis (mit Aktion, z. B. Weiterleiten über PITR oder Verwerfen) und fragt nicht erneut.
+**Für dieses Ziel gibt es kein Mapping.** Das Mapping-System hat geantwortet, dass zu dem Präfix kein EID-zu-RLOC-Eintrag existiert. Der ITR merkt sich das samt Aktion, z. B. Weiterleiten über einen PITR oder Verwerfen, und fragt nicht sofort erneut.
 
 </details>
 
 3. Wozu dient ein PITR?
 <details><summary>Antwort</summary>
 
-Er kapselt Verkehr aus Nicht-LISP-Netzen zu LISP-Sites (Internet → LISP-EID). Im Gegenzug entkapselt der PETR Verkehr aus LISP-Sites zu Nicht-LISP-Zielen.
+**Er verbindet Nicht-LISP-Netze mit LISP-Sites.** Der PITR nimmt Verkehr aus dem Internet an und kapselt ihn zur LISP-Site. Die Gegenrichtung übernimmt der PETR: Er entkapselt Verkehr aus der LISP-Site zu Zielen ohne LISP.
 
 </details>
 

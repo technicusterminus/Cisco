@@ -4,6 +4,12 @@
 
 Lines, lokale Benutzer, Privilege Levels, Login-Härtung und AAA mit TACACS+ (Server absichtlich nicht erreichbar, damit du das Fallback-Verhalten siehst). Der „Admin-PC“ R2 meldet sich per Telnet am Gerät R1 an.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- Den Gerätezugang mit lokalen Benutzern, SSH und Line-Einstellungen absichern.
+- AAA mit Methodenlisten für Anmeldung und Exec-Autorisierung aufbauen.
+- Erklären, wann ein Fallback auf `local` greift und wann nicht.
+
 | Deck-Tag | Thema | Karten im Kompendium |
 |---|---|---|
 | `Ziel::5.1.a` | Lines und lokale Anmeldung | 27 |
@@ -85,21 +91,21 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. Warum landet ein lokaler Benutzer mit `privilege 15` trotzdem in `R1>`?
 <details><summary>Antwort</summary>
 
-Mit `aaa new-model` fehlt `aaa authorization exec …`: Dann gilt das Default-Privileg der Line (1). Die Exec-Autorisierung übernimmt das Privileg vom Benutzer.
+**Weil die Exec-Autorisierung fehlt.** Mit `aaa new-model` übernimmt der Router das Privileg des Benutzers nur, wenn `aaa authorization exec …` gesetzt und an die Line gebunden ist. Sonst gilt das Standardprivileg der Line, also 1.
 
 </details>
 
 2. Der TACACS+-Server antwortet `reject`, der Benutzer existiert lokal. Greift das Fallback?
 <details><summary>Antwort</summary>
 
-Nein: Fallback nur bei Nichterreichbarkeit/Timeout, nicht bei einer Ablehnung des erreichbaren Servers.
+**Nein.** Der Router geht nur zur nächsten Methode, wenn der Server nicht antwortet. Ein „reject“ ist eine gültige Antwort, und dabei bleibt es. Merke: Fallback nur bei Schweigen, nicht bei Nein.
 
 </details>
 
 3. Wann ist RADIUS die bessere Wahl?
 <details><summary>Antwort</summary>
 
-Für Netzwerkzugang (802.1X, VPN, WLAN), weil RADIUS EAP und Attribute wie VLAN/dACL transportiert. Für Geräteadministration mit Command-Autorisierung ist TACACS+ üblich.
+**Für den Netzzugang, also 802.1X, VPN und WLAN.** RADIUS transportiert EAP und Attribute wie VLAN oder dACL. Für die Administration von Geräten mit Autorisierung einzelner Befehle nimmt man meist TACACS+.
 
 </details>
 

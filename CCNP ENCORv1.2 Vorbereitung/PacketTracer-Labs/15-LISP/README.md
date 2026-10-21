@@ -4,6 +4,12 @@
 
 LISP (Map-Server/Resolver, xTR) gibt es in Packet Tracer nicht.
 
+**Lernziele:** In CML oder EVE-NG lernst du mit diesem Lab:
+
+- LISP mit Map-Server, Map-Resolver und xTRs aufbauen.
+- Erklären, wie EID und RLOC zusammenhängen und wie ein Map-Request abläuft.
+- Registrierungsfehler auf dem Map-Server finden.
+
 | ENCOR-Ziel | Thema |
 |---|---|
 | `Ziel::2.3.a` | LISP |

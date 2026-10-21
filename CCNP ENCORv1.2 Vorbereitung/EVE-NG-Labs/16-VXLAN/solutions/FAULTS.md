@@ -5,6 +5,7 @@
 ## Ticket 1 (LEAF2)
 
 - **Symptom:** H1 und H2 im selben Subnetz erreichen sich nicht, `show nve vni` zeigt auf LEAF2 eine andere VNI.
+- **So findest du es:** `show nve vni` auf LEAF1 und LEAF2 vergleichen: VLAN 10 hängt an verschiedenen VNIs.
 - **Ursache:** VLAN 10 ist auf LEAF2 auf VNI 10011 gemappt, auf LEAF1 auf 10010: Das Segment stimmt nicht überein.
 - **Fix:** VNI auf beiden Leafs identisch machen.
 - **Eingebaut:**
@@ -17,6 +18,7 @@
 ## Ticket 2 (LEAF1)
 
 - **Symptom:** `show nve peers` ist auf LEAF1 leer oder zeigt einen Peer ohne Verkehr.
+- **So findest du es:** `show nve peers` auf LEAF1 ist leer. `show running-config interface nve1` zeigt eine Peer-IP, die es nicht gibt.
 - **Ursache:** Die Ingress-Replication-Peerliste zeigt auf eine falsche VTEP-Adresse.
 - **Fix:** Peer-IP auf 10.255.0.2 korrigieren.
 - **Eingebaut:**
@@ -29,6 +31,7 @@
 ## Ticket 3 (LEAF2)
 
 - **Symptom:** Die Verbindung steht nie, `show nve interface` zeigt `Admin down`.
+- **So findest du es:** `show nve interface` auf LEAF2 meldet „Admin down“.
 - **Ursache:** Das NVE-Interface ist administrativ ausgeschaltet.
 - **Fix:** `no shutdown` am nve1.
 - **Eingebaut:**
@@ -43,6 +46,7 @@
 ## Ticket 4 (LEAF1)
 
 - **Symptom:** LEAF2 erreicht 10.255.0.1 nicht (Ping auf die VTEP-Adresse scheitert), NVE-Peer bleibt down.
+- **So findest du es:** `show ip route 10.255.0.1` auf LEAF2 findet nichts. `show ip ospf interface brief` auf LEAF1 listet Loopback0 nicht.
 - **Ursache:** Die VTEP-Loopback wird nicht ins Underlay-OSPF aufgenommen: Der Gegen-VTEP hat keine Route.
 - **Fix:** `ip router ospf 1 area 0.0.0.0` an Loopback0 ergänzen.
 - **Eingebaut:**

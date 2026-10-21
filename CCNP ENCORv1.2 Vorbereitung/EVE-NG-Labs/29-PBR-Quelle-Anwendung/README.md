@@ -4,6 +4,12 @@
 
 Ein Branch-Router mit zwei Providern: Die Routing-Tabelle sendet alles über Provider A, per PBR wird ein bestimmter Host und Web-Verkehr über Provider B geleitet. Dazu die Wirkung von `deny` in einer PBR-Route-Map, die Reihenfolge der Auswertung und der Unterschied zwischen `ip policy` und `ip local policy`.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- Verkehr nach Quelle und nach Anwendung (Port) auf verschiedene Provider lenken.
+- Die Wirkung von `permit` und `deny` in einer PBR-Route-Map erklären.
+- Mit `show route-map` und `show access-lists` nachweisen, welche Sequenz greift.
+
 | Deck-Tag | Thema | Karten im Kompendium |
 |---|---|---|
 | `Ziel::3.2.d` | Policy-based Routing | 16 |
@@ -102,21 +108,21 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. H2 nimmt trotz Policy den Weg über Provider A. Welche vier Dinge prüfst du?
 <details><summary>Antwort</summary>
 
-1) `ip policy route-map` am richtigen (Eingangs-)Interface, 2) Route-Map `permit` und Sequenz-Reihenfolge, 3) ACL trifft die Quelle (Zähler in `show access-lists`), 4) Next-Hop ist direkt erreichbar (ARP/Route).
+**Interface, Route-Map, ACL und Next-Hop.** 1) Hängt `ip policy route-map` am Eingangs-Interface? 2) Steht die Sequenz auf `permit`, und stimmt die Reihenfolge? 3) Trifft die ACL die Quelle (Zähler in `show access-lists`)? 4) Ist der Next-Hop direkt erreichbar (ARP, Route)?
 
 </details>
 
 2. Was bewirkt `set ip default next-hop` im Unterschied zu `set ip next-hop`?
 <details><summary>Antwort</summary>
 
-`default` wirkt nur, wenn die Routing-Tabelle **keine** spezifische Route für das Ziel hat; `next-hop` gilt immer vor der Tabelle.
+**`default` greift nur, wenn es keine spezifische Route gibt.** `set ip next-hop` wirkt immer, noch vor der Routing-Tabelle. `set ip default next-hop` wird nur benutzt, wenn die Tabelle für das Ziel keine spezifischere Route als die Default hat.
 
 </details>
 
 3. Warum greift PBR nicht auf Pakete, die der Router selbst erzeugt?
 <details><summary>Antwort</summary>
 
-`ip policy` wird auf eingehende Pakete des Interfaces angewandt. Router-eigene Pakete laufen durch `ip local policy`.
+**Weil `ip policy` nur auf Pakete wirkt, die am Interface ankommen.** Pakete, die der Router selbst erzeugt, kommen nirgends an. Für sie gibt es `ip local policy route-map`.
 
 </details>
 

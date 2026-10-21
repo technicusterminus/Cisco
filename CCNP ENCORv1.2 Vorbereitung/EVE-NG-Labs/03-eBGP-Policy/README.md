@@ -4,6 +4,12 @@
 
 Kunde mit zwei Providern: eBGP-Sessions, Best-Path-Auswahl, Local-Preference, AS-Path-Prepending, MED, No-Transit-Filter und Soft-Reset. Private AS-Nummern dienen nur der Übung.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- Eine eBGP-Anbindung an zwei Provider aufbauen und Präfixe gezielt ankündigen.
+- Mit Route-Maps und Local Preference den Ausgang steuern.
+- Verhindern, dass das eigene AS zum Transit zwischen den Providern wird.
+
 | Deck-Tag | Thema | Karten im Kompendium |
 |---|---|---|
 | `Ziel::3.2.c` | Direktes eBGP | 61 |
@@ -98,21 +104,21 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 1. Warum bleibt eine eBGP-Session in `Active`?
 <details><summary>Antwort</summary>
 
-`Active` heißt: TCP-Verbindungsversuch läuft, aber kein Open. Typische Ursachen: falsche Neighbor-IP/AS, fehlende Route/ACL für TCP 179, Multihop (TTL) bei Loopback-Peering, Passwort-Mismatch.
+**Weil TCP nicht zustande kommt oder die OPEN-Nachricht abgelehnt wird.** Active heißt: Der Router versucht aktiv, die Sitzung aufzubauen, bekommt aber keine. Typische Ursachen: falsche Nachbar-IP oder AS, keine Route oder eine ACL für TCP 179, fehlendes `ebgp-multihop` beim Peering über Loopbacks, falsches Passwort.
 
 </details>
 
 2. Wann nutzt man `next-hop-self` in iBGP?
 <details><summary>Antwort</summary>
 
-Wenn eBGP-Next-Hops nicht im IGP stehen: Der iBGP-Peer bekäme sonst einen unerreichbaren Next-Hop (Route wird nicht installiert).
+**Wenn der eBGP-Next-Hop im IGP nicht bekannt ist.** iBGP gibt den Next-Hop unverändert weiter. Kennt der iBGP-Nachbar ihn nicht, ist die Route für ihn unbrauchbar und wird nicht installiert. Mit `next-hop-self` trägt der Rand-Router sich selbst als Next-Hop ein.
 
 </details>
 
 3. Was passiert mit AS-Pfaden, wenn R1 ISP-B-Routen an ISP-A schickt?
 <details><summary>Antwort</summary>
 
-Sie wären gültig, R1 würde Transit. Das verhindert ein Ausgangsfilter auf lokale Routen (`^$`) oder Prefix-List.
+**ISP-A würde sie annehmen, und R1 würde Transit für fremden Verkehr.** Der AS-Pfad ist gültig, also gibt es keinen Grund zum Verwerfen. Das verhindert nur ein Ausgangsfilter, der nur eigene Routen erlaubt, z. B. AS-Path `^$` oder eine Prefix-List.
 
 </details>
 

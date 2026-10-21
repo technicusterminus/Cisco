@@ -4,6 +4,12 @@
 
 Zehn Fälle zu Architektur, Virtualisierung und Controller-Betrieb. Beantworte jeden Fall schriftlich, bevor du den Schlüssel aufklappst.
 
+**Lernziele:** Nach diesen Fällen kannst du …
+
+- Einen Campus-Entwurf (2-Tier oder 3-Tier) mit Oversubscription und Verfügbarkeit begründen.
+- SD-WAN und SD-Access in Ebenen und Komponenten zerlegen und ihre Grenzen nennen.
+- Hypervisor-Typen, virtuelles Switching und die Rolle von Catalyst Center erklären.
+
 | Deck-Tag | Thema | Karten im Kompendium |
 |---|---|---|
 | `Ziel::1.1.a` | Campus-, Fabric- und Cloud-Design | 26 |

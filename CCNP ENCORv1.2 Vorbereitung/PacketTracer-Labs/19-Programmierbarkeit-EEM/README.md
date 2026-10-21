@@ -4,6 +4,12 @@
 
 RESTCONF, NETCONF, YANG und EEM sind in Packet Tracer nicht vorhanden. Für die Programmier-Anteile (Python, JSON, REST) gibt es das lokale Drill-Paket.
 
+**Lernziele:** In CML oder EVE-NG lernst du mit diesem Lab:
+
+- RESTCONF und NETCONF auf IOS XE aktivieren und abfragen.
+- YANG-Pfade lesen und PUT, PATCH und GET unterscheiden.
+- Ein EEM-Applet schreiben, das auf Syslog oder Tracking reagiert.
+
 | ENCOR-Ziel | Thema |
 |---|---|
 | `Ziel::4.6` | NETCONF und RESTCONF |

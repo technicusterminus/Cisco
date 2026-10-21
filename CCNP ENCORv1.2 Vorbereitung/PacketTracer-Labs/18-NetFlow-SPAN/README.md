@@ -4,6 +4,12 @@
 
 Verkehr sichtbar machen: Flexible NetFlow auf einem Router (Record, Exporter, Monitor), lokales SPAN und RSPAN über einen Trunk zwischen zwei Switches. ERSPAN wird als Konfigurationsübung ohne CML-Test behandelt.
 
+**Lernziele:** Nach diesem Lab kannst du …
+
+- Flexible NetFlow mit Record, Exporter und Monitor einrichten.
+- Lokales SPAN und RSPAN aufbauen.
+- Erklären, was NetFlow und SPAN zeigen und wo ihre Grenzen liegen.
+
 | ENCOR-Ziel (`Ziel::…`) | Thema |
 |---|---|
 | 4.2 | Flexible NetFlow |
@@ -85,11 +91,11 @@ graph LR
 | SRV | Gi0/0 | 10.20.20.10 |
 | ANA1 / ANA2 | Gi0/0 | Sniffer-Hosts (passiv) |
 
-SW1 Port-Belegung: Gi0/0 → R1 (Access VLAN 10), Gi0/1 → SW2 (Trunk), Gi1/0 → H1, Gi1/1 → H2, Gi1/2 → ANA1. SW2: Gi0/0 → SW1 (Trunk), Gi1/1 → ANA2.
+SW1 Port-Belegung: Fa0/1 → R1 (Access VLAN 10), Fa0/2 → SW2 (Trunk), Fa0/5 → H1, Fa0/6 → H2, Fa0/7 → ANA1. SW2: Fa0/1 → SW1 (Trunk), Fa0/6 → ANA2.
 
 ### Portzuordnung der Switches (CML → Packet Tracer)
 
-Die Aufgabentexte nennen Switch-Ports in der CML-Schreibweise (`Gi…`). Verkabelung, Konfigurationen und Fehlerlisten verwenden die Packet-Tracer-Ports. Umrechnung: `GiX/Y` → `Fa0/(X·4+Y+1)`.
+Aufgaben, Verkabelung, Konfigurationen und Fehlerlisten verwenden die Packet-Tracer-Ports. Die Tabelle zeigt, welcher Port der CML-Vorlage dazu gehört. Nur die Skizze nennt noch die CML-Ports. Umrechnung: `GiX/Y` → `Fa0/(X·4+Y+1)`.
 
 | Switch | CML-Port | PT-Port |
 |---|---|---|
@@ -101,7 +107,7 @@ Die Aufgabentexte nennen Switch-Ports in der CML-Schreibweise (`Gi…`). Verkabe
 | SW2 | Gi0/0 | Fa0/1 |
 | SW2 | Gi1/1 | Fa0/6 |
 
-> **Packet-Tracer-Hinweis:** **Eignung: teilweise.** Nach meinem Kenntnisstand zu Packet Tracer 8.x gilt: Flexible NetFlow: nicht vorhanden. Nicht vorhanden. SPAN (lokal): eingeschränkt. Lokales SPAN auf Switches, Ausgabe weicht ab. RSPAN/ERSPAN: nicht vorhanden. Nicht vorhanden. Akzeptiert PT einen Befehl nicht, ist das ein PT-Limit und kein Fehler von dir; solche Schritte machst du in CML oder EVE-NG. Die CML-Switches (Gi-Ports) sind hier 3560-24PS bzw. 2960 mit FastEthernet-Ports: Die Portzuordnung steht unter dem Adressplan; die Aufgabentexte nennen noch die CML-Ports.
+> **Packet-Tracer-Hinweis:** **Eignung: teilweise.** Stand Packet Tracer 8.x: Flexible NetFlow: nicht vorhanden. Nicht vorhanden. SPAN (lokal): eingeschränkt. Lokales SPAN auf Switches, Ausgabe weicht ab. RSPAN/ERSPAN: nicht vorhanden. Nicht vorhanden. Akzeptiert PT einen Befehl nicht, ist das ein PT-Limit und kein Fehler von dir; solche Schritte machst du in CML oder EVE-NG. Die CML-Switches (Gi-Ports) sind hier 3560-24PS bzw. 2960 mit FastEthernet-Ports: Die Portzuordnung steht unter dem Adressplan.
 
 ## Teil A – Bauen
 
@@ -114,11 +120,11 @@ Die Aufgabentexte nennen Switch-Ports in der CML-Schreibweise (`Gi…`). Verkabe
 
 **Teil 2 – Lokales SPAN**
 
-5. Auf SW1 `monitor session 1 source interface Gi1/0 both`, `destination interface Gi1/2`. Prüfe `show monitor session 1`. Was passiert mit dem Ziel-Port (nimmt keinen normalen Verkehr mehr, kein STP)?
+5. Auf SW1 `monitor session 1 source interface Fa0/5 both`, `destination interface Fa0/7`. Prüfe `show monitor session 1`. Was passiert mit dem Ziel-Port (nimmt keinen normalen Verkehr mehr, kein STP)?
 
 **Teil 3 – RSPAN**
 
-6. VLAN 999 als `remote-span` auf **beiden** Switches, im Trunk erlaubt. SW1: `monitor session 2 source interface Gi1/1 both`, `destination remote vlan 999`. SW2: `monitor session 2 source remote vlan 999`, `destination interface Gi1/1`. Prüfe die Sicht auf ANA2.
+6. VLAN 999 als `remote-span` auf **beiden** Switches, im Trunk erlaubt. SW1: `monitor session 2 source interface Fa0/6 both`, `destination remote vlan 999`. SW2: `monitor session 2 source remote vlan 999`, `destination interface Fa0/6`. Prüfe die Sicht auf ANA2.
 7. **Konzept.** Vergleiche SPAN, RSPAN (Layer 2, ein VLAN), ERSPAN (GRE, geroutet). Gib die ERSPAN-Konfiguration (IOS-XE) an: `monitor session 3 type erspan-source / source interface Gi1 both / destination / erspan-id 10 / ip address 10.1.1.1 / origin ip address 10.1.1.2`.
 
 ## Teil B – Reparieren
@@ -147,24 +153,24 @@ Erwartet: Cache mit Flows H1 → SRV, Exporter-Statistik zählt Flow-Records, AN
 
 Beantworte zuerst selbst, dann klappe die Antwort auf.
 
-1. Welche zwei Felder sind in NetFlow zwingend Key-Felder und welche sind Non-Key?
+1. Was sind Key-Felder und Non-Key-Felder in einem NetFlow-Record?
 <details><summary>Antwort</summary>
 
-Key: z. B. Quell-/Ziel-IP, Protokoll, Ports (bestimmen den Flow). Non-Key (`collect`): Zähler wie Bytes/Pakete, Zeitstempel, Flags.
+**Key-Felder bestimmen, was ein Flow ist, Non-Key-Felder werden nur mitgezählt.** Key (`match`): z. B. Quell- und Ziel-IP, Protokoll, Ports. Pakete mit gleichen Key-Werten gehören zum selben Flow. Non-Key (`collect`): Bytes, Pakete, Zeitstempel, TCP-Flags.
 
 </details>
 
 2. RSPAN-Session steht, aber ANA2 sieht nichts. Typische Ursachen?
 <details><summary>Antwort</summary>
 
-Das Remote-VLAN fehlt als `remote-span`, ist im Trunk nicht erlaubt, oder Quell-/Ziel-Session ist falsch gesetzt (`source remote vlan` fehlt auf dem Ziel-Switch).
+**Das Remote-VLAN fehlt, ist nicht erlaubt oder die Sessions sind falsch.** Ist das VLAN als `remote-span` angelegt? Ist es auf allen Trunks dazwischen erlaubt? Hat der Ziel-Switch eine Session mit `source remote vlan`?
 
 </details>
 
 3. Warum kann man das Gerät bei hoher Last im SPAN-Betrieb falsch interpretieren?
 <details><summary>Antwort</summary>
 
-SPAN-Kopien haben niedrigere Priorität; bei Überlast werden Pakete verworfen. NetFlow liefert Statistik, kein vollständiges Abbild.
+**Weil SPAN bei Überlast Pakete verliert und NetFlow nur Statistik liefert.** SPAN-Kopien haben niedrige Priorität. Wird es eng, verwirft der Switch sie. NetFlow zählt Flows, zeigt aber keine Paketinhalte. Merke: Fehlt etwas im Mitschnitt, fehlt es nicht unbedingt im echten Verkehr.
 
 </details>
 

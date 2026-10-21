@@ -5,6 +5,7 @@
 ## Ticket 1 (R3)
 
 - **Symptom:** R2 und R3 bilden keine Nachbarschaft; `debug ip ospf adj` zeigt `Hello from … with mismatched Stub/Transit area option bit`.
+- **So findest du es:** `debug ip ospf adj` zeigt „mismatched Stub/Transit area option bit“. `show ip ospf` auf R3 führt Area 1 als normale Area.
 - **Ursache:** Auf R3 fehlt `area 1 stub`: Die Area-Typen weichen ab (E-Bit).
 - **Fix:** `area 1 stub` auf R3.
 - **Eingebaut:**
@@ -16,6 +17,7 @@
 ## Ticket 2 (R2)
 
 - **Symptom:** R1 sieht drei einzelne Routen 192.168.1.0/24, 192.168.2.0/24, 192.168.3.0/24 und nur 192.168.0.0/24 als Summary.
+- **So findest du es:** `show ip route ospf` auf R1 zeigt drei einzelne /24 und ein Summary für nur ein /24. Die `area range` auf R2 hat die Maske 255.255.255.0.
 - **Ursache:** Der Range deckt nur 192.168.0.0/24 ab, die anderen Netze werden einzeln ausgegeben.
 - **Fix:** Maske 255.255.252.0 im `area range`.
 - **Eingebaut:**
@@ -28,6 +30,7 @@
 ## Ticket 3 (R1)
 
 - **Symptom:** R1 und R2 sind in `INIT`/ohne Nachbarschaft, Log: `Mismatched Authentication key`.
+- **So findest du es:** Das Log meldet „Mismatched Authentication Key“. `show ip ospf interface` zeigt auf beiden Seiten MD5, die Passwörter vergleichst du in der Konfiguration.
 - **Ursache:** Das MD5-Passwort auf R1 weicht von R2 ab.
 - **Fix:** Passwort angleichen.
 - **Eingebaut:**
@@ -40,6 +43,7 @@
 ## Ticket 4 (R4)
 
 - **Symptom:** 172.31.0.0/24 fehlt in Area 0, R1 sieht keine externe Route.
+- **So findest du es:** `show ip ospf database external` enthält 172.31.0.0 nicht. Die Konfiguration auf R4 zeigt `redistribute static` ohne `subnets`.
 - **Ursache:** Ohne `subnets` wird das /24-Netz nicht redistribuiert (nur klassische Netze).
 - **Fix:** `redistribute static subnets`.
 - **Eingebaut:**
@@ -52,6 +56,7 @@
 ## Ticket 5 (R4)
 
 - **Symptom:** R4 hat keinen OSPF-Nachbarn zu R2, obwohl der Link steht.
+- **So findest du es:** `show ip ospf neighbor` auf R4 ist leer. `show ip protocols` führt Gi0/0 als passiv.
 - **Ursache:** Das Uplink-Interface von R4 ist passiv: Es werden keine Hellos gesendet.
 - **Fix:** `no passive-interface GigabitEthernet0/0` auf R4.
 - **Eingebaut:**
@@ -63,6 +68,7 @@
 ## Ticket 6 (R2)
 
 - **Symptom:** R3 trägt trotz Stub-Area alle Inter-Area-Routen (O IA) statt nur der Default-Route.
+- **So findest du es:** `show ip route` auf R3 zeigt O-IA-Routen. `show ip ospf` auf R2 nennt Area 1 als Stub, aber nicht „no summary“.
 - **Ursache:** Ohne `no-summary` sendet der ABR weiter Typ-3-LSAs in die Area: nur Stub, nicht Totally Stubby.
 - **Fix:** `area 1 stub no-summary` auf dem ABR.
 - **Eingebaut:**
