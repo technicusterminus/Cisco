@@ -1,0 +1,187 @@
+# 2.3 | DMVPN: Überblick und Phasen
+S: https://www.cisco.com/c/en/us/support/docs/security/dynamic-multipoint-vpn-dmvpn/222585-configure-bgp-over-dmvpn-phase-3.pdf | Cisco: Configure BGP over DMVPN Phase 3
+
+Q: Aus welchen vier Bausteinen besteht DMVPN?
+A: **mGRE, NHRP, IPsec und ein dynamisches Routing-Protokoll.** mGRE liefert ein Tunnel-Interface für viele Gegenstellen, NHRP findet die öffentliche Adresse eines Tunnel-Nachbarn, IPsec verschlüsselt, das Routing-Protokoll verteilt die Netze hinter den Standorten.
+T: Wissen Leicht
+
+Q: Was unterscheidet DMVPN Phase 1, 2 und 3?
+A: **Phase 1: Verkehr nur über den Hub. Phase 2: direkte Spoke-to-Spoke-Tunnel, aber der Hub darf Next Hops nicht ändern und nicht zusammenfassen. Phase 3: direkte Tunnel per NHRP-Redirect und -Shortcut, der Hub darf zusammenfassen.** Phase 3 kombiniert also kleine Routingtabellen mit direkten Wegen.
+T: Vergleich Mittel
+
+Q: Welchen Tunnel-Modus haben Hub und Spokes in DMVPN Phase 1?
+A: **Der Hub hat mGRE (`tunnel mode gre multipoint`), die Spokes normalen Punkt-zu-Punkt-GRE mit `tunnel destination` zum Hub.** Deshalb gibt es in Phase 1 keine direkten Spoke-Tunnel: Ein Spoke-Interface kennt nur ein Ziel.
+T: Wissen Leicht
+
+Q: Warum skaliert DMVPN besser als einzelne GRE-over-IPsec-Tunnel zu jedem Spoke?
+A: **Weil der Hub nur ein mGRE-Interface braucht, egal wie viele Spokes es gibt.** Neue Spokes melden sich per NHRP selbst an, der Hub muss für sie nicht umkonfiguriert werden.
+T: Wissen Leicht
+
+# 2.3.a | DMVPN: GRE und mGRE
+
+Q: Wie sieht die Grundkonfiguration des mGRE-Tunnels auf einem DMVPN-Hub aus?
+A:
+```
+interface Tunnel0
+ ip address 10.0.0.1 255.255.255.0
+ tunnel source GigabitEthernet0/0
+ tunnel mode gre multipoint
+ tunnel key 100
+```
+Eine `tunnel destination` gibt es nicht, NHRP liefert die Ziele. `tunnel key` muss auf allen Routern gleich sein, wenn er genutzt wird.
+T: CLI Mittel
+
+Q: Wie viel Overhead bringt GRE mit, und welche MTU setzt man deshalb auf DMVPN-Tunneln üblicherweise?
+A: **GRE braucht 24 Byte (20 Byte neuer IP-Header plus 4 Byte GRE), mit IPsec kommen bis zu rund 60 Byte dazu. Üblich sind `ip mtu 1400` und `ip tcp adjust-mss 1360`.** So passen Pakete samt Kapselung in 1500 Byte, und TCP-Verbindungen handeln gleich passende Segmente aus.
+T: Rechnen Mittel
+
+Q: Über eine DMVPN-Strecke gehen Pings durch, aber Webseiten laden nicht vollständig. Was ist der wahrscheinliche Grund?
+A: **Ein MTU-Problem: Große Pakete passen samt Kapselung nicht durch, kleine schon.** Oft blockiert eine Firewall die ICMP-Meldungen für Path MTU Discovery. `ip tcp adjust-mss 1360` am Tunnel löst das für TCP.
+T: Szenario Mittel
+
+Q: Was passiert, wenn zwei Tunnel auf einem Router dieselbe `tunnel source` und denselben Modus haben, aber keinen `tunnel key`?
+A: **Der Router kann eingehende GRE-Pakete keinem Tunnel eindeutig zuordnen.** Mit unterschiedlichem `tunnel key` oder mit `tunnel protection ... shared` bei IPsec lassen sich solche Tunnel trennen.
+T: Falle Schwer
+
+Q: Was ist eine Front-Door-VRF (FVRF) bei DMVPN?
+A: **Das Internet-Interface liegt in einer eigenen VRF, der Tunnel nutzt sie mit `tunnel vrf INTERNET` für die Außenadressen.** So kann es intern und außen je eine eigene Default-Route geben, ohne dass sie sich stören.
+T: Wissen Schwer
+
+# 2.3.b | DMVPN: NHRP
+S: https://www.rfc-editor.org/rfc/rfc2332 | RFC 2332: NBMA Next Hop Resolution Protocol (NHRP)
+
+Q: Welche Aufgabe hat NHRP in DMVPN?
+A: **Es ordnet die Tunnel-Adresse eines Routers seiner öffentlichen (NBMA-)Adresse zu.** Spokes melden diese Zuordnung beim Hub an. Will ein Spoke einen anderen direkt erreichen, fragt er den Hub nach dessen NBMA-Adresse.
+T: Wissen Leicht
+
+Q: Wie meldet sich ein Spoke beim Hub mit Tunnel-IP 10.0.0.1 und öffentlicher IP 203.0.113.1 an (neue Kurzsyntax)?
+A:
+```
+interface Tunnel0
+ ip nhrp network-id 1
+ ip nhrp nhs 10.0.0.1 nbma 203.0.113.1 multicast
+```
+Diese Zeile ersetzt die alte Kombination aus `ip nhrp map`, `ip nhrp map multicast` und `ip nhrp nhs`.
+T: CLI Mittel
+
+Q: Was muss der Hub konfigurieren, damit Routing-Multicasts (z. B. EIGRP-Hellos) alle Spokes erreichen?
+A: **`ip nhrp map multicast dynamic` am Tunnel.** Der Hub repliziert Multicast dann an jeden Spoke, der sich per NHRP angemeldet hat. Ohne die Zeile bleiben Routing-Nachbarschaften zu den Spokes aus.
+T: CLI Mittel
+
+Q: Muss die `ip nhrp network-id` auf Hub und Spokes gleich sein?
+A: **Nein, sie ist nur lokal bedeutsam.** Sie bindet ein Tunnel-Interface an eine NHRP-Domäne auf diesem Router. Gleiche Werte sind trotzdem üblich, damit die Konfiguration übersichtlich bleibt.
+T: Falle Mittel
+
+Q: Ein Spoke registriert sich nicht am Hub, alles andere stimmt. Auf dem Hub steht `ip nhrp authentication CISCO`, auf dem Spoke `ip nhrp authentication cisco`. Ist das der Fehler?
+A: **Ja, der NHRP-Authentisierungsstring ist case-sensitiv und muss gleich sein.** Er steht unverschlüsselt im Paket und schützt nicht wirklich, er verhindert nur versehentliche Anmeldungen in der falschen DMVPN-Wolke.
+T: Szenario Leicht
+
+Q: Mit welchem Befehl prüfst du, welche Spokes beim Hub registriert sind?
+A: **`show dmvpn`.** Pro Gegenstelle siehst du NBMA- und Tunnel-Adresse, Zustand (UP, NHRP, IKE) und Attribut: S für statisch, D für dynamisch gelernt. Details liefert `show ip nhrp`.
+T: CLI Leicht
+
+Q: In `show dmvpn` auf einem Spoke steht der Hub mit Zustand „NHRP“ statt „UP“. Was heißt das?
+A: **Der Spoke hat eine Registrierung geschickt, aber keine Antwort erhalten.** Ursachen: Hub nicht erreichbar (UDP 500/4500 oder GRE blockiert), falsche NBMA-Adresse in `ip nhrp nhs`, unterschiedliche NHRP-Authentisierung oder ein IPsec-Problem.
+T: Exhibit Mittel
+
+Q: Was ist der Unterschied zwischen Next Hop Server (NHS) und Next Hop Client (NHC)?
+A: **Der NHS ist der Hub, der die Zuordnungen aller Spokes speichert und Anfragen beantwortet. Die Spokes sind NHCs, die sich registrieren und den NHS fragen.**
+T: Vergleich Leicht
+
+# 2.3.c | DMVPN: IPsec
+
+Q: Wie schützt du einen DMVPN-Tunnel mit IPsec?
+A:
+```
+crypto ipsec transform-set TS esp-aes 256 esp-sha256-hmac
+ mode transport
+crypto ipsec profile DMVPN
+ set transform-set TS
+interface Tunnel0
+ tunnel protection ipsec profile DMVPN
+```
+Das Profil wird direkt an den Tunnel gehängt. Eine Crypto Map mit ACL braucht DMVPN nicht.
+T: CLI Mittel
+
+Q: Warum nutzt man bei DMVPN den IPsec-Transport-Mode statt Tunnel-Mode?
+A: **Weil GRE schon einen neuen äußeren IP-Header liefert.** Transport-Mode verschlüsselt das GRE-Paket ohne zusätzlichen IP-Header und spart so 20 Byte. Tunnel-Mode funktioniert auch, kostet aber mehr Overhead.
+T: Wissen Mittel
+
+Q: Die Spokes haben dynamische öffentliche Adressen. Wie konfigurierst du einen Pre-Shared Key für IKEv1 am Hub?
+A: **Mit einer Wildcard-Adresse: `crypto isakmp key Geheim123 address 0.0.0.0`.** So akzeptiert der Hub den Schlüssel von jeder Gegenstelle. Bei IKEv2 entspricht das einem Keyring-Eintrag mit `address 0.0.0.0 0.0.0.0`.
+T: CLI Mittel
+
+Q: Mit welchen Befehlen prüfst du, ob IPsec auf dem DMVPN-Tunnel aufgebaut ist und Pakete verschlüsselt?
+A: **`show crypto isakmp sa` (bzw. `show crypto ikev2 sa`) für Phase 1 und `show crypto ipsec sa` für Phase 2.** Steigen in `show crypto ipsec sa` die Zähler „encaps“ und „decaps“, läuft Verkehr verschlüsselt in beide Richtungen.
+T: CLI Leicht
+
+Q: `show crypto ipsec sa` zeigt viele „encaps“, aber „decaps“ bleibt bei 0. Was bedeutet das?
+A: **Der Router verschlüsselt und sendet, bekommt aber nichts Verschlüsseltes zurück.** Ursache liegt meist auf dem Weg oder bei der Gegenseite: ESP (IP 50) oder UDP 4500 blockiert, Rückroute fehlt, oder die Gegenseite verwirft die Pakete.
+T: Exhibit Mittel
+
+Q: Welche Ports und Protokolle muss eine Firewall für DMVPN mit IPsec freigeben?
+A: **UDP 500 (IKE), UDP 4500 (NAT-Traversal) und IP-Protokoll 50 (ESP).** GRE (IP 47) läuft innerhalb von IPsec und muss nicht eigens freigegeben werden, solange alles verschlüsselt ist.
+T: Wissen Leicht
+
+Q: Ein Spoke sitzt hinter einem NAT-Router. Funktioniert DMVPN trotzdem?
+A: **Ja, mit NAT-Traversal: IPsec wird in UDP 4500 gepackt, und NHRP lernt die öffentliche Adresse nach dem NAT.** Spoke-to-Spoke-Tunnel zwischen zwei Spokes hinter NAT sind schwieriger und hängen vom NAT-Typ ab.
+T: Wissen Schwer
+
+# 2.3.d | DMVPN: Dynamische Nachbarn
+
+Q: Was heißt „dynamische Nachbarn“ bei DMVPN?
+A: **Der Hub kennt die Spokes nicht vorab, sie melden sich per NHRP an und bauen danach die Routing-Nachbarschaft auf.** Für einen neuen Spoke ändert man nichts am Hub. Erst die NHRP-Registrierung macht den Spoke für Multicast und Routing sichtbar.
+T: Wissen Leicht
+
+Q: Wie konfigurierst du BGP am Hub, damit er Sitzungen von beliebigen Spokes aus 10.0.0.0/24 annimmt?
+A:
+```
+router bgp 65000
+ neighbor SPOKES peer-group
+ neighbor SPOKES remote-as 65000
+ bgp listen range 10.0.0.0/24 peer-group SPOKES
+```
+Mit `bgp listen range` wartet der Hub passiv auf Spokes in diesem Bereich. Jeder Spoke konfiguriert den Hub normal als Nachbarn.
+T: CLI Schwer
+
+Q: Welchen OSPF-Netzwerktyp nutzt du für DMVPN Phase 2, und warum?
+A: **Broadcast, mit dem Hub als DR und `ip ospf priority 0` auf allen Spokes.** Broadcast lässt den Next Hop unverändert, Spokes sehen also einander als Next Hop und bauen direkte Tunnel. Point-to-Multipoint würde den Hub als Next Hop eintragen.
+T: Szenario Schwer
+
+Q: Welchen OSPF-Netzwerktyp nutzt man bei DMVPN Phase 3 oft, und warum geht das dort?
+A: **Point-to-Multipoint.** Der Hub ist zwar Next Hop für alles, aber in Phase 3 lenkt NHRP-Redirect den Verkehr trotzdem auf direkte Spoke-Tunnel um. Es gibt keine DR-Wahl, die bei einem ausgefallenen Hub stören könnte.
+T: Szenario Schwer
+
+Q: Was brauchst du bei EIGRP auf dem Hub für DMVPN Phase 2?
+A: **`no ip split-horizon eigrp 100` und `no ip next-hop-self eigrp 100` am Tunnel-Interface.** Ohne den ersten Befehl gibt der Hub Spoke-Routen nicht an andere Spokes weiter. Ohne den zweiten trägt er sich selbst als Next Hop ein, und der Verkehr läuft immer über ihn.
+T: CLI Schwer
+
+Q: Ein Spoke hat die EIGRP-Nachbarschaft zum Hub, die anderen Spokes erscheinen aber nicht als EIGRP-Nachbarn. Ist das ein Fehler?
+A: **Nein, in DMVPN gibt es Routing-Nachbarschaften nur zwischen Hub und Spokes.** Zwischen Spokes laufen keine Hellos, auch nicht über direkte Tunnel. Die Routen der anderen Spokes kommen über den Hub.
+T: Falle Mittel
+
+# 2.3.e | DMVPN: Spoke-to-Spoke
+
+Q: Welche zwei Befehle machen aus einer Phase-2-DMVPN eine Phase-3-DMVPN?
+A: **`ip nhrp redirect` am Hub-Tunnel und `ip nhrp shortcut` an den Spoke-Tunneln.** Der Hub meldet einem Spoke, dass es einen direkteren Weg gibt. Der Spoke fragt dann per NHRP nach und trägt eine Shortcut-Route ein.
+T: CLI Mittel
+
+Q: Wie läuft in Phase 3 der Aufbau eines Spoke-to-Spoke-Tunnels ab?
+A: **Das erste Paket geht über den Hub. Der Hub merkt, dass es auf demselben Tunnel wieder hinausgeht, und schickt dem Absender einen NHRP-Redirect. Der Spoke schickt eine Resolution Request, bekommt die NBMA-Adresse des Ziel-Spokes und baut den direkten Tunnel.** Danach läuft der Verkehr direkt.
+T: Wissen Mittel
+
+Q: Woran erkennst du auf einem Phase-3-Spoke, dass ein Shortcut installiert wurde?
+A: **In `show ip route` steht eine Route mit dem Code H (NHRP) und AD 250, deren Next Hop die Tunnel-Adresse des anderen Spokes ist.** `show ip nhrp shortcut` listet ihn ebenfalls. In `show dmvpn` erscheint der andere Spoke mit Attribut D.
+T: Exhibit Mittel
+
+Q: Warum darf der Hub in DMVPN Phase 2 nicht zusammenfassen, in Phase 3 aber schon?
+A: **In Phase 2 entscheidet die Routingtabelle des Spokes über den direkten Tunnel, er braucht deshalb die genaue Route mit dem anderen Spoke als Next Hop. In Phase 3 bringt NHRP die genaue Route selbst.** Der Hub kann darum in Phase 3 sogar nur eine Default-Route verteilen.
+T: Vergleich Schwer
+
+Q: Spoke-to-Spoke-Tunnel in Phase 2 bauen sich nicht auf, der Verkehr läuft immer über den Hub. Der Hub nutzt EIGRP mit Standardeinstellungen. Was ist die Ursache?
+A: **Der Hub setzt sich als Next Hop (`ip next-hop-self eigrp` ist Standard).** Die Spokes schicken deshalb alles an den Hub und lösen keine NHRP-Anfrage für den anderen Spoke aus. Lösung: `no ip next-hop-self eigrp 100` am Hub-Tunnel.
+T: Szenario Mittel
+
+Q: Was passiert mit einem Spoke-to-Spoke-Tunnel, wenn eine Weile kein Verkehr darüber läuft?
+A: **Er wird abgebaut, sobald der NHRP-Eintrag abläuft.** Die Haltezeit stellt man mit `ip nhrp holdtime` ein (Standard 7200 s, Cisco empfiehlt 300 bis 600 s). Beim nächsten Paket baut sich der Tunnel neu auf.
+T: Wissen Mittel

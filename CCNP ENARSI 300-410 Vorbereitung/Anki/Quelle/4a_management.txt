@@ -1,0 +1,215 @@
+# 4.1.a | Gerätezugang: Konsole und VTY
+
+Q: Wie stellst du ein, dass Konsolensitzungen nach 10 Minuten ohne Eingabe enden und Log-Meldungen deine Eingabe nicht zerreißen?
+A:
+```
+line con 0
+ exec-timeout 10 0
+ logging synchronous
+```
+`exec-timeout` nimmt Minuten und Sekunden. `logging synchronous` druckt Meldungen und stellt danach deine angefangene Zeile neu dar.
+T: CLI Leicht
+
+Q: Was bewirkt `exec-timeout 0 0` auf einer Line, und warum ist das ein Risiko?
+A: **Die Sitzung endet nie von selbst.** Eine vergessene Sitzung auf einer VTY bleibt offen und belegt eine Line. An der Konsole kann ein Unbefugter eine angemeldete Sitzung einfach weiterbenutzen.
+T: Wissen Leicht
+
+Q: Ein Admin bekommt beim SSH-Login sofort „Connection refused“, obwohl SSH konfiguriert ist. `show users` zeigt alle VTYs belegt. Was tust du?
+A: **Hängende Sitzungen mit `clear line vty 2` (bzw. der betroffenen Nummer) beenden und `exec-timeout` setzen.** Sind alle VTYs belegt, nimmt der Router keine weiteren Verbindungen an. Viele Plattformen haben dafür `line vty 0 15` mit 16 Lines.
+T: Szenario Mittel
+
+Q: Was erlaubt `transport input ssh` unter `line vty 0 15`, und was nicht?
+A: **Nur SSH-Verbindungen auf die VTYs, Telnet wird abgelehnt.** Mit `transport input none` ist gar kein Fernzugang über diese Lines möglich. Ältere Konfigurationen haben oft noch `transport input telnet ssh`.
+T: Wissen Leicht
+
+Q: Unter `line vty 0 4` steht `login`, aber kein `password`. Was passiert bei einem Telnet-Versuch (ohne AAA)?
+A: **Die Verbindung wird mit „Password required, but none set“ abgewiesen.** `login` verlangt ein Line-Passwort. Mit `login local` werden stattdessen die lokalen Benutzer abgefragt.
+T: Falle Leicht
+
+# 4.1.b | Gerätezugang: Telnet, HTTP, HTTPS, SSH, SCP
+S: https://www.rfc-editor.org/rfc/rfc4253 | RFC 4253: The Secure Shell (SSH) Transport Layer Protocol
+
+Q: Welche Schritte braucht ein Router, damit SSH funktioniert?
+A: **Hostname (nicht „Router“), Domainname, RSA-Schlüssel, lokaler Benutzer oder AAA und SSH auf den VTYs erlaubt.**
+```
+hostname R1
+ip domain name example.local
+crypto key generate rsa modulus 2048
+ip ssh version 2
+username admin privilege 15 algorithm-type scrypt secret Geheim123
+line vty 0 15
+ login local
+ transport input ssh
+```
+T: CLI Leicht
+
+Q: `crypto key generate rsa` schlägt mit „Please define a hostname other than Router“ fehl. Warum braucht SSH das?
+A: **Weil der Schlüsselname aus Hostname und Domainname gebildet wird.** Mit dem Standardnamen „Router“ und ohne `ip domain name` erzeugt IOS keinen Schlüssel, und ohne Schlüssel startet der SSH-Server nicht.
+T: Falle Leicht
+
+Q: Warum verlangt `ip ssh version 2` eine RSA-Schlüssellänge von mindestens 768 Bit, und welche Länge nimmt man heute?
+A: **SSHv2 lässt kürzere Schlüssel nicht zu. Heute nimmt man mindestens 2048 Bit, besser 3072 oder 4096.** Mit `show ip ssh` siehst du Version, Schlüssellänge und aktive Algorithmen.
+T: Wissen Mittel
+
+Q: Wie aktivierst du den HTTPS-Server für die Weboberfläche und schaltest HTTP ab?
+A:
+```
+no ip http server
+ip http secure-server
+ip http authentication local
+```
+HTTP überträgt Anmeldedaten im Klartext. `ip http authentication local` sorgt dafür, dass die lokalen Benutzer statt des Enable-Passworts gefragt werden.
+T: CLI Leicht
+
+Q: Was braucht ein Router, damit du per SCP Dateien auf ihn kopieren kannst?
+A: **`ip scp server enable` und AAA mit Autorisierung: `aaa new-model`, `aaa authentication login default local` und `aaa authorization exec default local`.** SCP nutzt SSH und braucht für den Benutzer Privilege 15. Ohne EXEC-Autorisierung lehnt der Router die Übertragung ab.
+T: CLI Mittel
+
+Q: Warum sollte Telnet zur Verwaltung nicht mehr genutzt werden?
+A: **Weil Benutzername, Passwort und alle Befehle im Klartext übertragen werden.** Jeder, der den Verkehr mitschneidet, sieht sie. SSH verschlüsselt die ganze Sitzung.
+T: Wissen Leicht
+
+Q: Ein Admin kann per SSH auf R1, aber nicht von einem neuen Jump-Host aus. Die SSH-Konfiguration ist korrekt. Was prüfst du?
+A: **Die `access-class` auf den VTYs.** Fehlt die neue Adresse in der ACL, lehnt der Router die Verbindung ab. Mit `show ip access-lists` siehst du, ob die `deny`-Zähler steigen.
+T: Szenario Leicht
+
+# 4.1.c | Dateiübertragung: TFTP und FTP
+
+Q: Wie sicherst du die laufende Konfiguration auf einen TFTP-Server?
+A: **`copy running-config tftp://10.1.1.50/r1-config.txt`.** TFTP nutzt UDP 69, kennt keine Anmeldung und keine Verschlüsselung. Für sensible Konfigurationen ist SCP besser.
+T: CLI Leicht
+
+Q: Der TFTP-Server nimmt Dateien nur von bekannten Router-Adressen an. Der Router schickt aber von wechselnden Interfaces. Wie löst du das?
+A: **Mit `ip tftp source-interface Loopback0`.** Dann geht TFTP immer von der Loopback-Adresse aus. Für FTP heißt der Befehl `ip ftp source-interface`.
+T: CLI Mittel
+
+Q: Wie gibst du Benutzername und Passwort für FTP-Kopien vor, ohne sie in jede URL zu schreiben?
+A: **Mit `ip ftp username backup` und `ip ftp password Geheim123`.** IOS nutzt diese Daten bei jedem `copy ... ftp:`. FTP verwendet TCP 21 für die Steuerung und überträgt die Anmeldung im Klartext.
+T: CLI Mittel
+
+Q: Ein `copy tftp: flash:` bricht bei großen Images ab, kleine Dateien gehen. Was ist eine typische Ursache?
+A: **TFTP verliert bei Paketverlust oder Firewalls mit kurzem UDP-Timeout die Übertragung.** Außerdem können alte TFTP-Server keine Dateien über 32 MB. Für Images ist SCP, FTP oder HTTP verlässlicher.
+T: Szenario Mittel
+
+# 4.2 | SNMP v2c und v3
+S: https://www.rfc-editor.org/rfc/rfc3414 | RFC 3414: User-based Security Model (USM) for SNMPv3
+S: https://www.rfc-editor.org/rfc/rfc3415 | RFC 3415: View-based Access Control Model (VACM) for SNMP
+
+Q: Welche Ports nutzt SNMP?
+A: **UDP 161 für Abfragen an das Gerät, UDP 162 für Traps und Informs an den Manager.** Für ACLs und Firewalls bedeutet das: Der Manager fragt auf 161, das Gerät meldet auf 162.
+T: Wissen Leicht
+
+Q: Wie erlaubst du SNMPv2c-Lesezugriff mit Community „Monitor“ nur für den Server 10.1.1.50?
+A:
+```
+access-list 10 permit host 10.1.1.50
+snmp-server community Monitor RO 10
+```
+Die ACL am Ende begrenzt, wer die Community nutzen darf. Ohne sie reicht die Kenntnis des Strings.
+T: CLI Leicht
+
+Q: Was ist der Sicherheitsnachteil von SNMPv2c gegenüber v3?
+A: **v2c schickt die Community im Klartext und verschlüsselt keine Daten. v3 bietet Benutzer mit Authentisierung (SHA) und Verschlüsselung (AES).** Wer v2c-Verkehr mitschneidet, kennt den Community-String.
+T: Vergleich Leicht
+
+Q: Welche Sicherheitsstufen kennt SNMPv3?
+A: **noAuthNoPriv (nur Benutzername), authNoPriv (mit Authentisierung) und authPriv (Authentisierung und Verschlüsselung).** Im Gruppenbefehl heißen sie `noauth`, `auth` und `priv`.
+T: Wissen Leicht
+
+Q: Wie richtest du einen SNMPv3-Benutzer mit SHA und AES-128 ein?
+A:
+```
+snmp-server group NMS v3 priv
+snmp-server user nmsuser NMS v3 auth sha AuthPass123 priv aes 128 PrivPass123
+```
+Die Gruppe legt die Sicherheitsstufe fest, der Benutzer die Schlüssel.
+T: CLI Mittel
+
+Q: Du siehst den SNMPv3-Benutzer nicht in der laufenden Konfiguration. Ist er verloren?
+A: **Nein, SNMPv3-Benutzer stehen absichtlich nicht in `show running-config`.** Du siehst sie mit `show snmp user`. Beim Kopieren der Konfiguration auf ein anderes Gerät musst du sie deshalb neu anlegen.
+T: Falle Mittel
+
+Q: Nach einer Änderung der SNMP Engine ID funktionieren alle SNMPv3-Benutzer nicht mehr. Warum?
+A: **Die Schlüssel der Benutzer werden aus Passwort und Engine ID abgeleitet.** Ändert sich die Engine ID, passen die gespeicherten Schlüssel nicht mehr. Die Benutzer müssen neu angelegt werden.
+T: Falle Schwer
+
+Q: Was ist der Unterschied zwischen Traps und Informs?
+A: **Ein Trap wird ohne Bestätigung verschickt. Ein Inform wird vom Manager bestätigt und sonst wiederholt.** Informs sind zuverlässiger, belasten das Gerät aber mehr, weil es sie bis zur Bestätigung speichert. Informs gibt es ab SNMPv2c.
+T: Vergleich Leicht
+
+Q: Wie schickst du SNMPv3-Traps an 10.1.1.50 mit Benutzer nmsuser?
+A:
+```
+snmp-server enable traps
+snmp-server host 10.1.1.50 version 3 priv nmsuser
+```
+Ohne `snmp-server enable traps` werden keine Traps erzeugt, auch wenn ein Host eingetragen ist.
+T: CLI Mittel
+
+Q: Wozu dient eine SNMP-View?
+A: **Sie legt fest, welche Teile der MIB eine Gruppe sehen oder ändern darf.** Eine View enthält oder schließt OID-Bäume aus. In der Gruppe weist du sie mit `read` oder `write` zu.
+T: Wissen Mittel
+
+Q: Das Monitoring zeigt nach jedem Neustart falsche Interface-Statistiken, weil die Interfaces andere Nummern bekommen. Was hilft?
+A: **`snmp-server ifindex persist`.** Damit behalten Interfaces ihren SNMP-ifIndex über Neustarts hinweg. Sonst ordnet das Monitoring Messwerte dem falschen Interface zu.
+T: Szenario Mittel
+
+Q: Der Monitoring-Server bekommt von R1 keine Antworten auf SNMP-Abfragen. Was prüfst du der Reihe nach?
+A: **Erreichbarkeit per UDP 161, Community bzw. v3-Benutzer und Sicherheitsstufe, die ACL am Community- oder Gruppenbefehl und CoPP.** `show snmp` zeigt Zähler für fehlerhafte Community-Namen und abgelehnte Pakete.
+T: Szenario Mittel
+
+# 4.3 | Logging, Debugging und Telemetrie
+S: https://www.rfc-editor.org/rfc/rfc5424 | RFC 5424: The Syslog Protocol
+
+Q: Welche Syslog-Severity-Stufen gibt es, von 0 bis 7?
+A: **0 Emergencies, 1 Alerts, 2 Critical, 3 Errors, 4 Warnings, 5 Notifications, 6 Informational, 7 Debugging.** Je kleiner die Zahl, desto ernster die Meldung.
+H: Eselsbrücke: „Every Awesome Cisco Engineer Will Need Ice cream Daily“.
+T: Wissen Leicht
+
+Q: Mit `logging trap warnings` werden welche Meldungen an den Syslog-Server geschickt?
+A: **Stufe 0 bis 4, also Emergencies bis Warnings.** Die eingestellte Stufe und alle ernsteren werden gesendet. Meldungen über Interface-Zustände (Stufe 5 und 3) kommen also teilweise nicht an.
+T: Rechnen Leicht
+
+Q: Wie schickst du Logs mit Datum und Millisekunden an 10.1.1.50 und puffert zusätzlich lokal alles bis Debugging?
+A:
+```
+service timestamps log datetime msec localtime show-timezone
+logging host 10.1.1.50
+logging trap informational
+logging buffered 64000 debugging
+logging source-interface Loopback0
+```
+Syslog nutzt UDP 514. Ohne Zeitstempel sind Meldungen verschiedener Geräte nicht vergleichbar.
+T: CLI Mittel
+
+Q: Du bist per SSH auf R1 und siehst keine Log-Meldungen, obwohl `logging monitor` aktiv ist. Was fehlt?
+A: **`terminal monitor` in deiner Sitzung.** Log-Meldungen gehen standardmäßig nur an die Konsole. Für VTY-Sitzungen musst du sie pro Sitzung einschalten.
+T: Falle Leicht
+
+Q: Warum ist `debug ip packet` ohne Einschränkung auf einem produktiven Router gefährlich?
+A: **Es erzeugt für jedes prozessgeswitchte Paket eine Meldung und kann die CPU auslasten.** Besonders bei Ausgabe auf die langsame Konsole kann der Router unbedienbar werden. Mit ACL (`debug ip packet 100`) und Ausgabe nur in den Puffer bleibt es beherrschbar.
+T: Wissen Mittel
+
+Q: Wie beschränkst du Debug-Ausgaben auf ein Interface oder eine IP-Adresse?
+A: **Mit Conditional Debugging: `debug condition interface GigabitEthernet0/1` oder `debug condition ip 10.1.1.20`.** Danach aktivierte Debugs zeigen nur Ereignisse, die die Bedingung erfüllen. `show debugging` listet aktive Debugs und Bedingungen.
+T: CLI Mittel
+
+Q: Welcher Befehl beendet alle laufenden Debugs sofort?
+A: **`undebug all` (oder `no debug all`).** Bei hoher Last tippt man es notfalls blind, weil die Debug-Ausgabe die Eingabe überdeckt.
+T: CLI Leicht
+
+Q: Log-Meldungen von zwei Routern lassen sich nicht in eine Reihenfolge bringen. Was fehlt?
+A: **Synchrone Uhren per NTP und Zeitstempel mit Millisekunden.** Ohne NTP laufen die Uhren auseinander, ohne `service timestamps` fehlen die Zeiten ganz. `service sequence-numbers` hilft zusätzlich, Meldungen eines Geräts lückenlos zu ordnen.
+T: Szenario Leicht
+
+Q: Was ist modellgetriebene Telemetrie, und wie unterscheidet sie sich von SNMP-Polling?
+A: **Das Gerät schickt Daten nach YANG-Modellen selbst an einen Collector, periodisch oder bei Änderung (on-change).** Bei SNMP fragt der Manager jedes Mal neu ab. Telemetrie ist schneller und genauer, weil kein Polling-Intervall dazwischen liegt.
+T: Vergleich Mittel
+
+Q: Was ist der Unterschied zwischen Dial-in- und Dial-out-Telemetrie?
+A: **Bei Dial-in baut der Collector die Verbindung auf und abonniert Daten (z. B. per gNMI oder NETCONF). Bei Dial-out ist das Abo auf dem Gerät konfiguriert, und das Gerät verbindet sich zum Collector.** Dial-out überlebt Neustarts in der Konfiguration, Dial-in hängt an der Sitzung des Collectors.
+T: Vergleich Schwer
+
+Q: Ein Interface flattert, aber im Syslog-Server fehlen die „LINK-3-UPDOWN“-Meldungen. `logging trap` steht auf `errors`. Kommen sie dort an?
+A: **Die LINK-Meldungen schon (Stufe 3), die „LINEPROTO-5-UPDOWN“-Meldungen nicht (Stufe 5).** Sind also gar keine Meldungen da, liegt es nicht an der Stufe. Dann prüfst du `logging host`, Erreichbarkeit und Quelladresse.
+T: Falle Schwer

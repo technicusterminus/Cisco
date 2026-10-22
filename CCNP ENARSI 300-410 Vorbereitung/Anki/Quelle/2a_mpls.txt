@@ -1,0 +1,152 @@
+# 2.1 | MPLS: LSR, LDP, Label Switching, LSP
+S: https://www.rfc-editor.org/rfc/rfc3031 | RFC 3031: Multiprotocol Label Switching Architecture
+S: https://www.rfc-editor.org/rfc/rfc3032 | RFC 3032: MPLS Label Stack Encoding
+
+Q: Wie ist ein MPLS-Label aufgebaut, und wo sitzt es im Paket?
+A: **32 Bit zwischen Layer-2- und IP-Header: 20 Bit Label, 3 Bit Traffic Class (früher EXP), 1 Bit Bottom of Stack, 8 Bit TTL.** Das S-Bit zeigt, ob noch ein weiteres Label folgt. Auf Ethernet kennzeichnet EtherType 0x8847 ein MPLS-Paket.
+T: Wissen Leicht
+
+Q: Welche Aufgaben haben Ingress-LER, LSR und Egress-LER?
+A: **Ingress-LER setzt das Label (Push), LSR tauscht es aus (Swap), Egress-LER entfernt es (Pop) und leitet per IP weiter.** Ein LSR im Kern schaut nur auf das oberste Label, nicht in den IP-Header.
+T: Wissen Leicht
+
+Q: Was ist ein LSP, und in welche Richtung gilt er?
+A: **Der Label Switched Path ist der Weg, den ein gelabeltes Paket vom Ingress- zum Egress-LER nimmt.** Er ist immer unidirektional. Für den Rückweg gibt es einen eigenen LSP, der anders verlaufen kann.
+T: Wissen Leicht
+
+Q: Was ist Penultimate Hop Popping (PHP), und warum gibt es das?
+A: **Der vorletzte Router entfernt das Transport-Label, sodass der Egress-Router nur noch einen Lookup machen muss.** Der Egress-Router signalisiert das, indem er für sein Präfix das Label 3 (Implicit Null) verteilt. Ohne PHP müsste er erst das Label und danach die IP-Adresse nachschlagen.
+T: Wissen Mittel
+
+Q: Was ist der Unterschied zwischen Implicit Null (Label 3) und Explicit Null (Label 0)?
+A: **Bei Implicit Null nimmt der vorletzte Router das Label ganz weg. Bei Explicit Null schickt er ein Label 0 mit, das der Egress-Router entfernt.** Explicit Null nutzt man, damit die Traffic-Class-Bits für QoS bis zum letzten Router erhalten bleiben.
+T: Vergleich Mittel
+
+Q: Über welche Ports und Adressen arbeitet LDP?
+A: **Discovery per UDP 646 an 224.0.0.2, die Sitzung selbst per TCP 646.** Die Hellos finden Nachbarn auf dem Link, danach bauen sie eine TCP-Verbindung zwischen ihren Transport-Adressen auf.
+S: https://www.rfc-editor.org/rfc/rfc5036 | RFC 5036: LDP Specification
+T: Wissen Leicht
+
+Q: Zwei LSRs sehen sich in `show mpls ldp discovery`, aber `show mpls ldp neighbor` bleibt leer. Was ist die häufigste Ursache?
+A: **Die Transport-Adresse (standardmäßig die LDP-Router-ID, meist eine Loopback) ist für den Nachbarn nicht erreichbar.** Die Hellos gehen per Multicast auf dem Link, die TCP-Sitzung aber an die Loopback. Fehlt die Loopback im IGP, kommt TCP 646 nicht zustande.
+S: https://www.rfc-editor.org/rfc/rfc5036 | RFC 5036: LDP Specification
+T: Szenario Mittel
+
+Q: Wie aktivierst du LDP auf allen OSPF-Interfaces von Area 0 auf einmal?
+A: **Mit `mpls ldp autoconfig area 0` unter `router ospf 1`.** Alternativ einzeln mit `mpls ip` an jedem Interface. Mit `mpls ldp router-id Loopback0 force` legst du die Router-ID fest.
+T: CLI Mittel
+
+Q: Was ist der Unterschied zwischen LIB und LFIB?
+A: **Die LIB enthält alle Labels, die der Router von allen Nachbarn für ein Präfix gelernt hat. Die LFIB enthält nur das Label des Nachbarn, der laut Routingtabelle der Next Hop ist.** Die LIB hält Alternativen vor, damit nach einer Topologieänderung sofort das passende Label bereitsteht.
+T: Vergleich Mittel
+
+Q: Mit welchen Befehlen prüfst du LDP-Labels und das Forwarding?
+A: **`show mpls ldp bindings` zeigt die LIB, `show mpls forwarding-table` die LFIB.** In der LFIB siehst du pro Präfix das lokale Label, das ausgehende Label (oder „Pop Label“), Ausgangsinterface und Next Hop.
+T: CLI Leicht
+
+Q: In `show mpls forwarding-table` steht bei 4.4.4.4/32 als Outgoing Label „Pop Label“. Was bedeutet das?
+A: **Dieser Router ist der vorletzte Hop zu 4.4.4.4 und entfernt das Label (PHP).** Der Nachbar hat für dieses Präfix Implicit Null gemeldet, weil es sein eigenes Netz ist.
+T: Exhibit Mittel
+
+Q: Warum sollten die Loopbacks der PE-Router im IGP als /32 auftauchen?
+A: **Weil LDP für genau dieses Präfix ein Label verteilt und der LSP zum PE daran hängt.** Wird die Loopback etwa als /24 gemeldet, endet der LSP zu früh oder es gibt keinen durchgehenden LSP. OSPF meldet Loopbacks automatisch als /32.
+T: Falle Schwer
+
+Q: Ein MPLS-L3VPN-Paket hat zwei Labels. Um wie viele Bytes wird es größer?
+A: **Um 8 Bytes, 4 pro Label.** Bei 1500 Byte IP-MTU braucht der Kern also mindestens 1508 Byte Label-MTU, sonst werden große Pakete fragmentiert oder verworfen. Darum setzt man im Kern oft eine größere MTU.
+T: Rechnen Leicht
+
+Q: Was bewirkt `no mpls ip propagate-ttl`?
+A: **Der Ingress-LER kopiert die IP-TTL nicht ins Label, sondern setzt 255.** Ein Traceroute durch das MPLS-Netz zeigt dann nur Ingress- und Egress-Router, der Kern bleibt verborgen.
+T: Wissen Mittel
+
+Q: Welche Label-Werte sind reserviert?
+A: **0 bis 15.** Wichtig sind 0 (IPv4 Explicit Null), 2 (IPv6 Explicit Null) und 3 (Implicit Null). Dynamisch vergebene Labels beginnen bei IOS ab 16.
+T: Wissen Leicht
+
+Q: Nach welchem Verfahren verteilt LDP in IOS standardmäßig Labels?
+A: **Downstream Unsolicited mit Liberal Label Retention und Independent Control.** Jeder Router vergibt Labels für seine Präfixe, ohne gefragt zu werden. Er behält alle empfangenen Labels, auch die von Nicht-Next-Hops, und wartet nicht auf den Downstream-Nachbarn.
+T: Wissen Schwer
+
+Q: Was ist eine FEC?
+A: **Eine Forwarding Equivalence Class: eine Gruppe von Paketen, die gleich behandelt und gleich weitergeleitet werden.** Bei LDP entspricht eine FEC meist einem IGP-Präfix, etwa der Loopback eines PE.
+T: Wissen Leicht
+
+Q: Was ist der Vorteil von MPLS gegenüber reinem IP-Routing im Provider-Kern?
+A: **Der Kern braucht keine Kundenrouten und keine vollständigen BGP-Tabellen.** P-Router schalten nur Labels zum Ziel-PE. Das ermöglicht L3VPNs mit überlappenden Kundennetzen und Traffic Engineering.
+T: Wissen Leicht
+
+# 2.2 | MPLS Layer-3-VPN
+S: https://www.rfc-editor.org/rfc/rfc4364 | RFC 4364: BGP/MPLS IP Virtual Private Networks (VPNs)
+
+Q: Welche Rollen haben CE-, PE- und P-Router in einem MPLS-L3VPN?
+A: **CE ist der Kundenrouter, PE der Provider-Rand mit den Kunden-VRFs, P der Provider-Kern.** Nur PEs kennen Kundenrouten. CEs wissen nichts von MPLS, P-Router nichts von Kunden.
+T: Wissen Leicht
+
+Q: Wozu dient der Route Distinguisher (RD)?
+A: **Er macht gleiche Kundenpräfixe im Provider-BGP eindeutig.** Aus 10.1.0.0/16 von Kunde A mit RD 65000:1 wird die VPNv4-Route 65000:1:10.1.0.0/16. Der RD sagt nichts darüber, welche VRF die Route importiert.
+T: Wissen Leicht
+
+Q: Wozu dient das Route Target (RT), und worin unterscheidet es sich vom RD?
+A: **Das RT steuert, welche VRF eine Route importiert. Der RD macht sie nur eindeutig.** Die VRF exportiert Routen mit einem RT als Extended Community. Jede VRF, die dieses RT importiert, übernimmt die Route. Damit lassen sich auch gemeinsame Dienste für mehrere Kunden bauen.
+T: Vergleich Mittel
+
+Q: Wie ist eine VPNv4-Adresse aufgebaut?
+A: **64 Bit RD plus 32 Bit IPv4-Präfix, also 96 Bit.** MP-BGP transportiert diese Adressen in der Address Family VPNv4 zwischen den PEs.
+T: Wissen Mittel
+
+Q: Welche zwei Labels trägt ein Paket in einem MPLS-L3VPN, und wer vergibt sie?
+A: **Außen das Transport-Label (LDP) zum Ziel-PE, innen das VPN-Label (MP-BGP) für die Ziel-VRF.** Die P-Router schalten nur das äußere Label. Der Ziel-PE erkennt am inneren, in welche VRF das Paket gehört.
+T: Wissen Mittel
+
+Q: Wie tauschen zwei PEs ihre VPN-Routen aus?
+A: **Per MP-iBGP in der Address Family VPNv4, meist zwischen ihren Loopbacks.**
+```
+router bgp 65000
+ neighbor 4.4.4.4 remote-as 65000
+ neighbor 4.4.4.4 update-source Loopback0
+ address-family vpnv4
+  neighbor 4.4.4.4 activate
+```
+Beim Aktivieren in VPNv4 ergänzt IOS automatisch `send-community extended`, denn ohne Extended Communities gäbe es keine RTs.
+T: CLI Mittel
+
+Q: Wie konfigurierst du auf einem PE die VRF KUNDE-A mit RD 65000:10, die das RT 65000:10 importiert und exportiert?
+A:
+```
+vrf definition KUNDE-A
+ rd 65000:10
+ address-family ipv4
+  route-target export 65000:10
+  route-target import 65000:10
+```
+RD und RT dürfen gleich aussehen, haben aber verschiedene Aufgaben.
+T: CLI Mittel
+
+Q: Die VPNv4-Sitzung zwischen zwei PEs steht, aber die Kunden-VRF auf PE2 bekommt keine Routen von PE1. Was prüfst du zuerst?
+A: **Ob die Import-RTs auf PE2 zu den Export-RTs auf PE1 passen.** `show bgp vpnv4 unicast all` zeigt, ob die Routen auf PE2 ankommen. Kommen sie an, aber nicht in die VRF, liegt es fast immer an den RTs.
+T: Szenario Mittel
+
+Q: Welche Routing-Protokolle können zwischen PE und CE laufen?
+A: **Statisch, RIP, OSPF, EIGRP und eBGP.** Auf dem PE läuft das Protokoll in der Kunden-VRF und wird in MP-BGP redistribuiert, auf der anderen Seite wieder aus MP-BGP heraus. Bei eBGP entfällt die Redistribution.
+T: Wissen Leicht
+
+Q: Ein Kunde nutzt an allen Standorten dieselbe AS-Nummer 65100 für eBGP zum Provider. Warum kommen die Routen anderer Standorte nicht an, und was ist die Lösung?
+A: **Der CE sieht seine eigene AS im AS_PATH und verwirft die Route wegen der Schleifenprüfung.** Lösung auf dem PE: `neighbor x as-override`, damit die Kunden-AS durch die Provider-AS ersetzt wird. Alternativ auf dem CE `allowas-in`.
+T: Szenario Schwer
+
+Q: Zwei Kunden nutzen beide 10.1.0.0/16. Wo liegt diese Überschneidung im MPLS-Netz kein Problem, und warum?
+A: **Auf den PEs, weil jede VRF eine eigene Routingtabelle hat und der RD die Präfixe in BGP unterscheidet.** Die P-Router sehen die Kundenadressen gar nicht.
+T: Wissen Leicht
+
+Q: Mit welchem Befehl siehst du auf einem PE das VPN-Label für die Routen einer VRF?
+A: **`show bgp vpnv4 unicast vrf KUNDE-A labels`.** Die Spalte „In label“ ist das Label, das dieser PE vergibt, „Out label“ das Label des entfernten PE für dessen Präfixe.
+T: CLI Mittel
+
+Q: Wie lässt du Kunde A und Kunde B gemeinsam auf einen zentralen Dienst zugreifen, ohne dass sie sich gegenseitig sehen?
+A: **Mit eigenen RTs: Die Dienst-VRF exportiert RT 65000:99, beide Kunden-VRFs importieren es. Die Kunden-VRFs exportieren ihre Routen zusätzlich mit einem RT, das nur die Dienst-VRF importiert.** So sehen beide Kunden den Dienst, aber nicht einander. Die Adressbereiche dürfen sich dafür nicht überschneiden.
+T: Szenario Schwer
+
+Q: Wozu dient bei OSPF zwischen PE und CE das Down-Bit?
+A: **Es verhindert, dass eine Route aus dem MPLS-Netz über einen zweiten PE zurück in MP-BGP läuft.** Der PE setzt das Bit, wenn er eine Route aus MP-BGP in OSPF gibt. Ein anderer PE ignoriert LSAs mit gesetztem Down-Bit. Bei VRF-Lite ohne MPLS schaltet `capability vrf-lite` diese Prüfung ab.
+T: Wissen Schwer
