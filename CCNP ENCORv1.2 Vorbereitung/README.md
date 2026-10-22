@@ -33,7 +33,7 @@ Jedes Lab hat drei Teile: **Bauen** (Schritt für Schritt, mit Prüfbefehl nach 
 | Plattform | Umfang | Hinweis |
 |---|---|---|
 | [CML](CML-Labs/) | 27 Labs mit Bau- und Reparatur-Topologie, dazu Python-Drills (20) und Fallstudien (21, 22) | Referenz, deckt alle Ziele ab |
-| [EVE-NG](EVE-NG-Labs/) | dieselben 27 Labs mit Node- und Kabeltabellen, Konfigurationsdateien und Hilfsskript | Interface-Namen wie in CML |
+| [EVE-NG](EVE-NG-Labs/) | dieselben 27 Labs als Import-ZIP (je Lab „Bauen“ und „Reparieren“ mit Startkonfiguration), dazu Node- und Kabeltabellen für den Aufbau von Hand | Interface-Namen wie in CML |
 | [Packet Tracer](PacketTracer-Labs/) | 23 Labs mit 117 Fehlern | Multicast, LISP, VXLAN und RESTCONF/EEM nur in CML oder EVE-NG |
 
 Die Labs in der Reihenfolge des Lernplans:

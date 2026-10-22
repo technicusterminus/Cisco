@@ -11,9 +11,27 @@ Diese Labs gehen über ENCOR und ENARSI hinaus. Sie behandeln, was im CCIE-Bluep
 - EVE-NG (Community oder Pro) mit dem Image **vIOS** (aus Ciscos IOSv-Paket). Das Image ist lizenzpflichtig und kommt nicht mit; Installation nach der EVE-NG-Anleitung.
 - RAM: Die Tabelle unten zeigt den Bedarf je Lab als Richtwert, er liegt bei 2 bis 2.6 GB.
 
-## Arbeiten mit den Dateien
+## Import in EVE-NG
 
-EVE-NG kann Startkonfigurationen nicht als Datei importieren. Pro Lab geht es so:
+Jedes Lab gibt es als fertiges EVE-NG-Lab in zwei Varianten: **Bauen** (Ausgangszustand für Teil A) und **Reparieren** (mit den eingebauten Fehlern für Teil B). Topologie, Verkabelung, RAM und Startkonfiguration sind darin enthalten.
+
+| Datei | Inhalt |
+|---|---|
+| [`CCIE-EI-EVE-NG-Labs.zip`](CCIE-EI-EVE-NG-Labs.zip) | alle Labs dieses Pakets |
+| `<Lab-Ordner>/EVE-Import.zip` | nur dieses eine Lab (Bauen und Reparieren) |
+
+1. **ZIP herunterladen.** Auf GitHub die Datei anklicken und mit *Download raw file* speichern. Nicht entpacken: EVE-NG importiert das ZIP direkt.
+2. **Importieren.** In der EVE-NG-Weboberfläche einen Ordner anlegen und öffnen (optional), dann in der Werkzeugleiste über den Labs *Import* wählen, das ZIP auswählen und *Upload* klicken. Die Labs erscheinen danach in der Liste, z. B. `CCIE-EI-01-…-Bauen` und `CCIE-EI-01-…-Reparieren`.
+3. **Starten.** Lab öffnen, alle Nodes markieren, *Start*. Beim ersten Start bootet jeder Node mit der Startkonfiguration aus dem Lab. vIOS braucht dafür ein bis zwei Minuten, Nexus 9000v deutlich länger.
+4. **Zurücksetzen.** Rechtsklick auf einen Node → *Wipe* löscht deine Änderungen. Beim nächsten Start lädt der Node wieder die Startkonfiguration aus dem Lab.
+
+**Images:** Die Lab-Dateien nennen kein Image. EVE-NG nimmt beim Laden das neueste installierte Image des passenden Templates (vIOS, vIOS-L2, CSRv 1000v, Nexus 9000v). Ist für ein Template kein Image installiert, startet der Node nicht. Dann das Image nachinstallieren oder den Node per Rechtsklick → *Edit* auf ein vorhandenes Image stellen.
+
+Die ZIP-Dateien erzeugt [`tools/build_eve_import.py`](tools/build_eve_import.py) aus den CML-Topologien und den Konfigurationsdateien. Wer eine Konfiguration ändert, baut sie im Paketordner neu: `python3 EVE-NG-Labs/tools/build_eve_import.py --paket CCIE-EI`.
+
+## Manuell aufbauen (ohne Import)
+
+Wenn du die Labs lieber selbst zusammenklickst oder das Image keine Startkonfiguration annimmt:
 
 1. **Lab anlegen.** Neues Lab in EVE-NG, Nodes laut Tabelle „Nodes“ platzieren (Template wie angegeben), Kabel laut Tabelle „Verkabelung“ ziehen.
 2. **Nodes starten**, bis ein Prompt (`Router>`) erscheint.
