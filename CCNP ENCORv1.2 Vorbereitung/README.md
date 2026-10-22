@@ -2,8 +2,8 @@
 
 Ein deutschsprachiges Anki-Deck für die Prüfung **Cisco 350-401 ENCOR v1.2**. Es deckt alle Themen des Blueprints ab. Die Karten fragen nicht nur Fakten ab, sondern erklären, warum etwas so ist. Für unterwegs gibt es kurze Karten ohne Code, fürs Prüfungstraining Exhibits und Fallen.
 
-**Aktuelle Version:** 5.0 (Stand 22.10.2026) · **1.431 Karten**
-**Datei:** [`ENCOR_v1.2_Kompendium_5.0_DE.apkg`](ENCOR_v1.2_Kompendium_5.0_DE.apkg)
+**Aktuelle Version:** 5.1 (Stand 22.10.2026) · **1.431 Karten**
+**Datei:** [`ENCOR_v1.2_Kompendium_5.1_DE.apkg`](ENCOR_v1.2_Kompendium_5.1_DE.apkg)
 
 ## Weiteres Material
 
@@ -89,6 +89,7 @@ Die Karten sind eigene Formulierungen, die Quellenlinks führen zur Cisco-Dokume
 
 | Version | Änderung |
 |---|---|
+| 5.1 | Karten im iOS-Dunkelmodus lesbar (Textfarbe der Karte explizit gesetzt, vorher stand heller Text auf weißem Grund). Neuer Notiztyp und neue GUIDs, daher Deck 5.0 vor dem Import löschen. |
 | 5.0 | Neuer Notiztyp: „Frage“ ist jetzt das erste Feld, im Anki-Browser stehen Fragen statt IDs. Neue GUIDs, der Lernstand von 4.x wird **nicht** übernommen. Vor dem Import das alte ENCOR-Deck in Anki löschen. Inhalt sonst wie 4.5. |
 | 4.5 | 431 flache Wissenskarten (Definitionen, Einzelfakten, Portnummern, „Was ist …?“) in Fragen mit kleiner Situation oder einem Warum umgeschrieben. Die Antwort beginnt fett mit dem Kern. Szenario-, Exhibit-, Interpretations- und Rechenkarten blieben unverändert. |
 | 4.4 | Alle Karten didaktisch überarbeitet: Fragen mit Kontext, Antworten beginnen mit dem direkten Treffer und erklären den Mechanismus, Hinweise nur noch als „Merke“, „Falle“ oder nächster Prüfschritt. Gleiche GUIDs, Lernfortschritt bleibt erhalten (Tag `Didaktik::4_4`) |
