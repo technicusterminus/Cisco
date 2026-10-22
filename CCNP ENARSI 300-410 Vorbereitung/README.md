@@ -5,6 +5,7 @@ Material für die Prüfung **300-410 ENARSI** (Implementing Cisco Enterprise Adv
 | Inhalt | Stand |
 |---|---|
 | [Anki-Deck](Anki/) mit 478 Karten zu allen Prüfungszielen | 1.0 |
+| [CML-Labs](CML-Labs/) und [EVE-NG-Labs](EVE-NG-Labs/): 6 Labs zu DMVPN, MPLS L3VPN, BFD, uRPF, DHCP-Relay und IPv6 First Hop Security, 29 eingebaute Fehler | 1.0 |
 
 ## Prüfung auf einen Blick
 
@@ -37,6 +38,19 @@ Viele ENARSI-Themen lassen sich mit den vorhandenen ENCOR-Labs (CML und EVE-NG) 
 | 2.3 DMVPN (Grundlage) | 14 GRE-IPsec |
 | Troubleshooting gemischt | 30 Capstone Routing-Troubleshooting |
 
-Noch ohne eigenes Lab sind DMVPN Phase 2/3, MPLS L3VPN, BFD, uRPF, DHCP-Relay und IPv6 First Hop Security.
+## Eigene ENARSI-Labs
+
+Für Themen, die das ENCOR-Paket nicht abdeckt, gibt es sechs Labs, jeweils zum Bauen, Reparieren (Tickets) und Üben, für CML und EVE-NG:
+
+| Lab | Thema | ENARSI-Ziel |
+|---|---|---|
+| E1 | DMVPN Phase 3 mit EIGRP | 2.3 |
+| E2 | MPLS L3VPN mit LDP und MP-BGP | 2.1, 2.2 |
+| E3 | BFD für schnelle Fehlererkennung mit OSPF | 1.8 |
+| E4 | uRPF: Strict, Loose, ACL | 3.2.c |
+| E5 | DHCP-Server und DHCP-Relay | 4.4 |
+| E6 | IPv6 First Hop Security: RA Guard und DHCPv6 Guard | 3.4 |
+
+Die Übersicht mit Dauer, Fehlerzahl und Ziel-Abdeckung steht in den READMEs von [CML-Labs](CML-Labs/README.md) und [EVE-NG-Labs](EVE-NG-Labs/README.md). Die Labs sind per Skript auf Konsistenz geprüft, aber noch nicht in einer laufenden Simulation durchgespielt. Packet Tracer ist nicht dabei, weil es DMVPN, MPLS, BFD und uRPF nicht abbildet.
 
 > Kein offizielles Cisco-Material. Cisco, CCNP und ENARSI sind Marken von Cisco Systems, Inc.
