@@ -5,6 +5,7 @@ Material für die Prüfung **300-410 ENARSI** (Implementing Cisco Enterprise Adv
 | Inhalt | Stand |
 |---|---|
 | [Anki-Deck](Anki/) mit 478 Karten zu allen Prüfungszielen | 1.0 |
+| [Prüfungssimulation](Pruefungssimulation/) mit 179 Fragen, 23 Exhibits und 8 Ordnen/Zuordnen, Prüfungsmodus 55 Fragen in 90 Minuten | 1.0 |
 | [CML-Labs](CML-Labs/) und [EVE-NG-Labs](EVE-NG-Labs/): 6 Labs zu DMVPN, MPLS L3VPN, BFD, uRPF, DHCP-Relay und IPv6 First Hop Security, 29 eingebaute Fehler | 1.0 |
 
 ## Prüfung auf einen Blick
