@@ -2,8 +2,8 @@
 
 Ein deutschsprachiges Anki-Deck für die Prüfung **Cisco 350-401 ENCOR v1.2**. Es deckt alle Themen des Blueprints ab. Die Karten fragen nicht nur Fakten ab, sondern erklären, warum etwas so ist. Für unterwegs gibt es kurze Karten ohne Code, fürs Prüfungstraining Exhibits und Fallen.
 
-**Aktuelle Version:** 4.5 (Stand 22.10.2026) · **1.431 Karten**
-**Datei:** [`ENCOR_v1.2_Kompendium_4.5_DE.apkg`](ENCOR_v1.2_Kompendium_4.5_DE.apkg)
+**Aktuelle Version:** 5.0 (Stand 22.10.2026) · **1.431 Karten**
+**Datei:** [`ENCOR_v1.2_Kompendium_5.0_DE.apkg`](ENCOR_v1.2_Kompendium_5.0_DE.apkg)
 
 ## Weiteres Material
 
@@ -89,7 +89,8 @@ Die Karten sind eigene Formulierungen, die Quellenlinks führen zur Cisco-Dokume
 
 | Version | Änderung |
 |---|---|
-| 4.5 | 431 flache Wissenskarten (Definitionen, Einzelfakten, Portnummern, „Was ist …?“) in Fragen mit kleiner Situation oder einem Warum umgeschrieben. Die Antwort beginnt fett mit dem Kern. Szenario-, Exhibit-, Interpretations- und Rechenkarten blieben unverändert. Gleiche GUIDs, Lernfortschritt bleibt erhalten (Tag `Didaktik::4_5`). Tipp für den Anki-Browser: Unter *Karten → Felder* beim Feld „Frage“ „Sortieren nach diesem Feld“ wählen, dann zeigt die Liste Fragen statt IDs. |
+| 5.0 | Neuer Notiztyp: „Frage“ ist jetzt das erste Feld, im Anki-Browser stehen Fragen statt IDs. Neue GUIDs, der Lernstand von 4.x wird **nicht** übernommen. Vor dem Import das alte ENCOR-Deck in Anki löschen. Inhalt sonst wie 4.5. |
+| 4.5 | 431 flache Wissenskarten (Definitionen, Einzelfakten, Portnummern, „Was ist …?“) in Fragen mit kleiner Situation oder einem Warum umgeschrieben. Die Antwort beginnt fett mit dem Kern. Szenario-, Exhibit-, Interpretations- und Rechenkarten blieben unverändert. |
 | 4.4 | Alle Karten didaktisch überarbeitet: Fragen mit Kontext, Antworten beginnen mit dem direkten Treffer und erklären den Mechanismus, Hinweise nur noch als „Merke“, „Falle“ oder nächster Prüfschritt. Gleiche GUIDs, Lernfortschritt bleibt erhalten (Tag `Didaktik::4_4`) |
 | 4.3 | Syntax- und Fachkorrekturen (u. a. Flexible NetFlow `match ipv4 protocol`, `ip sla schedule`, IKEv2-Begriffe, EEM-Label-Reihenfolge, NETCONF `discard-changes`), neue Virtualisierungs-, LISP-/VXLAN- und PBR-Karten |
 | 4.0 | +115 Karten: Vertiefung, weitere Exhibits, Security auf Blueprint-Niveau, Duplikate entfernt |
