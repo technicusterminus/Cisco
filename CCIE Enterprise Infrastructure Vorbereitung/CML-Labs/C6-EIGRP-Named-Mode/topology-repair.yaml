@@ -1,0 +1,248 @@
+lab:
+  title: 'Lab C6 – EIGRP Named Mode: SHA-256, Unequal-Cost Load Balancing und Stub mit Leak-Map (Repair)'
+  description: 'Vier Router im EIGRP Named Mode mit HMAC-SHA-256. Der Weg von der Zentrale zur Filiale führt über zwei Verteiler mit unterschiedlicher Verzögerung: Mit `variance` nutzt R1 beide, sofern der zweite die Feasibility Condition erfüllt. Die Filiale R4 ist ein Stub und damit nie Transit, gibt per Leak-Map aber die Default-Route weiter, damit ein Verteiler bei einem Linkausfall nicht abgeschnitten ist.'
+  notes: 'Aufgaben: siehe README.md'
+  version: 0.2.0
+nodes:
+- id: n0
+  label: R1
+  node_definition: iosv
+  x: 350
+  y: 50
+  configuration: |
+    hostname R1
+    no ip domain-lookup
+    service timestamps log datetime msec
+    line con 0
+     exec-timeout 0 0
+     logging synchronous
+    interface GigabitEthernet0/0
+     ip address 10.0.12.1 255.255.255.252
+     no shutdown
+    interface GigabitEthernet0/1
+     ip address 10.0.13.1 255.255.255.252
+     no shutdown
+    interface Loopback1
+     ip address 10.1.1.1 255.255.255.0
+    interface Loopback100
+     ip address 192.0.2.1 255.255.255.255
+    ip route 0.0.0.0 0.0.0.0 Null0
+    interface GigabitEthernet0/1
+     delay 10
+    router eigrp CCIE
+     address-family ipv4 unicast autonomous-system 100
+      af-interface default
+       authentication mode hmac-sha-256 EIGRP-Lab
+      exit-af-interface
+      topology base
+       redistribute static metric 1000000 10 255 1 1500
+      exit-af-topology
+      network 10.0.12.0 0.0.0.3
+      network 10.0.13.0 0.0.0.3
+      network 10.1.1.0 0.0.0.255
+      eigrp router-id 10.1.1.1
+     exit-address-family
+  tags: []
+  interfaces:
+  - id: i0
+    label: Loopback0
+    type: loopback
+  - id: i1
+    label: GigabitEthernet0/0
+    slot: 0
+    type: physical
+  - id: i2
+    label: GigabitEthernet0/1
+    slot: 1
+    type: physical
+  - id: i3
+    label: GigabitEthernet0/2
+    slot: 2
+    type: physical
+  - id: i4
+    label: GigabitEthernet0/3
+    slot: 3
+    type: physical
+- id: n1
+  label: R2
+  node_definition: iosv
+  x: 150
+  y: 250
+  configuration: |
+    hostname R2
+    no ip domain-lookup
+    service timestamps log datetime msec
+    line con 0
+     exec-timeout 0 0
+     logging synchronous
+    interface GigabitEthernet0/0
+     ip address 10.0.12.2 255.255.255.252
+     no shutdown
+    interface GigabitEthernet0/1
+     ip address 10.0.24.1 255.255.255.252
+     no shutdown
+    router eigrp CCIE
+     address-family ipv4 unicast autonomous-system 100
+      metric weights 0 1 1 1 0 0 0
+      af-interface default
+       authentication mode hmac-sha-256 EIGRP-Lab
+      exit-af-interface
+      network 10.0.12.0 0.0.0.3
+      network 10.0.24.0 0.0.0.3
+      eigrp router-id 10.0.0.2
+     exit-address-family
+  tags: []
+  interfaces:
+  - id: i0
+    label: Loopback0
+    type: loopback
+  - id: i1
+    label: GigabitEthernet0/0
+    slot: 0
+    type: physical
+  - id: i2
+    label: GigabitEthernet0/1
+    slot: 1
+    type: physical
+  - id: i3
+    label: GigabitEthernet0/2
+    slot: 2
+    type: physical
+  - id: i4
+    label: GigabitEthernet0/3
+    slot: 3
+    type: physical
+- id: n2
+  label: R3
+  node_definition: iosv
+  x: 550
+  y: 250
+  configuration: |
+    hostname R3
+    no ip domain-lookup
+    service timestamps log datetime msec
+    line con 0
+     exec-timeout 0 0
+     logging synchronous
+    interface GigabitEthernet0/0
+     ip address 10.0.13.2 255.255.255.252
+     no shutdown
+    interface GigabitEthernet0/1
+     ip address 10.0.34.1 255.255.255.252
+     no shutdown
+    router eigrp CCIE
+     address-family ipv4 unicast autonomous-system 100
+      af-interface default
+       authentication mode hmac-sha-256 EIGRP-lab
+      exit-af-interface
+      network 10.0.13.0 0.0.0.3
+      network 10.0.34.0 0.0.0.3
+      eigrp router-id 10.0.0.3
+     exit-address-family
+  tags: []
+  interfaces:
+  - id: i0
+    label: Loopback0
+    type: loopback
+  - id: i1
+    label: GigabitEthernet0/0
+    slot: 0
+    type: physical
+  - id: i2
+    label: GigabitEthernet0/1
+    slot: 1
+    type: physical
+  - id: i3
+    label: GigabitEthernet0/2
+    slot: 2
+    type: physical
+  - id: i4
+    label: GigabitEthernet0/3
+    slot: 3
+    type: physical
+- id: n3
+  label: R4
+  node_definition: iosv
+  x: 350
+  y: 450
+  configuration: |
+    hostname R4
+    no ip domain-lookup
+    service timestamps log datetime msec
+    line con 0
+     exec-timeout 0 0
+     logging synchronous
+    interface GigabitEthernet0/0
+     ip address 10.0.24.2 255.255.255.252
+     no shutdown
+    interface GigabitEthernet0/1
+     ip address 10.0.34.2 255.255.255.252
+     no shutdown
+    interface Loopback1
+     ip address 10.4.1.1 255.255.255.0
+    interface Loopback2
+     ip address 10.4.2.1 255.255.255.0
+    ip prefix-list DEFAULT seq 5 permit 0.0.0.0/0
+    route-map LEAK-DEFAULT permit 10
+     match ip address prefix-list DEFAULT
+    interface Loopback1
+     delay 10
+    interface Loopback2
+     delay 10
+    router eigrp CCIE
+     address-family ipv4 unicast autonomous-system 100
+      af-interface default
+       authentication mode hmac-sha-256 EIGRP-Lab
+      exit-af-interface
+      network 10.0.24.0 0.0.0.3
+      network 10.0.34.0 0.0.0.3
+      network 10.4.0.0 0.0.1.255
+      eigrp router-id 10.0.0.4
+      eigrp stub connected
+     exit-address-family
+  tags: []
+  interfaces:
+  - id: i0
+    label: Loopback0
+    type: loopback
+  - id: i1
+    label: GigabitEthernet0/0
+    slot: 0
+    type: physical
+  - id: i2
+    label: GigabitEthernet0/1
+    slot: 1
+    type: physical
+  - id: i3
+    label: GigabitEthernet0/2
+    slot: 2
+    type: physical
+  - id: i4
+    label: GigabitEthernet0/3
+    slot: 3
+    type: physical
+links:
+- id: l0
+  n1: n0
+  n2: n1
+  i1: i1
+  i2: i1
+  label: R1-GigabitEthernet0/0<->R2-GigabitEthernet0/0
+- id: l1
+  n1: n0
+  n2: n2
+  i1: i2
+  i2: i1
+  label: R1-GigabitEthernet0/1<->R3-GigabitEthernet0/0
+- id: l2
+  n1: n1
+  n2: n3
+  i1: i2
+  i2: i1
+  label: R2-GigabitEthernet0/1<->R4-GigabitEthernet0/0
+- id: l3
+  n1: n2
+  n2: n3
+  i1: i2
+  i2: i2
+  label: R3-GigabitEthernet0/1<->R4-GigabitEthernet0/1

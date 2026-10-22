@@ -8,7 +8,7 @@ Fehler werden nicht von Hand in zwei Konfigurationen gepflegt, sondern als Ände
 fertigen Konfiguration beschrieben (ersetzen, entfernen, einfügen). So stimmen Reparatur-Topologie,
 Fehlerliste und Diff immer überein.
 """
-import os, re
+import ipaddress, os, re
 import yaml
 
 HEADER = ["no ip domain-lookup", "service timestamps log datetime msec",
@@ -150,11 +150,96 @@ def validate(lab):
         if f.get("new") is not None:
             assert f["new"] in bad
     assert len(lab["tickets"]) == len(lab["faults"]), "Tickets und Fehler passen nicht zusammen"
+    for node in lab["nodes"]:  # alle Fehler eines Geräts zusammen: jeder bleibt sichtbar
+        mine = [f for f in lab["faults"] if f["node"] == node["name"]]
+        bad = full_config(node, True, mine)
+        for f in mine:
+            if f.get("new") is not None:
+                assert f["new"] in bad, f"{node['name']}: Fehler {f['new']!r} geht beim Kombinieren verloren"
     for r in (False, True):
         d = yaml.safe_load(cml_yaml(lab, r))
         ids = {n["id"]: {i["id"] for i in n["interfaces"]} for n in d["nodes"]}
         for l in d["links"]:
             assert l["i1"] in ids[l["n1"]] and l["i2"] in ids[l["n2"]]
+    check_addresses(lab)
+
+
+def iface_addrs(node):
+    """Interface -> Adressen aus der fertigen Konfiguration (Basis + Lösung).
+
+    Rückgabe: {Interface: {"v4": ip_interface oder None, "v6": [ip_interface, …], "dyn": bool}}.
+    "dyn" steht für Adressen, die erst zur Laufzeit kommen (DHCP, SLAAC)."""
+    out, cur = {}, None
+    for l in full_config(node, True):
+        if l.startswith("interface "):
+            cur = l.split()[1]
+            out.setdefault(cur, {"v4": None, "v6": [], "dyn": False})
+        elif not l.startswith(" "):
+            cur = None
+        elif cur and l.startswith(" ip address ") and "secondary" not in l:
+            p = l.split()
+            if len(p) >= 4 and p[2][0].isdigit():
+                out[cur]["v4"] = ipaddress.ip_interface(f"{p[2]}/{p[3]}")
+            elif len(p) >= 3 and p[2] == "dhcp":
+                out[cur]["dyn"] = True
+        elif cur and l.startswith(" ipv6 address "):
+            p = l.split()
+            if "/" in p[2] and "link-local" not in l:
+                out[cur]["v6"].append(ipaddress.ip_interface(p[2]))
+            else:
+                out[cur]["dyn"] = True
+    return {i: a for i, a in out.items() if a["v4"] or a["v6"] or a["dyn"]}
+
+
+def check_addresses(lab):
+    """Adressen an Links, doppelte Adressen, unverkabelte Interfaces und Ziel-Adressen in Befehlen."""
+    types = {n["name"]: n["type"] for n in lab["nodes"]}
+    addrs = {n["name"]: iface_addrs(n) for n in lab["nodes"] if n["type"] != "switch"}
+    segments = []  # Punkt-zu-Punkt-Links und Switch-Segmente
+    for a, ia, b, ib in lab["links"]:
+        if types[a] == "switch" or types[b] == "switch":
+            sw, end = (a, (b, ib)) if types[a] == "switch" else (b, (a, ia))
+            seg = next((s for s in segments if s[0] == sw), None)
+            if seg is None:
+                segments.append((sw, [end]))
+            else:
+                seg[1].append(end)
+        else:
+            segments.append((None, [(a, ia), (b, ib)]))
+    linked = set()
+    for _, ends in segments:
+        nets4, nets6 = set(), set()
+        for n, i in ends:
+            linked.add((n, long_if(i)))
+            a = addrs[n].get(long_if(i))
+            if a is None:
+                assert types[n] == "l2", f"{n} {i}: Link-Interface ohne Adresse"
+                continue  # Switchport ohne IP
+            if a["v4"]:
+                nets4.add(a["v4"].network)
+            nets6.update(x.network for x in a["v6"])
+        assert len(nets4) <= 1, f"Link {ends}: IPv4-Adressen in verschiedenen Netzen {nets4}"
+        assert len(nets6) <= 1, f"Link {ends}: IPv6-Adressen in verschiedenen Netzen {nets6}"
+    seen = {}
+    allowed = set(lab.get("anycast", ()))
+    for n, m in addrs.items():
+        for i, a in m.items():
+            for ip in ([a["v4"]] if a["v4"] else []) + a["v6"]:
+                key = str(ip.ip)
+                if key in seen and key not in allowed:
+                    raise SystemExit(f"Adresse {key} doppelt: {seen[key]} und {n} {i}")
+                seen.setdefault(key, f"{n} {i}")
+            if i.startswith("GigabitEthernet"):
+                assert (n, i) in linked, f"{n} {i} hat eine Adresse, ist aber nicht verkabelt"
+    pat = re.compile(r"^\s*(?:neighbor|ip msdp peer|ip pim rp-address|ip nhrp nhs)\s+(\d+\.\d+\.\d+\.\d+)"
+                     r"|^\s*ip mroute \S+ \S+ (\d+\.\d+\.\d+\.\d+)|\bnbma (\d+\.\d+\.\d+\.\d+)")
+    for node in lab["nodes"]:
+        if node["type"] == "switch":
+            continue
+        for l in full_config(node, True):
+            for m in pat.finditer(l):
+                ip = next(g for g in m.groups() if g)
+                assert ip in seen, f"{node['name']}: {l.strip()!r} zeigt auf {ip}, die es im Lab nicht gibt"
 
 
 # ---------------------------------------------------------------- Texte
@@ -246,6 +331,8 @@ def eve_build(lab):
     host_ram = 0
     for n in lab["nodes"]:
         tpl, mb, note = EVE_TPL[n["type"]]
+        if n["type"] == "host" and not lab.get("vpcs"):
+            note = "Host (vIOS, wie in CML)"
         ram += mb
         if n["type"] == "host":
             host_ram += mb

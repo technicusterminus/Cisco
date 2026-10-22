@@ -25,7 +25,7 @@ Im IPv6-Zugangsnetz kann jeder Host Router Advertisements und DHCPv6-Antworten s
 |---|---|---|---|
 | SW | Cisco vIOS Switch (vIOS-L2) | Der erste Start dauert einige Minuten. | 768 |
 | R1 | Cisco vIOS Router |  | 512 |
-| H1 | Cisco vIOS Router | Host (vIOS, wie in CML; alternativ VPCS) | 512 |
+| H1 | Cisco vIOS Router | Host (vIOS, wie in CML) | 512 |
 | ATK | Cisco vIOS Router |  | 512 |
 
 Summe (alle Nodes als vIOS/…): ca. **2.3 GB RAM**.
