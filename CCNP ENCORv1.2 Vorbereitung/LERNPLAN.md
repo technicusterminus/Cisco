@@ -1,6 +1,6 @@
 # Lernplan ENCOR 350-401 v1.2: 10 Wochen
 
-Der Plan verbindet das Anki-Deck, die Labs, die [Trainer](Trainer/) und die Prüfungssimulation. Er rechnet mit **etwa 8 Stunden pro Woche**. Hast du weniger Zeit, strecke ihn auf 12 Wochen und lass die Labs weg, die als „optional“ markiert sind.
+Der Plan verbindet das [Anki-Deck](Anki/), die [Labs](CML-Labs/), die [Trainer](Trainer/) und die [Prüfungssimulation](Pruefungssimulation/). Er rechnet mit **etwa 8 Stunden pro Woche**. Hast du weniger Zeit, strecke ihn auf 12 Wochen und lass die Labs weg, die als „optional“ markiert sind.
 
 ## Das Prinzip
 

@@ -1,121 +1,63 @@
-# CCNP ENCOR 350-401 v1.2 – Anki-Kompendium (Deutsch)
+# CCNP ENCOR 350-401 v1.2 Vorbereitung
 
-Ein deutschsprachiges Anki-Deck für die Prüfung **Cisco 350-401 ENCOR v1.2**. Es deckt alle Themen des Blueprints ab. Die Karten fragen nicht nur Fakten ab, sondern erklären, warum etwas so ist. Für unterwegs gibt es kurze Karten ohne Code, fürs Prüfungstraining Exhibits und Fallen.
+Material für die Prüfung **350-401 ENCOR v1.2** (Implementing and Operating Cisco Enterprise Network Core Technologies). ENCOR ist die Kernprüfung für den CCNP Enterprise und zugleich die Qualifikationsprüfung für die CCIE-Enterprise-Infrastructure-Labprüfung.
 
-**Aktuelle Version:** 5.1 (Stand 22.10.2026) · **1.431 Karten**
-**Datei:** [`ENCOR_v1.2_Kompendium_5.1_DE.apkg`](ENCOR_v1.2_Kompendium_5.1_DE.apkg)
-
-## Weiteres Material
-
-| Was | Wo |
+| Inhalt | Umfang |
 |---|---|
-| Prüfungssimulation, 241 Fragen mit Exhibits und Drag-and-drop, 60 Fragen in 75 Minuten, lädt auch eigene Fragenpools (HTML, offline) | [`Pruefungssimulation/`](Pruefungssimulation/) |
-| Rechentrainer (BGP, STP, OSPF, EIGRP, QoS) und Ticket-Trainer mit den 134 Lab-Tickets (HTML, offline) | [`Trainer/`](Trainer/) |
-| Cheatsheet, 4 Seiten (PDF) | [`ENCOR-Cheatsheet.pdf`](ENCOR-Cheatsheet.pdf) |
-| 10-Wochen-Lernplan mit Deck, Labs und Simulation | [`LERNPLAN.md`](LERNPLAN.md) |
-| Labs für CML, EVE-NG, Packet Tracer | [`CML-Labs/`](CML-Labs/), [`EVE-NG-Labs/`](EVE-NG-Labs/), [`PacketTracer-Labs/`](PacketTracer-Labs/) |
+| [Anki-Deck](Anki/) | 1.431 Karten zu allen 47 Prüfungszielen, Version 5.1 |
+| [Prüfungssimulation](Pruefungssimulation/) | 241 Fragen, davon 43 Exhibits und 21 zum Ordnen und Zuordnen; Prüfungsmodus mit 60 Fragen in 75 Minuten |
+| [Trainer](Trainer/) | Rechentrainer (BGP, STP, OSPF, EIGRP, QoS) und Ticket-Trainer mit den 134 Lab-Tickets |
+| [Labs](#labs) | 27 Labs für CML und EVE-NG, 23 davon auch für Packet Tracer, mit 134 eingebauten Fehlern; dazu Python-Drills und zwei Fallstudien-Pakete |
+| [Lernplan](LERNPLAN.md) | 10 Wochen, verbindet Deck, Labs, Trainer und Simulation |
+| [Cheatsheet](ENCOR-Cheatsheet.pdf) | 4 Seiten zum Ausdrucken |
 
-## Schnellstart
+Simulation und Trainer sind einzelne HTML-Dateien und laufen offline im Browser.
 
-1. `.apkg` herunterladen und in Anki öffnen (Datei → Importieren).
-2. Das Deck `ENCOR v1.2 · Kompendium` erscheint mit sechs Unterdecks, eines pro Blueprint-Domäne.
-3. Ein Update-Import über eine ältere Version behält deinen Lernfortschritt (gleiche Karten-IDs).
+## Prüfung auf einen Blick
 
-## Inhalt nach Blueprint
+- 120 Minuten, sechs Domänen: Architektur 15 %, Virtualisierung 10 %, Infrastruktur 30 %, Network Assurance 10 %, Security 20 %, Automation und KI 15 %.
+- Wireless gehört seit v1.2 nicht mehr zu ENCOR und fehlt deshalb auch hier.
+- Den größten Block bildet die Infrastruktur mit Layer 2, OSPF, EIGRP, BGP, NAT, FHRP und Multicast. Dort lohnt sich die meiste Lab-Zeit.
 
-| Domäne | Karten | Anteil | Blueprint |
-|---|---:|---:|---:|
-| 1 Architektur (QoS, SD-WAN, SD-Access, Redundanz) | 185 | 12,9 % | 15 % |
-| 2 Virtualisierung (Hypervisor, VRF, GRE/IPsec, LISP, VXLAN) | 147 | 10,3 % | 10 % |
-| 3 Infrastruktur (Layer 2, OSPF, EIGRP, BGP, NAT, HSRP, Multicast) | 475 | 33,2 % | 30 % |
-| 4 Network Assurance (Syslog, SNMP, NetFlow, SPAN, IP SLA, Catalyst Center) | 170 | 11,9 % | 10 % |
-| 5 Security (AAA, ACL, CoPP, 802.1X, TrustSec, MACsec, Firewall) | 272 | 19,0 % | 20 % |
-| 6 Automation und KI (Python, JSON, YANG, NETCONF/RESTCONF, EEM, Ansible/Terraform) | 182 | 12,7 % | 15 % |
+## So fängst du an
 
-Wireless gehört in v1.2 nicht mehr zu 350-401 (es liegt bei ENWLSI) und ist bewusst nicht enthalten.
+1. Lies den [Lernplan](LERNPLAN.md). Er legt fest, welche Karten, Labs und Trainer in welche Woche gehören.
+2. Importiere das [Anki-Deck](Anki/). Wer noch eine Version vor 5.1 hat, löscht das alte Deck vorher.
+3. Woche 1 beginnt mit [Lab 05](CML-Labs/05-VLAN-Trunk-EtherChannel/) und [Lab 06](CML-Labs/06-STP-MST-Schutz/). Wie ein Lab abläuft, steht in der [Lab-Übersicht](CML-Labs/README.md).
+4. Ab Woche 7 kommt die [Prüfungssimulation](Pruefungssimulation/) im Modus „Üben“ dazu, ab Woche 9 im Prüfungsmodus.
 
-## Kartentypen
+## Labs
 
-| Typ | Anzahl | Zweck |
-|---|---:|---|
-| Wissen | 445 | Definitionen und Fakten |
-| Szenario | 233 | Fehlersuche und Designentscheidungen |
-| CLI | 213 | Konfiguration und Befehle |
-| Interpretation | 169 | Ausgaben und Code lesen |
-| Vergleich | 168 | Protokolle und Verfahren gegenüberstellen |
-| Exhibit | 81 | `show`-Ausgaben und Konfigurationen wie in der Prüfung |
-| Vertiefung | 54 | Warum funktioniert etwas so? |
-| Prüfungsfalle | 43 | Typische Stolpersteine |
-| Rechnen | 25 | Subnetze, Wildcards, Overhead, Metriken |
+Jedes Lab hat drei Teile: **Bauen** (Schritt für Schritt, mit Prüfbefehl nach jedem Schritt), **Reparieren** (Tickets mit eingebauten Fehlern, wie im Betrieb) und **Üben** (Transferfragen mit aufklappbaren Antworten). Musterlösungen und Fehlerlisten liegen in `solutions/`.
 
-## Gefilterte Decks mit Tags
+| Plattform | Umfang | Hinweis |
+|---|---|---|
+| [CML](CML-Labs/) | 27 Labs mit Bau- und Reparatur-Topologie, dazu Python-Drills (20) und Fallstudien (21, 22) | Referenz, deckt alle Ziele ab |
+| [EVE-NG](EVE-NG-Labs/) | dieselben 27 Labs mit Node- und Kabeltabellen, Konfigurationsdateien und Hilfsskript | Interface-Namen wie in CML |
+| [Packet Tracer](PacketTracer-Labs/) | 23 Labs mit 117 Fehlern | Multicast, LISP, VXLAN und RESTCONF/EEM nur in CML oder EVE-NG |
 
-In Anki unter **Karteikarten durchsuchen** oder als gefiltertes Deck:
+Die Labs in der Reihenfolge des Lernplans:
 
-| Tag | Karten | Wofür |
-|---|---:|---|
-| `tag:Modus::Zug` | 1.022 | Kurze Karten ohne Codeblöcke, gut für unterwegs |
-| `tag:Fokus::Exhibit` | 127 | Ausgaben und Konfigurationen interpretieren |
-| `tag:Fokus::Falle` | 68 | Prüfungsfallen |
-| `tag:Fokus::HighYield` | 203 | Klassische Prüfungsfakten |
-| `tag:Domaene::3` usw. | – | Eine Blueprint-Domäne |
-| `tag:Ziel::3.2.b` usw. | – | Ein einzelner Blueprint-Punkt |
-| `tag:Korrektur::2026_10_19` | – | Nachträglich fachlich geschärfte Karten |
+| Woche | Thema | Labs |
+|---|---|---|
+| 1 | Layer 2 | 05 VLAN, Trunk, EtherChannel · 06 STP, MST, Schutzfunktionen |
+| 2 | Gateway-Redundanz, Zeit, NAT | 07 HSRP, VRRP, GLBP · 08 NTP, Syslog, SNMP · 09 NAT, PAT |
+| 3 | OSPF und EIGRP | 01 OSPFv2 Multi-Area · 28 OSPF-Areatypen · 25 EIGRP klassisch · 02 EIGRP Named Mode und OSPFv3 (optional) |
+| 4 | BGP, Redistribution, PBR | 03 eBGP-Policy · 26 iBGP mit Route Reflector · 27 Redistribution · 29 PBR nach Quelle und Anwendung |
+| 5 | Virtualisierung und Overlay | 13 VRF-Lite · 14 GRE, IPsec, VTI · 15 LISP und 16 VXLAN (optional) |
+| 6 | Architektur und Multicast | 17 QoS mit MQC · 12 Multicast mit PIM · 21 Design-Fallstudien |
+| 7 | Assurance und Security | 18 NetFlow, SPAN · 04 PBR mit IP SLA · 10 ACL, CoPP · 11 Zugriff, AAA |
+| 8 | Security-Produkte und Automation | 22 Security-Szenarien · 19 RESTCONF, NETCONF, EEM · 20 Python-Drills |
+| 9 | Capstones | 23 Campus und Edge · 24 WAN und Overlay · 30 Routing |
 
-## So ist eine Karte aufgebaut
+Welches Lab welches Prüfungsziel abdeckt, steht in [`CML-Labs/ZIELE.md`](CML-Labs/ZIELE.md). Die Topologien entstehen per Skript, geprüft sind Verkabelung, Ports und Fehlermuster. In einer laufenden Instanz sind sie noch nicht durchgespielt. Hakt etwas, hilft ein Issue mit der Lab-Nummer.
 
-- **Frage:** konkret und mit Kontext, z. B. „Eine OSPF-Nachbarschaft hängt in ExStart oder Exchange. Was prüfst du zuerst?“
-- **Antwort:** beginnt fett mit dem Kern (**Die MTU auf beiden Seiten.**). Danach folgen ein bis zwei Sätze, warum das so ist: Bei unterschiedlicher MTU werden die Database-Description-Pakete abgelehnt. Rechenwege stehen ausgeschrieben da.
-- **Hinweis** (nicht immer vorhanden): eine Merkhilfe, eine typische Falle oder der nächste Prüfschritt.
-- **Quellen:** Links zur Cisco-Dokumentation oder zum RFC.
+## Danach
 
-Jede Karte hat eine feste ID (`E12-<Blueprint-Punkt>-<Nr>`), dazu Thema, Typ und Stufe (Leicht, Mittel, Schwer). Die IDs bleiben über alle Versionen gleich. Deshalb behält ein Update-Import deinen Lernfortschritt.
-
-## Lernempfehlung
-
-Am besten folgst du dem [10-Wochen-Lernplan](LERNPLAN.md). Er verbindet Deck, Labs und Simulation. Kurz gefasst:
-
-1. **Wochen 1 bis 8:** je ein Thema. Karten mit dem passenden Filter (`tag:Ziel::…` oder `tag:Domaene::N`), dazu das Lab.
-2. **Woche 9:** Capstones, also Fehlersuche im ganzen Netz unter Zeitdruck.
-3. **Woche 10:** nur noch `tag:Fokus::Exhibit`, `tag:Fokus::Falle`, `tag:Fokus::HighYield` und Prüfungsläufe in der Simulation.
-
-Für unterwegs eignet sich `tag:Modus::Zug`: kurze Karten ohne Codeblöcke.
+Für den CCNP Enterprise fehlt noch eine Konzentrationsprüfung, etwa [ENARSI](../CCNP%20ENARSI%20300-410%20Vorbereitung/). Wer auf den CCIE zielt, findet die nächsten Schritte in [CCIE Enterprise Infrastructure](../CCIE%20Enterprise%20Infrastructure%20Vorbereitung/).
 
 ## Fehler gefunden?
 
-Die Karten sind eigene Formulierungen, die Quellenlinks führen zur Cisco-Dokumentation und zu den RFCs. Im Zweifel gilt die Cisco-Dokumentation. Wenn dir ein Fehler auffällt, melde ihn bitte als Issue, mit Karten-ID und Begründung.
+Karten, Fragen und Labs sind eigene Formulierungen. Im Zweifel gilt die Cisco-Dokumentation. Wenn dir ein Fehler auffällt, melde ihn bitte als Issue, mit Karten-ID oder Lab-Nummer.
 
-## Versionen
-
-| Version | Änderung |
-|---|---|
-| 5.1 | Karten im iOS-Dunkelmodus lesbar (Textfarbe der Karte explizit gesetzt, vorher stand heller Text auf weißem Grund). Neuer Notiztyp und neue GUIDs, daher Deck 5.0 vor dem Import löschen. |
-| 5.0 | Neuer Notiztyp: „Frage“ ist jetzt das erste Feld, im Anki-Browser stehen Fragen statt IDs. Neue GUIDs, der Lernstand von 4.x wird **nicht** übernommen. Vor dem Import das alte ENCOR-Deck in Anki löschen. Inhalt sonst wie 4.5. |
-| 4.5 | 431 flache Wissenskarten (Definitionen, Einzelfakten, Portnummern, „Was ist …?“) in Fragen mit kleiner Situation oder einem Warum umgeschrieben. Die Antwort beginnt fett mit dem Kern. Szenario-, Exhibit-, Interpretations- und Rechenkarten blieben unverändert. |
-| 4.4 | Alle Karten didaktisch überarbeitet: Fragen mit Kontext, Antworten beginnen mit dem direkten Treffer und erklären den Mechanismus, Hinweise nur noch als „Merke“, „Falle“ oder nächster Prüfschritt. Gleiche GUIDs, Lernfortschritt bleibt erhalten (Tag `Didaktik::4_4`) |
-| 4.3 | Syntax- und Fachkorrekturen (u. a. Flexible NetFlow `match ipv4 protocol`, `ip sla schedule`, IKEv2-Begriffe, EEM-Label-Reihenfolge, NETCONF `discard-changes`), neue Virtualisierungs-, LISP-/VXLAN- und PBR-Karten |
-| 4.0 | +115 Karten: Vertiefung, weitere Exhibits, Security auf Blueprint-Niveau, Duplikate entfernt |
-| 3.0 | Schwache Karten entfernt, Exhibits mit `show`-Ausgaben, Prüfungsfallen, Lücken geschlossen (Security-Produkte, 802.1X, Automation) |
-| 1.0 | Ausgangsdeck (972 Karten) |
-
-## Rechtliches
-
-Kein offizielles Cisco-Material, nicht von Cisco geprüft oder freigegeben. Cisco, CCNP und ENCOR sind Marken von Cisco Systems, Inc. Das Deck dient der privaten Prüfungsvorbereitung.
-
-## Labs: CML, Packet Tracer, EVE-NG
-
-Zu jedem der 47 Ziele gibt es Übungsmaterial in drei Zweigen. Jedes Lab hat dieselben drei Teile:
-
-1. **Bauen:** Schritt für Schritt aufbauen und verifizieren.
-2. **Reparieren:** Tickets mit eingebauten Fehlern lösen, wie im Betrieb.
-3. **Üben:** Transferfragen mit aufklappbaren Antworten.
-
-Musterlösungen und Fehlerlisten liegen jeweils in `solutions/`. Die Datei `ZIELE.md` in jedem Zweig ordnet die Prüfungsziele den Aufgaben zu.
-
-| Zweig | Inhalt | Hinweis |
-|---|---|---|
-| [`CML-Labs/`](CML-Labs/) | 27 Labs für Cisco Modeling Labs 2.x (24 Themen-Labs, 3 Capstones zur Fehlersuche im Gesamtnetz) mit Bau- und Reparatur-Topologie (134 Fehler), dazu Python-/API-Drills mit automatischen Tests und zwei Fallstudien-Pakete | Referenz-Zweig, alle Ziele |
-| [`EVE-NG-Labs/`](EVE-NG-Labs/) | Dieselben 27 Labs für EVE-NG: Node- und Kabeltabellen, Konfigurationsdateien, Hilfsskript zum Einspielen per Konsole | Interface-Namen wie in CML |
-| [`PacketTracer-Labs/`](PacketTracer-Labs/) | 23 Labs mit Aufbau, Konfigurationen und 117 Fehlern; 4 Labs (Multicast, LISP, VXLAN, RESTCONF/EEM) sind in Packet Tracer nicht darstellbar und verweisen auf CML/EVE-NG | Pro Lab Eignung (geeignet, teilweise) |
-
-Die Python-Drills haben automatische Tests. Die Topologien entstehen per Skript, geprüft sind Verkabelung, Ports und Fehlermuster. In einer laufenden Instanz sind sie noch nicht durchgespielt. Hakt etwas, hilft ein Issue mit Lab-Nummer.
+> Kein offizielles Cisco-Material, nicht von Cisco geprüft oder freigegeben. Cisco, CCNP, CCIE und ENCOR sind Marken von Cisco Systems, Inc.

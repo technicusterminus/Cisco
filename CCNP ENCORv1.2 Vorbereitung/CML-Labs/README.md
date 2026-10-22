@@ -113,13 +113,17 @@ Pro Ziel mit direkten Links zu Aufgaben und Lösungen: **[ZIELE.md](ZIELE.md)**.
 
 ## Empfohlene Reihenfolge
 
-1. **Fundament:** 05 (VLAN/EtherChannel), 06 (STP), 07 (FHRP), 01 (OSPF), 03 (BGP).
-   **Routing vertiefen:** 25 (EIGRP), 28 (OSPF-Areatypen), 26 (iBGP/Route Reflector), 27 (Redistribution).
-2. **Betrieb und Sicherheit:** 08, 09, 10, 11, 04, 12.
-3. **Overlay und QoS:** 13, 14, 15, 16, 17.
-4. **Assurance und Automation:** 18, 19, 20.
-5. **Konzept:** 21, 22 (Fallstudien), dazu die Karten mit `tag:Fokus::Exhibit` im Deck.
-6. **Abschluss:** 23, 24 und 30 (Capstones). Reine Fehlersuche im ganzen Netz, bei der ein Fehler den nächsten verdecken kann. Mach sie zuletzt und ohne Blick in die Lösungen.
+Die Reihenfolge folgt dem [Wochenplan im Lernplan](../LERNPLAN.md#wochenplan):
+
+1. **Layer 2:** 05, 06.
+2. **Gateway-Redundanz, Zeit, NAT:** 07, 08, 09.
+3. **OSPF und EIGRP:** 01, 28, 25, optional 02.
+4. **BGP, Redistribution, PBR:** 03, 26, 27, 29.
+5. **Virtualisierung und Overlay:** 13, 14, optional 15 und 16, dazu der Abschnitt Virtualisierung in 21.
+6. **Architektur und Multicast:** 17, 12, 21.
+7. **Assurance und Security:** 18, 04, 10, 11.
+8. **Security-Produkte und Automation:** 22, 19, 20.
+9. **Capstones:** 23, 24 und 30. Reine Fehlersuche im ganzen Netz, bei der ein Fehler den nächsten verdecken kann. Mach sie zuletzt und ohne Blick in die Lösungen.
 
 ## Voraussetzungen und Stand
 

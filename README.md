@@ -1,6 +1,6 @@
 # Cisco – Zertifizierungsvorbereitung
 
-Deutschsprachige Lernmaterialien für Cisco-Prüfungen, vom Einstieg bis zum CCNP.
+Deutschsprachige Lernmaterialien für Cisco-Prüfungen, vom Einstieg bis zum CCIE.
 
 | Ordner | Für wen | Inhalt |
 |---|---|---|
@@ -10,8 +10,8 @@ Deutschsprachige Lernmaterialien für Cisco-Prüfungen, vom Einstieg bis zum CCN
 | [`CCNP ENARSI 300-410 Vorbereitung`](CCNP%20ENARSI%20300-410%20Vorbereitung/) | CCNP ENARSI 300-410 | Anki-Deck (478 Karten) zu allen Prüfungszielen, Prüfungssimulation (179 Fragen, mit Exhibits und Drag-and-drop), 6 eigene Labs (CML und EVE-NG) und Zuordnung der passenden ENCOR-Labs |
 | [`CCIE Enterprise Infrastructure Vorbereitung`](CCIE%20Enterprise%20Infrastructure%20Vorbereitung/) | CCIE Enterprise Infrastructure | Anki-Deck (358 Karten) und Prüfungssimulation (175 Fragen), Labs folgen |
 
-**Reihenfolge:** Wer neu ist, startet mit dem Netzwerk-Einstieg, dann CCNA, dann ENCOR und danach ENARSI. Jeder Ordner hat einen eigenen Lernplan, der Karten, Labs und Simulation verbindet.
+**Reihenfolge:** Wer neu ist, startet mit dem Netzwerk-Einstieg, dann CCNA, dann ENCOR und ENARSI, danach CCIE. Netzwerk-Einstieg, CCNA und ENCOR haben einen Wochenplan, ENARSI und CCIE eine Lernempfehlung im README.
 
-**Neu:** Alle drei Pakete sind didaktisch überarbeitet: Karten, Simulationen, Labs, Kapitel und Cheatsheets. Jede Antwort nennt zuerst den Kern und erklärt dann, warum. Jedes Lab beginnt mit Lernzielen, und jedes Fehler-Ticket sagt, mit welchem Befehl du den Fehler findest. Die Tickets gibt es auch als Quiz im Ticket-Trainer, und beide Prüfungssimulationen laden eigene Fragenpools im JSON-Format.
+**So ist das Material aufgebaut:** Jede Antwort nennt zuerst den Kern und erklärt dann, warum. Jedes Lab beginnt mit Lernzielen, und jedes Fehler-Ticket sagt, mit welchem Befehl du den Fehler findest. Die Prüfungssimulationen laufen offline im Browser und laden auch eigene Fragenpools im JSON-Format.
 
-> Kein offizielles Cisco-Material. Cisco, CCNA, CCNP, ENCOR, ENARSI und Packet Tracer sind Marken von Cisco Systems, Inc.
+> Kein offizielles Cisco-Material. Cisco, CCNA, CCNP, CCIE, ENCOR, ENARSI und Packet Tracer sind Marken von Cisco Systems, Inc.
