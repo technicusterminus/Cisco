@@ -7,7 +7,7 @@ A: **TACACS+ nutzt TCP 49, verschlüsselt das ganze Paket und trennt Authentisie
 T: Vergleich Leicht
 
 Q: Welcher Befehl schaltet AAA auf IOS überhaupt erst ein, und was ändert sich danach sofort?
-A: **`aaa new-model`.** Danach gelten die AAA-Methodenlisten. Die alten `login`- und `password`-Zeilen unter den Lines verlieren ihre Wirkung, und ohne Methodenliste nutzt die Anmeldung die lokale Benutzerdatenbank.
+A: **`aaa new-model`.** Danach gelten die AAA-Methodenlisten, die alten `login`- und `password`-Zeilen unter den Lines verlieren ihre Wirkung. Ohne Methodenliste fragen die VTYs die lokale Benutzerdatenbank ab, nur die Konsole bleibt dann ohne Prüfung.
 T: Wissen Leicht
 
 Q: Wie sorgst du dafür, dass die Anmeldung über TACACS+ läuft und bei Ausfall der Server die lokale Datenbank greift?
@@ -163,7 +163,7 @@ A: **Mit `show ip interface Gi0/0`, dort steht die Zahl der „verification drop
 T: CLI Mittel
 
 Q: Wie lässt du bestimmte Pakete trotz uRPF-Fehler durch?
-A: **Mit einer ACL am Ende des Befehls: `ip verify unicast source reachable-via rx 100`.** Fällt ein Paket bei uRPF durch, prüft der Router ACL 100. Erlaubt sie das Paket, wird es weitergeleitet. So lassen sich Ausnahmen etwa für DHCP-Anfragen mit Quelle 0.0.0.0 schaffen.
+A: **Mit einer ACL am Ende des Befehls: `ip verify unicast source reachable-via rx 100`.** Fällt ein Paket bei uRPF durch, prüft der Router ACL 100. Erlaubt sie das Paket, wird es weitergeleitet. So lassen sich Ausnahmen für bekannte Quellen mit asymmetrischem Weg schaffen. Mit `deny ... log` in der ACL siehst du außerdem, welche Pakete uRPF verwirft.
 T: CLI Schwer
 
 # 3.3 | Control Plane Policing

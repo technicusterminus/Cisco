@@ -1,8 +1,8 @@
 # 3.1 | AAA: Fehlersuche und Feinheiten
 S: https://www.rfc-editor.org/rfc/rfc8907 | RFC 8907: The TACACS+ Protocol
 
-Q: Nach `aaa new-model` meldet sich ein Admin an der Konsole an, obwohl dort nie ein Benutzer gefragt wurde. Plötzlich kommt eine Benutzerabfrage. Warum?
-A: **Mit `aaa new-model` gilt auch für die Konsole die Methodenliste `default` bzw. ohne Liste die lokale Datenbank.** Die alten Line-Einstellungen wirken nicht mehr. Fehlt ein lokaler Benutzer, kommt man nur über einen Passwort-Recovery wieder hinein.
+Q: Du setzt `aaa new-model` und `aaa authentication login default group tacacs+`. Plötzlich verlangt auch die Konsole eine Anmeldung. Warum, und welches Risiko entsteht?
+A: **Die Liste `default` gilt für alle Lines, auch für die Konsole.** Solange es nur `aaa new-model` ohne Liste gibt, fragen die VTYs die lokale Datenbank ab, die Konsole aber gar nicht. Mit der Default-Liste und ohne `local` als Ausweichmethode hilft bei ausgefallenem Server nur noch ein Passwort-Recovery.
 T: Falle Mittel
 
 Q: Was bewirkt `aaa authentication login default group tacacs+` ohne weitere Methode, wenn alle TACACS+-Server ausfallen?
@@ -74,8 +74,8 @@ Q: Auf einem LAN-Interface mit DHCP-Clients ist uRPF Strict aktiv. Werden die DH
 A: **Nein, uRPF lässt Pakete mit Quelle 0.0.0.0 und Ziel 255.255.255.255 ausdrücklich durch.** Sonst würde DHCP und BOOTP an jedem uRPF-Interface brechen. Für andere Ausnahmen nutzt man eine ACL am `ip verify unicast`-Befehl.
 T: Szenario Schwer
 
-Q: Ein Router hat nur eine Default-Route zum Provider. Was bewirkt uRPF Strict auf dem Uplink zum Provider?
-A: **Fast nichts: Ohne `allow-default` würde Strict alles verwerfen, mit `allow-default` passt jede Quelle über die Default-Route.** Auf dem Provider-Uplink eines Endkunden nutzt man uRPF deshalb selten. Sinnvoll ist er auf den Interfaces zu eigenen LANs, wo die Quellen bekannt sind.
+Q: Ein Router hat nur eine Default-Route zum Provider. Was bewirkt uRPF Strict mit `allow-default` auf dem Uplink?
+A: **Fremde Quellen passen über die Default-Route und gehen durch, aber Pakete mit Absendern aus den eigenen Netzen werden verworfen.** Für die eigenen Präfixe zeigt die Route auf ein LAN-Interface, nicht auf den Uplink. So blockt uRPF gefälschte interne Absender, die von außen kommen. Ohne `allow-default` würde Strict dagegen jedes Paket verwerfen, dessen Quelle nur über die Default-Route erreichbar ist.
 T: Szenario Schwer
 
 Q: Wo setzt man uRPF Strict am wirkungsvollsten ein?
