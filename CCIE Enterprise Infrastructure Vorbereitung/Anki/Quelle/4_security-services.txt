@@ -1,0 +1,375 @@
+# 4.1.a | Geräte-Härtung, AAA und CoPP
+S: https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/sec_usr_cfg/configuration/xe-16/sec-usr-cfg-xe-16-book.html | Cisco IOS XE Security Configuration Guide
+
+Q: Wie unterscheiden sich TACACS+ und RADIUS?
+A: **TACACS+: TCP 49, verschlüsselt den gesamten Paketinhalt, trennt Authentifizierung, Autorisierung und Accounting. RADIUS: UDP 1812/1813, verschlüsselt nur das Passwort, kombiniert Authentifizierung und Autorisierung.** TACACS+ eignet sich für Kommandoautorisierung auf Geräten, RADIUS für Netzwerkzugang (802.1X).
+T: Vergleich Leicht
+
+Q: Wie konfigurierst du Login-Authentifizierung mit TACACS+ und lokalem Fallback?
+A:
+```
+aaa new-model
+tacacs server TAC1
+ address ipv4 10.0.0.10
+ key SecretKey
+aaa authentication login default group tacacs+ local
+aaa authorization exec default group tacacs+ local
+aaa accounting commands 15 default start-stop group tacacs+
+```
+Der lokale Fallback greift nur, wenn der Server nicht antwortet, nicht bei abgelehntem Login.
+T: CLI Mittel
+
+Q: Wie härtest du den Zugriff auf die VTY-Leitungen?
+A:
+```
+ip ssh version 2
+ip access-list standard MGMT
+ permit 10.0.0.0 0.0.0.255
+line vty 0 4
+ access-class MGMT in
+ transport input ssh
+ login authentication default
+login block-for 120 attempts 3 within 60
+```
+SSH benötigt Hostname, Domain und einen RSA-Schlüssel mit mindestens 2048 Bit.
+T: CLI Mittel
+
+Q: Warum ist `service password-encryption` kein echter Schutz?
+A: **Es nutzt Typ 7, eine umkehrbare Verschleierung.** Für Passwörter verwendet man `enable secret` mit Typ 8 (PBKDF2) oder Typ 9 (scrypt). Typ 5 (MD5) gilt als veraltet.
+T: Falle Mittel
+
+Q: Wie funktioniert Control Plane Policing?
+A: **Eine MQC-Policy wird auf das Control-Plane-Interface angewendet und begrenzt Verkehr, der zur Route Processor-CPU geht.** Klassifizierung per ACL, Aktion `police` oder `drop`.
+T: Wissen Mittel
+
+Q: Wie konfigurierst du CoPP, um ICMP zur CPU auf 64 kbit/s zu begrenzen?
+A:
+```
+ip access-list extended ICMP
+ permit icmp any any
+class-map match-all CM-ICMP
+ match access-group name ICMP
+policy-map COPP
+ class CM-ICMP
+  police 64000 conform-action transmit exceed-action drop
+control-plane
+ service-policy input COPP
+```
+Verkehr durch das Gerät betrifft CoPP nicht, nur Verkehr an das Gerät und daraus.
+T: CLI Mittel
+
+Q: Was unterscheidet CoPP von Control Plane Protection (CPPr)?
+A: **CPPr teilt die Control Plane in Subinterfaces Host, Transit und CEF-Exception und erlaubt feinere Policies pro Verkehrsart.** CoPP wendet eine Policy auf die gesamte Control Plane an. Zusätzlich bietet CPPr Port-Filter und Queue-Thresholds.
+T: Vergleich Schwer
+
+Q: Welche Rolle hat Management Plane Protection?
+A: **Es beschränkt Management-Protokolle (SSH, SNMP, HTTP) auf ausgewählte Interfaces.** Konfiguration unter `control-plane host` mit `management-interface Gi0/0 allow ssh snmp`. Alle anderen Interfaces antworten dann nicht auf diese Dienste.
+T: Wissen Schwer
+
+# 4.1.b | Layer-2-Sicherheit und 802.1X
+S: https://www.cisco.com/c/en/us/td/docs/switches/lan/catalyst9300/software/release/17-9/configuration_guide/sec/b_179_sec_9300_cg.html | Catalyst 9300 Security Configuration Guide
+
+Q: Wie funktioniert 802.1X?
+A: **Supplicant (Client), Authenticator (Switch) und Authentication Server (RADIUS) tauschen EAP-Nachrichten aus.** Zwischen Client und Switch läuft EAPoL, zwischen Switch und Server RADIUS. Bis zur erfolgreichen Authentifizierung ist nur EAPoL erlaubt.
+T: Wissen Leicht
+
+Q: Was bewirkt MAB, und wann wird es verwendet?
+A: **MAC Authentication Bypass authentifiziert Geräte ohne Supplicant anhand ihrer MAC-Adresse gegen RADIUS.** Typisch für Drucker und IoT. Die Reihenfolge steuert `authentication order dot1x mab`.
+T: Wissen Mittel
+
+Q: Wie konfigurierst du einen Access-Port mit 802.1X und MAB?
+A:
+```
+aaa new-model
+aaa authentication dot1x default group radius
+dot1x system-auth-control
+interface GigabitEthernet1/0/5
+ switchport mode access
+ authentication port-control auto
+ authentication order dot1x mab
+ authentication priority dot1x mab
+ mab
+ dot1x pae authenticator
+```
+`port-control auto` aktiviert die Authentifizierung auf dem Port.
+T: CLI Mittel
+
+Q: Welche Host-Modi gibt es an einem 802.1X-Port?
+A: **Single-Host (ein Gerät), Multi-Host (nach dem ersten Gerät dürfen alle), Multi-Domain (ein Daten- und ein Voice-Gerät), Multi-Auth (jedes Gerät einzeln).** Multi-Auth ist der flexibelste Modus und der sicherste für gemischte Szenarien.
+T: Vergleich Mittel
+
+Q: Wofür stehen Guest VLAN, Auth-Fail VLAN und Critical VLAN?
+A: **Guest: Gerät ohne Supplicant. Auth-Fail: Authentifizierung gescheitert. Critical: RADIUS nicht erreichbar.** Critical Authentication erlaubt den Zugang trotz Serverausfall mit einem definierten VLAN.
+T: Vergleich Mittel
+
+Q: Was leistet DHCP Snooping?
+A: **Der Switch trennt Trusted- und Untrusted-Ports, blockiert DHCP-Server-Antworten auf Untrusted-Ports und baut eine Binding-Tabelle (MAC, IP, VLAN, Port).** Trusted sind Uplinks und der DHCP-Server. Die Tabelle dient auch DAI und IP Source Guard.
+T: Wissen Mittel
+
+Q: Wie aktivierst du DHCP Snooping, DAI und IP Source Guard?
+A:
+```
+ip dhcp snooping
+ip dhcp snooping vlan 10
+interface GigabitEthernet1/0/1
+ ip dhcp snooping trust
+ ip arp inspection trust
+ip arp inspection vlan 10
+interface GigabitEthernet1/0/5
+ ip verify source
+```
+DAI prüft ARP-Pakete gegen die Binding-Tabelle, IP Source Guard filtert Quell-IP am Port. Bei Option 82 auf einem Switch ohne Relay hilft `no ip dhcp snooping information option`.
+T: CLI Schwer
+
+Q: Wie reagiert Port Security bei den Violation-Modi?
+A: **Protect verwirft stumm, Restrict verwirft und meldet (Syslog, SNMP), Shutdown versetzt den Port in err-disabled.** Shutdown ist der Standard. Die Wiederherstellung erfolgt mit `errdisable recovery cause psecure-violation`.
+T: Vergleich Mittel
+
+Q: Was ist der Unterschied zwischen Isolated, Community und Promiscuous Ports bei Private VLANs?
+A: **Isolated: nur Kommunikation mit Promiscuous. Community: mit eigener Community und Promiscuous. Promiscuous: mit allen.** Promiscuous Ports sind typischerweise Router- oder Firewall-Uplinks.
+T: Vergleich Mittel
+
+Q: Wie unterscheidet sich ein VACL von einem Router-ACL?
+A: **Eine VACL filtert Verkehr innerhalb eines VLANs (Layer 2) per VLAN Access Map, eine Router-ACL nur beim Routing am Interface.** Aktion `forward`, `drop` oder `redirect`. Damit begrenzt man Verkehr zwischen Hosts im selben VLAN.
+T: Vergleich Schwer
+
+Q: Wie wirkt Storm Control?
+A: **Es begrenzt Broadcast-, Multicast- oder Unicast-Verkehr pro Port auf einen Prozentwert oder pps/bps.** Bei Überschreitung verwirft der Port Verkehr (`action` kann auch shutdown oder trap sein). `storm-control broadcast level 10`.
+T: Wissen Leicht
+
+# 4.1.c | uRPF, IPv6 First Hop Security und ACLs
+S: https://www.rfc-editor.org/rfc/rfc3704 | RFC 3704: Ingress Filtering
+
+Q: Wie unterscheiden sich uRPF Strict und Loose?
+A: **Strict: Die Route zur Quelle muss über das Eingangsinterface führen. Loose: Es genügt irgendeine Route zur Quelle (Default Route zählt nur mit `allow-default`).** Strict bei Single-homed, Loose bei asymmetrischem Routing und Multihoming.
+T: Vergleich Mittel
+
+Q: Wie aktivierst du uRPF?
+A:
+```
+interface GigabitEthernet0/1
+ ip verify unicast source reachable-via rx
+interface GigabitEthernet0/2
+ ip verify unicast source reachable-via any
+```
+`rx` ist Strict, `any` ist Loose. Optional lässt `allow-default` die Default Route zu, und eine ACL kann Ausnahmen definieren.
+T: CLI Mittel
+
+Q: Welche Funktionen gehören zu IPv6 First Hop Security?
+A: **RA Guard, DHCPv6 Guard, ND Inspection, IPv6 Source Guard und Destination Guard, jeweils per Policy am Port oder VLAN.** Sie schützen gegen Rogue RA, falsche DHCPv6-Server und Neighbor-Spoofing.
+T: Wissen Mittel
+
+Q: Wie konfigurierst du RA Guard?
+A:
+```
+ipv6 nd raguard policy HOST
+ device-role host
+interface GigabitEthernet1/0/5
+ ipv6 nd raguard attach-policy HOST
+```
+Router-Ports bekommen `device-role router`. Auf Host-Ports blockiert die Policy eingehende Router Advertisements.
+T: CLI Mittel
+
+Q: Welche ACL-Arten gibt es auf IOS XE, und welche Besonderheit hat die Reihenfolge?
+A: **Standard, Extended, Named, Time-based, Reflexive. ACLs werden von oben nach unten ausgewertet, am Ende steht ein implizites deny.** Bei einer Anwendung auf einem Interface zählen Richtung und Ort. Eine nicht existierende ACL im `access-group` lässt alles durch.
+T: Wissen Mittel
+
+Q: Wie funktioniert eine Zone-Based Firewall?
+A: **Interfaces gehören zu Zonen, Zone-Pairs mit Policy-Map (inspect, pass, drop) steuern den Verkehr zwischen Zonen.** Ohne Zone-Pair wird Verkehr zwischen Zonen verworfen. Die Self-Zone steht für den Router selbst, Verkehr in und aus der Self-Zone ist standardmäßig erlaubt.
+T: Wissen Schwer
+
+# 4.2.a | QoS
+S: https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/qos_mqc/configuration/xe-16/qos-mqc-xe-16-book.html | Cisco QoS MQC Guide
+
+Q: Welche DSCP-Werte gehören zu EF, AF41, AF31 und CS3?
+A: **EF 46, AF41 34, AF31 26, CS3 24.** AFxy ergibt sich aus 8x + 2y. CS-Klassen sind Vielfache von 8.
+T: Rechnen Mittel
+
+Q: Wie unterscheiden sich Policing und Shaping?
+A: **Policing verwirft oder markiert überschüssigen Verkehr sofort, Shaping puffert ihn und glättet die Rate.** Shaping wirkt nur ausgehend, Policing in beide Richtungen. Shaping erhöht die Latenz, Policing erzeugt Verluste.
+T: Vergleich Leicht
+
+Q: Wie berechnest du das Zeitintervall Tc beim Shaping?
+A: **Tc = Bc / CIR.** Beispiel: Bc 8000 Bit bei CIR 64000 bit/s ergibt 125 ms. Kleinere Bc bedeutet kürzere Intervalle und weniger Jitter.
+T: Rechnen Mittel
+
+Q: Wie konfigurierst du eine Low-Latency-Queue für Sprache?
+A:
+```
+class-map match-all VOICE
+ match dscp ef
+policy-map WAN
+ class VOICE
+  priority percent 20
+ class class-default
+  fair-queue
+interface GigabitEthernet0/1
+ service-policy output WAN
+```
+`priority` begrenzt den LLQ-Verkehr automatisch (implizites Policing), damit andere Klassen nicht verhungern.
+T: CLI Mittel
+
+Q: Wie unterscheiden sich Single-Rate/Two-Color und Dual-Rate/Three-Color Policer?
+A: **Single-Rate: conform/exceed. Dual-Rate (trTCM): conform, exceed und violate mit CIR und PIR.** Beim Dual-Rate-Policer wird zwischen CIR und PIR markiert, über PIR verworfen.
+T: Vergleich Schwer
+
+Q: Wie funktioniert WRED?
+A: **Vor dem Tail Drop verwirft WRED Pakete mit steigender Wahrscheinlichkeit, abhängig von DSCP und Queue-Länge.** Schwellen: min-threshold, max-threshold, mark-probability. Pakete mit niedrigerer Priorität fallen früher heraus.
+T: Wissen Mittel
+
+Q: Was ist die Trust Boundary im QoS-Design?
+A: **Die Stelle im Netz, ab der man den Markierungen (DSCP/CoS) der Endgeräte glaubt, meist der Access-Switch.** Davor setzt man Markierungen von nicht vertrauenswürdigen Geräten per Policy neu oder auf Default zurück. Ein IP-Telefon kann man per CDP-Erkennung als vertrauenswürdig behandeln.
+T: Wissen Mittel
+
+# 4.3.a | FHRP, NTP und DHCP
+S: https://www.rfc-editor.org/rfc/rfc5798 | RFC 5798: VRRPv3
+
+Q: Wie unterscheiden sich HSRP, VRRP und GLBP?
+A: **HSRP: Cisco-proprietär, Active/Standby, Preempt standardmäßig aus. VRRP: offen, Master/Backup, Preempt standardmäßig an. GLBP: Cisco, AVG verteilt Last über mehrere AVFs.** Priorität ist bei allen 100 als Standard, VRRP und HSRP nutzen die höchste IP als Tie-Break.
+T: Vergleich Mittel
+
+Q: Welche Multicast-Adressen und virtuellen MACs nutzen HSRPv1, HSRPv2 und VRRP?
+A: **HSRPv1: 224.0.0.2, 0000.0C07.ACxx. HSRPv2: 224.0.0.102, 0000.0C9F.Fxxx. VRRP: 224.0.0.18, 0000.5E00.01xx.** HSRPv2 unterstützt Gruppen bis 4095 und IPv6.
+T: Wissen Schwer
+
+Q: Wie konfigurierst du HSRP mit Tracking?
+A:
+```
+track 1 ip sla 1 reachability
+interface GigabitEthernet0/0
+ standby version 2
+ standby 10 ip 10.1.1.254
+ standby 10 priority 110
+ standby 10 preempt
+ standby 10 track 1 decrement 20
+```
+Fällt das Ziel aus, sinkt die Priorität um 20, und der Standby übernimmt (mit Preempt).
+T: CLI Mittel
+
+Q: Wie sichert man NTP ab?
+A:
+```
+ntp authenticate
+ntp authentication-key 1 md5 Key123
+ntp trusted-key 1
+ntp server 10.0.0.1 key 1
+```
+Ohne `trusted-key` akzeptiert der Client die Antworten nicht. Mit `ntp access-group` begrenzt man zusätzlich die Zugriffsrechte.
+T: CLI Mittel
+
+Q: Was bedeutet Stratum 16 bei NTP?
+A: **Das Gerät ist nicht synchronisiert.** Eine echte Zeitquelle ist Stratum 1, jedes Hop erhöht um eins. `ntp master 3` macht ein Gerät zur Quelle mit Stratum 3.
+T: Wissen Leicht
+
+Q: Wie arbeitet DHCP Relay, und wozu dient Option 82?
+A: **Der Router leitet Broadcasts per `ip helper-address` als Unicast an den Server weiter und setzt dabei die Gateway-Adresse (giaddr).** Option 82 liefert Switch und Port des Clients. Den Pool wählt der Server anhand von giaddr, Option 82 erlaubt zusätzlich Zuteilung pro Port.
+T: Wissen Mittel
+
+Q: Wie richtest du einen DHCP-Server auf dem Router ein?
+A:
+```
+ip dhcp excluded-address 10.1.1.1 10.1.1.10
+ip dhcp pool LAN
+ network 10.1.1.0 255.255.255.0
+ default-router 10.1.1.1
+ dns-server 8.8.8.8
+ lease 1 0 0
+```
+Die ausgeschlossenen Adressen müssen vor dem Pool definiert sein.
+T: CLI Leicht
+
+Q: Wie unterscheiden sich SLAAC, Stateless DHCPv6 und Stateful DHCPv6?
+A: **SLAAC: Das Gerät bildet seine Adresse aus Präfix und Interface-ID. Stateless: SLAAC plus Optionen (DNS) per DHCPv6 (O-Flag). Stateful: Adresse per DHCPv6 (M-Flag).** Das A-Flag im Prefix-Information-Teil erlaubt SLAAC.
+T: Vergleich Mittel
+
+# 4.3.b | NAT, IP SLA und Monitoring
+S: https://www.rfc-editor.org/rfc/rfc3022 | RFC 3022: Traditional NAT
+
+Q: Wie heißen die vier NAT-Adresstypen?
+A: **Inside Local, Inside Global, Outside Local, Outside Global.** Inside Local ist die private Adresse des internen Hosts, Inside Global seine öffentliche Darstellung. Outside Global ist die echte Adresse des externen Hosts.
+T: Wissen Leicht
+
+Q: In welcher Reihenfolge arbeiten Routing und NAT?
+A: **Inside→Outside: erst Routing, dann NAT. Outside→Inside: erst NAT, dann Routing.** Deshalb benötigt man bei Policy-Entscheidungen die jeweils passende Adresse.
+T: Wissen Mittel
+
+Q: Wie konfigurierst du PAT auf das Interface Gi0/1?
+A:
+```
+ip access-list standard NAT-SRC
+ permit 10.0.0.0 0.255.255.255
+ip nat inside source list NAT-SRC interface GigabitEthernet0/1 overload
+interface GigabitEthernet0/0
+ ip nat inside
+interface GigabitEthernet0/1
+ ip nat outside
+```
+`overload` aktiviert PAT mit Ports.
+T: CLI Leicht
+
+Q: Wie konfigurierst du ein statisches NAT für einen Server mit Portweiterleitung?
+A:
+```
+ip nat inside source static tcp 10.1.1.10 443 203.0.113.5 443
+```
+Die Form ohne Protokoll gilt für alle Ports (1:1). Mit TCP/UDP und Port lässt sich eine Adresse für mehrere Server teilen.
+T: CLI Mittel
+
+Q: Wie sorgst du dafür, dass ein Default Route nur bei erreichbarem Ziel aktiv ist?
+A:
+```
+ip sla 1
+ icmp-echo 203.0.113.1 source-interface GigabitEthernet0/1
+ frequency 10
+ip sla schedule 1 life forever start-time now
+track 1 ip sla 1 reachability
+ip route 0.0.0.0 0.0.0.0 203.0.113.1 track 1
+ip route 0.0.0.0 0.0.0.0 198.51.100.1 250
+```
+Die Floating Static Route übernimmt, sobald das Tracking-Objekt down geht.
+T: CLI Mittel
+
+Q: Aus welchen Teilen besteht Flexible NetFlow?
+A: **Flow Record (Match- und Collect-Felder), Flow Exporter (Ziel Collector) und Flow Monitor (verbindet beides), angewendet am Interface.** `ip flow monitor MON input`. Match-Felder bilden den Flow-Schlüssel, Collect-Felder sind Zusatzdaten.
+T: Wissen Mittel
+
+Q: Wie konfigurierst du SPAN und ERSPAN?
+A:
+```
+monitor session 1 source interface GigabitEthernet1/0/1 both
+monitor session 1 destination interface GigabitEthernet1/0/24
+monitor session 2 type erspan-source
+ source interface GigabitEthernet1/0/1
+ destination
+  erspan-id 10
+  ip address 10.9.9.9
+  origin ip address 10.9.9.1
+```
+ERSPAN kapselt den Mirror-Verkehr in GRE und sendet ihn über Layer 3 an den Analysator.
+T: CLI Schwer
+
+Q: Wie nutzt du Embedded Packet Capture auf einem Catalyst 9000?
+A:
+```
+monitor capture CAP interface GigabitEthernet1/0/1 both
+monitor capture CAP match any
+monitor capture CAP buffer size 10
+monitor capture CAP start
+monitor capture CAP stop
+show monitor capture CAP buffer brief
+```
+Mit `monitor capture CAP export flash:cap.pcap` exportierst du die Datei.
+T: CLI Mittel
+
+Q: Welche Syslog-Schweregrade gibt es, und wie sieht der Befehl für die Konsole aus?
+A: **0 Emergencies, 1 Alerts, 2 Critical, 3 Errors, 4 Warnings, 5 Notifications, 6 Informational, 7 Debugging.** `logging console 4` zeigt Stufe 0–4. Eine niedrigere Zahl bedeutet schwerer.
+T: Wissen Leicht
+
+Q: Wie sicherst du SNMPv3 mit Authentifizierung und Verschlüsselung?
+A:
+```
+snmp-server group ADMIN v3 priv
+snmp-server user alice ADMIN v3 auth sha AuthPass priv aes 128 PrivPass
+```
+`priv` verschlüsselt, `auth` prüft nur Integrität. Informs sind bestätigt, Traps nicht.
+T: CLI Mittel

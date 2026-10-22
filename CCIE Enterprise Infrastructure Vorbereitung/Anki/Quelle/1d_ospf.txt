@@ -1,0 +1,194 @@
+# 1.4.a | OSPF: Nachbarschaften
+S: https://www.rfc-editor.org/rfc/rfc2328 | RFC 2328: OSPF Version 2
+S: https://www.rfc-editor.org/rfc/rfc5340 | RFC 5340: OSPF for IPv6
+
+Q: Welche Zustände durchläuft eine OSPF-Nachbarschaft bis FULL?
+A: **Down, Init, 2-Way, ExStart, Exchange, Loading, Full.** Init: Hello empfangen, eigene Router-ID noch nicht in der Nachbarliste. 2-Way: bidirektional. ExStart: Master/Slave wählen. Exchange: DBD-Pakete. Loading: LSRs und LSUs. Full: Datenbanken synchron.
+T: Wissen Leicht
+
+Q: Ein OSPF-Nachbar hängt in EXSTART. Was ist die häufigste Ursache?
+A: **Unterschiedliche Interface-MTU.** Der Router mit der größeren MTU sendet DBD-Pakete, die der andere nicht verarbeitet. Weitere Ursachen: doppelte Router-ID, ein Unicast-Problem (Layer 2) oder NAT. Abhilfe: `ip mtu` angleichen oder notfalls `ip ospf mtu-ignore`.
+T: Szenario Leicht
+
+Q: Zwei Router zeigen sich gegenseitig als `2-WAY/DROTHER`. Ist das ein Fehler?
+A: **Nein, auf Broadcast-Netzen ist das normal.** DROTHER-Router bilden nur mit DR und BDR die Full-Adjacency. Zwischen zwei DROTHERs bleibt es bei 2-Way. Nur wenn DR und BDR fehlen, stimmt etwas nicht.
+T: Falle Leicht
+
+Q: Welche Werte müssen auf beiden Seiten stimmen, damit zwei OSPF-Router Nachbarn werden?
+A: **Area-ID, Subnetz und Maske, Hello- und Dead-Intervall, Area-Typ (E-/N-Bit), Authentisierung und eindeutige Router-ID.** Die MTU muss für Full stimmen (sonst ExStart). Das Netzwerk-Typ-Setting selbst muss nicht gleich sein, aber unterschiedliche Typen bringen unterschiedliche Timer und führen daher oft zu Mismatches.
+T: Wissen Mittel
+
+Q: Wie aktivierst du OSPF direkt am Interface und wo siehst du, ob es greift?
+A:
+```
+interface GigabitEthernet0/1
+ ip ospf 1 area 0
+```
+Das ersetzt die `network`-Anweisung. `show ip ospf interface brief` listet alle OSPF-Interfaces mit Area, Kosten, Zustand und Nachbarzahl. Interface-Befehle haben Vorrang vor `network`.
+T: CLI Leicht
+
+Q: Beide Seiten zeigen den Nachbarn dauerhaft in INIT. Was heißt das?
+A: **Nur eine Richtung funktioniert: Der Router sieht die Hellos des Nachbarn, der Nachbar aber seine nicht.** Prüfe ACLs, Authentisierung, die Multicast-Weiterleitung (224.0.0.5) auf Layer 2 und Einseitigkeit durch NAT. `debug ip ospf hello` zeigt, welche Seite die Hellos nicht sieht.
+T: Szenario Mittel
+
+Q: Zwei Router mit derselben Router-ID im selben Netz: Was passiert?
+A: **Die Nachbarschaft kommt nicht zustande oder die LSDB wird inkonsistent.** Meist hängt sie in EXSTART/EXCHANGE, und im Log erscheint „Detected router with duplicate router-id“. Setze eindeutige IDs mit `router-id` und starte den Prozess mit `clear ip ospf process` neu.
+T: Falle Mittel
+
+Q: Wie baust du OSPFv3 für IPv4 und IPv6 mit der Address-Family-Syntax auf?
+A:
+```
+router ospfv3 1
+ address-family ipv6 unicast
+ address-family ipv4 unicast
+interface GigabitEthernet0/1
+ ospfv3 1 ipv6 area 0
+ ospfv3 1 ipv4 area 0
+```
+OSPFv3 läuft pro Link und nutzt Link-Local-Adressen als Absender. Im Gegensatz zu OSPFv2 steht keine Adresse im Hello, deshalb ist das Subnetz keine Bedingung für die Nachbarschaft.
+T: CLI Schwer
+
+# 1.4.b | OSPF: Netzwerktypen, LSA-Typen und Area-Typen
+S: https://www.rfc-editor.org/rfc/rfc2328 | RFC 2328: OSPF Version 2
+S: https://www.rfc-editor.org/rfc/rfc3101 | RFC 3101: The OSPF NSSA Option
+
+Q: Welche LSA-Typen gibt es in OSPFv2 und was beschreiben sie?
+A: **1 Router, 2 Network, 3 Summary (Netze anderer Areas), 4 ASBR-Summary, 5 AS-External, 7 NSSA-External, 9/10/11 Opaque.** Typ 1 und 2 fluten nur in der Area. Typ 3 und 4 erzeugt der ABR. Typ 5 erzeugt der ASBR und flutet überall außer in Stub-Areas. Typ 7 gilt nur in der NSSA.
+T: Wissen Mittel
+
+Q: Was ist ein Typ-4-LSA und wann braucht man ihn?
+A: **Er beschreibt, wie man einen ASBR in einer anderen Area erreicht.** Typ 5 enthält die Router-ID des ASBR als Advertising Router. Router in anderen Areas wissen zunächst nicht, wie sie den ASBR erreichen, der ABR erzeugt dafür ein Typ-4-LSA.
+T: Wissen Schwer
+
+Q: Welche Standard-Netzwerktypen, Timer und DR-Wahl haben die OSPF-Netzwerktypen?
+A: **Broadcast (Ethernet): Hello 10, Dead 40, DR/BDR. Point-to-Point: 10/40, kein DR. Non-Broadcast (NBMA): 30/120, DR, Nachbarn statisch. Point-to-Multipoint: 30/120, kein DR. Point-to-Multipoint Non-Broadcast: 30/120, statische Nachbarn, kein DR.** Die Typen müssen nicht identisch sein, aber verschiedene Timer verhindern die Nachbarschaft.
+T: Vergleich Mittel
+
+Q: Ein Loopback mit 10.1.1.1/24 erscheint bei den Nachbarn als /32. Warum und wie änderst du das?
+A: **Loopbacks haben den Netzwerktyp „loopback“ und werden als Host-Route (/32) angekündigt.** Mit `ip ospf network point-to-point` am Loopback erscheint die konfigurierte Maske. Das ist nützlich, wenn du das Netz tatsächlich als /24 verbreiten willst.
+T: Falle Mittel
+
+Q: Wie unterscheiden sich Stub, Totally Stub, NSSA und Totally NSSA?
+A: **Stub: keine Typ 5, ABR injiziert Default (Typ 3). Totally Stub: zusätzlich keine Typ 3 (außer Default). NSSA: keine Typ 5, aber ASBR möglich (Typ 7), ABR kann Default (Typ 7) injizieren. Totally NSSA: zusätzlich keine Typ 3.** Die Totally-Varianten erhältst du mit `no-summary` am ABR.
+T: Vergleich Mittel
+
+Q: Wie konfigurierst du Area 10 als Totally Stub?
+A:
+```
+router ospf 1
+ area 10 stub no-summary
+```
+Auf dem ABR mit `no-summary`, auf allen internen Routern nur `area 10 stub`. Stub-Flag und `no-summary` verhindern, dass Typ 3, 4 und 5 in die Area gelangen. Der ABR injiziert stattdessen eine Default-Route.
+T: CLI Mittel
+
+Q: Wie konfigurierst du eine NSSA und wann entsteht die Default-Route?
+A:
+```
+router ospf 1
+ area 20 nssa default-information-originate
+ ! Totally NSSA stattdessen: area 20 nssa no-summary
+```
+In einer NSSA wird die Default-Route nicht automatisch injiziert. Der ABR erzeugt sie bei `no-summary` (Typ 3) oder mit `default-information-originate` (Typ 7). Der ASBR in der NSSA erzeugt Typ-7-LSAs, der ABR übersetzt sie in Typ 5.
+T: CLI Schwer
+
+Q: Wie wird ein Typ-7-LSA zu einem Typ-5-LSA, und was ist die Forwarding Address?
+A: **Der ABR mit der höchsten Router-ID übersetzt Typ 7 in Typ 5, sofern das P-Bit gesetzt ist.** Die Forwarding Address des Typ-7-LSAs wird ins Typ-5-LSA übernommen. Ist sie 0.0.0.0, gilt der übersetzende ABR als Weg zum Ziel. Mit einer Forwarding Address geht der Verkehr direkt zum Next-Hop statt über den ASBR.
+T: Wissen Schwer
+
+Q: Was ist ein Typ-9-LSA?
+A: **Ein Opaque-LSA mit Link-Local-Scope.** Es bleibt auf dem Link, z. B. für Graceful Restart. Typ 10 gilt in der Area (Traffic Engineering, Segment Routing), Typ 11 AS-weit.
+T: Wissen Schwer
+
+Q: Wie unterscheidest du in DMVPN die OSPF-Netzwerktypen am Hub und an den Spokes?
+A: **Broadcast-Typ am Hub mit DR, Spokes mit Priorität 0, oder Point-to-Multipoint.** Mit Broadcast muss der Hub DR sein (Spokes `ip ospf priority 0`), sonst scheitert die Nachbarschaft. Mit Point-to-Multipoint gibt es keinen DR, aber der Next-Hop bleibt immer der Hub. Direkte Spoke-zu-Spoke-Pfade entstehen nur in Phase 3.
+T: Szenario Schwer
+
+# 1.4.c | OSPF: Pfadwahl und Summarization
+S: https://www.rfc-editor.org/rfc/rfc2328 | RFC 2328: OSPF Version 2
+
+Q: In welcher Reihenfolge bevorzugt OSPF Routentypen?
+A: **Intra-Area (O) vor Inter-Area (O IA) vor E1/N1 vor E2/N2.** Innerhalb der gleichen Kategorie gewinnt die niedrigste Metrik. Das gilt unabhängig von den Kosten: Eine Intra-Area-Route mit Kosten 1000 schlägt eine Inter-Area-Route mit Kosten 10.
+T: Wissen Mittel
+
+Q: Zwei E2-Routen zum selben Ziel haben dieselbe externe Metrik. Wie entscheidet OSPF?
+A: **Nach den Kosten zur Forwarding Address bzw. zum ASBR.** E2 enthält nur die externe Metrik, bei Gleichstand zählt die interne Distanz zum ASBR. E1 addiert beide Teile direkt.
+T: Wissen Schwer
+
+Q: Wie wirken die Kosten bei OSPF, und warum musst du bei Gigabit-Netzen die Referenzbandbreite anpassen?
+A: **Kosten = Referenzbandbreite / Interface-Bandbreite. Standard-Referenz ist 100 Mbit/s, damit haben 100 Mbit/s, 1 Gbit/s und 10 Gbit/s alle Kosten 1.** Setze `auto-cost reference-bandwidth 100000` (Mbit/s) auf allen Routern gleich, sonst entstehen Schleifen und Fehlentscheidungen.
+T: Rechnen Mittel
+
+Q: Wie legst du die Metrik einer Area-Summary am ABR fest?
+A:
+```
+router ospf 1
+ area 1 range 10.1.0.0 255.255.0.0 cost 50
+```
+Ohne `cost` leitet der ABR die Metrik aus den enthaltenen Routen ab. Die Summary bleibt bestehen, solange mindestens eine Teilroute der Area aktiv ist, und der ABR legt zusätzlich eine Route nach Null0 an.
+T: CLI Mittel
+
+Q: Wie wirkt sich `area 1 range 10.1.0.0 255.255.0.0 not-advertise` aus?
+A: **Der ABR unterdrückt sowohl die Summary als auch alle enthaltenen Einzelrouten für andere Areas.** Das ist ein Filter. Nützlich, um Netze aus Area 1 nicht in den Backbone zu tragen.
+T: Wissen Mittel
+
+# 1.4.d | OSPF: Betrieb, Router-ID, DR/BDR und Absicherung
+S: https://www.rfc-editor.org/rfc/rfc2328 | RFC 2328: OSPF Version 2
+
+Q: Wie wählt ein Router seine OSPF-Router-ID?
+A: **1. manuell mit `router-id`, 2. die höchste Loopback-IPv4-Adresse, 3. die höchste IPv4-Adresse eines aktiven physischen Interfaces.** Die ID wird beim Start des Prozesses bestimmt und nicht automatisch geändert. Neue Werte greifen nach `clear ip ospf process`.
+T: Wissen Leicht
+
+Q: Wie läuft die DR/BDR-Wahl ab und wann findet sie neu statt?
+A: **Höchste Priorität gewinnt (Standard 1), bei Gleichstand die höchste Router-ID. Priorität 0 schließt aus.** Die Wahl ist nicht präemptiv: Ein neuer Router mit höherer Priorität verdrängt einen laufenden DR nicht. Erst bei Ausfall des DR wird der BDR zum DR.
+T: Wissen Mittel
+
+Q: Wie lange lebt ein LSA und wann wird es erneuert?
+A: **MaxAge ist 3600 s, der Ersteller erneuert alle 1800 s (LSRefreshTime) mit höherer Sequenznummer.** Wird ein LSA ungültig, flutet der Ersteller es mit Alter 3600 und löscht es so aus allen Datenbanken.
+T: Wissen Mittel
+
+Q: Welche Multicast-Adressen nutzt OSPF?
+A: **224.0.0.5 (AllSPFRouters) und 224.0.0.6 (AllDRouters).** Hello und Updates der DR-Router gehen an 224.0.0.5. DROTHER sendet Updates an den DR an 224.0.0.6. Für IPv6: FF02::5 und FF02::6.
+T: Wissen Leicht
+
+Q: Welche Rolle hat `passive-interface` unter OSPF?
+A: **Das Interface sendet keine Hellos und bildet keine Nachbarschaft, das Netz wird aber weiterhin im Router-LSA angekündigt.** Nutze `passive-interface default` und lasse nur Transit-Interfaces mit `no passive-interface` aktiv.
+T: Wissen Leicht
+
+Q: Wie schützt du OSPF-Sitzungen mit GTSM?
+A:
+```
+interface GigabitEthernet0/1
+ ip ospf ttl-security hops 1
+```
+Der Router sendet Pakete mit TTL 255 und akzeptiert nur Pakete mit mindestens TTL 255 − hops. Damit erreichen entfernte Angreifer die Nachbarschaft nicht. Global gilt `ttl-security all-interfaces` im Prozess.
+T: CLI Schwer
+
+Q: Wie nimmst du einen OSPF-Router für Wartung aus dem Transit, ohne dass er Nachbarschaften verliert?
+A: **Mit `max-metric router-lsa`.** Der Router kündigt für seine Transit-Links die maximale Metrik an, die anderen Router meiden ihn, solange es Alternativen gibt. `max-metric router-lsa on-startup 300` tut das beim Start für 300 Sekunden.
+T: Wissen Mittel
+
+# 1.4.e | OSPF: Konvergenz, Throttling und Skalierung
+S: https://www.rfc-editor.org/rfc/rfc2328 | RFC 2328: OSPF Version 2
+
+Q: Wie beschleunigst du OSPF-Konvergenz mit SPF- und LSA-Throttling?
+A:
+```
+router ospf 1
+ timers throttle spf 50 200 5000
+ timers throttle lsa all 0 200 5000
+ timers lsa arrival 100
+```
+SPF: Start-Wartezeit 50 ms, danach Hold-Zeit 200 ms (verdoppelt sich bei jeder Wiederholung bis maximal 5000 ms). LSA-Throttle steuert, wie oft derselbe LSA erzeugt wird. `lsa arrival` ist der Mindestabstand, in dem ein Router denselben LSA von Nachbarn akzeptiert.
+T: CLI Schwer
+
+Q: Was bewirkt OSPF-Prefix-Suppression?
+A: **Der Router kündigt in seinem Router-LSA keine Transit-Link-Präfixe an (außer Loopbacks und passive Interfaces).** Das verkleinert die Routing-Tabelle und beschleunigt SPF. Aktiv mit `prefix-suppression` im Prozess oder `ip ospf prefix-suppression` am Interface. Die Router-IDs und Loopbacks bleiben erreichbar.
+T: Wissen Schwer
+
+Q: Was bedeutet LFA und Remote LFA bei OSPF?
+A: **LFA berechnet im Voraus einen Reserve-Next-Hop, der bei Ausfall sofort in die FIB geht. Remote LFA nutzt einen entfernten Tunnel-Endpunkt (PQ-Knoten), wenn kein direkter LFA existiert.** Aktiv mit `fast-reroute per-prefix enable prefix-priority low` im Prozess. Remote LFA braucht MPLS/LDP.
+T: Wissen Schwer
+
+Q: Wann lohnt sich OSPF Flood-Reduction oder Demand-Circuit?
+A: **Auf Links mit wenig Bandbreite oder kostenpflichtiger Wählverbindung.** `ip ospf flood-reduction` setzt das DoNotAge-Bit, damit periodische Refreshes nicht gefluten werden. `ip ospf demand-circuit` unterdrückt Hellos nach der Synchronisation.
+T: Wissen Schwer

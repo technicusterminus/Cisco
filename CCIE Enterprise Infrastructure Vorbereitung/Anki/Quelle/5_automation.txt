@@ -1,0 +1,110 @@
+# 5.1.a | Datenformate und Modelle
+S: https://www.rfc-editor.org/rfc/rfc7950 | RFC 7950: YANG 1.1
+
+Q: Wie unterscheiden sich JSON, XML und YAML?
+A: **JSON: Schlüssel-Wert-Paare in Klammern, kompakt, Standard für REST. XML: Tags, Attribute und Namespaces, Standard für NETCONF. YAML: Einrückung statt Klammern, gut lesbar, typisch für Ansible.** JSON und YAML kennen Listen und Objekte, XML bildet das über verschachtelte Elemente ab.
+T: Vergleich Leicht
+
+Q: Wofür steht YANG, und welche Bausteine hat es?
+A: **YANG ist eine Modellierungssprache für Konfigurations- und Zustandsdaten.** Bausteine: Module, Container, Lists, Leafs und Leaf-Lists. Es gibt native Modelle (Cisco-IOS-XE-native), IETF-Modelle und OpenConfig.
+T: Wissen Mittel
+
+Q: Wie unterscheiden sich NETCONF, RESTCONF und gNMI?
+A: **NETCONF: SSH (Port 830), XML, RPC-Operationen. RESTCONF: HTTPS, JSON oder XML, HTTP-Methoden. gNMI: gRPC über HTTP/2 mit Protobuf.** Alle drei arbeiten mit YANG-Modellen. gNMI ist besonders für Streaming-Telemetrie geeignet.
+T: Vergleich Mittel
+
+Q: Welche Operationen kennt NETCONF?
+A: **get, get-config, edit-config, copy-config, delete-config, lock, unlock, commit und close-session.** Mit dem Candidate-Datastore sammelt man Änderungen und aktiviert sie per `commit`. Ohne Candidate arbeitet edit-config direkt auf dem Running-Datastore.
+T: Wissen Mittel
+
+Q: Wie aktivierst du NETCONF und RESTCONF auf IOS XE?
+A:
+```
+netconf-yang
+restconf
+ip http secure-server
+ip http authentication local
+```
+NETCONF lauscht auf TCP 830. RESTCONF braucht den HTTPS-Server.
+T: CLI Mittel
+
+Q: Wie ordnest du HTTP-Methoden den RESTCONF-Aktionen zu?
+A: **GET liest, POST erzeugt, PUT ersetzt, PATCH ändert teilweise, DELETE löscht.** Der Pfad beginnt mit `/restconf/data/`, der Content-Type ist `application/yang-data+json`.
+T: Wissen Mittel
+
+Q: Welche HTTP-Statuscodes sind bei REST-APIs wichtig?
+A: **200 OK, 201 Created, 204 No Content, 400 Bad Request, 401 Unauthorized, 403 Forbidden, 404 Not Found, 500 Internal Server Error.** 401 bedeutet fehlende oder falsche Anmeldung, 403 fehlende Berechtigung.
+T: Wissen Leicht
+
+Q: Wie holst du per Python einen Token vom Catalyst Center?
+A:
+```
+import requests
+r = requests.post(
+    "https://<host>/dna/system/api/v1/auth/token",
+    auth=("admin", "password"), verify=False)
+token = r.json()["Token"]
+headers = {"X-Auth-Token": token}
+```
+Den Token sendet man bei weiteren Aufrufen im Header `X-Auth-Token`.
+T: CLI Mittel
+
+# 5.1.b | Telemetrie, EEM und Guest Shell
+S: https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/eem/configuration/xe-16/eem-xe-16-book.html | Cisco EEM Guide
+
+Q: Wie unterscheiden sich Polling und Model-Driven Telemetry?
+A: **Polling fragt periodisch ab (SNMP), Telemetrie sendet Daten per Subscription (Push).** Die Subscription arbeitet periodisch oder bei Änderung (on-change). Modelle liefern YANG-Pfade, Transport erfolgt per gRPC oder NETCONF.
+T: Vergleich Mittel
+
+Q: Was ist der Unterschied zwischen Dial-In und Dial-Out bei Telemetrie?
+A: **Dial-In: Der Collector baut die Verbindung auf und abonniert (z. B. gNMI). Dial-Out: Das Gerät baut die Verbindung zum Collector auf.** Dial-Out funktioniert auch hinter einer Firewall, die nur ausgehenden Verkehr erlaubt.
+T: Vergleich Schwer
+
+Q: Wie schreibst du ein EEM-Applet, das bei einem Link-Down-Syslog eine Meldung ausgibt?
+A:
+```
+event manager applet LINKDOWN
+ event syslog pattern "%LINK-3-UPDOWN.*down"
+ action 1.0 syslog msg "Link down erkannt"
+ action 2.0 cli command "enable"
+ action 3.0 cli command "show interfaces status"
+```
+Event-Detektoren sind u. a. syslog, timer, cli, snmp und track. Aktionen führen CLI-Befehle, Mails und Skripte aus.
+T: CLI Mittel
+
+Q: Wie verhinderst du, dass ein EEM-Applet einen CLI-Befehl blockiert oder wiederholt?
+A: **Mit `event cli pattern "..." sync no skip no` (Befehl wird ausgeführt, das Applet läuft parallel) bzw. `sync yes skip yes` (Applet ersetzt den Befehl).** Ein Ratenlimit setzt man mit `maxrun` oder `ratelimit`.
+T: Wissen Schwer
+
+Q: Was ist die Guest Shell?
+A: **Ein Linux-Container (LXC) auf IOS XE, in dem man Python 3 und Linux-Tools nutzen kann.** Aktivierung: `iox`, dann `guestshell enable`. Zugriff über `guestshell run python3`. Skripte nutzen das Modul `cli` für IOS-Befehle.
+T: Wissen Mittel
+
+Q: Wie führst du ein Skript regelmäßig auf dem Gerät aus?
+A: **Mit EEM-Applet, Timer-Event und `action cli command "guestshell run python3 /flash/script.py"`.** Alternativ ruft man das Skript aus dem Guest Shell per cron auf.
+T: Szenario Mittel
+
+Q: Wie nutzt man Ansible mit Cisco-Geräten?
+A: **Agentlos per SSH oder NETCONF. Inventory, Playbook (YAML) und Module wie `ios_config` oder `ios_facts`.** Das Playbook beschreibt den Soll-Zustand, Idempotenz vermeidet unnötige Änderungen.
+T: Wissen Mittel
+
+Q: Wie sieht eine NETCONF-Abfrage mit Python und ncclient aus?
+A:
+```
+from ncclient import manager
+with manager.connect(host="10.0.0.1", port=830,
+    username="admin", password="pw",
+    hostkey_verify=False) as m:
+    reply = m.get_config(source="running")
+    print(reply.xml)
+```
+`hostkey_verify=False` sollte man nur im Labor setzen.
+T: CLI Mittel
+
+Q: Wie sieht ein JSON-Body aus, um per RESTCONF eine Interface-Beschreibung zu setzen?
+A: **PATCH auf den Interface-Pfad, im Body steht der Modulname als Präfix vor dem Schlüssel.** PATCH ändert nur die angegebenen Felder.
+```
+PATCH /restconf/data/Cisco-IOS-XE-native:native/interface/GigabitEthernet=1
+{"Cisco-IOS-XE-native:GigabitEthernet": {"description": "Uplink"}}
+```
+T: Exhibit Schwer

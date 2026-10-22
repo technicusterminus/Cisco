@@ -1,0 +1,284 @@
+# 1.2.a | Administrative Distance und statische Routen
+S: https://www.rfc-editor.org/rfc/rfc2328 | RFC 2328: OSPF Version 2
+
+Q: Welche Administrative Distances haben Connected, Static, eBGP, EIGRP intern, OSPF, RIP, EIGRP extern und iBGP?
+A: **0, 1, 20, 90, 110, 120, 170, 200.** Dazu EIGRP-Summary 5, IS-IS 115, DHCP-Default 254, unbekannt 255. Niedriger gewinnt, vor der Metrik. Die AD gilt nur lokal und wird nicht übertragen.
+T: Wissen Leicht
+
+Q: Wie baust du eine Floating Static Route als Backup zu einer OSPF-Route?
+A:
+```
+ip route 10.2.0.0 255.255.0.0 192.168.9.2 150
+```
+Eine AD von 150 ist höher als OSPF (110) und bleibt unsichtbar, solange die OSPF-Route existiert. Fällt sie weg, wird die statische Route installiert. Die AD muss über der des primären Protokolls liegen.
+T: CLI Leicht
+
+Q: Du hast `ip route 10.9.0.0 255.255.0.0 GigabitEthernet0/0` auf einem Ethernet-Interface. Warum ist das problematisch?
+A: **Der Router sendet ARP-Anfragen für jedes einzelne Ziel im Netz 10.9.0.0/16 auf dem Interface (Proxy-ARP des Gegenübers nötig).** Das belastet ARP-Cache und Gegenstelle. Nutze auf Ethernet immer den Next-Hop, oder beides: `ip route … GigabitEthernet0/0 192.168.1.2`.
+T: Falle Mittel
+
+Q: Wie gibst du eine IPv6-Route mit Link-Local-Next-Hop an?
+A:
+```
+ipv6 route 2001:db8:10::/48 GigabitEthernet0/0 FE80::2
+```
+Eine Link-Local-Adresse ist nur pro Link eindeutig, deshalb ist das Interface Pflicht. Ohne es lehnt IOS den Befehl ab.
+T: CLI Mittel
+
+Q: Eine statische Route mit Next-Hop 10.1.1.1 wird nicht installiert, obwohl 10.1.1.1 per OSPF bekannt ist. Was könnte sein?
+A: **Die Route zum Next-Hop läuft über die statische Route selbst (rekursive Schleife) oder die Route zum Next-Hop liegt in der falschen VRF.** IOS löst den Next-Hop rekursiv auf, aber nicht über die Route, die er gerade auflösen soll. Prüfe `show ip route 10.1.1.1` und `show ip route static`.
+T: Szenario Schwer
+
+# 1.2.c | VRF-Lite und Route Leaking
+S: https://www.rfc-editor.org/rfc/rfc4364 | RFC 4364: BGP/MPLS IP VPNs
+
+Q: Wie legst du eine VRF mit dem Namen RED an und weist ihr ein Interface zu?
+A:
+```
+vrf definition RED
+ address-family ipv4
+ exit-address-family
+interface GigabitEthernet0/1
+ vrf forwarding RED
+ ip address 10.1.1.1 255.255.255.0
+```
+Die `vrf definition`-Syntax löst `ip vrf` ab und unterstützt IPv4 und IPv6. Weise die VRF zu, bevor du die IP-Adresse setzt, sonst wird die Adresse gelöscht.
+T: CLI Mittel
+
+Q: Wie pingst du ein Ziel in der VRF RED und wie siehst du ihre Routen?
+A:
+```
+ping vrf RED 10.1.1.2
+show ip route vrf RED
+traceroute vrf RED 10.1.1.2
+```
+Ohne `vrf` arbeitet der Befehl in der globalen Tabelle. Das gilt auch für `show ip arp vrf RED` und `show ip bgp vpnv4 vrf RED`.
+T: CLI Leicht
+
+Q: Wie gibst du VRF-spezifische Routing-Protokolle frei, zum Beispiel OSPF in VRF RED?
+A:
+```
+router ospf 10 vrf RED
+ network 10.1.1.0 0.0.0.255 area 0
+```
+Jeder VRF braucht seine eigene OSPF-Prozess-Instanz (die Prozess-ID ist lokal). Bei EIGRP nutzt du `address-family ipv4 vrf RED`, bei BGP `address-family ipv4 vrf RED`.
+T: CLI Mittel
+
+Q: Wie lenkst du Verkehr aus der VRF RED in die globale Tabelle (zum Beispiel für den Internet-Zugang)?
+A:
+```
+ip route vrf RED 0.0.0.0 0.0.0.0 192.168.1.1 global
+```
+Das Schlüsselwort `global` sagt, dass der Next-Hop in der globalen Tabelle aufgelöst wird. Für den Rückweg braucht die globale Tabelle eine Route ins VRF-Netz: `ip route 10.1.1.0 255.255.255.0 GigabitEthernet0/1 10.1.1.2`.
+T: CLI Schwer
+
+Q: Zwei VRFs auf demselben Router sollen ein Netz gegenseitig erreichen (Route Leaking). Wie gehst du ohne MPLS vor?
+A: **Mit statischen Routen, die auf ein Interface der anderen VRF zeigen, oder mit Import/Export-Maps und Route Targets.** Statisch: `ip route vrf RED 10.2.0.0 255.255.0.0 GigabitEthernet0/2 10.2.0.1`. Beide Richtungen sind nötig. Das Leaking durchbricht die Isolation und gehört in eine Policy mit Filter.
+T: Szenario Schwer
+
+Q: Warum brauchen Router in VRF-Lite keinen Route Distinguisher?
+A: **Weil die Tabellen nur lokal getrennt sind und keine Routen in ein gemeinsames Protokoll (MP-BGP) übertragen werden.** Ein RD wird erst relevant, wenn VPNv4-Präfixe in einer gemeinsamen BGP-Tabelle eindeutig sein müssen. Für Route Leaking per Route Targets brauchst du dagegen einen RD.
+T: Vergleich Mittel
+
+# 1.2.d | Policy-Based Routing
+S: https://www.rfc-editor.org/rfc/rfc1812 | RFC 1812: Requirements for IP Version 4 Routers
+
+Q: Welche Befehle sind nötig, um Verkehr von 10.1.1.0/24 über den Next-Hop 192.168.9.1 zu schicken?
+A:
+```
+ip access-list extended SRC
+ permit ip 10.1.1.0 0.0.0.255 any
+route-map PBR permit 10
+ match ip address SRC
+ set ip next-hop 192.168.9.1
+interface GigabitEthernet0/0
+ ip policy route-map PBR
+```
+Die Policy wirkt auf eingehende Pakete des Interface. Für lokal erzeugte Pakete gibt es `ip local policy route-map`.
+T: CLI Mittel
+
+Q: Wie unterscheiden sich `set ip next-hop` und `set ip default next-hop`?
+A: **`set ip next-hop` wirkt vor der Routing-Tabelle. `set ip default next-hop` greift nur, wenn es keine spezifische Route (keine Default-Route als Treffer) gibt.** Der erste ist die harte Umleitung, der zweite eine Rückfallebene.
+T: Vergleich Mittel
+
+Q: Wie hängst du PBR an einen Reachability-Check, damit bei Ausfall des Next-Hops die normale Route greift?
+A:
+```
+track 10 ip sla 1 reachability
+route-map PBR permit 10
+ set ip next-hop verify-availability 192.168.9.1 1 track 10
+```
+Mit Tracking prüft der Router den Next-Hop per IP SLA (oder CDP). Ist der Track down, überspringt PBR den Eintrag und routet normal.
+T: CLI Schwer
+
+Q: Du setzt `set interface Null0` in einer PBR-Route-Map. Was passiert?
+A: **Passende Pakete werden verworfen.** Das ist eine einfache Blackhole-Methode für gezielte Quellen oder Ziele.
+T: Wissen Mittel
+
+# 1.2.f | Route-Filterung mit Distribute-Lists, Prefix-Lists und Route-Maps
+S: https://www.rfc-editor.org/rfc/rfc2328 | RFC 2328: OSPF Version 2
+
+Q: Was matcht `ip prefix-list P seq 5 permit 10.0.0.0/8 ge 24 le 28`?
+A: **Alle Präfixe in 10.0.0.0/8 mit einer Länge von /24 bis /28.** Ohne ge/le matcht nur genau 10.0.0.0/8. `ge` allein bedeutet bis /32, `le` allein ab der angegebenen Länge. Die Länge muss zwischen Präfixlänge, ge und le liegen (len < ge ≤ le).
+T: Wissen Mittel
+
+Q: Wie matcht eine Prefix-List nur die Default-Route und wie alle Routen?
+A: **Nur die Default-Route: `permit 0.0.0.0/0`. Alle Routen: `permit 0.0.0.0/0 le 32`.** Die zweite Zeile erlaubt jede Länge von 0 bis 32. Am Ende jeder Prefix-List steht ein implizites `deny any`.
+T: Wissen Leicht
+
+Q: Du filterst mit `distribute-list prefix P in GigabitEthernet0/1` unter OSPF. Die Routen fehlen in der Routing-Tabelle, die LSAs bleiben aber in der LSDB und werden weitergeflutet. Warum?
+A: **OSPF-Distribute-Lists in Richtung `in` filtern nur, was in die Routing-Tabelle des lokalen Routers kommt. Die LSDB bleibt unverändert.** Der Link-State-Aufbau verlangt identische LSDBs innerhalb einer Area. Zum Filtern von LSAs nutzt du Area-Filter am ABR oder Summary mit `not-advertise`.
+T: Falle Schwer
+
+Q: Wie filterst du an einem ABR Typ-3-LSAs für das Netz 10.9.0.0/16 aus Area 1 in den Backbone?
+A:
+```
+ip prefix-list NO-109 seq 5 deny 10.9.0.0/16
+ip prefix-list NO-109 seq 10 permit 0.0.0.0/0 le 32
+router ospf 1
+ area 1 filter-list prefix NO-109 out
+```
+`out` filtert Routen aus Area 1 beim Verlassen, `in` filtert Routen, die in Area 1 hineingehen. Alternativ mit `area 1 range 10.9.0.0 255.255.0.0 not-advertise`.
+T: CLI Schwer
+
+Q: Wie filterst du Typ-5-LSAs bei der Redistribution am ASBR?
+A: **Mit einer Route-Map an `redistribute` oder mit `summary-address … not-advertise`.** Beispiel: `redistribute eigrp 100 subnets route-map NO-TAG`. Die Route-Map entscheidet vor der Erzeugung des Typ-5-LSAs. `distribute-list out` unter OSPF wirkt nur am ASBR für diese redistributierten Routen.
+T: Wissen Schwer
+
+Q: Wie wirken BGP-Filter über Prefix-Lists im Vergleich zu Extended-ACLs?
+A: **Eine extended ACL matcht in BGP Präfix und Maske: das erste Adresspaar das Netz, das zweite die Maske.** Beispiel: `access-list 100 permit ip 10.0.0.0 0.255.255.0 255.255.255.0 0.0.0.0` matcht /24 aus 10.x.x.0. Prefix-Lists sind lesbarer und der Standard.
+T: Wissen Schwer
+
+# 1.2.g | Manuelle Summarization
+S: https://www.rfc-editor.org/rfc/rfc4632 | RFC 4632: CIDR
+
+Q: Wie summierst du mit EIGRP die Netze 10.1.0.0/24 bis 10.1.3.0/24 an Gi0/1?
+A:
+```
+interface GigabitEthernet0/1
+ ip summary-address eigrp 100 10.1.0.0 255.255.252.0
+```
+Die Summary erzeugt lokal eine Route nach Null0 mit AD 5, die Schleifen verhindert. Im Named Mode steht der Befehl unter `af-interface` als `summary-address`.
+T: CLI Mittel
+
+Q: Wo fasst OSPF Routen manuell zusammen?
+A: **Am ABR mit `area X range` (Typ 3) und am ASBR mit `summary-address` (Typ 5).** Die Summary-Route erscheint am Router selbst als Route nach Null0 (AD 110). Bei Typ 7 in einer NSSA fasst der NSSA-ABR beim Übersetzen zusammen.
+T: Wissen Mittel
+
+Q: Wie summierst du in BGP und verbirgst die Einzelnetze?
+A:
+```
+router bgp 65001
+ aggregate-address 10.0.0.0 255.0.0.0 summary-only
+```
+Ohne `summary-only` gehen aggregierte und spezifische Routen raus. Die Aggregation erscheint nur, wenn mindestens eine spezifischere Route in der BGP-Tabelle existiert. `as-set` bewahrt die AS-Pfade.
+T: CLI Mittel
+
+# 1.2.h | Redistribution
+S: https://www.rfc-editor.org/rfc/rfc2328 | RFC 2328: OSPF Version 2
+
+Q: Du redistribuierst EIGRP in OSPF mit `redistribute eigrp 100`. Nur klassische Netze kommen an. Warum?
+A: **Das Schlüsselwort `subnets` fehlt.** Ohne `subnets` redistribuiert OSPF nur klassenbehaftete Netze (zum Beispiel 10.0.0.0/8). Richtig: `redistribute eigrp 100 subnets`. Die Standard-Metrik ist 20, bei BGP 1.
+T: Falle Leicht
+
+Q: EIGRP-Routen sollen in OSPF. Welche Metrik gilt, wenn du keine angibst, und wie unterscheiden sich E1 und E2?
+A: **Metrik 20, Typ E2.** E2 behält die Metrik konstant über die ganze Domäne. E1 addiert die interne Entfernung zum ASBR. E1 gewinnt gegen E2 bei gleichem Ziel. `metric-type 1` stellt E1 ein.
+T: Vergleich Mittel
+
+Q: OSPF-Routen sollen in EIGRP, aber sie erscheinen nicht. Was fehlt?
+A: **Eine Metrik.** EIGRP braucht fünf Metrikwerte beim Import: `redistribute ospf 1 metric 100000 10 255 1 1500` oder `default-metric`. Ohne Metrik wird die Route nicht übernommen. Im Named Mode steht das unter `topology base`.
+T: Falle Leicht
+
+Q: Mit welcher AD kommen OSPF-Routen in EIGRP an und warum ist das für Schleifenfreiheit wichtig?
+A: **Als EIGRP-Extern mit AD 170.** Bei zwei redistribuierenden Routern verhindert die höhere AD, dass einer die Routen des anderen zurück in EIGRP lernt und als bessere Route nimmt. Trotzdem sind Tags der verlässlichere Schutz.
+T: Wissen Mittel
+
+Q: Wie verhinderst du bei gegenseitiger Redistribution an zwei Punkten eine Routing-Schleife?
+A: **Mit Route-Tags: beim Import in das andere Protokoll Tag setzen und beim Rückweg dieses Tag filtern.** Beispiel: `route-map E2O permit 10 / set tag 100` und im Gegenzug `route-map O2E deny 10 / match tag 100`. Danach `permit 20` für den Rest.
+T: Szenario Schwer
+
+Q: Wie lässt du dir in der Routing-Tabelle ansehen, aus welchem Protokoll eine redistribuierte Route kam?
+A: **Mit `show ip route <Präfix>`: Dort steht „Known via“ mit dem Protokoll, Metrik-Typ, Tag und Redistributing-Router.** Bei OSPF zeigt `show ip ospf database external <Präfix>` das Tag und den ASBR. Bei EIGRP zeigt `show ip eigrp topology <Präfix>` „external route“ und den Original-Prozess.
+T: CLI Mittel
+
+Q: Wie redistribuierst du IPv6-Routen von EIGRP in OSPFv3?
+A:
+```
+router ospfv3 1
+ address-family ipv6 unicast
+  redistribute eigrp 100 include-connected
+```
+OSPFv3 im Adressfamilien-Modus benutzt `redistribute` im AF. `include-connected` nimmt zusätzlich die verbundenen Netze der EIGRP-Interfaces mit.
+T: CLI Schwer
+
+# 1.2.i | Authentisierung von Routing-Protokollen
+S: https://www.rfc-editor.org/rfc/rfc5709 | RFC 5709: OSPFv2 HMAC-SHA Cryptographic Authentication
+
+Q: Wie aktivierst du EIGRP-MD5-Authentisierung im klassischen Modus an Gi0/1?
+A:
+```
+key chain KC
+ key 1
+  key-string geheim
+interface GigabitEthernet0/1
+ ip authentication mode eigrp 100 md5
+ ip authentication key-chain eigrp 100 KC
+```
+Beide Befehle werden gebraucht. Ohne passenden Schlüssel auf beiden Seiten kommt keine Nachbarschaft zustande, im Log erscheint eine Meldung zur Authentisierung.
+T: CLI Mittel
+
+Q: Wie konfigurierst du EIGRP HMAC-SHA-256 im Named Mode?
+A:
+```
+router eigrp NAME
+ address-family ipv4 unicast autonomous-system 100
+  af-interface GigabitEthernet0/1
+   authentication mode hmac-sha-256 MeinPasswort
+```
+SHA-256 nutzt das Passwort direkt, ohne Key-Chain. Alternativ nimmst du `authentication key-chain KC` mit MD5.
+T: CLI Schwer
+
+Q: Welche OSPFv2-Authentisierungstypen gibt es und wie stellst du sie ein?
+A: **Typ 0 (keine), Typ 1 (Klartext, `ip ospf authentication-key`), Typ 2 (MD5, `ip ospf message-digest-key 1 md5 PW`).** Typ 2 aktivierst du mit `ip ospf authentication message-digest` am Interface oder `area X authentication message-digest` im Prozess. HMAC-SHA kommt über Key-Chains (`ip ospf authentication key-chain KC`).
+T: Wissen Mittel
+
+Q: Wie sicherst du OSPFv3 ab?
+A: **Über IPsec-Header (AH oder ESP) oder, in neueren Versionen, über Authentication-Trailer mit Key-Chain.** Klassisch: `ipv6 ospf authentication ipsec spi 256 sha1 <Hex-Schlüssel>` am Interface. Moderner: `ospfv3 authentication key-chain KC` am Interface (RFC 7166).
+T: Wissen Schwer
+
+Q: Zwei OSPF-Nachbarn haben dieselbe MD5-Konfiguration, kommen aber nicht in FULL. Welche Details prüfst du?
+A: **Key-ID und Passwort müssen auf beiden Seiten gleich sein, nicht nur das Passwort.** Außerdem muss der Authentisierungstyp identisch sein (Interface gegen Area). Mit `debug ip ospf adj` siehst du „Mismatch Authentication Key“ oder „Mismatch Authentication type“.
+T: Szenario Mittel
+
+# 1.2.j | Bidirectional Forwarding Detection
+S: https://www.rfc-editor.org/rfc/rfc5880 | RFC 5880: BFD
+
+Q: Wie aktivierst du BFD für OSPF, EIGRP und BGP?
+A:
+```
+interface GigabitEthernet0/1
+ bfd interval 300 min_rx 300 multiplier 3
+router ospf 1
+ bfd all-interfaces
+router eigrp NAME
+ address-family ipv4 unicast autonomous-system 100
+  af-interface default
+   bfd
+router bgp 65001
+ neighbor 10.0.0.2 fall-over bfd
+```
+Das Interface liefert die Timer, das Protokoll meldet sich als Client an. Ohne Timer am Interface startet die Sitzung nicht.
+T: CLI Schwer
+
+Q: Wie vermeidest du es, die BFD-Timer an jedem Interface zu wiederholen?
+A: **Mit einem BFD-Template.** `bfd-template single-hop FAST` mit `interval min-tx 300 min-rx 300 multiplier 3`, dann `bfd template FAST` am Interface. Die Vorlage vereinfacht die Pflege bei vielen Interfaces und trägt auch Authentisierung.
+T: CLI Mittel
+
+Q: Wie verknüpfst du eine statische Route mit BFD?
+A:
+```
+ip route static bfd GigabitEthernet0/1 192.168.1.2
+ip route 10.5.0.0 255.255.0.0 GigabitEthernet0/1 192.168.1.2
+```
+Die Route bleibt nur installiert, solange die BFD-Sitzung zum Next-Hop up ist. Ohne BFD bleibt eine statische Route bestehen, solange das Interface up ist.
+T: CLI Schwer
