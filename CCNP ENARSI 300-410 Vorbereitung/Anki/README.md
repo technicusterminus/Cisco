@@ -1,11 +1,13 @@
 # Anki-Deck: CCNP ENARSI 300-410
 
-**Aktuelle Version:** 1.0 (Stand 22.10.2026) · **478 Karten**
-**Datei:** [`ENARSI_300-410_Kompendium_1.0_DE.apkg`](ENARSI_300-410_Kompendium_1.0_DE.apkg)
+**Aktuelle Version:** 1.1 (Stand 23.10.2026) · **709 Karten** (478 Wissens- und Übungskarten, 231 Befehlskarten)
+**Datei:** [`ENARSI_300-410_Kompendium_1.1_DE.apkg`](ENARSI_300-410_Kompendium_1.1_DE.apkg)
 
 Grundlage sind die öffentlichen Prüfungsthemen von Cisco für 300-410 ENARSI (aktueller Stand mit Catalyst Center Assurance und IPFIX).
 
 ## Verteilung
+
+Ohne die Befehlskarten, deren Verteilung im Abschnitt „Befehlsreferenz“ steht.
 
 | Domäne | Gewicht im Blueprint | Karten |
 |---|---:|---:|
@@ -23,7 +25,7 @@ Domäne 1 hat etwas mehr Karten als ihr Gewicht, weil EIGRP, OSPF und BGP die me
 - **Hinweis:** nur, wenn er etwas bringt, etwa eine Eselsbrücke.
 - **Quellen:** RFCs und Cisco-Dokumente zum Nachlesen.
 
-Kartentypen: Wissen, Szenario, Vergleich, CLI, Exhibit (Ausgabe deuten), Rechnen und Prüfungsfalle.
+Kartentypen: Wissen, Szenario, Vergleich, CLI, Befehl, Exhibit (Ausgabe deuten), Rechnen und Prüfungsfalle.
 
 ## Import
 
@@ -32,6 +34,23 @@ Kartentypen: Wissen, Szenario, Vergleich, CLI, Exhibit (Ausgabe deuten), Rechnen
 3. Im Kartenbrowser stehen die Fragen, nicht die IDs. Die Karten sind auch im Dunkelmodus (z. B. iOS) lesbar.
 
 Spätere Versionen behalten deinen Lernfortschritt, solange sich die Frage einer Karte nicht ändert.
+
+## Befehlsreferenz
+
+231 Karten fragen Befehle ab wie eine Befehlstabelle zum Abdecken: Vorne steht die Aufgabe („Welcher Befehl zeigt …?“, „Wie legst du … an?“), hinten die genaue Syntax. Platzhalter stehen in spitzen Klammern (`<vlan-id>`), Optionales in eckigen (`[detail]`), Alternativen in geschweiften (`{in | out}`). Unter der Syntax steht der Konfigurationsmodus und in einem Satz, was der Befehl bewirkt oder worauf du achten musst.
+
+| Suche | Was du bekommst |
+|---|---|
+| `tag:Fokus::Befehle` | alle Befehlskarten |
+| `tag:Befehlsart::Pruefen` | `show`, `debug`, `ping` und andere Prüfbefehle |
+| `tag:Befehlsart::Konfigurieren` | Konfigurationsbefehle |
+| `tag:Fokus::Befehle tag:Ziel::1.11*` | Befehle zu einem Ziel |
+
+Tipp: Schreib die Syntax auf oder tipp sie ins Lab, bevor du umdrehst. Erst dann merkst du, ob Reihenfolge und Schlüsselwörter sitzen.
+
+Verteilung der Befehlskarten: Layer-3-Technologien 122, VPN-Technologien 31, Infrastruktur-Security 34, Infrastruktur-Services 44.
+
+Die Befehlskarten stehen in [`Quelle/9_befehle.txt`](Quelle/9_befehle.txt) und werden mit dem Deck gebaut.
 
 ## Gezielt lernen
 
@@ -43,6 +62,7 @@ Spätere Versionen behalten deinen Lernfortschritt, solange sich die Frage einer
 | `tag:Typ::CLI` | Konfiguration und Befehle |
 | `tag:Ziel::1.11*` | alles zu einem Prüfungsziel, hier BGP |
 | `tag:Stufe::Schwer` | die anspruchsvollen Karten |
+| `tag:Fokus::Befehle` | Befehle abfragen: Aufgabe vorne, Syntax hinten |
 
 Tipp: Sag die Antwort laut oder schreib sie auf, bevor du umdrehst. Bei CLI-Karten lohnt es sich, die Konfiguration einmal im Lab selbst einzugeben.
 
@@ -61,6 +81,7 @@ Das Skript prüft beim Bauen, ob jede Frage mit „?“ endet, jede Antwort fett
 
 | Version | Änderung |
 |---|---|
+| 1.1 | 231 Befehlskarten zu allen Zielen mit CLI-Bezug, Tag `Fokus::Befehle`. Bestehende Karten unverändert, Update-Import behält den Lernstand |
 | 1.0 | Erste Version: 478 Karten zu allen Zielen des Blueprints, fachlich gegengelesen |
 
 ## Vorbehalt

@@ -1,0 +1,1856 @@
+# 1.1.a | Befehle: Switch-Administration, MTU und Errdisable
+S: https://www.cisco.com/c/en/us/support/switches/catalyst-9300-series-switches/products-command-reference-list.html | Cisco Catalyst 9300: Command References
+
+Q: Wie stellst du auf einem Catalyst 9000 die MTU aller Ports auf Jumbo Frames?
+A:
+```
+system mtu <bytes>
+```
+**Modus:** global. Beispiel `system mtu 9198`. Gilt für alle Layer-2-Ports, Layer-3-Interfaces haben zusätzlich `ip mtu`.
+T: Befehl Mittel
+
+Q: Wie holst du Ports aus allen err-disabled-Gründen automatisch zurück?
+A:
+```
+errdisable recovery cause all
+errdisable recovery interval <sekunden>
+```
+**Modus:** global. Welche Gründe aktiv sind und wann der nächste Versuch kommt: `show errdisable recovery`.
+T: Befehl Mittel
+
+Q: Welcher Befehl zeigt alle Ports im Zustand err-disabled mit Grund?
+A:
+```
+show interfaces status err-disabled
+```
+**Modus:** privilegiert. Die Spalte „Reason“ nennt z. B. bpduguard, psecure-violation oder link-flap.
+T: Befehl Leicht
+
+Q: Wie trägst du eine MAC-Adresse statisch ein, und wie verwirfst du Frames an eine MAC?
+A:
+```
+mac address-table static <mac> vlan <vlan-id> interface <interface>
+mac address-table static <mac> vlan <vlan-id> drop
+```
+**Modus:** global. `drop` verwirft alle Frames mit dieser Ziel-MAC im VLAN.
+T: Befehl Mittel
+
+Q: Wie schaltest du das MAC-Lernen in einem VLAN ab?
+A:
+```
+no mac address-table learning vlan <vlan-id>
+```
+**Modus:** global. Der Switch flutet dann allen Unicast im VLAN. Nur in Sonderfällen sinnvoll.
+T: Befehl Schwer
+
+# 1.1.b | Befehle: CDP und LLDP
+S: https://www.cisco.com/c/en/us/support/switches/catalyst-9300-series-switches/products-command-reference-list.html | Cisco Catalyst 9300: Command References
+
+Q: Wie aktivierst du LLDP global und schaltest es auf einem Port nur in eine Richtung?
+A:
+```
+lldp run
+interface <interface>
+ no lldp transmit
+ lldp receive
+```
+**Modus:** global bzw. Interface. Der Port lernt dann Nachbarn, verrät aber nichts über sich.
+T: Befehl Mittel
+
+Q: Welche Befehle zeigen CDP- und LLDP-Nachbarn mit Adressen und Fähigkeiten?
+A:
+```
+show cdp neighbors detail
+show lldp neighbors detail
+```
+**Modus:** privilegiert. `detail` liefert Management-Adresse, Version und bei CDP natives VLAN und Duplex.
+T: Befehl Leicht
+
+Q: Wie änderst du die LLDP-Sendeintervall und die Haltezeit?
+A:
+```
+lldp timer <sekunden>
+lldp holdtime <sekunden>
+```
+**Modus:** global. Standard: 30 Sekunden senden, 120 Sekunden halten.
+T: Befehl Mittel
+
+# 1.1.c | Befehle: VLANs, Trunks, Q-in-Q, Voice VLAN und Private VLANs
+S: https://www.cisco.com/c/en/us/support/switches/catalyst-9300-series-switches/products-command-reference-list.html | Cisco Catalyst 9300: Command References
+
+Q: Wie konfigurierst du einen Kundenport für Q-in-Q (802.1ad-Tunnel)?
+A:
+```
+interface <kundenport>
+ switchport access vlan <provider-vlan>
+ switchport mode dot1q-tunnel
+```
+**Modus:** Interface. Der Switch setzt ein äußeres Tag mit dem Provider-VLAN auf die schon getaggten Kunden-Frames.
+T: Befehl Schwer
+
+Q: Wie tunnelst du CDP, STP und VTP des Kunden durch einen Q-in-Q-Port?
+A:
+```
+l2protocol-tunnel cdp
+l2protocol-tunnel stp
+l2protocol-tunnel vtp
+```
+**Modus:** Interface (dot1q-tunnel). Sonst verbraucht der Provider-Switch die Kunden-BPDUs selbst.
+T: Befehl Schwer
+
+Q: Wie taggst du das native VLAN auf allen Trunks?
+A:
+```
+vlan dot1q tag native
+```
+**Modus:** global. Bei Q-in-Q nötig, sonst verliert das Provider-Netz das äußere Tag beim nativen VLAN.
+T: Befehl Schwer
+
+Q: Wie legst du für Private VLANs das Primary-VLAN mit einem Isolated- und einem Community-VLAN an?
+A:
+```
+vlan <isolated>
+ private-vlan isolated
+vlan <community>
+ private-vlan community
+vlan <primary>
+ private-vlan primary
+ private-vlan association <isolated>,<community>
+```
+**Modus:** VLAN-Modus. Bei VTPv1/v2 muss der Switch transparent sein, VTPv3 kann Private VLANs verteilen.
+T: Befehl Schwer
+
+Q: Wie machst du einen Port zum Host-Port in einem Secondary-VLAN?
+A:
+```
+switchport mode private-vlan host
+switchport private-vlan host-association <primary> <secondary>
+```
+**Modus:** Interface. Isolated-Hosts erreichen nur den Promiscuous-Port, Community-Hosts auch einander.
+T: Befehl Schwer
+
+Q: Wie machst du einen Port zum Promiscuous-Port für ein Private VLAN?
+A:
+```
+switchport mode private-vlan promiscuous
+switchport private-vlan mapping <primary> <secondary-liste>
+```
+**Modus:** Interface. Typisch der Port zum Router oder zur Firewall.
+T: Befehl Schwer
+
+Q: Wie routet eine SVI für ein Private VLAN auch die Secondary-VLANs?
+A:
+```
+interface vlan <primary>
+ private-vlan mapping <secondary-liste>
+```
+**Modus:** Interface (SVI). Ohne Mapping erreichen die Hosts in den Secondary-VLANs ihr Gateway nicht.
+T: Befehl Schwer
+
+Q: Welcher Befehl zeigt die Private-VLAN-Zuordnungen?
+A:
+```
+show vlan private-vlan [type]
+```
+**Modus:** privilegiert. Ohne `type` erscheinen Primary, Secondary und zugeordnete Ports.
+T: Befehl Mittel
+
+Q: Wie konfigurierst du VTPv3 und machst den Switch zum Primary Server?
+A:
+```
+vtp version 3
+vtp mode server
+vtp primary
+```
+**Modus:** global, `vtp primary` privilegiert. Nur der Primary Server darf die VLAN-Datenbank ändern.
+T: Befehl Schwer
+
+# 1.1.d | Befehle: EtherChannel
+S: https://www.cisco.com/c/en/us/support/switches/catalyst-9300-series-switches/products-command-reference-list.html | Cisco Catalyst 9300: Command References
+
+Q: Wie baust du ein LACP-Bündel mit schnellen LACPDUs und mindestens zwei aktiven Links?
+A:
+```
+interface range <ports>
+ channel-group <nr> mode active
+ lacp rate fast
+interface port-channel <nr>
+ port-channel min-links 2
+```
+**Modus:** Interface. `lacp rate fast` sendet jede Sekunde, Ausfälle fallen nach 3 Sekunden auf.
+T: Befehl Schwer
+
+Q: Wie begrenzt du einen Port-Channel auf eine Zahl aktiver Links und hältst den Rest als Hot Standby?
+A:
+```
+lacp max-bundle <anzahl>
+```
+**Modus:** Port-Channel-Interface. Welche Ports aktiv werden, steuern `lacp system-priority` und `lacp port-priority`.
+T: Befehl Schwer
+
+Q: Wie erkennt STP falsch konfigurierte EtherChannels und sperrt sie?
+A:
+```
+spanning-tree etherchannel guard misconfig
+```
+**Modus:** global. Bildet nur eine Seite ein Bündel, geht der Port-Channel in err-disabled statt eine Schleife zu bauen.
+T: Befehl Schwer
+
+Q: Welche Befehle zeigen EtherChannel-Status, LACP-Partner und Hashing?
+A:
+```
+show etherchannel summary
+show lacp neighbor
+show etherchannel load-balance
+```
+**Modus:** privilegiert. „H“ in der Summary markiert Hot-Standby-Ports.
+T: Befehl Mittel
+
+# 1.1.e | Befehle: Spanning Tree, MST und Schutzfunktionen
+S: https://www.cisco.com/c/en/us/support/switches/catalyst-9300-series-switches/products-command-reference-list.html | Cisco Catalyst 9300: Command References
+
+Q: Wie richtest du eine MST-Region mit zwei Instanzen ein?
+A:
+```
+spanning-tree mode mst
+spanning-tree mst configuration
+ name <region>
+ revision <nr>
+ instance 1 vlan <liste>
+ instance 2 vlan <liste>
+```
+**Modus:** global. Nicht zugeordnete VLANs bleiben in Instanz 0 (IST).
+T: Befehl Mittel
+
+Q: Wie verteilst du die Root-Rollen der MST-Instanzen auf zwei Distribution-Switches?
+A:
+```
+spanning-tree mst 1 root primary
+spanning-tree mst 2 root secondary
+```
+**Modus:** global, auf dem zweiten Switch umgekehrt. So nutzen beide Uplinks Verkehr.
+T: Befehl Mittel
+
+Q: Wie stellst du die STP-Kostenberechnung auf 32-Bit-Werte um?
+A:
+```
+spanning-tree pathcost method long
+```
+**Modus:** global. MST nutzt immer lange Kosten, bei PVST+ ist es eine Option.
+T: Befehl Schwer
+
+Q: Wie schaltest du Loop Guard global ein?
+A:
+```
+spanning-tree loopguard default
+```
+**Modus:** global. Gilt für Punkt-zu-Punkt-Links. Bleiben BPDUs aus, geht der Port in loop-inconsistent statt in Forwarding.
+T: Befehl Mittel
+
+Q: Wie aktivierst du Bridge Assurance auf einem Trunk zwischen zwei Switches?
+A:
+```
+spanning-tree portfast network
+```
+**Modus:** Interface. Beide Seiten senden auf jedem Port BPDUs. Bleiben sie aus, geht der Port in den Zustand BA-inconsistent.
+T: Befehl Schwer
+
+Q: Welcher Befehl zeigt, wie oft und von welchem Port zuletzt eine Topologieänderung kam?
+A:
+```
+show spanning-tree detail | include ieee|occurr|from|is exec
+```
+**Modus:** privilegiert. Der Filter zeigt pro Instanz Anzahl, Zeitpunkt und Quell-Port der letzten TCN.
+T: Befehl Schwer
+
+Q: Welcher Befehl zeigt die MST-Konfiguration und die Rollen pro Instanz?
+A:
+```
+show spanning-tree mst configuration
+show spanning-tree mst <instanz> detail
+```
+**Modus:** privilegiert. Weicht der Digest ab, gehören Switches zu verschiedenen Regionen.
+T: Befehl Mittel
+
+# 1.2.a | Befehle: Administrative Distance und statische Routen
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie legst du eine statische Route an, die auch bei einem Interface-Ausfall in der Tabelle bleibt?
+A:
+```
+ip route <zielnetz> <maske> <next-hop-ip> permanent
+```
+**Modus:** global. Vorsicht: Die Route zieht weiter Verkehr an, auch wenn der Weg tot ist.
+T: Befehl Schwer
+
+Q: Wie versiehst du eine statische Route mit einem Tag für spätere Redistribution?
+A:
+```
+ip route <zielnetz> <maske> <next-hop-ip> tag <wert>
+```
+**Modus:** global. Eine Route-Map bei `redistribute static` kann dann mit `match tag` filtern.
+T: Befehl Mittel
+
+Q: Wie gibst du OSPF-internen und externen Routen unterschiedliche Distanzen?
+A:
+```
+distance ospf intra-area <ad> inter-area <ad> external <ad>
+```
+**Modus:** Router (OSPF). Hilft gegen suboptimales Routing bei gegenseitiger Redistribution.
+T: Befehl Schwer
+
+# 1.2.c | Befehle: VRF-Lite und Route Leaking
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie importierst du Routen zwischen zwei VRFs ohne MPLS über Route Targets?
+A:
+```
+vrf definition <a>
+ rd <rd-a>
+ address-family ipv4
+  route-target export <rt-a>
+  route-target import <rt-b>
+router bgp <as>
+ address-family ipv4 vrf <a>
+  redistribute connected
+```
+**Modus:** global bzw. Router. BGP übernimmt den Austausch zwischen den VRFs lokal, auch ohne einen einzigen Nachbarn.
+T: Befehl Schwer
+
+Q: Wie importierst du Routen aus der globalen Tabelle in eine VRF ohne statische Routen?
+A:
+```
+vrf definition <name>
+ address-family ipv4
+  import ipv4 unicast map <route-map>
+```
+**Modus:** VRF Address Family. Die Route-Map wählt aus, welche globalen Routen in die VRF kommen.
+T: Befehl Schwer
+
+Q: Wie lässt du ein OSPF in einer VRF auf einem CE-Router ohne PE-Prüfungen laufen?
+A:
+```
+router ospf <prozess-id> vrf <name>
+ capability vrf-lite
+```
+**Modus:** Router. Schaltet die Down-Bit- und Domain-Tag-Prüfung ab, die nur auf PEs sinnvoll ist.
+T: Befehl Schwer
+
+# 1.2.d | Befehle: Policy-Based Routing
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie gibst du PBR mehrere Next Hops, die nach Verfügbarkeit geprüft werden?
+A:
+```
+route-map <name> permit 10
+ match ip address <acl>
+ set ip next-hop verify-availability <nh1> 10 track <obj1>
+ set ip next-hop verify-availability <nh2> 20 track <obj2>
+```
+**Modus:** Route-Map. Die Sequenz bestimmt die Reihenfolge. Fallen alle, gilt die Routing-Tabelle.
+T: Befehl Schwer
+
+Q: Wie setzt du per PBR den Next Hop rekursiv, also auch auf eine nicht direkt verbundene Adresse?
+A:
+```
+set ip next-hop recursive <ip>
+```
+**Modus:** Route-Map. Der Router löst den Next Hop über die Routing-Tabelle auf.
+T: Befehl Schwer
+
+Q: Wie leitest du per PBR Verkehr in eine andere VRF?
+A:
+```
+set vrf <name>
+```
+**Modus:** Route-Map. Der Router schlägt das Ziel dann in der Tabelle dieser VRF nach.
+T: Befehl Schwer
+
+# 1.2.f | Befehle: Route-Filterung
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie erlaubst du in einer Prefix-Liste alle Präfixe zwischen /24 und /32 aus 10.0.0.0/8?
+A:
+```
+ip prefix-list <name> permit 10.0.0.0/8 ge 24
+```
+**Modus:** global. Ohne `le` gilt bis /32.
+T: Befehl Mittel
+
+Q: Wie filterst du in EIGRP die Routen, die über ein bestimmtes Interface hinausgehen?
+A:
+```
+distribute-list prefix <liste> out <interface>
+```
+**Modus:** Router (Classic) bzw. Topology Base (Named). Bei EIGRP wirkt das auf die Updates selbst.
+T: Befehl Mittel
+
+Q: Wie filterst du per Distribute-List mit einer Route-Map, etwa nach Tag oder Metrik?
+A:
+```
+distribute-list route-map <name> {in | out}
+```
+**Modus:** Router. Kann mehr prüfen als eine Prefix-Liste, z. B. `match tag` oder `match metric`.
+T: Befehl Schwer
+
+# 1.2.g | Befehle: Summarization
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie lässt du im EIGRP Named Mode bestimmte Einzelrouten trotz Summary durch?
+A:
+```
+af-interface <interface>
+ summary-address <netz> <maske> leak-map <route-map>
+```
+**Modus:** AF-Interface. Was die Route-Map erlaubt, wird zusätzlich zum Summary bekannt gegeben.
+T: Befehl Schwer
+
+Q: Wie verhinderst du, dass OSPF eine Discard-Route für sein Summary anlegt?
+A:
+```
+no discard-route internal
+no discard-route external
+```
+**Modus:** Router (OSPF). `internal` betrifft `area range`, `external` betrifft `summary-address`.
+T: Befehl Schwer
+
+Q: Wie gibst du einem BGP-Aggregat bestimmte Attribute mit?
+A:
+```
+aggregate-address <netz> <maske> attribute-map <route-map>
+```
+**Modus:** Router bzw. Address Family. Die Route-Map setzt z. B. Communities oder MED auf dem Aggregat.
+T: Befehl Schwer
+
+# 1.2.h | Befehle: Redistribution
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie markierst du bei gegenseitiger Redistribution die Routen mit Tags und verhinderst die Rückführung?
+A:
+```
+route-map OSPF-TO-EIGRP deny 10
+ match tag <eigrp-tag>
+route-map OSPF-TO-EIGRP permit 20
+ set tag <ospf-tag>
+router eigrp <as>
+ redistribute ospf <prozess-id> metric <bw> <dly> 255 1 1500 route-map OSPF-TO-EIGRP
+```
+**Modus:** global bzw. Router. Gegenrichtung spiegelbildlich. So kommt keine Route zurück in ihr Ursprungsprotokoll.
+T: Befehl Schwer
+
+Q: Wie redistribuierst du in OSPF nur die Connected-Netze aus einer Route-Map?
+A:
+```
+redistribute connected subnets route-map <name>
+```
+**Modus:** Router (OSPF). Ohne Route-Map kämen auch Loopbacks und Transfernetze dazu.
+T: Befehl Mittel
+
+Q: Wie redistribuierst du iBGP-Routen in ein IGP?
+A:
+```
+router bgp <as>
+ bgp redistribute-internal
+```
+**Modus:** Router. Standardmäßig redistribuiert IOS nur eBGP-Routen in IGPs, weil iBGP-Routen sonst schnell Schleifen bauen.
+T: Befehl Schwer
+
+# 1.2.i | Befehle: Authentisierung von Routing-Protokollen
+S: https://www.rfc-editor.org/rfc/rfc5709 | RFC 5709: OSPFv2 HMAC-SHA Cryptographic Authentication
+
+Q: Wie aktivierst du OSPFv2-Authentisierung mit HMAC-SHA-256 über eine Key Chain?
+A:
+```
+key chain <kc>
+ key <id>
+  key-string <schlüssel>
+  cryptographic-algorithm hmac-sha-256
+interface <interface>
+ ip ospf authentication key-chain <kc>
+```
+**Modus:** global bzw. Interface. Key-ID, Schlüssel und Algorithmus müssen beim Nachbarn gleich sein.
+T: Befehl Schwer
+
+Q: Wie aktivierst du EIGRP-Authentisierung mit SHA-256 für alle Interfaces im Named Mode?
+A:
+```
+af-interface default
+ authentication mode hmac-sha-256 <passwort>
+```
+**Modus:** AF-Interface. Einzelne Interfaces können abweichende Werte bekommen.
+T: Befehl Schwer
+
+Q: Wie aktivierst du OSPFv3-Authentisierung für eine ganze Area?
+A:
+```
+router ospfv3 <prozess-id>
+ area <area-id> authentication ipsec spi <spi> sha1 <40-hex-zeichen>
+```
+**Modus:** Router. Interface-Einstellungen haben Vorrang vor der Area-Einstellung.
+T: Befehl Schwer
+
+Q: Wie schützt du eine LDP-Sitzung mit einem Passwort?
+A:
+```
+mpls ldp neighbor <ldp-id> password <passwort>
+```
+**Modus:** global. Mit `mpls ldp password required` lehnt der Router Nachbarn ohne Passwort ab.
+T: Befehl Schwer
+
+# 1.2.j | Befehle: BFD
+S: https://www.rfc-editor.org/rfc/rfc5880 | RFC 5880: Bidirectional Forwarding Detection
+
+Q: Wie legst du ein BFD-Template an und nutzt es für Multihop-BFD?
+A:
+```
+bfd-template multi-hop <name>
+ interval min-tx <ms> min-rx <ms> multiplier <n>
+bfd map ipv4 <ziel>/<länge> <quelle>/<länge> <name>
+```
+**Modus:** global. Multihop-BFD braucht ein Template und eine Zuordnung von Ziel und Quelle.
+T: Befehl Schwer
+
+Q: Wie schaltest du BFD-Echo-Mode auf einem Interface ab?
+A:
+```
+no bfd echo
+```
+**Modus:** Interface. Ohne Echo laufen nur Control-Pakete. Nötig, wenn der Nachbar Echo nicht unterstützt oder uRPF stört.
+T: Befehl Schwer
+
+Q: Wie koppelst du OSPF, EIGRP und BGP an BFD?
+A:
+```
+router ospf <id>
+ bfd all-interfaces
+router eigrp <as>
+ bfd all-interfaces
+router bgp <as>
+ neighbor <peer-ip> fall-over bfd
+```
+**Modus:** Router. Im EIGRP Named Mode stattdessen `bfd` unter `af-interface`.
+T: Befehl Mittel
+
+# 1.3.e | Befehle: EIGRP Named Mode
+S: https://www.rfc-editor.org/rfc/rfc7868 | RFC 7868: Cisco's Enhanced Interior Gateway Routing Protocol
+
+Q: Wie wandelst du einen EIGRP-Classic-Prozess ohne Unterbrechung in den Named Mode um?
+A:
+```
+router eigrp <as>
+ eigrp upgrade-cli <name>
+```
+**Modus:** Router (Classic). Die Konfiguration wird übersetzt, die Nachbarschaften bleiben bestehen.
+T: Befehl Schwer
+
+Q: Wie nimmst du im EIGRP Named Mode ein Interface komplett aus dem Prozess?
+A:
+```
+af-interface <interface>
+ shutdown
+```
+**Modus:** AF-Interface. Anders als `passive-interface` wird auch das Netz nicht mehr beworben, wenn kein `network` passt.
+T: Befehl Schwer
+
+Q: Wie stellst du im EIGRP Named Mode die Bandbreite ein, die EIGRP für seine eigenen Pakete nutzen darf?
+A:
+```
+af-interface <interface>
+ bandwidth-percent <prozent>
+```
+**Modus:** AF-Interface. Standard 50 Prozent der Interface-Bandbreite.
+T: Befehl Schwer
+
+# 1.3.f | Befehle: EIGRP Stub, LFA und Add-Paths
+S: https://www.rfc-editor.org/rfc/rfc7868 | RFC 7868: Cisco's Enhanced Interior Gateway Routing Protocol
+
+Q: Wie aktivierst du EIGRP Fast Reroute mit Loop-Free Alternates für alle Präfixe?
+A:
+```
+router eigrp <name>
+ address-family ipv4 unicast autonomous-system <as>
+  topology base
+   fast-reroute per-prefix all
+```
+**Modus:** Topology Base. Der Feasible Successor liegt dann schon in der FIB bereit.
+T: Befehl Schwer
+
+Q: Wie lässt ein DMVPN-Hub mit EIGRP mehrere Pfade zu einem Präfix an die Spokes weitergeben?
+A:
+```
+af-interface Tunnel0
+ add-paths <anzahl>
+ no next-hop-self
+ no split-horizon
+```
+**Modus:** AF-Interface (Named Mode). Add-Paths setzt `no next-hop-self` voraus.
+T: Befehl Schwer
+
+Q: Wie lässt ein EIGRP-Stub über eine Leak-Map einzelne gelernte Routen durch?
+A:
+```
+eigrp stub connected summary leak-map <route-map>
+```
+**Modus:** Router bzw. Address Family. Typisch bei zwei Stub-Routern an einem Standort.
+T: Befehl Schwer
+
+# 1.4.a | Befehle: OSPF-Nachbarschaften
+S: https://www.rfc-editor.org/rfc/rfc2328 | RFC 2328: OSPF Version 2
+
+Q: Wie stellst du OSPF auf Subsekunden-Hellos um?
+A:
+```
+ip ospf dead-interval minimal hello-multiplier <3-20>
+```
+**Modus:** Interface. Dead-Intervall ist dann 1 Sekunde, Hellos kommen n-mal pro Sekunde. BFD ist meist die bessere Wahl.
+T: Befehl Schwer
+
+Q: Wie schützt du OSPF mit GTSM gegen Pakete aus größerer Entfernung?
+A:
+```
+router ospf <prozess-id>
+ ttl-security all-interfaces [hops <n>]
+```
+**Modus:** Router. Pakete mit zu kleiner TTL werden verworfen. Pro Interface: `ip ospf ttl-security`.
+T: Befehl Schwer
+
+Q: Wie verhindert ein Interface, dass OSPF über es LSAs flutet?
+A:
+```
+ip ospf database-filter all out
+```
+**Modus:** Interface. Die Nachbarschaft bleibt bestehen, aber keine LSAs gehen hinaus. Der Nachbar braucht dann statische Routen.
+T: Befehl Schwer
+
+# 1.4.b | Befehle: OSPF-Netzwerktypen, LSAs und Areas
+S: https://www.rfc-editor.org/rfc/rfc2328 | RFC 2328: OSPF Version 2
+
+Q: Wie stellst du ein Interface auf OSPF point-to-multipoint non-broadcast mit festen Nachbarn?
+A:
+```
+interface <interface>
+ ip ospf network point-to-multipoint non-broadcast
+router ospf <prozess-id>
+ neighbor <ip> [cost <kosten>]
+```
+**Modus:** Interface bzw. Router. Hier darfst du pro Nachbar unterschiedliche Kosten setzen.
+T: Befehl Schwer
+
+Q: Wie zwingst du einen NSSA-ABR, Typ-7-LSAs immer zu übersetzen?
+A:
+```
+area <area-id> nssa translate type7 always
+```
+**Modus:** Router (ABR). Sonst übersetzt nur der ABR mit der höchsten Router-ID.
+T: Befehl Schwer
+
+Q: Wie unterdrückst du die Typ-7-zu-Typ-5-Übersetzung auf einem NSSA-ABR?
+A:
+```
+area <area-id> nssa translate type7 suppress-fa
+```
+**Modus:** Router (ABR). Die Forwarding Address wird dann auf 0.0.0.0 gesetzt, die Route zeigt zum ABR.
+T: Befehl Schwer
+
+Q: Wie verhinderst du, dass OSPF die Transfernetze zwischen Routern bewirbt?
+A:
+```
+router ospf <prozess-id>
+ prefix-suppression
+```
+**Modus:** Router. Nur Loopbacks und passive Interfaces bleiben sichtbar. Verkleinert die Tabelle und die Angriffsfläche.
+T: Befehl Schwer
+
+# 1.4.c | Befehle: OSPF-Pfadwahl und Summarization
+S: https://www.rfc-editor.org/rfc/rfc2328 | RFC 2328: OSPF Version 2
+
+Q: Wie aktivierst du OSPF Fast Reroute mit Loop-Free Alternates?
+A:
+```
+router ospf <prozess-id>
+ fast-reroute per-prefix enable prefix-priority low
+```
+**Modus:** Router. `low` schützt alle Präfixe, `high` nur die mit hoher Priorität (Loopbacks /32).
+T: Befehl Schwer
+
+Q: Wie aktivierst du Remote LFA für OSPF, wenn es kein direktes LFA gibt?
+A:
+```
+router ospf <prozess-id>
+ fast-reroute per-prefix remote-lfa tunnel mpls-ldp
+```
+**Modus:** Router. Der Ersatzpfad läuft per LDP-Tunnel zu einem Knoten, der frei von Schleifen ist.
+T: Befehl Schwer
+
+Q: Wie wechselt OSPF zur Pfadwahl nach RFC 2328 statt RFC 1583?
+A:
+```
+no compatible rfc1583
+```
+**Modus:** Router. Bevorzugt Intra-Area-Pfade zu einem ASBR. Muss auf allen Routern gleich sein, sonst drohen Schleifen.
+T: Befehl Schwer
+
+# 1.4.e | Befehle: OSPF-Konvergenz und Throttling
+S: https://www.rfc-editor.org/rfc/rfc2328 | RFC 2328: OSPF Version 2
+
+Q: Wie stellst du das SPF-Throttling von OSPF ein?
+A:
+```
+timers throttle spf <start-ms> <hold-ms> <max-ms>
+```
+**Modus:** Router. Beispiel `50 200 5000`: erste Berechnung nach 50 ms, dann wachsende Pausen bis 5 s.
+T: Befehl Schwer
+
+Q: Wie bremst du, wie oft ein Router dasselbe LSA neu erzeugt und annimmt?
+A:
+```
+timers throttle lsa <start-ms> <hold-ms> <max-ms>
+timers lsa arrival <ms>
+```
+**Modus:** Router. `arrival` muss kleiner oder gleich dem `hold` der Nachbarn sein, sonst verwirft er gültige Updates.
+T: Befehl Schwer
+
+Q: Wie meldet ein OSPF-Router bis zum Ende der BGP-Konvergenz maximale Kosten?
+A:
+```
+max-metric router-lsa on-startup wait-for-bgp
+```
+**Modus:** Router. Verhindert, dass nach dem Neustart Verkehr in ein Loch läuft.
+T: Befehl Schwer
+
+Q: Welcher Befehl zeigt die SPF- und LSA-Throttling-Werte und die letzten SPF-Läufe?
+A:
+```
+show ip ospf statistics
+```
+**Modus:** privilegiert. Die Einstellungen stehen auch in `show ip ospf`.
+T: Befehl Schwer
+
+# 1.5.a | Befehle: BGP-Peering
+S: https://www.rfc-editor.org/rfc/rfc4271 | RFC 4271: A Border Gateway Protocol 4
+
+Q: Wie nimmt ein Hub BGP-Nachbarn aus einem Bereich dynamisch an?
+A:
+```
+router bgp <as>
+ bgp listen range <netz>/<länge> peer-group <gruppe>
+ bgp listen limit <anzahl>
+ neighbor <gruppe> peer-group
+ neighbor <gruppe> remote-as <as>
+```
+**Modus:** Router. Der Hub muss die Spokes nicht einzeln kennen, typisch bei DMVPN.
+T: Befehl Schwer
+
+Q: Wie zeigt ein Router einem eBGP-Nachbarn eine andere eigene AS-Nummer als die echte?
+A:
+```
+neighbor <peer-ip> local-as <alte-as> no-prepend replace-as
+```
+**Modus:** Router. Hilfreich bei AS-Migrationen. `no-prepend` und `replace-as` verhindern, dass beide Nummern im Pfad stehen.
+T: Befehl Schwer
+
+Q: Wie konfigurierst du eine BGP-Konföderation mit Sub-AS?
+A:
+```
+router bgp <sub-as>
+ bgp confederation identifier <aussen-as>
+ bgp confederation peers <andere-sub-as>
+```
+**Modus:** Router. Nach außen erscheint nur die äußere AS. Die Sub-AS stehen im Pfad als AS_CONFED_SEQUENCE.
+T: Befehl Schwer
+
+Q: Wie aktivierst du BGP Graceful Restart?
+A:
+```
+bgp graceful-restart
+```
+**Modus:** Router. Nachbarn behalten die Routen während eines Neustarts der Control Plane. Gilt für neue Sitzungen.
+T: Befehl Schwer
+
+# 1.5.b | Befehle: BGP-Pfadwahl
+S: https://www.rfc-editor.org/rfc/rfc4271 | RFC 4271: A Border Gateway Protocol 4
+
+Q: Wie erlaubt BGP Multipath über eBGP-Pfade mit unterschiedlichen Nachbar-AS?
+A:
+```
+maximum-paths <n>
+bgp bestpath as-path multipath-relax
+```
+**Modus:** Router bzw. Address Family. Ohne `multipath-relax` müssen die AS-Pfade identisch sein, nicht nur gleich lang.
+T: Befehl Schwer
+
+Q: Wie behandelt BGP Routen ohne MED als schlechteste statt als beste?
+A:
+```
+bgp bestpath med missing-as-worst
+```
+**Modus:** Router. Ohne Option zählt fehlender MED als 0 und gewinnt.
+T: Befehl Schwer
+
+Q: Wie lässt du BGP bei gleichen Pfaden die Router-ID statt des Alters entscheiden?
+A:
+```
+bgp bestpath compare-routerid
+```
+**Modus:** Router. Macht die Wahl zwischen eBGP-Pfaden stabil und vorhersagbar.
+T: Befehl Schwer
+
+Q: Wie ignoriert BGP die Länge des AS-Pfads bei der Pfadwahl?
+A:
+```
+bgp bestpath as-path ignore
+```
+**Modus:** Router. Versteckter Befehl in IOS, für Labs und Sonderfälle.
+T: Befehl Schwer
+
+# 1.5.c | Befehle: BGP-Policies und Communities
+S: https://www.rfc-editor.org/rfc/rfc1997 | RFC 1997: BGP Communities Attribute
+
+Q: Wie bewirbst du ein Präfix nur, wenn ein anderes Präfix fehlt (Conditional Advertisement)?
+A:
+```
+neighbor <peer-ip> advertise-map <adv-map> non-exist-map <bedingung-map>
+```
+**Modus:** Router bzw. Address Family. Mit `exist-map` statt `non-exist-map` gilt die umgekehrte Bedingung.
+T: Befehl Schwer
+
+Q: Wie löschst du bestimmte Communities aus einer Route?
+A:
+```
+ip community-list standard <liste> permit <community>
+route-map <name> permit 10
+ set comm-list <liste> delete
+```
+**Modus:** global bzw. Route-Map. Die übrigen Communities bleiben erhalten.
+T: Befehl Schwer
+
+Q: Wie gleichst du Communities mit einem regulären Ausdruck ab?
+A:
+```
+ip community-list expanded <name> permit <regex>
+```
+**Modus:** global. Beispiel `^65001:` trifft alle Communities, die mit 65001 beginnen.
+T: Befehl Schwer
+
+# 1.5.d | Befehle: AS-Path-Manipulation
+S: https://www.rfc-editor.org/rfc/rfc4271 | RFC 4271: A Border Gateway Protocol 4
+
+Q: Wie verlängerst du den AS-Pfad mit der AS des letzten Nachbarn?
+A:
+```
+set as-path prepend last-as <anzahl>
+```
+**Modus:** Route-Map, eingehend. Wiederholt die erste AS im Pfad, nicht die eigene.
+T: Befehl Schwer
+
+Q: Wie entfernst du private AS-Nummern auch dann, wenn öffentliche dazwischenstehen?
+A:
+```
+neighbor <peer-ip> remove-private-as all [replace-as]
+```
+**Modus:** Router bzw. Address Family. Ohne `all` entfernt IOS sie nur, wenn der Pfad ausschließlich private AS enthält.
+T: Befehl Schwer
+
+Q: Wie akzeptierst du Routen mit der eigenen AS im Pfad?
+A:
+```
+neighbor <peer-ip> allowas-in <anzahl>
+```
+**Modus:** Router bzw. Address Family. Die Zahl begrenzt, wie oft die eigene AS vorkommen darf.
+T: Befehl Mittel
+
+# 1.5.e | Befehle: BGP-Konvergenz und Skalierung
+S: https://www.rfc-editor.org/rfc/rfc7911 | RFC 7911: Advertisement of Multiple Paths in BGP
+
+Q: Wie aktivierst du BGP Add-Path, damit ein Route Reflector mehrere Pfade weitergibt?
+A:
+```
+address-family ipv4
+ bgp additional-paths select all
+ bgp additional-paths send receive
+ neighbor <client> advertise additional-paths all
+```
+**Modus:** Address Family. Die Clients brauchen `bgp additional-paths receive`.
+T: Befehl Schwer
+
+Q: Wie dämpfst du flappende eBGP-Routen?
+A:
+```
+bgp dampening [<halbwertszeit> <reuse> <suppress> <max-suppress>]
+```
+**Modus:** Router bzw. Address Family. Standard: 15 Minuten Halbwertszeit, Reuse 750, Suppress 2000.
+T: Befehl Schwer
+
+Q: Wie hält BGP einen Ersatzpfad schon vorberechnet in der FIB (PIC Edge)?
+A:
+```
+bgp additional-paths install
+```
+**Modus:** Address Family. Fällt der beste Pfad, schaltet die FIB sofort um, ohne auf die neue Pfadwahl zu warten.
+T: Befehl Schwer
+
+Q: Wie stellst du ein, wie lange BGP zwischen Updates an einen Nachbarn wartet?
+A:
+```
+neighbor <peer-ip> advertisement-interval <sekunden>
+```
+**Modus:** Router bzw. Address Family. Standard: 30 s für eBGP, 0 s für iBGP.
+T: Befehl Schwer
+
+# 1.5.f | Befehle: Soft Reconfiguration, Route Refresh und Schutz
+S: https://www.rfc-editor.org/rfc/rfc2918 | RFC 2918: Route Refresh Capability for BGP-4
+
+Q: Wie wendest du eine geänderte Eingangs-Policy ohne Sitzungsabbau an?
+A:
+```
+clear ip bgp <peer-ip> soft in
+```
+**Modus:** privilegiert. Mit Route Refresh holt der Router die Routen neu, ohne vorher alles zu speichern.
+T: Befehl Mittel
+
+Q: Wie begrenzt du die Präfixe eines Nachbarn und warnst nur, statt abzubauen?
+A:
+```
+neighbor <peer-ip> maximum-prefix <max> <warn-prozent> warning-only
+```
+**Modus:** Router bzw. Address Family. Ohne `warning-only` baut BGP die Sitzung bei Überschreitung ab.
+T: Befehl Mittel
+
+Q: Wie schützt du eine BGP-Sitzung mit TCP-AO statt MD5?
+A:
+```
+key chain <kc> tcp
+ key <id>
+  send-id <id>
+  recv-id <id>
+  key-string <schlüssel>
+  cryptographic-algorithm hmac-sha-256
+neighbor <peer-ip> ao <kc>
+```
+**Modus:** global bzw. Router. TCP-AO (RFC 5925) erlaubt Schlüsselwechsel ohne Sitzungsabbau.
+T: Befehl Schwer
+
+# 1.6.a | Befehle: IGMP, MLD und Snooping
+S: https://www.rfc-editor.org/rfc/rfc3376 | RFC 3376: IGMP Version 3
+
+Q: Wie trägst du eine Multicast-Gruppe statisch an einem Interface ein, ohne dass der Router selbst beitritt?
+A:
+```
+ip igmp static-group <gruppe>
+```
+**Modus:** Interface. Anders als `join-group` leitet der Router weiter, verarbeitet die Pakete aber nicht selbst.
+T: Befehl Mittel
+
+Q: Wie aktivierst du auf einem Switch-VLAN einen IGMP-Querier, wenn kein Router im VLAN ist?
+A:
+```
+ip igmp snooping querier
+```
+**Modus:** global. Ohne Querier verfallen die Snooping-Einträge, und der Switch flutet oder verwirft Multicast.
+T: Befehl Schwer
+
+Q: Wie übersetzt ein Router IGMPv2-Joins für SSM-Gruppen in (S,G)-Joins?
+A:
+```
+ip igmp ssm-map enable
+ip igmp ssm-map static <acl> <quelle>
+```
+**Modus:** global. Nützlich für alte Empfänger, die kein IGMPv3 können.
+T: Befehl Schwer
+
+Q: Welcher Befehl zeigt die per MLD angemeldeten IPv6-Gruppen?
+A:
+```
+show ipv6 mld groups
+```
+**Modus:** privilegiert. Für IPv4: `show ip igmp groups`.
+T: Befehl Mittel
+
+# 1.6.b | Befehle: RPF
+S: https://www.rfc-editor.org/rfc/rfc7761 | RFC 7761: PIM Sparse Mode
+
+Q: Wie gibst du für Multicast einen anderen RPF-Pfad vor als den der Unicast-Tabelle?
+A:
+```
+ip mroute <quell-netz> <maske> <rpf-nachbar>
+```
+**Modus:** global. Nötig, wenn Multicast über einen Tunnel läuft, Unicast aber nicht.
+T: Befehl Schwer
+
+Q: Wie prüfst du, welchen RPF-Nachbarn und welches Interface der Router für eine Quelle nutzt?
+A:
+```
+show ip rpf <quell-ip>
+```
+**Modus:** privilegiert. Zeigt auch, ob der Eintrag aus der Unicast-Tabelle, aus `ip mroute` oder aus MBGP stammt.
+T: Befehl Mittel
+
+Q: Mit welchem Befehl verfolgst du den Multicast-Pfad von der Quelle zum Empfänger?
+A:
+```
+mtrace <quelle> <empfänger> <gruppe>
+```
+**Modus:** privilegiert. Läuft rückwärts vom Empfänger zur Quelle und zeigt jeden RPF-Schritt.
+T: Befehl Schwer
+
+# 1.6.c | Befehle: PIM, RP, BSR, Bidir und Anycast RP
+S: https://www.rfc-editor.org/rfc/rfc7761 | RFC 7761: PIM Sparse Mode
+
+Q: Wie bleibt PIM Sparse Mode dauerhaft auf dem Shared Tree statt zum SPT zu wechseln?
+A:
+```
+ip pim spt-threshold infinity
+```
+**Modus:** global. Spart State auf den Routern, kostet aber eventuell einen Umweg über den RP.
+T: Befehl Schwer
+
+Q: Wie aktivierst du Bidirectional PIM mit einem statischen RP?
+A:
+```
+ip pim bidir-enable
+ip pim rp-address <rp-ip> <acl> bidir
+```
+**Modus:** global. Auf neueren Versionen ist `bidir-enable` bereits Standard. Es gibt dann keine (S,G)-Einträge.
+T: Befehl Schwer
+
+Q: Wie lassen Router in PIM Sparse Mode Auto-RP-Gruppen trotzdem im Dense Mode durch?
+A:
+```
+ip pim autorp listener
+```
+**Modus:** global. Flutet nur 224.0.1.39 und 224.0.1.40, alles andere bleibt Sparse Mode.
+T: Befehl Schwer
+
+Q: Wie baust du Anycast RP mit MSDP zwischen zwei RPs?
+A:
+```
+interface Loopback1
+ ip address <anycast-rp-ip> 255.255.255.255
+ip pim rp-address <anycast-rp-ip>
+ip msdp peer <anderer-rp> connect-source Loopback0
+ip msdp originator-id Loopback0
+```
+**Modus:** global. Beide RPs haben dieselbe Anycast-Adresse, MSDP tauscht die aktiven Quellen aus.
+T: Befehl Schwer
+
+Q: Welche Befehle zeigen MSDP-Peers und die gelernten Quellen?
+A:
+```
+show ip msdp peer
+show ip msdp sa-cache
+```
+**Modus:** privilegiert. Ein Peer muss „Up“ sein. Im SA-Cache stehen (S,G)-Paare der anderen RPs.
+T: Befehl Schwer
+
+Q: Wie begrenzt du, welche Multicast-Gruppen über ein Interface dürfen?
+A:
+```
+ip multicast boundary <acl> [filter-autorp]
+```
+**Modus:** Interface. `filter-autorp` entfernt die gesperrten Gruppen auch aus den Auto-RP-Meldungen.
+T: Befehl Schwer
+
+Q: Wie beeinflusst du, welcher Router im LAN PIM-DR wird?
+A:
+```
+ip pim dr-priority <wert>
+```
+**Modus:** Interface. Höher gewinnt. Der DR sendet Register-Nachrichten an den RP.
+T: Befehl Mittel
+
+Q: Wie aktivierst du Multicast-Routing für IPv6 und legst einen RP fest?
+A:
+```
+ipv6 multicast-routing
+ipv6 pim rp-address <rp-ipv6>
+```
+**Modus:** global. PIMv6 läuft danach automatisch auf allen IPv6-Interfaces.
+T: Befehl Schwer
+
+Q: Welcher Befehl zeigt Multicast-Verkehrsstatistiken pro (S,G)?
+A:
+```
+show ip mroute count
+```
+**Modus:** privilegiert. Zeigt Pakete, Bytes und verworfene Pakete, auch durch RPF-Fehler.
+T: Befehl Mittel
+
+# 2.2.a | Befehle: SD-WAN am cEdge prüfen
+S: https://www.cisco.com/c/en/us/td/docs/routers/sdwan/command/sdwan-cr-book.pdf | Cisco Catalyst SD-WAN Command Reference
+
+Q: Welcher Befehl zeigt die Control Connections eines cEdge zu den Controllern?
+A:
+```
+show sdwan control connections
+```
+**Modus:** privilegiert. Fehlversuche zeigt `show sdwan control connection-history`.
+T: Befehl Mittel
+
+Q: Welcher Befehl zeigt die BFD-Sitzungen über die SD-WAN-Tunnel?
+A:
+```
+show sdwan bfd sessions
+```
+**Modus:** privilegiert. Pro Sitzung lokale und entfernte Color, System-IP und Zustand.
+T: Befehl Mittel
+
+Q: Welche Befehle zeigen OMP-Peers und OMP-Routen?
+A:
+```
+show sdwan omp peers
+show sdwan omp routes
+```
+**Modus:** privilegiert. Fehlen Routen, prüfe die zentralen Policies auf dem vSmart.
+T: Befehl Mittel
+
+Q: Welcher Befehl zeigt die Transport-Interfaces eines cEdge mit Color und Zustand?
+A:
+```
+show sdwan control local-properties
+```
+**Modus:** privilegiert. Zeigt auch System-IP, Site-ID, Organisationsname und Zertifikatsstatus.
+T: Befehl Schwer
+
+# 3.1.a | Befehle: GRE
+S: https://www.rfc-editor.org/rfc/rfc2784 | RFC 2784: Generic Routing Encapsulation
+
+Q: Wie verhinderst du rekursives Routing, bei dem das Tunnelziel über den Tunnel selbst gelernt wird?
+A:
+```
+ip route <tunnel-ziel> 255.255.255.255 <transport-next-hop>
+```
+**Modus:** global. Alternativ das Tunnelziel aus dem Routing-Protokoll im Tunnel herausfiltern.
+T: Befehl Schwer
+
+Q: Wie aktivierst du Path MTU Discovery auf einem GRE-Tunnel?
+A:
+```
+tunnel path-mtu-discovery
+```
+**Modus:** Tunnel-Interface. Der Tunnel passt seine MTU an ICMP-Meldungen aus dem Transportnetz an.
+T: Befehl Schwer
+
+Q: Wie legst du einen GRE-Tunnel in eine Front-Door-VRF, damit das Transportnetz getrennt bleibt?
+A:
+```
+interface Tunnel0
+ tunnel vrf <fvrf>
+ tunnel source <interface-in-fvrf>
+```
+**Modus:** Tunnel-Interface. Tunnelquelle und -ziel werden in der FVRF aufgelöst, der Tunnelinhalt in der globalen Tabelle.
+T: Befehl Schwer
+
+# 3.1.b | Befehle: IPsec und IKEv2
+S: https://www.rfc-editor.org/rfc/rfc7296 | RFC 7296: Internet Key Exchange Protocol Version 2
+
+Q: Wie baust du ein IKEv2-Profil für Pre-Shared Keys?
+A:
+```
+crypto ikev2 keyring <kr>
+ peer <name>
+  address <peer-ip>
+  pre-shared-key <schlüssel>
+crypto ikev2 profile <profil>
+ match identity remote address <peer-ip> 255.255.255.255
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local <kr>
+```
+**Modus:** global. Ohne eigenen Proposal nutzt IOS die Smart Defaults.
+T: Befehl Schwer
+
+Q: Wie schützt du einen Tunnel mit IPsec und IKEv2?
+A:
+```
+crypto ipsec profile <ipsec-profil>
+ set ikev2-profile <profil>
+interface Tunnel0
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile <ipsec-profil>
+```
+**Modus:** global bzw. Interface. Ohne Transform-Set greift auch hier der Smart Default.
+T: Befehl Schwer
+
+Q: Wie aktivierst du Dead Peer Detection in einem IKEv2-Profil?
+A:
+```
+dpd <intervall> <wiederholung> {on-demand | periodic}
+```
+**Modus:** IKEv2-Profil. Erkennt tote Peers, damit veraltete SAs abgebaut werden.
+T: Befehl Schwer
+
+Q: Wie baust du einen Hub, der IPsec-Tunnel dynamisch als Virtual-Access-Interfaces anlegt (DVTI)?
+A:
+```
+interface Virtual-Template1 type tunnel
+ ip unnumbered Loopback0
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile <ipsec-profil>
+crypto ikev2 profile <profil>
+ virtual-template 1
+```
+**Modus:** global. Für jeden Peer entsteht ein eigenes Virtual-Access-Interface.
+T: Befehl Schwer
+
+Q: Welche Befehle zeigen IKEv2- und IPsec-SAs mit Details?
+A:
+```
+show crypto ikev2 sa detailed
+show crypto ipsec sa
+```
+**Modus:** privilegiert. `show crypto session detail` fasst beides pro Peer zusammen.
+T: Befehl Mittel
+
+# 3.1.c | Befehle: DMVPN
+S: https://www.rfc-editor.org/rfc/rfc2332 | RFC 2332: NBMA Next Hop Resolution Protocol
+
+Q: Wie konfigurierst du einen DMVPN-Hub für Phase 3?
+A:
+```
+interface Tunnel0
+ ip address <tunnel-ip> <maske>
+ ip nhrp network-id <id>
+ ip nhrp map multicast dynamic
+ ip nhrp redirect
+ tunnel source <interface>
+ tunnel mode gre multipoint
+```
+**Modus:** Interface. `redirect` meldet Spokes, dass es einen direkten Weg gibt.
+T: Befehl Mittel
+
+Q: Wie konfigurierst du einen DMVPN-Spoke für Phase 3?
+A:
+```
+interface Tunnel0
+ ip address <tunnel-ip> <maske>
+ ip nhrp network-id <id>
+ ip nhrp nhs <hub-tunnel-ip> nbma <hub-nbma-ip> multicast
+ ip nhrp shortcut
+ tunnel source <interface>
+ tunnel mode gre multipoint
+```
+**Modus:** Interface. `shortcut` installiert die direkten Routen aus den NHRP-Antworten.
+T: Befehl Mittel
+
+Q: Wie lässt ein Spoke eine Registrierung trotz neuer NBMA-Adresse zu, etwa hinter NAT mit wechselnder IP?
+A:
+```
+ip nhrp registration no-unique
+```
+**Modus:** Tunnel-Interface (Spoke). Sonst lehnt der Hub die neue Adresse ab, solange der alte Eintrag lebt.
+T: Befehl Schwer
+
+Q: Wie stellst du ein, wie lange NHRP-Einträge gültig sind?
+A:
+```
+ip nhrp holdtime <sekunden>
+```
+**Modus:** Tunnel-Interface. Spokes registrieren sich nach einem Drittel der Zeit neu.
+T: Befehl Schwer
+
+Q: Welche Befehle zeigen den DMVPN-Zustand mit Details und die NHRP-Tabelle?
+A:
+```
+show dmvpn detail
+show ip nhrp detail
+```
+**Modus:** privilegiert. Direkte Spoke-zu-Spoke-Einträge sind mit „D“ (dynamisch) markiert.
+T: Befehl Mittel
+
+# 3.2.a | Befehle: MPLS und LDP
+S: https://www.rfc-editor.org/rfc/rfc5036 | RFC 5036: LDP Specification
+
+Q: Wie aktivierst du LDP auf einem Interface und legst die LDP-Router-ID fest?
+A:
+```
+mpls ldp router-id Loopback0 force
+interface <interface>
+ mpls ip
+```
+**Modus:** global bzw. Interface. Die Router-ID muss als /32 im IGP stehen.
+T: Befehl Leicht
+
+Q: Wie hält LDP eine Sitzung über einen Ersatzweg, wenn der direkte Link ausfällt?
+A:
+```
+mpls ldp session protection
+```
+**Modus:** global. Baut eine zusätzliche Targeted-Hello-Verbindung, damit die Labels beim Wiederkommen sofort da sind.
+T: Befehl Schwer
+
+Q: Wie synchronisierst du OSPF mit LDP?
+A:
+```
+router ospf <prozess-id>
+ mpls ldp sync
+```
+**Modus:** Router. Prüfen mit `show mpls ldp igp sync`.
+T: Befehl Schwer
+
+Q: Wie vergibst du Labels nur für Loopbacks statt für alle Präfixe?
+A:
+```
+mpls ldp label
+ allocate global prefix-list <liste>
+```
+**Modus:** global. Spart Labels und Speicher, weil nur die PE-Loopbacks Labels brauchen.
+T: Befehl Schwer
+
+Q: Wie verbirgst du den MPLS-Kern im Traceroute?
+A:
+```
+no mpls ip propagate-ttl forwarded
+```
+**Modus:** global. `forwarded` betrifft nur Kundenverkehr, eigene Traceroutes aus dem Kern sehen weiter alle Hops.
+T: Befehl Schwer
+
+Q: Welche Befehle zeigen LDP-Nachbarn, Bindings und die LFIB?
+A:
+```
+show mpls ldp neighbor
+show mpls ldp bindings
+show mpls forwarding-table
+```
+**Modus:** privilegiert. „Pop Label“ in der LFIB zeigt Penultimate Hop Popping.
+T: Befehl Mittel
+
+Q: Mit welchem Befehl prüfst du, ob ein LSP bis zum Ziel durchgeht?
+A:
+```
+ping mpls ipv4 <präfix>/<länge>
+```
+**Modus:** privilegiert. Für den Weg Hop für Hop: `traceroute mpls ipv4 <präfix>/<länge>`.
+T: Befehl Schwer
+
+# 3.2.b | Befehle: MPLS L3VPN
+S: https://www.rfc-editor.org/rfc/rfc4364 | RFC 4364: BGP/MPLS IP VPNs
+
+Q: Wie legst du eine Kunden-VRF mit RD und gleichem Import- und Export-RT an?
+A:
+```
+vrf definition <kunde>
+ rd <as:nn>
+ address-family ipv4
+  route-target both <as:nn>
+```
+**Modus:** global. Für Hub-and-Spoke-VPNs unterscheiden sich Import und Export.
+T: Befehl Mittel
+
+Q: Wie aktivierst du VPNv4 zwischen PEs und schickst die Extended Communities mit?
+A:
+```
+router bgp <as>
+ address-family vpnv4
+  neighbor <pe-ip> activate
+  neighbor <pe-ip> send-community extended
+```
+**Modus:** Router. Bei einem Route Reflector zusätzlich `neighbor <pe-ip> route-reflector-client` in dieser AF.
+T: Befehl Mittel
+
+Q: Wie baust du einen OSPF-Sham-Link zwischen zwei PEs, damit eine Backdoor-Verbindung nicht bevorzugt wird?
+A:
+```
+router ospf <prozess-id> vrf <kunde>
+ area <area-id> sham-link <eigene-loopback> <andere-loopback> cost <kosten>
+```
+**Modus:** Router. Die Loopbacks liegen in der VRF und werden per BGP verteilt, nicht per OSPF.
+T: Befehl Schwer
+
+Q: Wie redistribuierst du zwischen EIGRP beim Kunden und MP-BGP auf dem PE?
+A:
+```
+router eigrp <name>
+ address-family ipv4 unicast vrf <kunde> autonomous-system <as>
+  topology base
+   redistribute bgp <bgp-as> metric <bw> <dly> 255 1 1500
+router bgp <bgp-as>
+ address-family ipv4 vrf <kunde>
+  redistribute eigrp <as>
+```
+**Modus:** Router. EIGRP übernimmt seine Originalmetrik aus den Extended Communities, wenn beide Seiten EIGRP sprechen.
+T: Befehl Schwer
+
+Q: Wie steuerst du per Route-Map, welche Routen eine VRF exportiert?
+A:
+```
+vrf definition <kunde>
+ address-family ipv4
+  export map <route-map>
+```
+**Modus:** VRF Address Family. Die Route-Map kann pro Präfix andere Route Targets setzen (`set extcommunity rt`).
+T: Befehl Schwer
+
+Q: Welche Befehle zeigen die VPNv4-Routen mit Labels und die Routing-Tabelle einer VRF?
+A:
+```
+show bgp vpnv4 unicast all labels
+show ip route vrf <kunde>
+```
+**Modus:** privilegiert. Fehlt eine Route in der VRF, stimmen meist Import-RT oder Send-Community nicht.
+T: Befehl Mittel
+
+# 4.1.a | Befehle: Geräte-Härtung, AAA und CoPP
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie verschlüsselst du gespeicherte Schlüssel mit AES (Typ 6)?
+A:
+```
+key config-key password-encrypt <master-key>
+password encryption aes
+```
+**Modus:** global. Betrifft u. a. Pre-Shared Keys und RADIUS-Keys.
+T: Befehl Schwer
+
+Q: Wie schaltest du unnötige Dienste ab, die Angreifern Informationen liefern?
+A:
+```
+no ip http server
+no ip source-route
+no service pad
+no ip bootp server
+interface <interface>
+ no ip proxy-arp
+ no ip redirects
+ no ip unreachables
+```
+**Modus:** global bzw. Interface. Typische Härtungsliste nach dem Cisco-Guide zur Gerätehärtung.
+T: Befehl Mittel
+
+Q: Wie bremst du, wie viele ICMP-Unreachables ein Router erzeugt?
+A:
+```
+ip icmp rate-limit unreachable <ms>
+```
+**Modus:** global. Schützt die CPU vor Scans, die viele Unreachables auslösen.
+T: Befehl Schwer
+
+Q: Wie autorisierst du Befehle per TACACS+ mit Fallback auf lokal, wenn der Benutzer schon angemeldet ist?
+A:
+```
+aaa authorization commands 15 default group <gruppe> if-authenticated
+```
+**Modus:** global. `if-authenticated` erlaubt alles, sobald der Benutzer erfolgreich angemeldet ist und der Server ausfällt.
+T: Befehl Schwer
+
+Q: Wie baust du CoPP mit einer Klasse für Routing-Protokolle und einer für den Rest?
+A:
+```
+policy-map <copp>
+ class <routing>
+  police <bit/s> conform-action transmit exceed-action transmit
+ class class-default
+  police <bit/s> conform-action transmit exceed-action drop
+control-plane
+ service-policy input <copp>
+```
+**Modus:** global. Routing-Protokolle nur messen, nicht verwerfen, damit Nachbarschaften stabil bleiben.
+T: Befehl Schwer
+
+# 4.1.b | Befehle: Layer-2-Sicherheit und 802.1X
+S: https://www.cisco.com/c/en/us/support/switches/catalyst-9300-series-switches/products-command-reference-list.html | Cisco Catalyst 9300: Command References
+
+Q: Wie aktivierst du DHCP Snooping für ein VLAN und vertraust dem Uplink?
+A:
+```
+ip dhcp snooping
+ip dhcp snooping vlan <vlan>
+interface <uplink>
+ ip dhcp snooping trust
+```
+**Modus:** global bzw. Interface. Mit `no ip dhcp snooping information option` fügt der Switch keine Option 82 ein.
+T: Befehl Mittel
+
+Q: Wie aktivierst du DAI mit zusätzlicher Prüfung von MAC- und IP-Feldern?
+A:
+```
+ip arp inspection vlan <vlan>
+ip arp inspection validate src-mac dst-mac ip
+```
+**Modus:** global. Ohne `validate` prüft DAI nur die IP-MAC-Zuordnung gegen die Snooping-Tabelle.
+T: Befehl Schwer
+
+Q: Wie erlaubst du bei DAI Geräte mit statischer Adresse über eine ARP-ACL?
+A:
+```
+arp access-list <name>
+ permit ip host <ip> mac host <mac>
+ip arp inspection filter <name> vlan <vlan>
+```
+**Modus:** global. Statische Geräte stehen nicht in der DHCP-Snooping-Tabelle und würden sonst blockiert.
+T: Befehl Schwer
+
+Q: Wie aktivierst du IP Source Guard auf einem Access-Port?
+A:
+```
+ip verify source [port-security]
+```
+**Modus:** Interface. Nur Quelladressen aus der Snooping-Tabelle sind erlaubt. Mit `port-security` auch die MAC.
+T: Befehl Schwer
+
+Q: Wie begrenzt du Broadcast-Verkehr an einem Port auf 1 Prozent und sperrst ihn bei Überschreitung?
+A:
+```
+storm-control broadcast level 1.00
+storm-control action shutdown
+```
+**Modus:** Interface. Statt `shutdown` geht auch `trap`, dann wird nur gemeldet und verworfen.
+T: Befehl Mittel
+
+Q: Wie aktivierst du 802.1X mit IBNS 2.0 an einem Port?
+A:
+```
+interface <interface>
+ access-session port-control auto
+ dot1x pae authenticator
+ mab
+ service-policy type control subscriber <policy>
+```
+**Modus:** Interface. Die Control Policy legt Reihenfolge und Fallbacks fest, statt `authentication order`.
+T: Befehl Schwer
+
+Q: Welcher Befehl zeigt die Sitzungen mit IBNS 2.0?
+A:
+```
+show access-session [interface <interface> details]
+```
+**Modus:** privilegiert. Zeigt Methode, Status, zugewiesenes VLAN, ACL und SGT.
+T: Befehl Mittel
+
+# 4.1.c | Befehle: uRPF, IPv6 First Hop Security und ACLs
+S: https://www.rfc-editor.org/rfc/rfc3704 | RFC 3704: Ingress Filtering for Multihomed Networks
+
+Q: Wie aktivierst du Strict uRPF und Loose uRPF?
+A:
+```
+ip verify unicast source reachable-via rx [allow-default]
+ip verify unicast source reachable-via any [allow-default]
+```
+**Modus:** Interface. Strict an Kunden-Ports, Loose bei asymmetrischem Routing.
+T: Befehl Mittel
+
+Q: Wie verwirfst du bei IPv6 Pakete an Adressen, die nicht in der Binding Table stehen (Destination Guard)?
+A:
+```
+ipv6 destination-guard policy <policy>
+vlan configuration <vlan>
+ ipv6 destination-guard attach-policy <policy>
+```
+**Modus:** global bzw. VLAN-Konfiguration. Schützt vor ND-Cache-Erschöpfung durch Scans.
+T: Befehl Schwer
+
+Q: Wie hängst du eine FHS-Policy an alle Ports eines VLANs statt an jeden Port einzeln?
+A:
+```
+vlan configuration <vlan>
+ ipv6 nd raguard attach-policy <policy>
+```
+**Modus:** VLAN-Konfiguration. Policies am Port haben Vorrang vor denen am VLAN.
+T: Befehl Schwer
+
+Q: Wie gruppierst du Netze und Ports in einer ACL mit Object Groups?
+A:
+```
+object-group network <name>
+ <netz> <maske>
+object-group service <name>
+ tcp eq 443
+ip access-list extended <acl>
+ permit object-group <service> any object-group <netz>
+```
+**Modus:** global. Macht große ACLs kürzer und lesbarer.
+T: Befehl Schwer
+
+# 4.2.a | Befehle: QoS
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie baust du einen Policer mit zwei Raten und drei Farben (Two-Rate Three-Color)?
+A:
+```
+police cir <bit/s> pir <bit/s> conform-action transmit exceed-action set-dscp-transmit af12 violate-action drop
+```
+**Modus:** Policy-Map, Klasse. Unter CIR grün, zwischen CIR und PIR gelb (ummarkiert), über PIR rot (verworfen).
+T: Befehl Schwer
+
+Q: Wie gibst du zwei Klassen Priority Queues mit unterschiedlicher Priorität?
+A:
+```
+class <voice>
+ priority level 1
+ police cir percent 10
+class <video>
+ priority level 2
+ police cir percent 20
+```
+**Modus:** Policy-Map. Level 1 wird vor Level 2 bedient. Der Policer begrenzt jede Priority-Klasse.
+T: Befehl Schwer
+
+Q: Wie verteilst du die Bandbreite, die nach der Priority Queue übrig bleibt?
+A:
+```
+bandwidth remaining percent <anteil>
+```
+**Modus:** Policy-Map, Klasse. Die Anteile beziehen sich auf den Rest, nicht auf die gesamte Bandbreite.
+T: Befehl Schwer
+
+Q: Wie baust du einen hierarchischen Shaper mit Queuing darunter?
+A:
+```
+policy-map <parent>
+ class class-default
+  shape average <bit/s>
+  service-policy <child>
+interface <interface>
+ service-policy output <parent>
+```
+**Modus:** global bzw. Interface. Der Parent-Shaper erzeugt den Stau, auf den die Child-Policy reagiert.
+T: Befehl Schwer
+
+Q: Wie übersetzt du DSCP-Werte beim Markieren mit einer Table Map?
+A:
+```
+table-map <name>
+ map from <dscp-alt> to <dscp-neu>
+ default copy
+policy-map <name>
+ class class-default
+  set dscp dscp table <name>
+```
+**Modus:** global. `default copy` lässt nicht aufgeführte Werte unverändert.
+T: Befehl Schwer
+
+Q: Wie aktivierst du WRED nach DSCP und legst Schwellen für eine Markierung fest?
+A:
+```
+random-detect dscp-based
+random-detect dscp <wert> <min-schwelle> <max-schwelle> <kehrwert>
+```
+**Modus:** Policy-Map, Klasse. Zwischen den Schwellen verwirft WRED zufällig, an der oberen Schwelle jedes n-te Paket (Kehrwert 10 = 10 Prozent), darüber alles.
+T: Befehl Schwer
+
+Q: Welcher Befehl zeigt die Statistik einer QoS-Policy mit Queue-Tiefe und Drops?
+A:
+```
+show policy-map interface <interface> output
+```
+**Modus:** privilegiert. Auf Catalyst 9000 zeigt die Hardware-Queues `show platform hardware fed switch active qos queue stats interface <interface>`.
+T: Befehl Mittel
+
+# 4.3.a | Befehle: FHRP, NTP und DHCP
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie richtest du HSRP für IPv6 ein?
+A:
+```
+standby version 2
+standby <gruppe> ipv6 autoconfig
+standby <gruppe> priority <wert>
+standby <gruppe> preempt
+```
+**Modus:** Interface. Die virtuelle Link-Local-Adresse wird aus der virtuellen MAC gebildet.
+T: Befehl Schwer
+
+Q: Wie richtest du VRRPv3 für IPv6 ein?
+A:
+```
+fhrp version vrrp v3
+interface <interface>
+ vrrp <gruppe> address-family ipv6
+  address <fe80-adresse> primary
+  priority <wert>
+```
+**Modus:** global bzw. Interface. Bei IPv6 muss die primäre virtuelle Adresse eine Link-Local sein.
+T: Befehl Schwer
+
+Q: Wie gewichtet GLBP die Router nach Kapazität?
+A:
+```
+glbp <gruppe> load-balancing weighted
+glbp <gruppe> weighting <wert> [lower <x> upper <y>]
+```
+**Modus:** Interface. Unter `lower` gibt der Router seine AVF-Rolle ab, über `upper` übernimmt er sie wieder.
+T: Befehl Schwer
+
+Q: Wie aktivierst du NTP-Authentisierung mit SHA-256?
+A:
+```
+ntp authentication-key <id> hmac-sha2-256 <schlüssel>
+ntp authenticate
+ntp trusted-key <id>
+ntp server <ip> key <id>
+```
+**Modus:** global. Auf älteren Versionen gibt es nur `md5`.
+T: Befehl Schwer
+
+Q: Wie aktualisiert NTP auch die Hardware-Uhr des Geräts?
+A:
+```
+ntp update-calendar
+```
+**Modus:** global. Nach einem Neustart startet das Gerät dann mit einer annähernd richtigen Zeit.
+T: Befehl Mittel
+
+Q: Wie setzt ein DHCP-Relay die Agent-Information-Option (Option 82)?
+A:
+```
+ip dhcp relay information option
+```
+**Modus:** global. Der Server sieht dann Relay und Port des Clients und kann danach Adressen vergeben.
+T: Befehl Schwer
+
+# 4.3.b | Befehle: NAT, IP SLA und Monitoring
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie übersetzt du ein ganzes Netz statisch auf ein anderes Netz?
+A:
+```
+ip nat inside source static network <inside-netz> <outside-netz> /<länge>
+```
+**Modus:** global. Jede Host-Adresse wird 1:1 auf die gleiche Position im anderen Netz abgebildet.
+T: Befehl Schwer
+
+Q: Wie machst du NAT VRF-aware, sodass Kunden aus einer VRF ins Internet übersetzt werden?
+A:
+```
+ip nat inside source list <acl> interface <wan> vrf <kunde> overload
+```
+**Modus:** global. Das Inside-Interface gehört zur VRF, das Outside-Interface zur globalen Tabelle.
+T: Befehl Schwer
+
+Q: Wie übersetzt NAT64 IPv6-Clients auf IPv4-Server (stateful)?
+A:
+```
+ipv6 access-list <v6-acl>
+ permit ipv6 <v6-präfix> any
+nat64 prefix stateful <nat64-präfix>/96
+nat64 v4 pool <pool> <start-ip> <end-ip>
+nat64 v6v4 list <v6-acl> pool <pool> overload
+interface <v6-seite>
+ nat64 enable
+interface <v4-seite>
+ nat64 enable
+```
+**Modus:** global bzw. Interface. Die IPv4-Ziele erscheinen für Clients mit dem /96-Präfix davor, DNS64 liefert passende AAAA-Einträge.
+T: Befehl Schwer
+
+Q: Wie startest du eine IP-SLA-Messung zu einer festen Uhrzeit, und wie lange läuft sie?
+A:
+```
+ip sla schedule <nr> start-time <hh:mm> <monat> <tag> life <sekunden>
+```
+**Modus:** global. `life forever` lässt sie unbegrenzt laufen, `recurring` wiederholt sie täglich.
+T: Befehl Schwer
+
+Q: Wie lässt IP SLA bei Überschreitung eines Schwellwerts eine Aktion auslösen?
+A:
+```
+ip sla reaction-configuration <nr> react timeout threshold-type immediate action-type trapOnly
+```
+**Modus:** global. Mit `action-type triggerOnly` startet stattdessen eine andere IP-SLA-Messung.
+T: Befehl Schwer
+
+Q: Wie legst du eine ERSPAN-Ziel-Session an, die gespiegelten Verkehr empfängt und auf einen Port gibt?
+A:
+```
+monitor session <nr> type erspan-destination
+ destination interface <port>
+ no shutdown
+ source
+  erspan-id <id>
+  ip address <eigene-ip>
+```
+**Modus:** global. Die ERSPAN-ID muss zur Quell-Session passen.
+T: Befehl Schwer
+
+# 5.1.a | Befehle: NETCONF, RESTCONF und gNMI
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie schaltest du NETCONF und RESTCONF ein?
+A:
+```
+netconf-yang
+restconf
+ip http secure-server
+ip http authentication local
+```
+**Modus:** global. NETCONF auf TCP 830 (SSH), RESTCONF auf TCP 443 (HTTPS).
+T: Befehl Leicht
+
+Q: Wie aktivierst du den Candidate Datastore und prüfst die Datastores?
+A:
+```
+netconf-yang feature candidate-datastore
+show netconf-yang datastores
+```
+**Modus:** global bzw. privilegiert. Mit Candidate werden Änderungen erst beim `<commit>` aktiv.
+T: Befehl Schwer
+
+Q: Welcher Befehl zeigt die laufenden NETCONF-Sitzungen?
+A:
+```
+show netconf-yang sessions [detail]
+```
+**Modus:** privilegiert. Hängende Sitzungen halten Locks auf Datastores, `clear netconf-yang session <id>` löst sie.
+T: Befehl Mittel
+
+# 5.1.b | Befehle: Telemetrie, EEM und Guest Shell
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie legst du eine Telemetrie-Subscription an, die bei jeder Änderung sendet statt periodisch?
+A:
+```
+telemetry ietf subscription <id>
+ encoding encode-kvgpb
+ filter xpath <xpath>
+ stream yang-push
+ update-policy on-change
+ receiver ip address <collector> <port> protocol grpc-tcp
+```
+**Modus:** global. On-Change geht nur für Pfade, die das unterstützen, z. B. Interface-Status.
+T: Befehl Schwer
+
+Q: Welcher Befehl zeigt, ob eine Telemetrie-Subscription gültig ist und der Empfänger verbunden?
+A:
+```
+show telemetry ietf subscription <id> receiver
+```
+**Modus:** privilegiert. „State: Connected“ heißt: Die gRPC-Verbindung steht.
+T: Befehl Schwer
+
+Q: Wie reagiert ein EEM-Applet auf einen Schwellwert eines SNMP-Objekts, z. B. der CPU-Last?
+A:
+```
+event manager applet <name>
+ event snmp oid <oid> get-type exact entry-op ge entry-val <wert> poll-interval <sekunden>
+```
+**Modus:** Applet. `entry-op ge` löst aus, sobald der Wert größer oder gleich der Schwelle ist.
+T: Befehl Schwer
+
+Q: Wie speichert ein EEM-Applet die Ausgabe eines Befehls und schreibt sie ins Syslog?
+A:
+```
+action 1.0 cli command "enable"
+action 2.0 cli command "show ip route summary"
+action 3.0 syslog msg "$_cli_result"
+```
+**Modus:** Applet. `$_cli_result` enthält die Ausgabe des letzten `cli command`.
+T: Befehl Schwer
+
+Q: Wie verzweigt ein EEM-Applet abhängig von einem Wert?
+A:
+```
+action 1.0 if $_cli_result eq "<wert>"
+action 2.0  syslog msg "<text>"
+action 3.0 end
+```
+**Modus:** Applet. Weitere Steuerung mit `else`, `while` und `regexp`.
+T: Befehl Schwer
+
+Q: Wie startest du die Guest Shell und führst ein Python-Skript darin aus?
+A:
+```
+iox
+guestshell enable
+guestshell run python3 <skript>
+```
+**Modus:** `iox` global, die anderen privilegiert. Eine Shell bekommst du mit `guestshell run bash`.
+T: Befehl Schwer

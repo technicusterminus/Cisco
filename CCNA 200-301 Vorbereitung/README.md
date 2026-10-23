@@ -6,7 +6,7 @@
 |---|---|
 | [`Packet-Tracer-Labs/`](Packet-Tracer-Labs/) | 26 Packet-Tracer-Labs mit Aufgaben (Bauen), eingebauten Fehlern (Reparieren, 95 Tickets) und Transferfragen (Üben), dazu ein Python-/JSON-/REST-Paket mit Tests und Konzept-Fallstudien |
 | [`Packet-Tracer-Labs/ZIELE.md`](Packet-Tracer-Labs/ZIELE.md) | Pro Prüfungsziel: Links zu Aufgaben und Lösungen |
-| [`Anki/`](Anki/) | Deutsches Anki-Deck: 621 Karten zu allen 53 Zielen, davon 53 Prüfungsfallen |
+| [`Anki/`](Anki/) | Deutsches Anki-Deck: 792 Karten zu allen 53 Zielen, davon 53 Prüfungsfallen und 171 Befehlskarten |
 | [`Trainer/`](Trainer/) | Subnetting-Trainer mit Lösungsweg, IPv6 und EUI-64, dazu der Ticket-Trainer mit den 95 Lab-Tickets (HTML, offline) |
 | [`Pruefungssimulation/`](Pruefungssimulation/) | 273 Übungsfragen mit Drag-and-drop, Zeitlimit, Domänengewicht, Wiederholung falscher Fragen; lädt auch eigene Fragenpools (HTML, offline) |
 | [`LERNPLAN.md`](LERNPLAN.md) | 8-Wochen-Plan, der Deck, Labs, Trainer und Simulation verbindet |

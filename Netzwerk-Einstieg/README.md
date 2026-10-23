@@ -10,7 +10,7 @@ Material für alle, die noch **nichts** über Netzwerke wissen, auf Deutsch, ohn
 | [`Cheatsheet.md`](Cheatsheet.md) · [`PDF`](Cheatsheet.pdf) | Kurzfassung als Text; PDF mit 3 Seiten: Modelle, Subnetting mit Rechenweg, Protokolle, Geräte, Kabel, Befehle, Fehlersuche nach Symptom |
 | [`Glossar.md`](Glossar.md) | Die wichtigsten Begriffe in Alltagssprache |
 | [`Uebungen/`](Uebungen/) | 5 Praxisübungen: eigenes Netz, Ping, DNS/ARP, Wireshark, Packet Tracer |
-| [`Anki/`](Anki/) | Deutsches Anki-Deck mit 102 Karten |
+| [`Anki/`](Anki/) | Deutsches Anki-Deck mit 137 Karten, davon 35 Befehlskarten |
 | [`Quiz/`](Quiz/) | 57 Fragen als Quiz im Browser |
 | [`Lernplan.md`](Lernplan.md) | 4 Wochen, etwa 5 Stunden pro Woche |
 

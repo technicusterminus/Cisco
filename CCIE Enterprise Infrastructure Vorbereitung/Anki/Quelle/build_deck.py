@@ -15,6 +15,10 @@ Kartenformat (eine Datei pro Domäne, *.txt):
     T: Typ Stufe          z. B. "Szenario Mittel"
     S: https://... | zusätzliche Quelle nur für diese Karte
 
+Befehlskarten (Datei 9_befehle.txt) nutzen "T: Befehl <Stufe> [Pruefen|Konfigurieren|Betrieb]":
+Frage ist eine Aufgabe, Antwort beginnt mit dem Codeblock der Syntax, danach "**Modus:** …".
+Die Befehlsart wird sonst aus dem ersten Befehl abgeleitet (show, debug, ping … = Pruefen).
+
 Leerzeilen trennen Karten. Code steht zwischen ``` und ``` (ohne Leerzeilen darin).
 Inline: **fett**, `code`.
 """
@@ -22,7 +26,10 @@ import glob, hashlib, html, os, re, sys
 
 import genanki
 
-VERSION = "1.0"
+VERSION = "1.1"
+# Vorlage und Kompendium-Tag bleiben auf dem Stand von 1.0: Ändert sich die Vorlage,
+# kann Anki beim Update-Import einen zweiten Notiztyp anlegen und den Lernstand trennen.
+VORLAGE_VERSION = "1.0"
 STAND = "22.10.2026"
 HERE = os.path.dirname(os.path.abspath(__file__))
 MODEL_ID = 1842051000
@@ -35,8 +42,25 @@ DOMAINS = {
     "5": ("5 Automation und Programmierbarkeit", 1842051105),
 }
 TYPEN = {"Wissen": "Wissen", "Szenario": "Szenario", "Vergleich": "Vergleich", "CLI": "CLI",
-         "Exhibit": "Exhibit", "Rechnen": "Rechnen", "Falle": "Prüfungsfalle"}
+         "Exhibit": "Exhibit", "Rechnen": "Rechnen", "Falle": "Prüfungsfalle", "Befehl": "Befehl"}
 STUFEN = {"Leicht", "Mittel", "Schwer"}
+ARTEN = {"Pruefen", "Konfigurieren", "Betrieb"}
+PRUEFEN = ("show", "debug", "undebug", "ping", "traceroute", "test", "mtrace", "monitor capture")
+BETRIEB = ("clear", "copy", "reload", "write", "erase", "dir", "delete", "ssh", "telnet", "terminal", "more",
+           "event manager run", "guestshell run", "verify")
+
+
+def befehlsart(c):
+    t = c["T"].split()
+    if len(t) == 3:
+        return t[2]
+    m = re.search(r"```\n?(.*?)\n", c["A"] + "\n", flags=re.S)
+    first = (m.group(1) if m else "").strip().lower()
+    if first.startswith(PRUEFEN):
+        return "Pruefen"
+    if first.startswith(BETRIEB):
+        return "Betrieb"
+    return "Konfigurieren"
 
 CSS = open(os.path.join(HERE, "karte.css"), encoding="utf-8").read()
 HEAD = ('<div class="sheet"><div class="eyebrow">CCIE Enterprise Infrastructure</div><div class="meta">'
@@ -50,7 +74,7 @@ MODEL = genanki.Model(
         "qfmt": HEAD + "</div>",
         "afmt": HEAD + '<hr id="answer"><div class="label">Kernantwort</div><div class="answer">{{Antwort}}</div>'
                 '{{#Hinweis}}<div class="hint">{{Hinweis}}</div>{{/Hinweis}}'
-                f'<div class="sources"><div>{{{{ID}}}} · Kompendium {VERSION} · Stand {STAND}</div>{{{{Quellen}}}}</div></div>',
+                f'<div class="sources"><div>{{{{ID}}}} · Kompendium {VORLAGE_VERSION} · Stand {STAND}</div>{{{{Quellen}}}}</div></div>',
     }],
     css=CSS, sort_field_index=0)
 
@@ -131,13 +155,18 @@ def check(c):
     if not c["Q"].strip().endswith("?"):
         p.append("Frage endet nicht mit ?")
     typ_stufe = c["T"].split()
+    befehl = typ_stufe[:1] == ["Befehl"]
+    if befehl and len(typ_stufe) == 3 and typ_stufe[2] in ARTEN:
+        typ_stufe = typ_stufe[:2]
     if len(typ_stufe) != 2 or typ_stufe[0] not in TYPEN or typ_stufe[1] not in STUFEN:
         p.append(f"T ungültig: {c['T']!r}")
     a = c["A"].lstrip()
-    if not (a.startswith("**") or (typ_stufe and typ_stufe[0] == "CLI" and a.startswith("```"))):
+    if not (a.startswith("**") or (typ_stufe and typ_stufe[0] in ("CLI", "Befehl") and a.startswith("```"))):
         p.append("Antwort beginnt nicht fett")
     if a.count("```") % 2:
         p.append("Codeblock nicht geschlossen")
+    if befehl and "**Modus:**" not in c["A"]:
+        p.append("Befehlskarte ohne Modus")
     for w in ("konzeptionell", "plattformabhängig", "im üblichen", "Lehrbeispiel"):
         if w in c["Q"] + c["A"] + c["H"]:
             p.append(f"Floskel: {w}")
@@ -164,15 +193,17 @@ def main():
     for c in cards:
         counter[c["ziel"]] = counter.get(c["ziel"], 0) + 1
         cid = f"EI-{c['ziel']}-{counter[c['ziel']]:03d}"
-        typ, stufe = c["T"].split()
+        typ, stufe = c["T"].split()[:2]
         dom = c["ziel"].split(".")[0]
         frage, antwort = md(c["Q"]), md(c["A"])
         tags = ["CCIE_EI", f"Ziel::{c['ziel']}", f"Domaene::{dom}", f"Typ::{typ}", f"Stufe::{stufe}",
-                f"Kompendium::{VERSION.replace('.', '_')}"]
+                f"Kompendium::{VORLAGE_VERSION.replace('.', '_')}"]
         if "<pre>" not in frage + antwort and typ != "CLI" and len(c["Q"]) + len(c["A"]) < 360:
             tags.append("Modus::Zug")
         if typ == "Falle":
             tags.append("Fokus::Falle")
+        if typ == "Befehl":
+            tags += ["Fokus::Befehle", f"Befehlsart::{befehlsart(c)}", f"Befehle::{VERSION.replace('.', '_')}"]
         if typ == "Exhibit":
             tags.append("Fokus::Exhibit")
         note = genanki.Note(

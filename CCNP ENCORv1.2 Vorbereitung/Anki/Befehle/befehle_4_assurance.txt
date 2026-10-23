@@ -1,0 +1,446 @@
+# 4.1 | Befehle: Ping, Traceroute, Debug und Paketmitschnitt
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie pingst du mit fester Quelladresse, 100 Wiederholungen, 1500 Byte und gesetztem DF-Bit?
+A:
+```
+ping <ziel> source <interface> repeat 100 size 1500 df-bit
+```
+**Modus:** privilegiert. Kommen große Pakete mit DF nicht durch, kleine aber schon, liegt ein MTU-Problem vor.
+T: Befehl Mittel
+
+Q: Wie startest du einen erweiterten Ping mit Abfrage aller Parameter?
+A:
+```
+ping
+```
+**Modus:** privilegiert, ohne Ziel eingeben. IOS fragt dann Protokoll, Ziel, Anzahl, Größe, Quelle und weitere Optionen ab.
+T: Befehl Mittel
+
+Q: Wie verfolgst du den Pfad zu einem Ziel mit fester Quelladresse und ohne DNS-Auflösung?
+A:
+```
+traceroute <ziel> source <interface> numeric
+```
+**Modus:** privilegiert. Sterne (*) heißen: keine Antwort, oft wegen gefiltertem ICMP, nicht zwingend ein Ausfall.
+T: Befehl Mittel
+
+Q: Wie siehst du Debug-Ausgaben in einer SSH-Sitzung?
+A:
+```
+terminal monitor
+```
+**Modus:** privilegiert. Ohne diesen Befehl gehen Meldungen nur an Konsole und Log.
+T: Befehl Leicht
+
+Q: Wie schaltest du alle laufenden Debugs auf einmal ab?
+A:
+```
+undebug all
+```
+**Modus:** privilegiert. Gleichwertig: `no debug all`. Welche Debugs aktiv sind, zeigt `show debugging`.
+T: Befehl Leicht
+
+Q: Wie beschränkst du Debug-Ausgaben auf ein einzelnes Interface?
+A:
+```
+debug condition interface <interface>
+```
+**Modus:** privilegiert. Viele Debugs berücksichtigen die Bedingung, das schont die CPU auf belasteten Geräten.
+T: Befehl Schwer
+
+Q: Wie legst du auf IOS XE einen Paketmitschnitt (Embedded Packet Capture) an einem Interface an?
+A:
+```
+monitor capture <name> interface <interface> both
+monitor capture <name> match ipv4 any any
+```
+**Modus:** privilegiert. `both` schneidet in beide Richtungen mit. Statt `ipv4 any any` geht auch eine ACL.
+T: Befehl Schwer
+
+Q: Wie startest und stoppst du einen Embedded Packet Capture und zeigst den Inhalt?
+A:
+```
+monitor capture <name> start
+monitor capture <name> stop
+show monitor capture <name> buffer brief
+```
+**Modus:** privilegiert. Ohne `brief` siehst du die Pakete dekodiert.
+T: Befehl Schwer
+
+Q: Wie speicherst du einen Embedded Packet Capture als PCAP-Datei für Wireshark?
+A:
+```
+monitor capture <name> export flash:<datei>.pcap
+```
+**Modus:** privilegiert. Danach per SCP oder TFTP vom Gerät kopieren.
+T: Befehl Schwer
+
+# 4.1 | Befehle: Syslog
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie schickst du Syslog-Meldungen an einen Server und legst die Schwelle fest?
+A:
+```
+logging host <server-ip>
+logging trap <severity>
+```
+**Modus:** global. Severity als Zahl (0–7) oder Name, z. B. `informational` (6). Gesendet wird diese Stufe und alles Wichtigere.
+T: Befehl Leicht
+
+Q: Wie legst du einen lokalen Log-Puffer mit 64 KB für alle Meldungen bis Debugging an?
+A:
+```
+logging buffered 64000 debugging
+```
+**Modus:** global. Auslesen mit `show logging`, leeren mit `clear logging`.
+T: Befehl Mittel
+
+Q: Wie legst du fest, von welcher Adresse Syslog-Meldungen gesendet werden?
+A:
+```
+logging source-interface <interface>
+```
+**Modus:** global. Mit Loopback0 erkennt der Server das Gerät unabhängig vom Ausgangsinterface.
+T: Befehl Mittel
+
+Q: Wie versiehst du Log- und Debug-Meldungen mit Datum, Millisekunden und lokaler Zeitzone?
+A:
+```
+service timestamps log datetime msec localtime show-timezone
+service timestamps debug datetime msec localtime show-timezone
+```
+**Modus:** global. Ohne `localtime` steht die Zeit in UTC.
+T: Befehl Mittel
+
+Q: Wie nummerierst du Log-Meldungen fortlaufend, um Lücken beim Syslog-Server zu erkennen?
+A:
+```
+service sequence-numbers
+```
+**Modus:** global. Fehlt eine Nummer, ist eine Meldung unterwegs verloren gegangen (Syslog läuft über UDP).
+T: Befehl Schwer
+
+Q: Wie begrenzt du die Meldungen auf der Konsole auf Severity „warnings“ und schwerer?
+A:
+```
+logging console warnings
+```
+**Modus:** global. Für VTY-Sitzungen gilt `logging monitor <severity>`.
+T: Befehl Mittel
+
+# 4.1 | Befehle: SNMP
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie erlaubst du SNMPv2c-Lesezugriff nur von bestimmten Hosts?
+A:
+```
+snmp-server community <community> ro <acl>
+```
+**Modus:** global. Ohne ACL darf jeder lesen, der die Community kennt, und die steht im Klartext im Paket.
+T: Befehl Mittel
+
+Q: Wie legst du eine SNMPv3-Gruppe mit Authentisierung und Verschlüsselung an?
+A:
+```
+snmp-server group <gruppe> v3 priv [read <view>] [access <acl>]
+```
+**Modus:** global. `priv` heißt authPriv. `auth` wäre nur Authentisierung, `noauth` nichts von beidem.
+T: Befehl Schwer
+
+Q: Wie legst du einen SNMPv3-Benutzer mit SHA und AES-128 an?
+A:
+```
+snmp-server user <benutzer> <gruppe> v3 auth sha <auth-passwort> priv aes 128 <priv-passwort>
+```
+**Modus:** global. Der Benutzer erscheint nicht in der Running-Config, nur in `show snmp user`.
+T: Befehl Schwer
+
+Q: Wie schickst du Traps mit SNMPv3 an ein Monitoring-System?
+A:
+```
+snmp-server host <nms-ip> version 3 priv <benutzer>
+snmp-server enable traps
+```
+**Modus:** global. Mit `informs` statt Traps bestätigt der Empfänger jede Meldung.
+T: Befehl Schwer
+
+Q: Wie legst du eine SNMP-View an, die nur einen Teil des MIB-Baums zeigt?
+A:
+```
+snmp-server view <view> <oid-baum> {included | excluded}
+```
+**Modus:** global. Beispiel: `snmp-server view NUR-IF ifEntry included`. Die View wird der Gruppe mit `read` zugeordnet.
+T: Befehl Schwer
+
+Q: Welche Befehle zeigen SNMPv3-Benutzer und -Gruppen?
+A:
+```
+show snmp user
+show snmp group
+```
+**Modus:** privilegiert. `show snmp` allein zeigt Zähler für Anfragen und Fehler.
+T: Befehl Mittel
+
+# 4.2 | Befehle: Flexible NetFlow
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie legst du einen Flow Record an, der Flows nach Quelle, Ziel, Protokoll und Ports unterscheidet und Bytes zählt?
+A:
+```
+flow record <name>
+ match ipv4 source address
+ match ipv4 destination address
+ match ipv4 protocol
+ match transport source-port
+ match transport destination-port
+ collect counter bytes long
+ collect counter packets long
+```
+**Modus:** global, dann Flow Record. `match` bildet den Schlüssel eines Flows, `collect` die Werte, die nur gesammelt werden.
+T: Befehl Schwer
+
+Q: Wie legst du einen Flow Exporter an, der per IPFIX an einen Collector sendet?
+A:
+```
+flow exporter <name>
+ destination <collector-ip>
+ source <interface>
+ transport udp <port>
+ export-protocol ipfix
+```
+**Modus:** global, dann Flow Exporter. Standard ist NetFlow v9. Der Port muss zum Collector passen, oft 2055 oder 4739.
+T: Befehl Schwer
+
+Q: Wie verknüpfst du Record und Exporter in einem Flow Monitor?
+A:
+```
+flow monitor <name>
+ record <record>
+ exporter <exporter>
+ cache timeout active 60
+```
+**Modus:** global, dann Flow Monitor. Der Active Timeout exportiert lang laufende Flows regelmäßig, nicht erst am Ende.
+T: Befehl Schwer
+
+Q: Wie wendest du einen Flow Monitor auf eingehenden Verkehr eines Interfaces an?
+A:
+```
+ip flow monitor <monitor> input
+```
+**Modus:** Interface. Für IPv6: `ipv6 flow monitor <monitor> input`.
+T: Befehl Mittel
+
+Q: Welche Befehle zeigen den Flow-Cache und den Zustand des Exporters?
+A:
+```
+show flow monitor <monitor> cache
+show flow exporter [<exporter>] [statistics]
+```
+**Modus:** privilegiert. Steigt beim Exporter der Fehlerzähler, erreicht er den Collector nicht.
+T: Befehl Mittel
+
+Q: Wie richtest du klassisches NetFlow v9 ohne Flexible NetFlow ein?
+A:
+```
+ip flow-export destination <collector-ip> <port>
+ip flow-export version 9
+interface <interface>
+ ip flow ingress
+```
+**Modus:** global bzw. Interface. Den Cache zeigt `show ip cache flow`.
+T: Befehl Schwer
+
+# 4.3 | Befehle: SPAN, RSPAN und ERSPAN
+S: https://www.cisco.com/c/en/us/support/switches/catalyst-9300-series-switches/products-command-reference-list.html | Cisco Catalyst 9300: Command References
+
+Q: Wie spiegelst du den Verkehr eines Ports in beide Richtungen auf einen Analyse-Port (lokaler SPAN)?
+A:
+```
+monitor session <nr> source interface <quelle> both
+monitor session <nr> destination interface <ziel>
+```
+**Modus:** global. Der Ziel-Port leitet danach keinen normalen Verkehr mehr weiter.
+T: Befehl Leicht
+
+Q: Wie spiegelst du alle Ports eines VLANs, aber nur eingehend?
+A:
+```
+monitor session <nr> source vlan <vlan-id> rx
+```
+**Modus:** global. Mit `tx` nur ausgehend, mit `both` beides.
+T: Befehl Mittel
+
+Q: Wie beschränkst du eine SPAN-Session mit einem Trunk als Quelle auf bestimmte VLANs?
+A:
+```
+monitor session <nr> filter vlan <vlan-liste>
+```
+**Modus:** global. Spart Bandbreite am Ziel-Port.
+T: Befehl Schwer
+
+Q: Wie legst du ein VLAN für RSPAN an?
+A:
+```
+vlan <vlan-id>
+ remote-span
+```
+**Modus:** VLAN-Modus. Das VLAN muss auf allen Switches im Pfad existieren und über die Trunks erlaubt sein.
+T: Befehl Mittel
+
+Q: Wie schickst du auf dem Quell-Switch gespiegelten Verkehr in ein RSPAN-VLAN?
+A:
+```
+monitor session <nr> source interface <quelle>
+monitor session <nr> destination remote vlan <rspan-vlan>
+```
+**Modus:** global. Auf dem Ziel-Switch umgekehrt: `source remote vlan <rspan-vlan>` und `destination interface <port>`.
+T: Befehl Mittel
+
+Q: Wie legst du eine ERSPAN-Quell-Session an, die gespiegelten Verkehr per GRE an eine IP-Adresse schickt?
+A:
+```
+monitor session <nr> type erspan-source
+ source interface <quelle> both
+ no shutdown
+ destination
+  erspan-id <id>
+  ip address <ziel-ip>
+  origin ip address <quell-ip>
+```
+**Modus:** global, dann ERSPAN-Session. Sessions sind standardmäßig `shutdown`. Die ERSPAN-ID muss auf der Gegenseite passen.
+T: Befehl Schwer
+
+Q: Welcher Befehl zeigt Quellen, Ziel und Typ einer SPAN-Session?
+A:
+```
+show monitor session <nr> [detail]
+```
+**Modus:** privilegiert. Mit `all` statt einer Nummer erscheinen alle Sessions.
+T: Befehl Leicht
+
+# 4.4 | Befehle: IP SLA
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie legst du eine IP-SLA-Messung an, die alle 10 Sekunden ein Ziel per ICMP prüft?
+A:
+```
+ip sla <nr>
+ icmp-echo <ziel> source-interface <interface>
+ frequency 10
+```
+**Modus:** global, dann IP SLA. `threshold` und `timeout` in Millisekunden bestimmen, ab wann eine Antwort zu langsam oder verloren ist.
+T: Befehl Mittel
+
+Q: Wie startest du eine IP-SLA-Messung dauerhaft und sofort?
+A:
+```
+ip sla schedule <nr> life forever start-time now
+```
+**Modus:** global. Ohne Schedule ist die Messung zwar konfiguriert, läuft aber nicht.
+T: Befehl Leicht
+
+Q: Wie misst du Jitter und Verlust zu einem anderen Cisco-Router mit UDP?
+A:
+```
+ip sla <nr>
+ udp-jitter <ziel> <port> num-packets <anzahl>
+```
+**Modus:** IP SLA. Auf dem Ziel muss `ip sla responder` laufen, sonst kommen keine Messwerte zurück.
+T: Befehl Schwer
+
+Q: Wie aktivierst du auf einem Router den IP-SLA-Responder?
+A:
+```
+ip sla responder
+```
+**Modus:** global. Nötig für UDP Jitter und andere Messungen, die Zeitstempel auf beiden Seiten brauchen.
+T: Befehl Mittel
+
+Q: Welche Befehle zeigen Ergebnis und Konfiguration einer IP-SLA-Messung?
+A:
+```
+show ip sla statistics [<nr>]
+show ip sla configuration [<nr>]
+```
+**Modus:** privilegiert. Return Code „OK“ und steigende Erfolgszähler sind das Ziel.
+T: Befehl Mittel
+
+Q: Wie koppelst du eine statische Route an eine IP-SLA-Messung, damit sie bei Ausfall verschwindet?
+A:
+```
+track <objekt> ip sla <nr> reachability
+ip route 0.0.0.0 0.0.0.0 <primär-next-hop> track <objekt>
+```
+**Modus:** global. Eine Floating Static Route mit höherer Distanz übernimmt dann.
+T: Befehl Mittel
+
+Q: Wie dämpfst du ein Tracking-Objekt, damit es nicht bei jedem verlorenen Paket umschaltet?
+A:
+```
+track <objekt> ip sla <nr> reachability
+ delay down <sekunden> up <sekunden>
+```
+**Modus:** Track. Erst nach dieser Zeit im neuen Zustand meldet das Objekt die Änderung.
+T: Befehl Schwer
+
+Q: Welcher Befehl zeigt alle Tracking-Objekte mit Zustand und Änderungen?
+A:
+```
+show track [brief]
+```
+**Modus:** privilegiert. Zeigt auch, welche Clients (HSRP, statische Route) das Objekt nutzen.
+T: Befehl Mittel
+
+# 4.6 | Befehle: NETCONF und RESTCONF einschalten
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie schaltest du NETCONF auf einem IOS-XE-Gerät ein?
+A:
+```
+netconf-yang
+```
+**Modus:** global. NETCONF läuft über SSH auf Port 830. Der Benutzer braucht Privilege 15.
+T: Befehl Leicht
+
+Q: Wie schaltest du RESTCONF auf einem IOS-XE-Gerät ein?
+A:
+```
+restconf
+ip http secure-server
+ip http authentication local
+```
+**Modus:** global. RESTCONF läuft über HTTPS, ohne den HTTPS-Server antwortet es nicht.
+T: Befehl Mittel
+
+Q: Wie legst du einen lokalen Benutzer an, der per NETCONF und RESTCONF konfigurieren darf?
+A:
+```
+username <name> privilege 15 secret <passwort>
+```
+**Modus:** global. Mit AAA muss die Autorisierung Privilege 15 liefern.
+T: Befehl Leicht
+
+Q: Welcher Befehl zeigt die offenen NETCONF-Sitzungen?
+A:
+```
+show netconf-yang sessions [detail]
+```
+**Modus:** privilegiert. Die verfügbaren Datastores zeigt `show netconf-yang datastores`.
+T: Befehl Mittel
+
+Q: Welcher Befehl zeigt, ob die Prozesse für NETCONF und RESTCONF laufen?
+A:
+```
+show platform software yang-management process
+```
+**Modus:** privilegiert. Alle Prozesse wie confd, nesd und pubd sollten „Running“ zeigen.
+T: Befehl Schwer
+
+Q: Wie aktivierst du den Candidate Datastore für NETCONF?
+A:
+```
+netconf-yang feature candidate-datastore
+```
+**Modus:** global. Änderungen landen dann zuerst im Candidate und werden erst mit `<commit>` aktiv.
+T: Befehl Schwer

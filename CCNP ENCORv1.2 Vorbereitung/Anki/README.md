@@ -1,7 +1,7 @@
 # Anki-Deck: CCNP ENCOR 350-401 v1.2
 
-**Aktuelle Version:** 5.1 (Stand 22.10.2026) · **1.431 Karten**
-**Datei:** [`ENCOR_v1.2_Kompendium_5.1_DE.apkg`](ENCOR_v1.2_Kompendium_5.1_DE.apkg)
+**Aktuelle Version:** 5.2 (Stand 23.10.2026) · **1.776 Karten** (1.431 Wissens- und Übungskarten, 345 Befehlskarten)
+**Datei:** [`ENCOR_v1.2_Kompendium_5.2_DE.apkg`](ENCOR_v1.2_Kompendium_5.2_DE.apkg)
 
 Das Deck deckt alle 47 Ziele des Blueprints ab. Die Karten fragen nicht nur Fakten ab, sondern erklären, warum etwas so ist. Für unterwegs gibt es kurze Karten ohne Code, fürs Prüfungstraining Exhibits und Fallen.
 
@@ -9,11 +9,14 @@ Das Deck deckt alle 47 Ziele des Blueprints ab. Die Karten fragen nicht nur Fakt
 
 1. `.apkg` herunterladen und in Anki öffnen (Datei → Importieren).
 2. Das Deck heißt „ENCOR v1.2 · Kompendium“ und hat sechs Unterdecks, eines pro Domäne.
-3. **Umstieg von 4.x oder 5.0:** Lösche vorher das alte ENCOR-Deck. Version 5.1 bringt einen neuen Notiztyp mit, damit der Text auch im iOS-Dunkelmodus lesbar ist. Ohne Löschen stehen alle Karten doppelt in der Sammlung, und der alte Lernstand geht ohnehin nicht über.
+3. **Von 5.1 auf 5.2:** einfach importieren. Notiztyp und Kennungen sind gleich, der Lernstand bleibt, die Befehlskarten kommen neu dazu.
+4. **Umstieg von 4.x oder 5.0:** Lösche vorher das alte ENCOR-Deck. Version 5.1 bringt einen neuen Notiztyp mit, damit der Text auch im iOS-Dunkelmodus lesbar ist. Ohne Löschen stehen alle Karten doppelt in der Sammlung, und der alte Lernstand geht ohnehin nicht über.
 
 Künftige Updates behalten den Lernstand, solange Notiztyp und interne Kennungen gleich bleiben. Ändert sich das, steht es in der Versionstabelle unten.
 
 ## Verteilung
+
+Ohne die Befehlskarten, deren Verteilung im Abschnitt „Befehlsreferenz“ steht.
 
 | Domäne | Karten | Anteil | Blueprint |
 |---|---:|---:|---:|
@@ -44,6 +47,30 @@ Jede Karte hat eine feste ID (`E12-<Blueprint-Punkt>-<Nr>`) sowie Ziel, Thema, T
 | Vertiefung | 54 | Warum funktioniert etwas so? |
 | Prüfungsfalle | 43 | Typische Stolpersteine |
 | Rechnen | 25 | Subnetze, Wildcards, Overhead, Metriken |
+| Befehl | 345 | Aufgabe vorne, Syntax mit Modus hinten |
+
+## Befehlsreferenz
+
+345 Karten fragen Befehle ab wie eine Befehlstabelle zum Abdecken: Vorne steht die Aufgabe („Welcher Befehl zeigt …?“, „Wie legst du … an?“), hinten die genaue Syntax. Platzhalter stehen in spitzen Klammern (`<vlan-id>`), Optionales in eckigen (`[detail]`), Alternativen in geschweiften (`{in | out}`). Unter der Syntax steht der Konfigurationsmodus und in einem Satz, was der Befehl bewirkt oder worauf du achten musst.
+
+| Suche | Was du bekommst |
+|---|---|
+| `tag:Fokus::Befehle` | alle Befehlskarten |
+| `tag:Befehlsart::Pruefen` | `show`, `debug`, `ping` und andere Prüfbefehle |
+| `tag:Befehlsart::Konfigurieren` | Konfigurationsbefehle |
+| `tag:Fokus::Befehle tag:Ziel::3.1.c` | Befehle zu einem Ziel |
+
+Tipp: Schreib die Syntax auf oder tipp sie ins Lab, bevor du umdrehst. Erst dann merkst du, ob Reihenfolge und Schlüsselwörter sitzen.
+
+Verteilung der Befehlskarten: Architektur 24, Virtualisierung 35, Infrastruktur 175, Network Assurance 48, Security 52, Automation 11. Infrastruktur hat die meisten, weil Layer 2, OSPF, BGP, NAT, FHRP und Multicast die meiste CLI haben. Die Befehle aus den Befehlstabellen der Kapitel zur Paketweiterleitung (MAC-Tabelle, SDM, `show interfaces …`) stehen unter `Ziel::3.1.a`.
+
+Die Befehlskarten stehen nach Domänen getrennt in [`Befehle/`](Befehle/). Nach einer Änderung neu einspielen:
+
+```
+python3 Befehle/befehle_einspielen.py ENCOR_v1.2_Kompendium_5.2_DE.apkg ENCOR_v1.2_Kompendium_5.3_DE.apkg 5.3
+```
+
+Das Skript ersetzt nur die Karten mit `Fokus::Befehle` und lässt alle anderen unverändert.
 
 ## Gezielt lernen
 
@@ -57,7 +84,8 @@ Im Anki-Browser suchen oder als gefiltertes Deck anlegen:
 | `tag:Fokus::HighYield` | 203 | Klassische Prüfungsfakten |
 | `tag:Domaene::3` usw. | – | Eine Domäne |
 | `tag:Ziel::3.2.b` usw. | – | Ein einzelnes Prüfungsziel, passend zu den Labs |
-| `tag:Stufe::Schwer` | 115 | Die anspruchsvollsten Karten |
+| `tag:Stufe::Schwer` | 115 | Die anspruchsvollsten Karten (ohne Befehlskarten) |
+| `tag:Fokus::Befehle` | 345 | Befehle abfragen: Aufgabe vorne, Syntax hinten |
 
 Welche Filter in welche Woche gehören, steht im [Lernplan](../LERNPLAN.md).
 
@@ -65,6 +93,7 @@ Welche Filter in welche Woche gehören, steht im [Lernplan](../LERNPLAN.md).
 
 | Version | Änderung |
 |---|---|
+| 5.2 | 345 Befehlskarten zu allen Zielen mit CLI-Bezug, Tag `Fokus::Befehle` und `Befehlsart::…`. Notiztyp und GUIDs wie 5.1: Update-Import behält den Lernstand. |
 | 5.1 | Karten im iOS-Dunkelmodus lesbar (Textfarbe der Karte explizit gesetzt, vorher stand heller Text auf weißem Grund). Neuer Notiztyp und neue GUIDs, daher das alte Deck vor dem Import löschen. |
 | 5.0 | Neuer Notiztyp: „Frage“ ist jetzt das erste Feld, im Anki-Browser stehen Fragen statt IDs. Neue GUIDs, der Lernstand von 4.x wird **nicht** übernommen. Inhalt sonst wie 4.5. |
 | 4.5 | 431 flache Wissenskarten (Definitionen, Einzelfakten, Portnummern, „Was ist …?“) in Fragen mit kleiner Situation oder einem Warum umgeschrieben. Die Antwort beginnt fett mit dem Kern. |

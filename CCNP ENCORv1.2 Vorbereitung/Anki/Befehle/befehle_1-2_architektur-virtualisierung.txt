@@ -1,0 +1,572 @@
+# 1.1.b | Befehle: Redundanz, SSO und StackWise
+S: https://www.cisco.com/c/en/us/support/switches/catalyst-9300-series-switches/products-command-reference-list.html | Cisco Catalyst 9300: Command References
+
+Q: Wie stellst du ein Gerät mit zwei Supervisors auf Stateful Switchover um?
+A:
+```
+redundancy
+ mode sso
+```
+**Modus:** global, dann Redundancy. Der Standby-Supervisor hält dann den Zustand synchron und übernimmt ohne Neustart der Linecards.
+T: Befehl Mittel
+
+Q: Welcher Befehl zeigt den Redundanzmodus und den Zustand des Standby-Supervisors?
+A:
+```
+show redundancy [states]
+```
+**Modus:** privilegiert. Gesucht ist „STANDBY HOT“, sonst ist SSO nicht einsatzbereit.
+T: Befehl Mittel
+
+Q: Wie legst du fest, welcher Switch im StackWise-Stack aktiv wird?
+A:
+```
+switch <nummer> priority <1-15>
+```
+**Modus:** privilegiert (EXEC, nicht config). Höher gewinnt, wirkt bei der nächsten Wahl des aktiven Switches.
+T: Befehl Schwer
+
+Q: Welcher Befehl zeigt alle Mitglieder eines StackWise-Stacks mit Rolle, Priorität und Zustand?
+A:
+```
+show switch [detail]
+```
+**Modus:** privilegiert. Rollen: Active, Standby, Member.
+T: Befehl Mittel
+
+Q: Wie ermöglichst du Nonstop Forwarding für OSPF bei einem Supervisor-Wechsel?
+A:
+```
+router ospf <prozess-id>
+ nsf
+```
+**Modus:** Router. Die Nachbarn halten die Routen während des Wechsels (Graceful Restart), der Verkehr läuft weiter.
+T: Befehl Schwer
+
+# 1.2.a | Befehle: SD-WAN am cEdge prüfen
+S: https://www.cisco.com/c/en/us/td/docs/routers/sdwan/command/sdwan-cr-book.pdf | Cisco Catalyst SD-WAN Command Reference
+
+Q: Welcher Befehl zeigt auf einem cEdge die Steuerverbindungen zu vBond, vSmart und vManage?
+A:
+```
+show sdwan control connections
+```
+**Modus:** privilegiert. Fehlt ein Controller, liegt es meist an Zertifikaten, Uhrzeit oder Erreichbarkeit des Transports.
+T: Befehl Mittel
+
+Q: Welcher Befehl zeigt auf einem cEdge die BFD-Sitzungen über die SD-WAN-Tunnel?
+A:
+```
+show sdwan bfd sessions
+```
+**Modus:** privilegiert. BFD misst pro Tunnel Erreichbarkeit, Verlust, Latenz und Jitter.
+T: Befehl Mittel
+
+Q: Welcher Befehl zeigt auf einem cEdge die über OMP gelernten Routen?
+A:
+```
+show sdwan omp routes
+```
+**Modus:** privilegiert. OMP verteilt die Routen zwischen vSmart und den Edges. Peers zeigt `show sdwan omp peers`.
+T: Befehl Mittel
+
+# 1.4 | Befehle: QoS mit MQC
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie legst du eine Class-Map an, die Sprachverkehr anhand von DSCP EF erkennt?
+A:
+```
+class-map match-any <name>
+ match dscp ef
+```
+**Modus:** global, dann Class-Map. `match-any` trifft, wenn eine Bedingung passt, `match-all`, wenn alle passen.
+T: Befehl Leicht
+
+Q: Wie ordnest du Verkehr einer Class-Map über eine ACL zu?
+A:
+```
+class-map match-all <name>
+ match access-group name <acl>
+```
+**Modus:** Class-Map. Die ACL bestimmt nur die Klasse, `deny` heißt hier: nicht in dieser Klasse.
+T: Befehl Mittel
+
+Q: Wie erkennt eine Class-Map Verkehr anhand der Anwendung statt anhand von Ports?
+A:
+```
+class-map match-any <name>
+ match protocol <anwendung>
+```
+**Modus:** Class-Map. Nutzt NBAR. Welche Anwendungen tatsächlich laufen, zeigt `ip nbar protocol-discovery` am Interface.
+T: Befehl Schwer
+
+Q: Wie markierst du Verkehr einer Klasse in einer Policy-Map mit einem DSCP-Wert?
+A:
+```
+policy-map <name>
+ class <class-map>
+  set dscp <wert>
+```
+**Modus:** Policy-Map. Typisch am Access-Switch eingehend, damit der Rest des Netzes den Markierungen trauen kann.
+T: Befehl Leicht
+
+Q: Wie gibst du Sprache eine Low-Latency-Queue mit 10 Prozent der Bandbreite?
+A:
+```
+policy-map <name>
+ class <voice-klasse>
+  priority percent 10
+```
+**Modus:** Policy-Map. LLQ wird immer zuerst bedient, ist aber bei Stau auf den Wert begrenzt (impliziter Policer).
+T: Befehl Mittel
+
+Q: Wie garantierst du einer Klasse bei Stau einen Mindestanteil der Bandbreite (CBWFQ)?
+A:
+```
+policy-map <name>
+ class <klasse>
+  bandwidth percent <anteil>
+```
+**Modus:** Policy-Map. Ohne Stau darf die Klasse mehr nutzen. Alternativ `bandwidth remaining percent` für den Rest nach LLQ.
+T: Befehl Mittel
+
+Q: Wie aktivierst du Fair Queuing für allen Verkehr, der in keine andere Klasse fällt?
+A:
+```
+policy-map <name>
+ class class-default
+  fair-queue
+```
+**Modus:** Policy-Map. Verteilt die Restbandbreite fair auf die Flows statt nach FIFO.
+T: Befehl Mittel
+
+Q: Wie begrenzt du eine Klasse mit einem Policer auf 10 Mbit/s und verwirfst den Überschuss?
+A:
+```
+police cir 10000000 conform-action transmit exceed-action drop
+```
+**Modus:** Policy-Map, Klasse. CIR steht in bit/s. Statt `drop` geht auch `set-dscp-transmit <wert>` zum Ummarkieren.
+T: Befehl Mittel
+
+Q: Wie glättest du ausgehenden Verkehr mit einem Shaper auf 50 Mbit/s?
+A:
+```
+policy-map <name>
+ class class-default
+  shape average 50000000
+```
+**Modus:** Policy-Map. Shaping puffert statt zu verwerfen. Typisch, wenn der Provider weniger liefert als die Port-Geschwindigkeit.
+T: Befehl Mittel
+
+Q: Wie verschachtelst du eine Queuing-Policy unter einem Shaper (hierarchische QoS)?
+A:
+```
+policy-map <parent>
+ class class-default
+  shape average <bit/s>
+  service-policy <child>
+```
+**Modus:** Policy-Map. Der Shaper erzeugt den Stau künstlich, erst dann greift das Queuing der Child-Policy.
+T: Befehl Schwer
+
+Q: Wie aktivierst du WRED auf Basis der DSCP-Werte in einer Klasse?
+A:
+```
+random-detect dscp-based
+```
+**Modus:** Policy-Map, Klasse. Verwirft bei füllender Queue früh und zufällig, Pakete mit höherer Drop-Precedence zuerst.
+T: Befehl Schwer
+
+Q: Wie wendest du eine Policy-Map ausgehend auf ein Interface an?
+A:
+```
+interface <interface>
+ service-policy output <policy-map>
+```
+**Modus:** Interface. Queuing (priority, bandwidth, shape) geht nur ausgehend. Marking und Policing auch eingehend.
+T: Befehl Leicht
+
+Q: Welcher Befehl zeigt pro Klasse Treffer, Rate, Queue-Tiefe und Drops einer angewendeten Policy?
+A:
+```
+show policy-map interface <interface> [input | output]
+```
+**Modus:** privilegiert. Steigen Drops in der Priority-Klasse, ist sie zu knapp bemessen.
+T: Befehl Leicht
+
+Q: Welcher Befehl zeigt alle Class-Maps mit ihren Match-Bedingungen?
+A:
+```
+show class-map [<name>]
+```
+**Modus:** privilegiert. Die Policy-Maps selbst zeigt `show policy-map [<name>]`.
+T: Befehl Leicht
+
+Q: Wie vertraut ein Catalyst-Port den Markierungen nur, wenn ein Cisco-IP-Telefon erkannt wird?
+A:
+```
+trust device cisco-phone
+```
+**Modus:** Interface. Die Erkennung läuft über CDP. Ohne Telefon setzt der Switch die Markierungen zurück.
+T: Befehl Schwer
+
+Q: Wie richtest du auf einem Catalyst-Port die automatische QoS-Konfiguration für ein Cisco-Telefon ein?
+A:
+```
+auto qos voip cisco-phone
+```
+**Modus:** Interface. AutoQoS erzeugt Class-Maps, Policy-Maps und Trust-Einstellungen nach Cisco-Empfehlung.
+T: Befehl Schwer
+
+# 2.2.a | Befehle: VRF
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie legst du auf IOS XE eine VRF für IPv4 und IPv6 an?
+A:
+```
+vrf definition <name>
+ address-family ipv4
+ exit-address-family
+ address-family ipv6
+ exit-address-family
+```
+**Modus:** global. Die ältere Syntax `ip vrf <name>` kann nur IPv4.
+T: Befehl Mittel
+
+Q: Wie ordnest du ein Interface einer VRF zu?
+A:
+```
+interface <interface>
+ vrf forwarding <name>
+ ip address <ip-adresse> <maske>
+```
+**Modus:** Interface. Falle: `vrf forwarding` löscht vorhandene IP-Adressen, deshalb die Adresse danach neu setzen.
+T: Befehl Mittel
+
+Q: Welcher Befehl zeigt die Routing-Tabelle einer VRF?
+A:
+```
+show ip route vrf <name>
+```
+**Modus:** privilegiert. Ohne `vrf` siehst du nur die globale Tabelle.
+T: Befehl Leicht
+
+Q: Wie pingst du aus einer VRF heraus?
+A:
+```
+ping vrf <name> <ziel-ip>
+```
+**Modus:** privilegiert. Ein normaler Ping nutzt die globale Tabelle und scheitert bei VRF-Zielen.
+T: Befehl Leicht
+
+Q: Welcher Befehl zeigt alle VRFs mit Route Distinguisher und zugeordneten Interfaces?
+A:
+```
+show vrf [detail]
+```
+**Modus:** privilegiert. Für die alte Syntax: `show ip vrf interfaces`.
+T: Befehl Mittel
+
+Q: Wie legst du eine statische Route in einer VRF an?
+A:
+```
+ip route vrf <name> <zielnetz> <maske> <next-hop-ip>
+```
+**Modus:** global. Mit `global` am Ende zeigt der Next Hop in die globale Tabelle (Route Leaking).
+T: Befehl Mittel
+
+Q: Wie startest du einen OSPF-Prozess für eine VRF?
+A:
+```
+router ospf <prozess-id> vrf <name>
+```
+**Modus:** global. Jede VRF braucht einen eigenen OSPF-Prozess.
+T: Befehl Mittel
+
+Q: Wie zeigst du die ARP-Tabelle einer VRF?
+A:
+```
+show ip arp vrf <name>
+```
+**Modus:** privilegiert. Viele Show-Befehle kennen den Zusatz `vrf <name>`, auch `traceroute vrf`.
+T: Befehl Mittel
+
+# 2.2.b | Befehle: GRE-Tunnel
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie baust du einen GRE-Tunnel zwischen zwei Routern?
+A:
+```
+interface Tunnel<nummer>
+ ip address <tunnel-ip> <maske>
+ tunnel source <interface-oder-ip>
+ tunnel destination <ziel-ip>
+```
+**Modus:** global, dann Interface. GRE ist der Standardmodus, `tunnel mode gre ip` musst du nicht setzen.
+T: Befehl Leicht
+
+Q: Wie verhinderst du Fragmentierung über einen GRE-Tunnel bei IP und TCP?
+A:
+```
+ip mtu 1400
+ip tcp adjust-mss 1360
+```
+**Modus:** Tunnel-Interface. GRE fügt 24 Byte hinzu, mit IPsec noch mehr. MSS = MTU − 40 Byte für IP- und TCP-Header.
+T: Befehl Mittel
+
+Q: Wie erkennt ein GRE-Tunnel, dass die Gegenstelle nicht mehr antwortet?
+A:
+```
+keepalive <sekunden> <versuche>
+```
+**Modus:** Tunnel-Interface. Beispiel `keepalive 10 3`. Ohne Keepalive bleibt der Tunnel „up“, solange die Route zum Ziel existiert.
+T: Befehl Mittel
+
+Q: Welcher Befehl zeigt Quelle, Ziel, Modus und Status eines Tunnels?
+A:
+```
+show interfaces tunnel <nummer>
+```
+**Modus:** privilegiert. Zeile „Tunnel source … destination …“ und „Tunnel protocol/transport“.
+T: Befehl Leicht
+
+Q: Wie baust du einen GRE-Tunnel für IPv6 über ein IPv4-Transportnetz?
+A:
+```
+interface Tunnel<nummer>
+ ipv6 address <ipv6-adresse>/<länge>
+ tunnel source <interface>
+ tunnel destination <ziel-ipv4>
+```
+**Modus:** Tunnel-Interface. GRE trägt IPv6 ohne extra Modus. Für reines 6in4 gibt es `tunnel mode ipv6ip`.
+T: Befehl Schwer
+
+# 2.2.b | Befehle: IPsec mit IKEv1
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie legst du eine ISAKMP-Policy (IKEv1 Phase 1) mit AES-256, SHA-256, Pre-Shared Key und DH-Gruppe 14 an?
+A:
+```
+crypto isakmp policy <priorität>
+ encryption aes 256
+ hash sha256
+ authentication pre-share
+ group 14
+```
+**Modus:** global, dann ISAKMP-Policy. Mindestens eine Policy muss auf beiden Seiten übereinstimmen.
+T: Befehl Mittel
+
+Q: Wie hinterlegst du den Pre-Shared Key für einen IKEv1-Peer?
+A:
+```
+crypto isakmp key <schlüssel> address <peer-ip>
+```
+**Modus:** global. `address 0.0.0.0` gilt für alle Peers, z. B. bei DMVPN.
+T: Befehl Mittel
+
+Q: Wie legst du ein Transform-Set für ESP mit AES-256 und SHA-256 an?
+A:
+```
+crypto ipsec transform-set <name> esp-aes 256 esp-sha256-hmac
+ mode {tunnel | transport}
+```
+**Modus:** global, dann Transform-Set. Transport Mode spart 20 Byte, wenn GRE ohnehin einen neuen IP-Header baut.
+T: Befehl Mittel
+
+Q: Wie baust du eine Crypto Map für ein Site-to-Site-VPN und wendest sie an?
+A:
+```
+crypto map <map> <seq> ipsec-isakmp
+ set peer <peer-ip>
+ set transform-set <name>
+ match address <acl>
+interface <wan-interface>
+ crypto map <map>
+```
+**Modus:** global, dann Interface. Die ACL definiert, welcher Verkehr verschlüsselt wird, und muss auf beiden Seiten gespiegelt sein.
+T: Befehl Schwer
+
+Q: Wie schützt du einen GRE-Tunnel mit IPsec über ein IPsec-Profil?
+A:
+```
+crypto ipsec profile <profil>
+ set transform-set <name>
+interface Tunnel<nummer>
+ tunnel protection ipsec profile <profil>
+```
+**Modus:** global, dann Tunnel-Interface. Keine Crypto-ACL nötig: Alles, was in den Tunnel geht, wird verschlüsselt.
+T: Befehl Mittel
+
+Q: Wie machst du aus einem Tunnel-Interface ein natives IPsec-VTI statt GRE?
+A:
+```
+tunnel mode ipsec ipv4
+tunnel protection ipsec profile <profil>
+```
+**Modus:** Tunnel-Interface. Spart den GRE-Header, trägt aber nur IPv4-Unicast und keinen Multicast.
+T: Befehl Schwer
+
+Q: Welcher Befehl zeigt, ob die IKEv1-Phase-1 steht?
+A:
+```
+show crypto isakmp sa
+```
+**Modus:** privilegiert. QM_IDLE heißt: Phase 1 ist fertig und wartet. MM_NO_STATE deutet auf einen Fehler in der Policy oder beim Key.
+T: Befehl Mittel
+
+Q: Welcher Befehl zeigt die IPsec-SAs mit Zählern für ver- und entschlüsselte Pakete?
+A:
+```
+show crypto ipsec sa [peer <ip>]
+```
+**Modus:** privilegiert. Steigt nur „encaps“ und nicht „decaps“, kommt von der Gegenseite nichts zurück.
+T: Befehl Mittel
+
+Q: Welcher Befehl zeigt in einer Übersicht alle Crypto-Sitzungen mit Peer und Status?
+A:
+```
+show crypto session [detail]
+```
+**Modus:** privilegiert. „UP-ACTIVE“ heißt: IKE und IPsec stehen.
+T: Befehl Mittel
+
+# 2.2.b | Befehle: IPsec mit IKEv2
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie legst du einen IKEv2-Proposal mit AES-256, SHA-256 und DH-Gruppe 14 an?
+A:
+```
+crypto ikev2 proposal <name>
+ encryption aes-cbc-256
+ integrity sha256
+ group 14
+```
+**Modus:** global, dann IKEv2-Proposal. Der Proposal wird erst über eine `crypto ikev2 policy` mit `proposal <name>` aktiv.
+T: Befehl Schwer
+
+Q: Wie hinterlegst du bei IKEv2 den Pre-Shared Key für einen Peer?
+A:
+```
+crypto ikev2 keyring <keyring>
+ peer <name>
+  address <peer-ip>
+  pre-shared-key <schlüssel>
+```
+**Modus:** global, dann Keyring. Anders als IKEv1 steckt der Key in einem Keyring, den das Profil referenziert.
+T: Befehl Schwer
+
+Q: Wie baust du ein IKEv2-Profil, das den Peer erkennt und per Pre-Shared Key authentisiert?
+A:
+```
+crypto ikev2 profile <profil>
+ match identity remote address <peer-ip> 255.255.255.255
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local <keyring>
+```
+**Modus:** global, dann IKEv2-Profil. Remote und local werden bei IKEv2 getrennt festgelegt und dürfen verschieden sein.
+T: Befehl Schwer
+
+Q: Wie verknüpfst du ein IPsec-Profil mit einem IKEv2-Profil?
+A:
+```
+crypto ipsec profile <ipsec-profil>
+ set transform-set <name>
+ set ikev2-profile <ikev2-profil>
+```
+**Modus:** IPsec-Profil. Danach am Tunnel `tunnel protection ipsec profile <ipsec-profil>`.
+T: Befehl Schwer
+
+Q: Welcher Befehl zeigt die IKEv2-SAs?
+A:
+```
+show crypto ikev2 sa [detail]
+```
+**Modus:** privilegiert. „READY“ heißt: IKE-SA steht.
+T: Befehl Mittel
+
+# 2.3.a | Befehle: LISP
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie meldet ein LISP-xTR sein EID-Präfix mit seinem RLOC an?
+A:
+```
+router lisp
+ eid-table default instance-id 0
+  database-mapping <eid-präfix>/<länge> <rloc-ip> priority 1 weight 100
+```
+**Modus:** global, dann LISP. Die Zuordnung EID zu RLOC registriert der ETR beim Map-Server.
+T: Befehl Schwer
+
+Q: Wie konfigurierst du auf einem xTR Map-Resolver und Map-Server für IPv4?
+A:
+```
+router lisp
+ ipv4 itr map-resolver <mr-ip>
+ ipv4 itr
+ ipv4 etr map-server <ms-ip> key <schlüssel>
+ ipv4 etr
+```
+**Modus:** LISP. ITR fragt beim Map-Resolver nach, ETR registriert sich beim Map-Server.
+T: Befehl Schwer
+
+Q: Wie richtest du einen Router als LISP-Map-Server und Map-Resolver mit einer Site ein?
+A:
+```
+router lisp
+ site <name>
+  authentication-key <schlüssel>
+  eid-prefix <präfix>/<länge>
+ exit-site
+ ipv4 map-server
+ ipv4 map-resolver
+```
+**Modus:** LISP. Der Key muss zum `etr map-server … key` auf dem xTR passen.
+T: Befehl Schwer
+
+Q: Welcher Befehl zeigt auf dem Map-Server, welche Sites registriert sind?
+A:
+```
+show lisp site
+```
+**Modus:** privilegiert. „Up: yes“ heißt: Der ETR hat sich erfolgreich registriert.
+T: Befehl Mittel
+
+Q: Welcher Befehl zeigt auf einem ITR die gelernten EID-zu-RLOC-Zuordnungen?
+A:
+```
+show ip lisp map-cache
+```
+**Modus:** privilegiert. Ein Eintrag entsteht erst nach dem ersten Paket zum Ziel (Map-Request).
+T: Befehl Mittel
+
+# 2.3.b | Befehle: VXLAN
+S: https://www.cisco.com/c/en/us/support/switches/catalyst-9300-series-switches/products-command-reference-list.html | Cisco Catalyst 9300: Command References
+
+Q: Wie legst du auf einem Catalyst-Switch ein NVE-Interface als VTEP an und ordnest ein VNI zu?
+A:
+```
+interface nve1
+ source-interface Loopback0
+ host-reachability protocol bgp
+ member vni <vni> ingress-replication
+```
+**Modus:** global, dann NVE-Interface. `host-reachability protocol bgp` lässt BGP EVPN die MAC- und IP-Adressen verteilen. Statt `ingress-replication` kann BUM-Verkehr über `mcast-group <gruppe>` laufen.
+T: Befehl Schwer
+
+Q: Wie ordnest du auf einem Catalyst-Switch mit BGP EVPN ein VLAN einem VXLAN-VNI zu?
+A:
+```
+vlan configuration <vlan-id>
+ member evpn-instance <evi> vni <vni>
+```
+**Modus:** global. Erst damit verbindet der Switch das lokale VLAN mit dem Overlay-Segment. Die EVI legst du unter `l2vpn evpn instance <evi> vlan-based` an.
+T: Befehl Schwer
+
+Q: Welcher Befehl zeigt die VXLAN-Peers eines VTEP?
+A:
+```
+show nve peers
+```
+**Modus:** privilegiert. Die VNIs mit Status zeigt `show nve vni`.
+T: Befehl Mittel

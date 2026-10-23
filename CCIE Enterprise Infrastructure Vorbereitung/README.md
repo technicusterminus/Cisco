@@ -6,7 +6,7 @@ Kostenloses Lernmaterial auf Deutsch für den Weg zum CCIE Enterprise Infrastruc
 
 | Baustein | Stand |
 |---|---|
-| [Anki-Deck](Anki/) mit 358 Karten zu allen fünf Domänen | fertig (Version 1.0) |
+| [Anki-Deck](Anki/) mit 542 Karten zu allen fünf Domänen, davon 184 Befehlskarten | fertig (Version 1.1) |
 | [Prüfungssimulation](Pruefungssimulation/) mit 175 Fragen, 9 Exhibits und Ordnen/Zuordnen | fertig (Version 1.0) |
 | [CML-Labs](CML-Labs/) und [EVE-NG-Labs](EVE-NG-Labs/): 6 Labs mit 30 eingebauten Fehlern, dazu die passenden Labs aus ENCOR und ENARSI | fertig (Version 1.0) |
 | Trainer | in Planung |
