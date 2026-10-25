@@ -1,0 +1,613 @@
+# 5.1.a | Befehle: Lines, Passwörter und SSH
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie setzt du ein Enable-Passwort mit dem starken Hash-Typ 9 (scrypt)?
+A:
+```
+enable algorithm-type scrypt secret <passwort>
+```
+**Modus:** global. Typ 5 (MD5) gilt als veraltet, Typ 7 lässt sich zurückrechnen.
+T: Befehl Mittel
+
+Q: Wie legst du einen lokalen Admin mit scrypt-Hash und Privilege 15 an?
+A:
+```
+username <name> privilege 15 algorithm-type scrypt secret <passwort>
+```
+**Modus:** global. In der Running-Config erscheint der Hash als `secret 9`.
+T: Befehl Mittel
+
+Q: Wie erlaubst du auf den VTY-Lines nur SSH mit lokaler Anmeldung und Zugriff aus einem Management-Netz?
+A:
+```
+line vty 0 15
+ transport input ssh
+ login local
+ access-class <acl> in
+```
+**Modus:** global, dann Line. `access-class` filtert, wer die Line überhaupt erreichen darf.
+T: Befehl Mittel
+
+Q: Welche Befehle bereiten ein Gerät auf SSH vor und erzwingen Version 2?
+A:
+```
+ip domain name <domäne>
+crypto key generate rsa modulus 2048
+ip ssh version 2
+```
+**Modus:** global. Der Hostname darf nicht der Standardname sein, sonst bricht die Schlüsselerzeugung ab.
+T: Befehl Mittel
+
+Q: Wie trennst du inaktive Sitzungen auf Konsole und VTY nach 5 Minuten?
+A:
+```
+exec-timeout 5 0
+```
+**Modus:** Line. Format: Minuten und Sekunden.
+T: Befehl Leicht
+
+Q: Wie sperrst du Logins für eine Zeit nach mehreren Fehlversuchen?
+A:
+```
+login block-for <sekunden> attempts <anzahl> within <sekunden>
+```
+**Modus:** global. Mit `login quiet-mode access-class <acl>` dürfen Admin-Netze auch während der Sperre zugreifen.
+T: Befehl Schwer
+
+Q: Wie verschlüsselst du gespeicherte Klartext-Passwörter wie Key-Strings mit AES (Typ 6)?
+A:
+```
+key config-key password-encrypt <master-key>
+password encryption aes
+```
+**Modus:** global. Stärker als `service password-encryption` (Typ 7). Der Master-Key steht nicht in der Konfiguration.
+T: Befehl Schwer
+
+Q: Wie gibst du einem Befehl eine niedrigere Privilege-Stufe, damit ein eingeschränkter Benutzer ihn ausführen darf?
+A:
+```
+privilege exec level <stufe> <befehl>
+```
+**Modus:** global. Beispiel: `privilege exec level 5 show running-config`. Der Benutzer braucht dann `privilege 5`.
+T: Befehl Schwer
+
+Q: Welche Befehle zeigen SSH-Einstellungen und offene SSH-Sitzungen?
+A:
+```
+show ip ssh
+show ssh
+```
+**Modus:** privilegiert. `show users` zeigt alle angemeldeten Benutzer auf allen Lines.
+T: Befehl Mittel
+
+# 5.1.b | Befehle: AAA mit TACACS+ und RADIUS
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Mit welchem Befehl schaltest du AAA ein?
+A:
+```
+aaa new-model
+```
+**Modus:** global. Danach gilt auf allen Lines die Methodenliste `default`, sobald sie existiert. Vorher lokalen Benutzer anlegen.
+T: Befehl Leicht
+
+Q: Wie trägst du einen TACACS+-Server ein und fasst ihn in eine Servergruppe?
+A:
+```
+tacacs server <name>
+ address ipv4 <server-ip>
+ key <schlüssel>
+aaa group server tacacs+ <gruppe>
+ server name <name>
+```
+**Modus:** global. Die Gruppe wird in den Methodenlisten referenziert.
+T: Befehl Mittel
+
+Q: Wie trägst du einen RADIUS-Server mit Ports und Schlüssel ein?
+A:
+```
+radius server <name>
+ address ipv4 <server-ip> auth-port 1812 acct-port 1813
+ key <schlüssel>
+```
+**Modus:** global, dann RADIUS-Server. Gruppe analog mit `aaa group server radius <gruppe>`.
+T: Befehl Mittel
+
+Q: Wie meldest du dich zuerst per TACACS+ an und fällst nur bei Server-Ausfall auf lokal zurück?
+A:
+```
+aaa authentication login default group <gruppe> local
+```
+**Modus:** global. Lehnt der Server das Passwort ab, wird `local` nicht mehr gefragt.
+T: Befehl Mittel
+
+Q: Wie autorisierst du per TACACS+, ob ein Benutzer eine EXEC-Shell bekommt?
+A:
+```
+aaa authorization exec default group <gruppe> local
+```
+**Modus:** global. Der Server liefert dabei auch die Privilege-Stufe.
+T: Befehl Mittel
+
+Q: Wie lässt du jeden Befehl auf Privilege 15 einzeln vom TACACS+-Server freigeben?
+A:
+```
+aaa authorization commands 15 default group <gruppe> local
+```
+**Modus:** global. Nur TACACS+ kann Befehle einzeln autorisieren, RADIUS nicht.
+T: Befehl Schwer
+
+Q: Wie protokollierst du alle Befehle auf Privilege 15 beim TACACS+-Server?
+A:
+```
+aaa accounting commands 15 default start-stop group <gruppe>
+```
+**Modus:** global. Für Anmeldungen: `aaa accounting exec default start-stop group <gruppe>`.
+T: Befehl Schwer
+
+Q: Wie gibst du der Konsole eine eigene Methodenliste, die nur lokal prüft?
+A:
+```
+aaa authentication login <liste> local
+line console 0
+ login authentication <liste>
+```
+**Modus:** global, dann Line. So bleibt die Konsole erreichbar, auch wenn alle AAA-Server ausfallen.
+T: Befehl Mittel
+
+Q: Wie legst du fest, von welcher Adresse TACACS+- bzw. RADIUS-Anfragen kommen?
+A:
+```
+ip tacacs source-interface <interface>
+ip radius source-interface <interface>
+```
+**Modus:** global. Der AAA-Server kennt das Gerät nur unter genau dieser Adresse.
+T: Befehl Mittel
+
+Q: Wie testest du eine Anmeldung gegen eine AAA-Servergruppe, ohne dich abzumelden?
+A:
+```
+test aaa group <gruppe> <benutzer> <passwort> new-code
+```
+**Modus:** privilegiert. Zeigt sofort, ob der Server den Benutzer annimmt.
+T: Befehl Mittel
+
+Q: Welcher Befehl zeigt den Zustand der AAA-Server mit Antwortzeiten und Fehlern?
+A:
+```
+show aaa servers
+```
+**Modus:** privilegiert. Fehlersuche live: `debug aaa authentication` und `debug tacacs` bzw. `debug radius`.
+T: Befehl Mittel
+
+# 5.2.a | Befehle: ACLs für IPv4, IPv6 und Layer 2
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie legst du eine nummerierte Standard-ACL an?
+A:
+```
+access-list <1-99 | 1300-1999> {permit | deny} <quelle> [<wildcard>]
+```
+**Modus:** global. Standard-ACLs prüfen nur die Quelle und stehen daher nah am Ziel.
+T: Befehl Leicht
+
+Q: Wie legst du eine benannte Extended-ACL mit Protokoll, Quelle, Ziel und Port an?
+A:
+```
+ip access-list extended <name>
+ permit tcp <quelle> <wildcard> <ziel> <wildcard> eq <port>
+ deny ip any any log
+```
+**Modus:** global, dann ACL. `log` am Ende macht das sonst unsichtbare implizite deny sichtbar.
+T: Befehl Mittel
+
+Q: Wie wendest du eine IPv4-ACL auf ein Interface an?
+A:
+```
+ip access-group <acl> {in | out}
+```
+**Modus:** Interface. Auf einem Layer-2-Port ergibt das eine Port-ACL (PACL), nur eingehend.
+T: Befehl Leicht
+
+Q: Wie wendest du eine IPv6-ACL auf ein Interface an?
+A:
+```
+ipv6 access-list <name>
+ permit tcp any host <ipv6-adresse> eq 443
+interface <interface>
+ ipv6 traffic-filter <name> in
+```
+**Modus:** global bzw. Interface. IPv6-ACLs sind immer benannt, und am Interface heißt es `traffic-filter`.
+T: Befehl Mittel
+
+Q: Wie fügst du eine Zeile an einer bestimmten Stelle einer benannten ACL ein und nummerierst danach neu?
+A:
+```
+ip access-list extended <name>
+ <seq> permit <bedingung>
+ip access-list resequence <name> <start> <schritt>
+```
+**Modus:** ACL bzw. global. Ohne Sequenznummer landet eine neue Zeile am Ende.
+T: Befehl Mittel
+
+Q: Wie erlaubst du in einer ACL Verkehr nur zu bestimmten Zeiten?
+A:
+```
+time-range <name>
+ periodic weekdays 08:00 to 18:00
+ip access-list extended <acl>
+ permit tcp any any eq 22 time-range <name>
+```
+**Modus:** global, dann Time-Range bzw. ACL. Die Uhr des Geräts muss stimmen, also NTP.
+T: Befehl Schwer
+
+Q: Wie filterst du Verkehr innerhalb eines VLANs mit einer VLAN Access Map (VACL)?
+A:
+```
+vlan access-map <name> 10
+ match ip address <acl>
+ action drop
+vlan access-map <name> 20
+ action forward
+vlan filter <name> vlan-list <vlan-id>
+```
+**Modus:** global. Ohne den letzten Eintrag mit `forward` verwirft die VACL alles andere.
+T: Befehl Schwer
+
+Q: Wie filterst du Frames anhand von MAC-Adressen auf einem Switch-Port?
+A:
+```
+mac access-list extended <name>
+ deny host <mac> any
+ permit any any
+interface <interface>
+ mac access-group <name> in
+```
+**Modus:** global bzw. Interface. Auf Catalyst-Switches prüfen MAC-ACLs nur Nicht-IP-Verkehr. IP-Pakete filterst du mit einer IP-ACL.
+T: Befehl Schwer
+
+Q: Welche Befehle zeigen ACL-Treffer und welche ACL auf einem Interface liegt?
+A:
+```
+show access-lists [<name>]
+show ip interface <interface>
+```
+**Modus:** privilegiert. Zähler zurücksetzen mit `clear access-list counters`.
+T: Befehl Leicht
+
+# 5.2.b | Befehle: Control Plane Policing
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie ordnest du für CoPP SSH-Verkehr zur CPU einer Klasse zu?
+A:
+```
+ip access-list extended <acl>
+ permit tcp any any eq 22
+class-map match-all <klasse>
+ match access-group name <acl>
+```
+**Modus:** global. `permit` in der ACL heißt hier nur: gehört zur Klasse, nicht „erlauben“.
+T: Befehl Mittel
+
+Q: Wie begrenzt du eine CoPP-Klasse auf eine Rate und verwirfst den Rest?
+A:
+```
+policy-map <copp-policy>
+ class <klasse>
+  police <bit/s> conform-action transmit exceed-action drop
+```
+**Modus:** Policy-Map. `class-default` nicht vergessen, sonst ist aller übrige Verkehr zur CPU unbegrenzt.
+T: Befehl Mittel
+
+Q: Wie wendest du eine CoPP-Policy auf die Control Plane an?
+A:
+```
+control-plane
+ service-policy input <copp-policy>
+```
+**Modus:** global, dann Control Plane. Auf Catalyst 9000 gibt es dafür die vorgegebene `system-cpp-policy`.
+T: Befehl Mittel
+
+Q: Welcher Befehl zeigt Treffer und Drops pro Klasse der CoPP-Policy?
+A:
+```
+show policy-map control-plane
+```
+**Modus:** privilegiert. Steigen die Drops bei Routing-Protokollen, ist die Rate zu knapp.
+T: Befehl Mittel
+
+# 5.4.b | Befehle: 802.1X und MAB
+S: https://www.cisco.com/c/en/us/support/switches/catalyst-9300-series-switches/products-command-reference-list.html | Cisco Catalyst 9300: Command References
+
+Q: Welche globalen Befehle braucht ein Switch für 802.1X mit RADIUS?
+A:
+```
+aaa new-model
+aaa authentication dot1x default group radius
+aaa authorization network default group radius
+dot1x system-auth-control
+```
+**Modus:** global. Ohne `authorization network` nimmt der Switch keine VLAN- oder ACL-Zuweisung vom Server an.
+T: Befehl Mittel
+
+Q: Wie aktivierst du 802.1X mit MAB als Fallback auf einem Access-Port?
+A:
+```
+interface <interface>
+ switchport mode access
+ authentication port-control auto
+ dot1x pae authenticator
+ mab
+ authentication order dot1x mab
+```
+**Modus:** Interface. Geräte ohne Supplicant (Drucker) werden nach dem 802.1X-Timeout per MAC-Adresse geprüft.
+T: Befehl Schwer
+
+Q: Wie erlaubst du an einem 802.1X-Port ein Telefon im Voice-VLAN und einen PC im Daten-VLAN?
+A:
+```
+authentication host-mode multi-domain
+```
+**Modus:** Interface. Ein Gerät pro Domäne. `multi-auth` erlaubt mehrere Geräte im Daten-VLAN, jedes einzeln geprüft.
+T: Befehl Schwer
+
+Q: Wie lässt du 802.1X im Monitor Mode laufen, ohne Geräte zu blockieren?
+A:
+```
+authentication open
+```
+**Modus:** Interface. Der Port lässt Verkehr auch vor erfolgreicher Prüfung durch, protokolliert aber das Ergebnis.
+T: Befehl Schwer
+
+Q: Welcher Befehl zeigt den Authentisierungszustand eines Ports mit Methode, VLAN und Ergebnis?
+A:
+```
+show authentication sessions interface <interface> details
+```
+**Modus:** privilegiert. In der neueren Syntax (IBNS 2.0): `show access-session interface <interface> details`.
+T: Befehl Mittel
+
+Q: Wie erlaubst du dem RADIUS-Server, eine Sitzung nachträglich zu ändern (Change of Authorization)?
+A:
+```
+aaa server radius dynamic-author
+ client <ise-ip> server-key <schlüssel>
+```
+**Modus:** global. Nötig, damit ISE z. B. nach einer Posture-Prüfung ein anderes VLAN zuweisen kann.
+T: Befehl Schwer
+
+# 5.4.c | Befehle: Zone-Based Firewall
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie legst du für eine Zone-Based Firewall die Zonen an und ordnest Interfaces zu?
+A:
+```
+zone security <innen>
+zone security <aussen>
+interface <interface>
+ zone-member security <zone>
+```
+**Modus:** global bzw. Interface. Zwischen Interfaces verschiedener Zonen ist ohne Policy aller Verkehr verboten.
+T: Befehl Mittel
+
+Q: Wie legst du eine Inspect-Class-Map für HTTP und HTTPS an?
+A:
+```
+class-map type inspect match-any <klasse>
+ match protocol http
+ match protocol https
+```
+**Modus:** global. Das Schlüsselwort `type inspect` unterscheidet sie von QoS-Class-Maps.
+T: Befehl Mittel
+
+Q: Wie baust du die Inspect-Policy, die eine Klasse zustandsbehaftet erlaubt und den Rest verwirft?
+A:
+```
+policy-map type inspect <policy>
+ class type inspect <klasse>
+  inspect
+ class class-default
+  drop
+```
+**Modus:** global. `inspect` lässt auch die Antworten zurück, `pass` erlaubt nur in eine Richtung.
+T: Befehl Mittel
+
+Q: Wie wendest du die Inspect-Policy auf den Verkehr von innen nach außen an?
+A:
+```
+zone-pair security <name> source <innen> destination <aussen>
+ service-policy type inspect <policy>
+```
+**Modus:** global. Ein Zone-Pair gilt nur in eine Richtung. Die Antworten erlaubt `inspect` automatisch.
+T: Befehl Mittel
+
+Q: Welcher Befehl zeigt die offenen Sitzungen einer Zone-Based Firewall?
+A:
+```
+show policy-map type inspect zone-pair sessions
+```
+**Modus:** privilegiert. Die Zone-Pairs selbst zeigt `show zone-pair security`.
+T: Befehl Schwer
+
+# 5.4.d | Befehle: TrustSec und MACsec
+S: https://www.cisco.com/c/en/us/support/switches/catalyst-9300-series-switches/products-command-reference-list.html | Cisco Catalyst 9300: Command References
+
+Q: Wie schaltest du auf einem Switch die SGT-basierte Durchsetzung ein?
+A:
+```
+cts role-based enforcement
+cts role-based enforcement vlan-list <vlans>
+```
+**Modus:** global. Die zweite Zeile gilt für Verkehr, der innerhalb eines VLANs geswitcht wird.
+T: Befehl Schwer
+
+Q: Wie ordnest du einer IP-Adresse statisch ein SGT zu?
+A:
+```
+cts role-based sgt-map <ip-adresse> sgt <tag>
+```
+**Modus:** global. Dynamisch kommt das SGT meist von ISE bei der 802.1X-Anmeldung.
+T: Befehl Schwer
+
+Q: Wie trägt ein Uplink SGTs inline im Ethernet-Frame (manuelles TrustSec)?
+A:
+```
+interface <uplink>
+ cts manual
+  policy static sgt <tag> trusted
+```
+**Modus:** Interface. `trusted` übernimmt die SGTs, die der Nachbar schickt.
+T: Befehl Schwer
+
+Q: Wie gibt ein Switch SGT-Zuordnungen per SXP an ein Gerät weiter, das keine Inline-Tags kann?
+A:
+```
+cts sxp enable
+cts sxp default password <passwort>
+cts sxp connection peer <peer-ip> source <eigene-ip> password default mode local speaker
+```
+**Modus:** global. SXP läuft über TCP 64999. Der Speaker sendet, der Listener empfängt.
+T: Befehl Schwer
+
+Q: Welcher Befehl zeigt alle bekannten IP-zu-SGT-Zuordnungen?
+A:
+```
+show cts role-based sgt-map all
+```
+**Modus:** privilegiert. Die SGACL-Regeln zeigt `show cts role-based permissions`.
+T: Befehl Schwer
+
+Q: Wie richtest du eine MKA-Policy mit AES-256-GCM für MACsec zwischen zwei Switches ein?
+A:
+```
+mka policy <policy>
+ macsec-cipher-suite gcm-aes-256
+key chain <kc> macsec
+ key 01
+  cryptographic-algorithm aes-256-cmac
+  key-string <64-hex-zeichen>
+```
+**Modus:** global. Key-ID und Key-String müssen auf beiden Switches gleich sein.
+T: Befehl Schwer
+
+Q: Wie aktivierst du MACsec mit Pre-Shared Key auf einem Switch-zu-Switch-Link?
+A:
+```
+interface <uplink>
+ macsec network-link
+ mka policy <policy>
+ mka pre-shared-key key-chain <kc>
+```
+**Modus:** Interface. `network-link` ist die Variante zwischen Netzgeräten, für Endgeräte läuft MACsec über 802.1X.
+T: Befehl Schwer
+
+Q: Welche Befehle zeigen, ob MACsec auf den Links aktiv ist?
+A:
+```
+show macsec summary
+show mka sessions
+```
+**Modus:** privilegiert. Die MKA-Session muss „Secured“ zeigen.
+T: Befehl Schwer
+
+# 6.6 | Befehle: EEM-Applets
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie legst du ein EEM-Applet an, das auf eine bestimmte Syslog-Meldung reagiert?
+A:
+```
+event manager applet <name>
+ event syslog pattern "<regex>"
+```
+**Modus:** global, dann Applet. Beispiel für das Muster: `"Interface GigabitEthernet0/1, changed state to down"`.
+T: Befehl Mittel
+
+Q: Wie führt ein EEM-Applet Konfigurationsbefehle aus?
+A:
+```
+action 1.0 cli command "enable"
+action 2.0 cli command "configure terminal"
+action 3.0 cli command "interface <interface>"
+action 4.0 cli command "no shutdown"
+```
+**Modus:** Applet. Die Labels werden als Text sortiert, deshalb 1.0, 2.0 statt 1, 2, 10. Zuerst immer `enable`.
+T: Befehl Mittel
+
+Q: Wie schreibt ein EEM-Applet eine eigene Meldung ins Syslog?
+A:
+```
+action <label> syslog msg "<text>"
+```
+**Modus:** Applet. Variablen wie `$_event_pub_time` lassen sich in den Text einbauen.
+T: Befehl Mittel
+
+Q: Wie startest du ein EEM-Applet regelmäßig alle 5 Minuten?
+A:
+```
+event timer watchdog time 300
+```
+**Modus:** Applet. Für feste Uhrzeiten: `event timer cron cron-entry "0 2 * * *"`.
+T: Befehl Mittel
+
+Q: Wie reagiert ein EEM-Applet auf einen CLI-Befehl und verhindert, dass er ausgeführt wird?
+A:
+```
+event cli pattern "<regex>" sync no skip yes
+```
+**Modus:** Applet. `skip yes` unterdrückt den eingegebenen Befehl, `sync no` lässt das Applet parallel laufen.
+T: Befehl Schwer
+
+Q: Wie startet ein EEM-Applet, wenn ein Tracking-Objekt down geht?
+A:
+```
+event track <objekt> state down
+```
+**Modus:** Applet. Gut kombinierbar mit IP SLA für automatische Reaktionen auf Ausfälle.
+T: Befehl Schwer
+
+Q: Wie legst du ein EEM-Applet an, das du nur von Hand startest, und wie startest du es?
+A:
+```
+event manager applet <name>
+ event none
+event manager run <name>
+```
+**Modus:** global bzw. privilegiert. Gut zum Testen der Actions.
+T: Befehl Mittel
+
+Q: Welche Befehle zeigen registrierte EEM-Applets und ihre letzten Ausführungen?
+A:
+```
+show event manager policy registered
+show event manager history events
+```
+**Modus:** privilegiert. Fehler in den Actions: `debug event manager action cli`.
+T: Befehl Mittel
+
+# 6.1 | Befehle: Python auf dem Gerät (Guest Shell)
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie aktivierst du auf IOS XE die Guest Shell für Python-Skripte?
+A:
+```
+iox
+guestshell enable
+```
+**Modus:** `iox` global, `guestshell enable` privilegiert. IOx ist die Plattform, auf der die Guest Shell als Container läuft.
+T: Befehl Schwer
+
+Q: Wie startest du in der Guest Shell den Python-Interpreter oder ein Skript?
+A:
+```
+guestshell run python3 [<skript>]
+```
+**Modus:** privilegiert. Im Skript stellt das Modul `cli` die Funktionen `cli()` und `configure()` für IOS-Befehle bereit.
+T: Befehl Schwer
+
+Q: Welcher Befehl zeigt die Container auf IOx mit ihrem Zustand?
+A:
+```
+show app-hosting list
+```
+**Modus:** privilegiert. Die Guest Shell erscheint als `guestshell` und sollte „RUNNING“ zeigen.
+T: Befehl Schwer

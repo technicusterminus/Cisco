@@ -1,0 +1,1524 @@
+# 3.1.a | Befehle: Paketweiterleitung, MAC-Tabelle und SDM
+S: https://www.cisco.com/c/en/us/support/switches/catalyst-9300-series-switches/products-command-reference-list.html | Cisco Catalyst 9300: Command References
+
+Q: Wie legst du ein VLAN an und gibst ihm einen Namen?
+A:
+```
+vlan <vlan-id>
+ name <vlan-name>
+```
+**Modus:** global, dann VLAN-Modus. Das VLAN ist sofort aktiv und erscheint in `show vlan brief`.
+T: Befehl Leicht
+
+Q: Wie machst du einen Switch-Port zum Access-Port in einem bestimmten VLAN?
+A:
+```
+switchport mode access
+switchport access vlan {<vlan-id> | name <vlan-name>}
+```
+**Modus:** Interface. Neuere IOS-XE-Versionen akzeptieren statt der ID auch den VLAN-Namen.
+T: Befehl Leicht
+
+Q: Wie trägst du eine MAC-Adresse statisch für ein VLAN und ein Interface in die MAC-Tabelle ein?
+A:
+```
+mac address-table static <mac-adresse> vlan <vlan-id> interface <interface-id>
+```
+**Modus:** global. Statische Einträge altern nicht und werden nicht durch Lernen an einem anderen Port überschrieben.
+T: Befehl Mittel
+
+Q: Mit welchem Befehl löschst du dynamisch gelernte MAC-Adressen, wahlweise nach Adresse, Interface oder VLAN?
+A:
+```
+clear mac address-table dynamic [address <mac-adresse> | interface <interface-id> | vlan <vlan-id>]
+```
+**Modus:** privilegiert. Ohne Zusatz verschwinden alle dynamischen Einträge, die statischen bleiben.
+T: Befehl Mittel
+
+Q: Welcher Befehl zeigt die MAC-Tabelle, optional nur eine Adresse, nur dynamische Einträge oder nur ein VLAN?
+A:
+```
+show mac address-table [address <mac-adresse> | dynamic | vlan <vlan-id>]
+```
+**Modus:** privilegiert. Springt eine MAC zwischen zwei Ports, deutet das auf eine Schleife oder eine doppelte Adresse hin.
+T: Befehl Leicht
+
+Q: Welcher Befehl zeigt, wie viele MAC-Adressen pro VLAN gelernt sind und wie viel Platz die Tabelle noch hat?
+A:
+```
+show mac address-table count
+```
+**Modus:** privilegiert. Hilft, wenn die CAM-Tabelle volläuft (MAC-Flooding).
+T: Befehl Mittel
+
+Q: Wie gibst du einem Interface eine IPv4-Adresse?
+A:
+```
+ip address <ip-adresse> <subnetzmaske>
+```
+**Modus:** Interface. Auf einem Switch-Port vorher `no switchport`, sonst nur auf SVIs.
+T: Befehl Leicht
+
+Q: Wie gibst du einem Interface eine zusätzliche IPv4-Adresse aus einem zweiten Subnetz?
+A:
+```
+ip address <ip-adresse> <subnetzmaske> secondary
+```
+**Modus:** Interface. OSPF bildet über sekundäre Adressen keine Nachbarschaft, bewirbt das Netz aber.
+T: Befehl Mittel
+
+Q: Wie gibst du einem Interface eine IPv6-Adresse mit Präfixlänge?
+A:
+```
+ipv6 address <ipv6-adresse>/<präfixlänge>
+```
+**Modus:** Interface. Fürs Routing zusätzlich global `ipv6 unicast-routing`.
+T: Befehl Leicht
+
+Q: Wie änderst du auf einem Catalyst-Switch die Aufteilung der TCAM-Ressourcen (SDM-Template)?
+A:
+```
+sdm prefer {vlan | advanced}
+```
+**Modus:** global. Greift erst nach `reload`. `vlan` gibt mehr Platz für MAC-Adressen, `advanced` für Routen, ACLs und QoS. Welche Templates eine Plattform kennt, zeigt `sdm prefer ?`.
+T: Befehl Mittel
+
+Q: Welcher Befehl zeigt das aktive SDM-Template und wie viele Einträge es für MAC, Routen und ACLs vorsieht?
+A:
+```
+show sdm prefer
+```
+**Modus:** privilegiert. Zeigt auch, welches Template nach dem nächsten Neustart gilt.
+T: Befehl Mittel
+
+Q: Welcher Befehl zeigt alle Trunk-Ports mit den VLANs, die sie erlauben und weiterleiten?
+A:
+```
+show interfaces trunk
+```
+**Modus:** privilegiert. Die letzte Spalte „forwarding state and not pruned“ zeigt, was wirklich über den Trunk läuft.
+T: Befehl Leicht
+
+Q: Welcher Befehl zeigt die VLANs mit ihren Access-Ports, wahlweise kurz, einzeln oder als Zusammenfassung?
+A:
+```
+show vlan [brief | id <vlan-id> | name <vlan-name> | summary]
+```
+**Modus:** privilegiert. `summary` zählt nur die VLANs, `brief` zeigt pro VLAN die Ports.
+T: Befehl Leicht
+
+Q: Welcher Befehl zeigt Status, Duplex, Speed und VLAN aller Ports in einer Tabelle?
+A:
+```
+show interfaces status
+```
+**Modus:** privilegiert. Statt einer VLAN-Nummer steht dort „trunk“ oder „routed“, wenn der Port kein Access-Port ist.
+T: Befehl Leicht
+
+Q: Welcher Befehl zeigt die Layer-2-Konfiguration eines einzelnen Switch-Ports, etwa Admin- und Betriebsmodus?
+A:
+```
+show interfaces <interface-id> switchport
+```
+**Modus:** privilegiert. Zeigt auch Access-VLAN, natives VLAN, Voice-VLAN und ob DTP verhandelt.
+T: Befehl Mittel
+
+# 3.2.a | Befehle: RIB, CEF und statische Routen
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Welcher Befehl zeigt die Forwarding Information Base (CEF) für ein Präfix?
+A:
+```
+show ip cef [<präfix> [<maske>]] [detail]
+```
+**Modus:** privilegiert. Die FIB wird aus der RIB gebaut. Fehlt ein Eintrag hier, leitet die Hardware nicht weiter.
+T: Befehl Mittel
+
+Q: Welcher Befehl zeigt die CEF-Adjazenztabelle mit den vorgefertigten Layer-2-Headern?
+A:
+```
+show adjacency [<interface>] [detail]
+```
+**Modus:** privilegiert. Die Adjazenzen entstehen aus ARP- und ND-Einträgen.
+T: Befehl Schwer
+
+Q: Mit welchem Befehl prüfst du, über welchen Pfad CEF ein bestimmtes Quell-Ziel-Paar bei ECMP schickt?
+A:
+```
+show ip cef exact-route <quell-ip> <ziel-ip>
+```
+**Modus:** privilegiert. Zeigt das Ausgangsinterface, das der Hash für genau diesen Flow wählt.
+T: Befehl Schwer
+
+Q: Welcher Befehl zeigt, wie viele Routen jeder Routing-Quelle in der RIB stehen?
+A:
+```
+show ip route summary
+```
+**Modus:** privilegiert. Gut für einen schnellen Vergleich vor und nach einer Änderung.
+T: Befehl Mittel
+
+Q: Wie legst du eine statische Route mit Ausgangsinterface und Next Hop an?
+A:
+```
+ip route <zielnetz> <maske> <interface> <next-hop-ip>
+```
+**Modus:** global. Nur mit Interface und ohne Next Hop würde der Router auf Ethernet für jedes Ziel ARP fragen (Proxy ARP).
+T: Befehl Mittel
+
+Q: Wie legst du eine Floating Static Route als Backup für eine dynamisch gelernte Route an?
+A:
+```
+ip route <zielnetz> <maske> <next-hop-ip> <admin-distanz>
+```
+**Modus:** global. Die Distanz muss höher sein als die des Protokolls, z. B. 130 für ein Backup zu OSPF (110).
+T: Befehl Mittel
+
+Q: Wie legst du eine Route auf Null0 an, um ein Summary zu verankern oder Verkehr zu verwerfen?
+A:
+```
+ip route <zielnetz> <maske> Null0
+```
+**Modus:** global. Pakete zu genaueren, nicht existierenden Zielen werden verworfen statt der Default-Route zu folgen.
+T: Befehl Mittel
+
+Q: Wie legst du eine IPv6-Default-Route über einen Link-Local-Next-Hop an?
+A:
+```
+ipv6 route ::/0 <interface> <fe80-adresse>
+```
+**Modus:** global. Mit Link-Local-Next-Hop ist das Interface Pflicht.
+T: Befehl Mittel
+
+# 3.1.a | Befehle: 802.1Q-Trunks, DTP und VTP
+S: https://www.cisco.com/c/en/us/support/switches/catalyst-9300-series-switches/products-command-reference-list.html | Cisco Catalyst 9300: Command References
+
+Q: Wie konfigurierst du einen Port als Trunk?
+A:
+```
+switchport mode trunk
+```
+**Modus:** Interface. Auf Switches, die noch ISL kennen, vorher `switchport trunk encapsulation dot1q`.
+T: Befehl Leicht
+
+Q: Wie änderst du das native VLAN eines Trunks?
+A:
+```
+switchport trunk native vlan <vlan-id>
+```
+**Modus:** Interface. Beide Seiten müssen übereinstimmen, sonst laufen ungetaggte Frames ins falsche VLAN.
+T: Befehl Mittel
+
+Q: Wie begrenzt du die VLANs auf einem Trunk, und wie fügst du eines hinzu oder entfernst eines?
+A:
+```
+switchport trunk allowed vlan <liste>
+switchport trunk allowed vlan {add | remove} <vlan-id>
+```
+**Modus:** Interface. Falle: Ohne `add` ersetzt der Befehl die gesamte Liste.
+T: Befehl Mittel
+
+Q: Wie schaltest du DTP auf einem Port ab?
+A:
+```
+switchport nonegotiate
+```
+**Modus:** Interface. Nur zusammen mit festem `switchport mode trunk` oder `access` möglich.
+T: Befehl Mittel
+
+Q: Wie sorgst du dafür, dass auch das native VLAN auf allen Trunks getaggt wird?
+A:
+```
+vlan dot1q tag native
+```
+**Modus:** global. Schützt vor VLAN-Hopping per Double Tagging.
+T: Befehl Schwer
+
+Q: Wie stellst du einen Switch auf VTP Version 3 im Transparent-Modus um?
+A:
+```
+vtp version 3
+vtp mode transparent
+```
+**Modus:** global. Transparent übernimmt keine VTP-Updates, reicht sie aber weiter. `vtp mode off` reicht sie nicht weiter.
+T: Befehl Mittel
+
+Q: Wie legst du VTP-Domäne und Passwort fest?
+A:
+```
+vtp domain <name>
+vtp password <passwort>
+```
+**Modus:** global. Server und Clients tauschen nur Updates aus, wenn Domäne und Passwort gleich sind.
+T: Befehl Mittel
+
+Q: Wie machst du einen Switch unter VTPv3 zum Primary Server, der VLANs verteilen darf?
+A:
+```
+vtp primary
+```
+**Modus:** privilegiert (EXEC). Bei VTPv3 darf nur der Primary Server die VLAN-Datenbank ändern.
+T: Befehl Schwer
+
+Q: Welcher Befehl zeigt VTP-Version, Domäne, Modus und Revisionsnummer?
+A:
+```
+show vtp status
+```
+**Modus:** privilegiert. Eine höhere Revisionsnummer überschreibt bei VTPv1/v2 die VLAN-Datenbank anderer Switches.
+T: Befehl Mittel
+
+# 3.1.b | Befehle: EtherChannel
+S: https://www.cisco.com/c/en/us/support/switches/catalyst-9300-series-switches/products-command-reference-list.html | Cisco Catalyst 9300: Command References
+
+Q: Wie bündelst du Ports per LACP und lässt den Switch aktiv verhandeln?
+A:
+```
+channel-group <nummer> mode active
+```
+**Modus:** Interface (auf allen Member-Ports). `passive` wartet nur. Active–Active und Active–Passive bilden ein Bündel.
+T: Befehl Leicht
+
+Q: Wie bündelst du Ports per PAgP?
+A:
+```
+channel-group <nummer> mode {desirable | auto}
+```
+**Modus:** Interface. Desirable verhandelt aktiv, Auto wartet. Auto–Auto bildet kein Bündel.
+T: Befehl Mittel
+
+Q: Wie bildest du ein statisches Bündel ohne LACP oder PAgP?
+A:
+```
+channel-group <nummer> mode on
+```
+**Modus:** Interface. Beide Seiten `on`. Ein `on` gegen `active` kommt nicht zustande.
+T: Befehl Mittel
+
+Q: Wie baust du einen Layer-3-Port-Channel?
+A:
+```
+interface range <ports>
+ no switchport
+ channel-group <nummer> mode active
+interface port-channel <nummer>
+ ip address <ip-adresse> <maske>
+```
+**Modus:** Interface. `no switchport` zuerst auf den Membern, sonst entsteht ein Layer-2-Port-Channel.
+T: Befehl Schwer
+
+Q: Wie stellst du die Lastverteilung eines EtherChannels auf Quell- und Ziel-IP um?
+A:
+```
+port-channel load-balance src-dst-ip
+```
+**Modus:** global. Gilt für alle Port-Channels des Switches. Prüfen mit `show etherchannel load-balance`.
+T: Befehl Mittel
+
+Q: Welcher Befehl zeigt alle Port-Channels mit Protokoll und Member-Status?
+A:
+```
+show etherchannel summary
+```
+**Modus:** privilegiert. Flags: P gebündelt, I eigenständig, s suspendiert, D down, SU/RU Layer 2 oder 3 und in Betrieb.
+T: Befehl Leicht
+
+Q: Welcher Befehl zeigt die LACP-Partner mit System-ID, Port-Priorität und Flags?
+A:
+```
+show lacp neighbor
+```
+**Modus:** privilegiert. Für PAgP: `show pagp neighbor`.
+T: Befehl Mittel
+
+Q: Wie legst du fest, welcher Switch bei LACP über aktive und Standby-Links entscheidet?
+A:
+```
+lacp system-priority <wert>
+```
+**Modus:** global. Kleiner gewinnt. Pro Port beeinflusst `lacp port-priority`, welche Links aktiv werden.
+T: Befehl Schwer
+
+Q: Wie beschränkst du einen LACP-Port-Channel auf vier aktive Links, weitere werden Hot Standby?
+A:
+```
+lacp max-bundle 4
+```
+**Modus:** Port-Channel-Interface. Die Ports mit der besten Priorität werden aktiv.
+T: Befehl Schwer
+
+Q: Wie legst du fest, dass ein Port-Channel erst ab zwei aktiven Links up geht?
+A:
+```
+port-channel min-links 2
+```
+**Modus:** Port-Channel-Interface. Verhindert, dass ein halber Port-Channel zu viel Verkehr anzieht.
+T: Befehl Schwer
+
+Q: Wie lässt du LACP jede Sekunde statt alle 30 Sekunden PDUs senden?
+A:
+```
+lacp rate fast
+```
+**Modus:** Interface. Fehler werden nach 3 Sekunden statt nach 90 Sekunden erkannt.
+T: Befehl Schwer
+
+# 3.1.c | Befehle: Spanning Tree, RSTP und Schutzfunktionen
+S: https://www.cisco.com/c/en/us/support/switches/catalyst-9300-series-switches/products-command-reference-list.html | Cisco Catalyst 9300: Command References
+
+Q: Wie wechselst du den Spanning-Tree-Modus des Switches?
+A:
+```
+spanning-tree mode {pvst | rapid-pvst | mst}
+```
+**Modus:** global. Ein Wechsel startet alle STP-Instanzen neu, das unterbricht kurz den Verkehr.
+T: Befehl Leicht
+
+Q: Wie machst du einen Switch für ein VLAN zur primären oder sekundären Root Bridge?
+A:
+```
+spanning-tree vlan <vlan-id> root {primary | secondary}
+```
+**Modus:** global. Ein Makro: Es setzt die Priorität einmalig auf 24576 bzw. 28672 oder knapp unter die aktuelle Root.
+T: Befehl Leicht
+
+Q: Wie setzt du die Bridge-Priorität direkt?
+A:
+```
+spanning-tree vlan <vlan-id> priority <wert>
+```
+**Modus:** global. Nur Vielfache von 4096, weil die unteren 12 Bit die VLAN-ID tragen (Extended System ID).
+T: Befehl Mittel
+
+Q: Wie änderst du die Port-Kosten eines Ports für ein VLAN?
+A:
+```
+spanning-tree vlan <vlan-id> cost <kosten>
+```
+**Modus:** Interface. Wirkt auf den Weg dieses Switches zur Root, also auf die Wahl seines Root Ports.
+T: Befehl Mittel
+
+Q: Wie beeinflusst du, welchen Port der Nachbar-Switch als Root Port wählt, wenn beide Wege gleich teuer sind?
+A:
+```
+spanning-tree vlan <vlan-id> port-priority <wert>
+```
+**Modus:** Interface, auf dem Switch näher an der Root. Vielfache von 16, kleiner gewinnt. Der Nachbar sieht den Wert in der BPDU.
+T: Befehl Schwer
+
+Q: Wie stellst du die STP-Kosten auf die lange Methode (32 Bit) um?
+A:
+```
+spanning-tree pathcost method long
+```
+**Modus:** global. Nötig, damit 10 und 100 Gbit/s unterscheidbare Kosten bekommen. Auf allen Switches gleich setzen.
+T: Befehl Schwer
+
+Q: Wie schaltest du PortFast an einem Endgeräte-Port ein?
+A:
+```
+spanning-tree portfast [edge]
+```
+**Modus:** Interface. Neuere Versionen verlangen `edge`. Für einen Trunk zu einem Server: `spanning-tree portfast edge trunk`.
+T: Befehl Leicht
+
+Q: Wie schaltest du PortFast global für alle Access-Ports ein?
+A:
+```
+spanning-tree portfast [edge] default
+```
+**Modus:** global. Trunks bleiben ausgenommen.
+T: Befehl Mittel
+
+Q: Wie aktivierst du BPDU Guard auf einem Port und global für alle PortFast-Ports?
+A:
+```
+spanning-tree bpduguard enable
+spanning-tree portfast [edge] bpduguard default
+```
+**Modus:** Interface bzw. global. Eine empfangene BPDU setzt den Port in err-disabled.
+T: Befehl Mittel
+
+Q: Wie unterdrückst du BPDUs auf PortFast-Ports, fällst aber bei einer empfangenen BPDU auf normales STP zurück?
+A:
+```
+spanning-tree portfast [edge] bpdufilter default
+```
+**Modus:** global. Falle: Am Interface (`spanning-tree bpdufilter enable`) filtert BPDU Filter alles in beide Richtungen und kann Schleifen erzeugen.
+T: Befehl Schwer
+
+Q: Wie verhinderst du, dass ein angeschlossener Switch die Root Bridge übernimmt?
+A:
+```
+spanning-tree guard root
+```
+**Modus:** Interface, auf Ports Richtung Access. Bessere BPDUs setzen den Port in „root-inconsistent“.
+T: Befehl Mittel
+
+Q: Wie schützt du einen blockierten Port davor, in Forwarding zu gehen, wenn plötzlich keine BPDUs mehr kommen?
+A:
+```
+spanning-tree guard loop
+```
+**Modus:** Interface. Global für alle Ports: `spanning-tree loopguard default`. Der Port geht in „loop-inconsistent“.
+T: Befehl Schwer
+
+Q: Wie erkennst du unidirektionale Glasfaserlinks und schaltest sie ab?
+A:
+```
+udld aggressive
+interface <interface>
+ udld port aggressive
+```
+**Modus:** global (für Glasfaser) bzw. Interface. Im Aggressive Mode geht der Port in err-disabled, sobald keine Echos zurückkommen.
+T: Befehl Schwer
+
+Q: Wie holst du Ports automatisch aus err-disabled zurück, z. B. nach BPDU Guard?
+A:
+```
+errdisable recovery cause bpduguard
+errdisable recovery interval <sekunden>
+```
+**Modus:** global. Prüfen mit `show errdisable recovery`.
+T: Befehl Mittel
+
+Q: Welcher Befehl zeigt für ein VLAN Root Bridge, eigene Bridge-ID und Rolle, Zustand und Kosten jedes Ports?
+A:
+```
+show spanning-tree vlan <vlan-id>
+```
+**Modus:** privilegiert. Rollen: Root, Desg, Altn, Back. Zustände: FWD, BLK, LRN.
+T: Befehl Leicht
+
+Q: Welcher Befehl zeigt für alle VLANs die Root Bridge, die Kosten dorthin und den Root Port?
+A:
+```
+show spanning-tree root
+```
+**Modus:** privilegiert. Kosten 0 und kein Root Port heißt: Dieser Switch ist selbst Root.
+T: Befehl Mittel
+
+Q: Welcher Befehl zeigt pro VLAN, wann die letzte Topologieänderung war und von welchem Port sie kam?
+A:
+```
+show spanning-tree detail
+```
+**Modus:** privilegiert. Häufige Topology Changes deuten auf flappende Ports ohne PortFast hin.
+T: Befehl Schwer
+
+Q: Welcher Befehl zeigt alle Ports, die Root Guard oder Loop Guard gerade blockiert?
+A:
+```
+show spanning-tree inconsistentports
+```
+**Modus:** privilegiert. Leere Ausgabe heißt: keine Inkonsistenzen.
+T: Befehl Mittel
+
+Q: Wie änderst du die STP-Timer eines VLANs auf der Root Bridge?
+A:
+```
+spanning-tree vlan <vlan-id> {hello-time | forward-time | max-age} <sekunden>
+```
+**Modus:** global. Nur die Root verteilt ihre Timer, Einstellungen auf anderen Switches wirken erst, wenn sie Root werden.
+T: Befehl Schwer
+
+# 3.1.c | Befehle: MST
+S: https://www.cisco.com/c/en/us/support/switches/catalyst-9300-series-switches/products-command-reference-list.html | Cisco Catalyst 9300: Command References
+
+Q: Wie konfigurierst du MST-Region, Revision und die Zuordnung von VLANs zu einer Instanz?
+A:
+```
+spanning-tree mst configuration
+ name <region>
+ revision <nummer>
+ instance <nr> vlan <vlan-liste>
+```
+**Modus:** global, dann MST-Konfiguration. Name, Revision und Zuordnung müssen auf allen Switches der Region identisch sein.
+T: Befehl Mittel
+
+Q: Wie machst du einen Switch zur Root einer MST-Instanz?
+A:
+```
+spanning-tree mst <instanz> root {primary | secondary}
+```
+**Modus:** global. Direkt geht es mit `spanning-tree mst <instanz> priority <wert>`.
+T: Befehl Mittel
+
+Q: Wie änderst du unter MST die Kosten eines Ports für eine Instanz?
+A:
+```
+spanning-tree mst <instanz> cost <kosten>
+```
+**Modus:** Interface. Analog `spanning-tree mst <instanz> port-priority <wert>`.
+T: Befehl Schwer
+
+Q: Welcher Befehl zeigt Region, Revision und die VLAN-Zuordnung der MST-Instanzen?
+A:
+```
+show spanning-tree mst configuration
+```
+**Modus:** privilegiert. Vor dem Verlassen der MST-Konfiguration zeigt `show pending` die noch nicht aktiven Änderungen.
+T: Befehl Mittel
+
+Q: Welcher Befehl zeigt pro MST-Instanz Root und Port-Rollen?
+A:
+```
+show spanning-tree mst [<instanz>]
+```
+**Modus:** privilegiert. Instanz 0 ist die IST, sie spricht mit Switches außerhalb der Region.
+T: Befehl Mittel
+
+# 3.2.b | Befehle: OSPFv2
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie startest du OSPF mit fester Router-ID?
+A:
+```
+router ospf <prozess-id>
+ router-id <a.b.c.d>
+```
+**Modus:** global, dann Router. Ohne feste ID nimmt OSPF die höchste Loopback- oder Interface-Adresse beim Start.
+T: Befehl Leicht
+
+Q: Wie aktivierst du OSPF mit dem `network`-Befehl für ein Netz in einer Area?
+A:
+```
+network <adresse> <wildcard> area <area-id>
+```
+**Modus:** Router. Jedes Interface, dessen Adresse passt, wird aktiv. `network 0.0.0.0 255.255.255.255 area 0` trifft alle.
+T: Befehl Leicht
+
+Q: Wie aktivierst du OSPF direkt auf einem Interface?
+A:
+```
+ip ospf <prozess-id> area <area-id>
+```
+**Modus:** Interface. Hat Vorrang vor einem passenden `network`-Befehl.
+T: Befehl Leicht
+
+Q: Wie machst du alle Interfaces passiv und nimmst nur die Uplinks wieder heraus?
+A:
+```
+router ospf <prozess-id>
+ passive-interface default
+ no passive-interface <uplink>
+```
+**Modus:** Router. Passive Interfaces senden keine Hellos, ihr Netz wird aber weiter beworben.
+T: Befehl Mittel
+
+Q: Wie setzt du die OSPF-Kosten eines Interfaces?
+A:
+```
+ip ospf cost <1-65535>
+```
+**Modus:** Interface. Sonst gilt: Referenzbandbreite geteilt durch Interface-Bandbreite.
+T: Befehl Leicht
+
+Q: Wie setzt du die OSPF-Referenzbandbreite auf 100 Gbit/s?
+A:
+```
+auto-cost reference-bandwidth 100000
+```
+**Modus:** Router. Wert in Mbit/s. Muss auf allen Routern gleich sein, sonst werden die Pfade uneinheitlich bewertet.
+T: Befehl Mittel
+
+Q: Wie beeinflusst du die DR-Wahl auf einem Ethernet-Segment?
+A:
+```
+ip ospf priority <0-255>
+```
+**Modus:** Interface. 0 heißt: nie DR oder BDR. Die Wahl ist nicht preemptiv.
+T: Befehl Mittel
+
+Q: Wie änderst du den OSPF-Netzwerktyp eines Interfaces?
+A:
+```
+ip ospf network {point-to-point | broadcast | point-to-multipoint | non-broadcast}
+```
+**Modus:** Interface. Die Typen müssen nicht gleich sein, aber die Hello- und Dead-Timer der Typen müssen passen.
+T: Befehl Mittel
+
+Q: Wie stellst du die OSPF-Timer eines Interfaces auf schnellere Erkennung ein?
+A:
+```
+ip ospf hello-interval <sekunden>
+ip ospf dead-interval <sekunden>
+```
+**Modus:** Interface. Beide Nachbarn brauchen dieselben Werte. Subsekunden-Hellos: `ip ospf dead-interval minimal hello-multiplier 4`.
+T: Befehl Mittel
+
+Q: Wie fasst du auf einem ABR die Netze einer Area zu einem Summary zusammen?
+A:
+```
+area <area-id> range <netz> <maske>
+```
+**Modus:** Router (auf dem ABR). Fasst Typ-1- und Typ-2-LSAs der Area zu einem Typ-3-LSA zusammen.
+T: Befehl Mittel
+
+Q: Wie fasst du auf einem ASBR redistribuierte externe Netze zusammen?
+A:
+```
+summary-address <netz> <maske>
+```
+**Modus:** Router (auf dem ASBR). Wirkt auf Typ-5- und Typ-7-LSAs, nicht auf interne Routen.
+T: Befehl Schwer
+
+Q: Wie machst du eine Area zur Stub Area oder zur Totally Stubby Area?
+A:
+```
+area <area-id> stub [no-summary]
+```
+**Modus:** Router. `stub` auf allen Routern der Area. `no-summary` nur auf dem ABR, er schickt dann nur eine Default-Route.
+T: Befehl Mittel
+
+Q: Wie machst du eine Area zur NSSA, damit ein ASBR in ihr externe Routen einspeisen darf?
+A:
+```
+area <area-id> nssa [no-summary] [default-information-originate]
+```
+**Modus:** Router, auf allen Routern der Area. Externe Routen laufen als Typ 7 und werden am ABR zu Typ 5.
+T: Befehl Schwer
+
+Q: Wie verteilt OSPF eine Default-Route, auch wenn der Router selbst keine hat?
+A:
+```
+default-information originate always
+```
+**Modus:** Router. Ohne `always` nur, wenn eine Default-Route in der RIB steht.
+T: Befehl Mittel
+
+Q: Wie aktivierst du OSPF-Authentisierung mit MD5 auf einem Interface?
+A:
+```
+ip ospf authentication message-digest
+ip ospf message-digest-key <key-id> md5 <schlüssel>
+```
+**Modus:** Interface. Für die ganze Area: `area <id> authentication message-digest` im Router-Modus.
+T: Befehl Mittel
+
+Q: Wie aktivierst du OSPF-Authentisierung mit HMAC-SHA-256 über eine Key Chain?
+A:
+```
+key chain <name>
+ key <id>
+  key-string <schlüssel>
+  cryptographic-algorithm hmac-sha-256
+interface <interface>
+ ip ospf authentication key-chain <name>
+```
+**Modus:** global, dann Interface. Die stärkere Variante nach RFC 5709.
+T: Befehl Schwer
+
+Q: Wie filterst du Routen, bevor OSPF sie in die eigene Routing-Tabelle übernimmt?
+A:
+```
+distribute-list prefix <prefix-list> in
+```
+**Modus:** Router. Wirkt nur auf die RIB dieses Routers, nicht auf die LSDB. Die LSAs werden weiter geflutet.
+T: Befehl Schwer
+
+Q: Wie filterst du auf einem ABR Typ-3-LSAs in eine Area hinein?
+A:
+```
+area <area-id> filter-list prefix <prefix-list> in
+```
+**Modus:** Router (auf dem ABR). Anders als die Distribute-List entfernt das die Routen aus der LSDB der Area.
+T: Befehl Schwer
+
+Q: Welcher Befehl zeigt die OSPF-Nachbarn mit Zustand und Rolle?
+A:
+```
+show ip ospf neighbor [detail]
+```
+**Modus:** privilegiert. Hängt ein Nachbar in EXSTART oder EXCHANGE, ist meist die MTU ungleich.
+T: Befehl Leicht
+
+Q: Welcher Befehl zeigt die OSPF-Interfaces mit Area, Kosten, Zustand und Anzahl der Nachbarn?
+A:
+```
+show ip ospf interface brief
+```
+**Modus:** privilegiert. Ohne `brief`: Netzwerktyp, Timer, DR und BDR.
+T: Befehl Leicht
+
+Q: Welcher Befehl zeigt die OSPF-Datenbank mit den LSA-Typen?
+A:
+```
+show ip ospf database [router | network | summary | external | nssa-external]
+```
+**Modus:** privilegiert. Ohne Zusatz kommt eine Übersicht aller LSAs pro Area.
+T: Befehl Mittel
+
+Q: Welcher Befehl zeigt OSPF-Prozess, Router-ID, Areas und SPF-Läufe?
+A:
+```
+show ip ospf
+```
+**Modus:** privilegiert. Häufige SPF-Läufe deuten auf eine instabile Topologie hin.
+T: Befehl Mittel
+
+Q: Wie startest du den OSPF-Prozess neu?
+A:
+```
+clear ip ospf process
+```
+**Modus:** privilegiert. Nötig, damit eine geänderte Router-ID greift. Alle Nachbarschaften werden neu aufgebaut.
+T: Befehl Mittel
+
+Q: Mit welchem Debug verfolgst du den Aufbau von OSPF-Nachbarschaften?
+A:
+```
+debug ip ospf adj
+```
+**Modus:** privilegiert. Zeigt z. B. „Mismatched hello parameters“ oder MTU-Probleme. Hellos selbst: `debug ip ospf hello`.
+T: Befehl Mittel
+
+# 3.2.b | Befehle: OSPFv3
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie startest du OSPFv3 mit Address-Family-Syntax für IPv6?
+A:
+```
+router ospfv3 <prozess-id>
+ router-id <a.b.c.d>
+ address-family ipv6 unicast
+ exit-address-family
+```
+**Modus:** global, dann Router. Die Router-ID ist auch für IPv6 eine 32-Bit-Zahl.
+T: Befehl Mittel
+
+Q: Wie aktivierst du OSPFv3 für IPv6 auf einem Interface?
+A:
+```
+ospfv3 <prozess-id> ipv6 area <area-id>
+```
+**Modus:** Interface. Mit `ospfv3 <prozess-id> ipv4 area <area-id>` trägt derselbe Prozess auch IPv4.
+T: Befehl Mittel
+
+Q: Wie aktivierst du OSPFv3 in der alten Syntax ohne Address Families?
+A:
+```
+ipv6 router ospf <prozess-id>
+ router-id <a.b.c.d>
+interface <interface>
+ ipv6 ospf <prozess-id> area <area-id>
+```
+**Modus:** global bzw. Interface. Setzt `ipv6 unicast-routing` voraus.
+T: Befehl Mittel
+
+Q: Welcher Befehl zeigt die OSPFv3-Nachbarn?
+A:
+```
+show ospfv3 neighbor
+```
+**Modus:** privilegiert. In der alten Syntax: `show ipv6 ospf neighbor`. Die Nachbarn erscheinen mit Router-ID, die Adressen sind Link-Local.
+T: Befehl Mittel
+
+Q: Welcher Befehl zeigt die OSPFv3-Datenbank?
+A:
+```
+show ospfv3 database
+```
+**Modus:** privilegiert. OSPFv3 trennt Präfixe von der Topologie: Präfixe stehen in Intra-Area-Prefix- und Link-LSAs.
+T: Befehl Schwer
+
+# 3.2.a | Befehle: EIGRP
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie startest du EIGRP im Classic Mode und nimmst ein Netz auf?
+A:
+```
+router eigrp <as-nummer>
+ eigrp router-id <a.b.c.d>
+ network <netz> <wildcard>
+```
+**Modus:** global, dann Router. Die AS-Nummer muss bei allen Nachbarn gleich sein.
+T: Befehl Leicht
+
+Q: Wie startest du EIGRP im Named Mode für IPv4?
+A:
+```
+router eigrp <name>
+ address-family ipv4 unicast autonomous-system <as-nummer>
+  network <netz> <wildcard>
+```
+**Modus:** global, dann Address Family. Der Name ist lokal, die AS-Nummer muss beim Nachbarn passen.
+T: Befehl Mittel
+
+Q: Wo stellst du im EIGRP Named Mode Interface-Optionen wie passive oder Timer ein?
+A:
+```
+router eigrp <name>
+ address-family ipv4 unicast autonomous-system <as>
+  af-interface {default | <interface>}
+   passive-interface
+   hello-interval <sekunden>
+```
+**Modus:** AF-Interface. `af-interface default` gilt für alle Interfaces der Address Family.
+T: Befehl Schwer
+
+Q: Wie erlaubst du EIGRP Unequal-Cost Load Balancing?
+A:
+```
+variance <multiplikator>
+```
+**Modus:** Router (Classic) bzw. `topology base` (Named). Nur Feasible Successors mit Metrik ≤ Multiplikator × FD werden genutzt.
+T: Befehl Mittel
+
+Q: Wie machst du einen Zweigstellen-Router zum EIGRP-Stub?
+A:
+```
+eigrp stub [connected] [summary] [static] [receive-only]
+```
+**Modus:** Router bzw. Address Family. Ohne Zusatz gilt `connected summary`. Der Hub fragt den Stub nicht mehr bei Queries.
+T: Befehl Mittel
+
+Q: Welcher Befehl zeigt die EIGRP-Nachbarn mit Hold-Zeit, Uptime und SRTT?
+A:
+```
+show ip eigrp neighbors
+```
+**Modus:** privilegiert. Steigt Q Cnt dauerhaft, hängt der Nachbar mit Bestätigungen hinterher.
+T: Befehl Leicht
+
+Q: Welcher Befehl zeigt die EIGRP-Topologietabelle mit Successors und Feasible Successors?
+A:
+```
+show ip eigrp topology [all-links]
+```
+**Modus:** privilegiert. Ohne `all-links` erscheinen nur Successor und Feasible Successors.
+T: Befehl Mittel
+
+Q: Welcher Befehl zeigt die Interfaces, auf denen EIGRP läuft?
+A:
+```
+show ip eigrp interfaces [detail]
+```
+**Modus:** privilegiert. Passive Interfaces erscheinen hier nicht.
+T: Befehl Mittel
+
+# 3.2.c | Befehle: BGP
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie startest du BGP und baust eine eBGP-Nachbarschaft auf?
+A:
+```
+router bgp <eigene-as>
+ bgp router-id <a.b.c.d>
+ neighbor <peer-ip> remote-as <peer-as>
+```
+**Modus:** global, dann Router. Andere AS als die eigene heißt eBGP, gleiche AS heißt iBGP.
+T: Befehl Leicht
+
+Q: Wie gibst du ein Netz in BGP bekannt?
+A:
+```
+network <netz> mask <maske>
+```
+**Modus:** Router bzw. Address Family. Das Netz muss mit genau dieser Maske in der RIB stehen, sonst wird es nicht beworben.
+T: Befehl Mittel
+
+Q: Wie baust du eine BGP-Nachbarschaft zwischen Loopbacks auf?
+A:
+```
+neighbor <peer-loopback> remote-as <as>
+neighbor <peer-loopback> update-source Loopback0
+```
+**Modus:** Router. Bei eBGP über Loopbacks zusätzlich `neighbor <ip> ebgp-multihop 2`, weil eBGP sonst TTL 1 nutzt.
+T: Befehl Mittel
+
+Q: Wie aktivierst du einen BGP-Nachbarn nur in bestimmten Address Families?
+A:
+```
+router bgp <as>
+ no bgp default ipv4-unicast
+ neighbor <peer-ip> remote-as <as>
+ address-family ipv4 unicast
+  neighbor <peer-ip> activate
+```
+**Modus:** Router, dann Address Family. Ohne `no bgp default ipv4-unicast` wird jeder Nachbar automatisch für IPv4 aktiviert.
+T: Befehl Schwer
+
+Q: Wie baust du eine BGP-Nachbarschaft für IPv6-Präfixe auf?
+A:
+```
+router bgp <as>
+ neighbor <peer-ipv6> remote-as <as>
+ address-family ipv6 unicast
+  neighbor <peer-ipv6> activate
+  network <präfix>/<länge>
+```
+**Modus:** Router, dann Address Family. IPv6-Netze stehen in Präfixschreibweise, ohne `mask`.
+T: Befehl Mittel
+
+Q: Wie fasst du in BGP Netze zusammen und unterdrückst die genaueren Präfixe?
+A:
+```
+aggregate-address <netz> <maske> summary-only
+```
+**Modus:** Router bzw. Address Family. Mindestens ein genaueres Präfix muss in der BGP-Tabelle stehen.
+T: Befehl Mittel
+
+Q: Wie sorgt ein iBGP-Router dafür, dass seine Nachbarn den externen Next Hop nicht selbst erreichen müssen?
+A:
+```
+neighbor <ibgp-peer> next-hop-self
+```
+**Modus:** Router bzw. Address Family. iBGP gibt den Next Hop sonst unverändert weiter.
+T: Befehl Mittel
+
+Q: Wie schützt du eine BGP-Sitzung mit einem MD5-Passwort?
+A:
+```
+neighbor <peer-ip> password <passwort>
+```
+**Modus:** Router. Schützt die TCP-Sitzung (TCP-MD5, RFC 2385). Beide Seiten brauchen dasselbe Passwort.
+T: Befehl Mittel
+
+Q: Wie schaltest du eine BGP-Nachbarschaft administrativ ab, ohne sie zu löschen?
+A:
+```
+neighbor <peer-ip> shutdown
+```
+**Modus:** Router. Im Summary erscheint der Nachbar als „Idle (Admin)“.
+T: Befehl Mittel
+
+Q: Wie legst du eine Prefix-Liste an, die /24 bis /28 aus 10.0.0.0/8 erlaubt?
+A:
+```
+ip prefix-list <name> seq 10 permit 10.0.0.0/8 ge 24 le 28
+```
+**Modus:** global. `ge` und `le` gelten für die Präfixlänge. Am Ende steht ein implizites deny.
+T: Befehl Mittel
+
+Q: Wie filterst du die Präfixe, die ein BGP-Nachbar dir schickt?
+A:
+```
+neighbor <peer-ip> prefix-list <name> in
+```
+**Modus:** Router bzw. Address Family. Die neue Policy greift erst nach einem Soft Reset.
+T: Befehl Mittel
+
+Q: Wie filterst du BGP-Routen anhand des AS-Pfads?
+A:
+```
+ip as-path access-list <nr> permit <regex>
+router bgp <as>
+ neighbor <peer-ip> filter-list <nr> in
+```
+**Modus:** global bzw. Router. Beispiel `^$` trifft Routen aus der eigenen AS, `^65002_` Routen direkt vom Nachbarn 65002.
+T: Befehl Schwer
+
+Q: Wie wendest du eine Route-Map auf Routen von oder zu einem BGP-Nachbarn an?
+A:
+```
+neighbor <peer-ip> route-map <name> {in | out}
+```
+**Modus:** Router bzw. Address Family. Typisch für Local Preference eingehend und AS-Path-Prepend ausgehend.
+T: Befehl Mittel
+
+Q: Wie gibst du allen Routen eines Nachbarn ein höheres Weight?
+A:
+```
+neighbor <peer-ip> weight <wert>
+```
+**Modus:** Router. Weight ist Cisco-spezifisch, lokal auf dem Router und wird zuerst verglichen. Höher gewinnt.
+T: Befehl Mittel
+
+Q: Wie setzt du in einer Route-Map die Local Preference für eingehende Routen?
+A:
+```
+route-map <name> permit 10
+ set local-preference <wert>
+```
+**Modus:** Route-Map. Standard 100, höher gewinnt. Gilt für die ganze eigene AS, steuert also den ausgehenden Verkehr.
+T: Befehl Mittel
+
+Q: Wie verlängerst du in einer Route-Map den AS-Pfad, um eingehenden Verkehr auf einen anderen Link zu lenken?
+A:
+```
+route-map <name> permit 10
+ set as-path prepend <eigene-as> <eigene-as>
+```
+**Modus:** Route-Map, ausgehend am Nachbarn anwenden. Ein längerer Pfad wirkt für andere AS weniger attraktiv.
+T: Befehl Mittel
+
+Q: Wie setzt du in einer Route-Map den MED?
+A:
+```
+route-map <name> permit 10
+ set metric <wert>
+```
+**Modus:** Route-Map, ausgehend anwenden. Kleiner gewinnt. Der Nachbar vergleicht MED standardmäßig nur bei Routen aus derselben AS.
+T: Befehl Schwer
+
+Q: Wie erlaubst du BGP, Verkehr über mehrere gleichwertige eBGP-Pfade zu verteilen?
+A:
+```
+maximum-paths <anzahl>
+```
+**Modus:** Router bzw. Address Family. Für iBGP: `maximum-paths ibgp <anzahl>`.
+T: Befehl Schwer
+
+Q: Wie speicherst du die ungefilterten Routen eines Nachbarn, um Policies ohne Reset neu anwenden zu können?
+A:
+```
+neighbor <peer-ip> soft-reconfiguration inbound
+```
+**Modus:** Router bzw. Address Family. Braucht mehr Speicher. Danach zeigt `received-routes` die Routen vor dem Filter.
+T: Befehl Schwer
+
+Q: Wie wendest du eine geänderte BGP-Policy an, ohne die Sitzung zu trennen?
+A:
+```
+clear ip bgp <peer-ip | *> soft [in | out]
+```
+**Modus:** privilegiert. `in` holt die Routen per Route Refresh neu, `out` schickt die eigenen neu.
+T: Befehl Mittel
+
+Q: Welcher Befehl zeigt alle BGP-Nachbarn mit Zustand und Anzahl empfangener Präfixe?
+A:
+```
+show ip bgp summary
+```
+**Modus:** privilegiert. Steht in der letzten Spalte eine Zahl, ist die Sitzung Established. Sonst steht dort Idle, Active oder Connect.
+T: Befehl Leicht
+
+Q: Welcher Befehl zeigt die BGP-Tabelle mit Next Hop, Metrik, Local Preference, Weight und AS-Pfad?
+A:
+```
+show ip bgp [<präfix>]
+```
+**Modus:** privilegiert. „>“ markiert den besten Pfad, „*“ einen gültigen. Mit Präfix kommen alle Attribute im Detail.
+T: Befehl Leicht
+
+Q: Welcher Befehl zeigt, welche Routen du an einen BGP-Nachbarn sendest?
+A:
+```
+show ip bgp neighbors <peer-ip> advertised-routes
+```
+**Modus:** privilegiert. Erhaltene Routen nach dem Filter: `… routes`. Vor dem Filter: `… received-routes` (braucht Soft Reconfiguration).
+T: Befehl Mittel
+
+Q: Welcher Befehl zeigt die BGP-Nachbarn und -Präfixe für IPv6?
+A:
+```
+show bgp ipv6 unicast summary
+```
+**Modus:** privilegiert. Die Tabelle selbst: `show bgp ipv6 unicast`.
+T: Befehl Mittel
+
+# 3.2.d | Befehle: Policy-based Routing
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie baust du eine Route-Map, die Verkehr aus einer ACL zu einem bestimmten Next Hop schickt?
+A:
+```
+route-map <name> permit 10
+ match ip address <acl>
+ set ip next-hop <ip>
+```
+**Modus:** global, dann Route-Map. Was nicht passt, wird normal nach der Routing-Tabelle weitergeleitet.
+T: Befehl Mittel
+
+Q: Wie wendest du eine PBR-Route-Map auf eingehenden Verkehr eines Interfaces an?
+A:
+```
+interface <interface>
+ ip policy route-map <name>
+```
+**Modus:** Interface, auf dem Eingangsinterface. PBR wirkt nur auf eingehende Pakete.
+T: Befehl Mittel
+
+Q: Wie wendest du PBR auf Pakete an, die der Router selbst erzeugt?
+A:
+```
+ip local policy route-map <name>
+```
+**Modus:** global. Betrifft z. B. Pings, Syslog oder IP-SLA-Pakete des Routers.
+T: Befehl Schwer
+
+Q: Wie lässt du PBR den Next Hop nur nutzen, solange ein Tracking-Objekt up ist?
+A:
+```
+set ip next-hop verify-availability <ip> <seq> track <objekt>
+```
+**Modus:** Route-Map. Fällt das Objekt, nutzt PBR den nächsten Eintrag oder die normale Routing-Tabelle.
+T: Befehl Schwer
+
+Q: Wie lässt du PBR einen Next Hop nur nutzen, wenn die Routing-Tabelle keine genauere Route als die Default-Route kennt?
+A:
+```
+set ip default next-hop <ip>
+```
+**Modus:** Route-Map. Anders als `set ip next-hop` hat hier die Routing-Tabelle Vorrang.
+T: Befehl Schwer
+
+Q: Welche Befehle zeigen, wo PBR angewendet ist und wie oft die Route-Map getroffen hat?
+A:
+```
+show ip policy
+show route-map [<name>]
+```
+**Modus:** privilegiert. Live verfolgen mit `debug ip policy`.
+T: Befehl Mittel
+
+# 3.3.a | Befehle: NTP
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie stellst du einen Router als NTP-Client ein und bevorzugst einen Server?
+A:
+```
+ntp server <ip-adresse> [prefer]
+```
+**Modus:** global. Mindestens drei Server erlauben NTP, einen falschen zu erkennen.
+T: Befehl Leicht
+
+Q: Wie machst du einen Router zur autoritativen NTP-Quelle ohne externe Referenz?
+A:
+```
+ntp master [<stratum>]
+```
+**Modus:** global. Ohne Angabe meldet er Stratum 8.
+T: Befehl Mittel
+
+Q: Wie synchronisieren sich zwei Router per NTP gegenseitig als gleichrangige Peers?
+A:
+```
+ntp peer <ip-adresse>
+```
+**Modus:** global. Bei `ntp server` ist die Richtung fest, bei `ntp peer` kann jede Seite die andere stellen.
+T: Befehl Mittel
+
+Q: Wie aktivierst du NTP-Authentisierung auf einem Client?
+A:
+```
+ntp authenticate
+ntp authentication-key <id> md5 <schlüssel>
+ntp trusted-key <id>
+ntp server <ip> key <id>
+```
+**Modus:** global. Ohne `trusted-key` synchronisiert der Client nicht, auch wenn der Key stimmt.
+T: Befehl Schwer
+
+Q: Wie legst du die Quelladresse für NTP-Pakete fest?
+A:
+```
+ntp source <interface>
+```
+**Modus:** global. Meist Loopback0, damit der Server eine feste Adresse sieht.
+T: Befehl Mittel
+
+Q: Wie beschränkst du, wer Zeit von diesem Router beziehen darf?
+A:
+```
+ntp access-group {peer | serve | serve-only | query-only} <acl>
+```
+**Modus:** global. `serve-only` erlaubt nur Zeit-Anfragen, aber keine Synchronisation des Routers selbst.
+T: Befehl Schwer
+
+Q: Welche Befehle zeigen den NTP-Status und die Server mit Stratum und Offset?
+A:
+```
+show ntp status
+show ntp associations [detail]
+```
+**Modus:** privilegiert. `*` markiert den gewählten Server, `~` einen konfigurierten.
+T: Befehl Leicht
+
+Q: Wie stellst du Zeitzone und Sommerzeit für Mitteleuropa ein?
+A:
+```
+clock timezone CET 1 0
+clock summer-time CEST recurring last Sun Mar 2:00 last Sun Oct 3:00
+```
+**Modus:** global. NTP überträgt immer UTC, die Zone betrifft nur die Anzeige.
+T: Befehl Schwer
+
+# 3.3.b | Befehle: NAT und PAT
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie kennzeichnest du Innen- und Außeninterfaces für NAT?
+A:
+```
+ip nat inside
+ip nat outside
+```
+**Modus:** Interface. Ohne diese Markierung greift keine NAT-Regel.
+T: Befehl Leicht
+
+Q: Wie richtest du statisches NAT für einen Server ein?
+A:
+```
+ip nat inside source static <inside-local> <inside-global>
+```
+**Modus:** global. Wirkt in beide Richtungen.
+T: Befehl Leicht
+
+Q: Wie leitest du einen Port der öffentlichen Adresse auf einen internen Server weiter?
+A:
+```
+ip nat inside source static tcp <inside-local> <port> <inside-global> <port>
+```
+**Modus:** global. Beispiel: `ip nat inside source static tcp 192.168.1.10 443 203.0.113.5 443`.
+T: Befehl Mittel
+
+Q: Wie legst du einen NAT-Pool an?
+A:
+```
+ip nat pool <name> <start-ip> <end-ip> {netmask <maske> | prefix-length <länge>}
+```
+**Modus:** global. Die Maske beschreibt das Netz des Pools, nicht die Zahl der Adressen.
+T: Befehl Mittel
+
+Q: Wie übersetzt du eine ACL dynamisch auf einen Pool, mit Port-Übersetzung?
+A:
+```
+ip nat inside source list <acl> pool <name> overload
+```
+**Modus:** global. Ohne `overload` bekommt jeder Host eine eigene Adresse aus dem Pool.
+T: Befehl Mittel
+
+Q: Wie übersetzt du ein LAN per PAT auf die Adresse des Außeninterfaces?
+A:
+```
+ip nat inside source list <acl> interface <interface> overload
+```
+**Modus:** global. Folgt automatisch, wenn das Interface eine neue Adresse per DHCP bekommt.
+T: Befehl Leicht
+
+Q: Wie übersetzt du die Adresse eines externen Hosts, damit interne Geräte ihn unter einer internen Adresse sehen?
+A:
+```
+ip nat outside source static <outside-global> <outside-local>
+```
+**Modus:** global. Nützlich bei überlappenden Netzen zweier Firmen.
+T: Befehl Schwer
+
+Q: Welche Befehle zeigen die NAT-Übersetzungen und die NAT-Statistik?
+A:
+```
+show ip nat translations [verbose]
+show ip nat statistics
+```
+**Modus:** privilegiert. `verbose` zeigt zusätzlich Alter und Timeout jeder Übersetzung.
+T: Befehl Leicht
+
+Q: Wie löschst du alle dynamischen NAT-Übersetzungen?
+A:
+```
+clear ip nat translation *
+```
+**Modus:** privilegiert. Nötig, bevor du eine Pool- oder ACL-Regel ändern kannst, die gerade benutzt wird.
+T: Befehl Mittel
+
+Q: Wie änderst du, wie lange eine dynamische NAT-Übersetzung ohne Verkehr bestehen bleibt?
+A:
+```
+ip nat translation timeout <sekunden>
+```
+**Modus:** global. Standard sind 86400 Sekunden (24 Stunden) für einfaches dynamisches NAT.
+T: Befehl Schwer
+
+# 3.3.c | Befehle: HSRP, VRRP, GLBP und Tracking
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie richtest du HSRP Version 2 mit virtueller Adresse ein?
+A:
+```
+standby version 2
+standby <gruppe> ip <virtuelle-ip>
+```
+**Modus:** Interface. Version 2 kennt Gruppen 0 bis 4095 und Millisekunden-Timer.
+T: Befehl Leicht
+
+Q: Wie wird ein HSRP-Router aktiv und holt sich die Rolle nach einem Ausfall zurück, aber erst nach einer Wartezeit?
+A:
+```
+standby <gruppe> priority <wert>
+standby <gruppe> preempt delay minimum <sekunden>
+```
+**Modus:** Interface. Die Wartezeit gibt dem Routing Zeit, nach dem Neustart zu konvergieren.
+T: Befehl Mittel
+
+Q: Wie stellst du HSRP auf schnellere Erkennung ein?
+A:
+```
+standby <gruppe> timers msec <hello> msec <hold>
+```
+**Modus:** Interface. Beispiel: `standby 10 timers msec 250 msec 750`.
+T: Befehl Schwer
+
+Q: Wie schützt du HSRP mit MD5-Authentisierung?
+A:
+```
+standby <gruppe> authentication md5 key-string <schlüssel>
+```
+**Modus:** Interface. Beide Router brauchen denselben Schlüssel, sonst sind beide aktiv.
+T: Befehl Mittel
+
+Q: Wie senkst du die HSRP-Priorität, wenn der Uplink ausfällt?
+A:
+```
+track <objekt> interface <uplink> line-protocol
+interface <lan-interface>
+ standby <gruppe> track <objekt> decrement <wert>
+```
+**Modus:** global bzw. Interface. Wirkt nur, wenn der andere Router `preempt` hat.
+T: Befehl Mittel
+
+Q: Wie gibst du einer IPv6-Gruppe in HSRP automatisch eine virtuelle Link-Local-Adresse?
+A:
+```
+standby version 2
+standby <gruppe> ipv6 autoconfig
+```
+**Modus:** Interface. HSRP für IPv6 braucht Version 2.
+T: Befehl Schwer
+
+Q: Welcher Befehl zeigt alle HSRP-Gruppen mit aktivem und Standby-Router?
+A:
+```
+show standby brief
+```
+**Modus:** privilegiert. Ohne `brief`: virtuelle MAC, Timer und Tracking.
+T: Befehl Leicht
+
+Q: Wie richtest du VRRPv3 für IPv4 ein?
+A:
+```
+fhrp version vrrp v3
+interface <interface>
+ vrrp <gruppe> address-family ipv4
+  address <virtuelle-ip> primary
+  priority <wert>
+```
+**Modus:** global, dann Interface. Bei VRRP ist Preempt standardmäßig an.
+T: Befehl Schwer
+
+Q: Welcher Befehl zeigt die VRRP-Gruppen mit Master und Priorität?
+A:
+```
+show vrrp brief
+```
+**Modus:** privilegiert. Master und Backup heißen bei VRRP so, nicht Active und Standby.
+T: Befehl Mittel
+
+Q: Wie richtest du GLBP ein und verteilst die Clients reihum auf die Router?
+A:
+```
+glbp <gruppe> ip <virtuelle-ip>
+glbp <gruppe> load-balancing round-robin
+```
+**Modus:** Interface. Der AVG verteilt virtuelle MACs, bis zu vier AVFs leiten weiter.
+T: Befehl Schwer
+
+Q: Wie legst du ein Tracking-Objekt für die Erreichbarkeit aus einer IP-SLA-Messung an?
+A:
+```
+track <objekt> ip sla <sla-nummer> reachability
+```
+**Modus:** global. Prüfen mit `show track`.
+T: Befehl Mittel
+
+# 3.3.d | Befehle: Multicast
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Wie schaltest du Multicast-Routing auf einem Router ein?
+A:
+```
+ip multicast-routing [distributed]
+```
+**Modus:** global. Auf vielen Catalyst-Plattformen ist `distributed` Pflicht.
+T: Befehl Leicht
+
+Q: Wie aktivierst du PIM Sparse Mode auf einem Interface?
+A:
+```
+ip pim sparse-mode
+```
+**Modus:** Interface. Auf allen Interfaces im Multicast-Pfad, auch auf Loopbacks, die als RP dienen.
+T: Befehl Leicht
+
+Q: Wie legst du einen statischen Rendezvous Point fest?
+A:
+```
+ip pim rp-address <rp-ip> [<acl>]
+```
+**Modus:** global, auf allen Routern gleich. Die ACL beschränkt die Gruppen, für die dieser RP gilt.
+T: Befehl Mittel
+
+Q: Wie meldet sich ein Router per Auto-RP als RP-Kandidat und wie wird ein anderer zum Mapping Agent?
+A:
+```
+ip pim send-rp-announce Loopback0 scope <ttl>
+ip pim send-rp-discovery Loopback0 scope <ttl>
+```
+**Modus:** global. Kandidaten senden an 224.0.1.39, der Mapping Agent verteilt an 224.0.1.40.
+T: Befehl Schwer
+
+Q: Wie konfigurierst du einen Router als BSR- und RP-Kandidat?
+A:
+```
+ip pim bsr-candidate Loopback0
+ip pim rp-candidate Loopback0
+```
+**Modus:** global. BSR ist der Standard (PIMv2) und flutet die RP-Informationen hop für hop.
+T: Befehl Schwer
+
+Q: Wie aktivierst du Source-Specific Multicast für den Standardbereich 232/8?
+A:
+```
+ip pim ssm default
+```
+**Modus:** global. Die Empfänger brauchen IGMPv3: `ip igmp version 3` am Interface.
+T: Befehl Schwer
+
+Q: Wie lässt du ein Router-Interface einer Multicast-Gruppe beitreten, um Multicast zu testen?
+A:
+```
+ip igmp join-group <gruppe>
+```
+**Modus:** Interface. Der Router antwortet dann selbst auf Pings an die Gruppe.
+T: Befehl Mittel
+
+Q: Welcher Befehl zeigt die Multicast-Routing-Tabelle mit (*,G)- und (S,G)-Einträgen?
+A:
+```
+show ip mroute [<gruppe>]
+```
+**Modus:** privilegiert. Incoming Interface und Outgoing Interface List zeigen den Verteilbaum.
+T: Befehl Mittel
+
+Q: Welche Befehle zeigen PIM-Nachbarn und die PIM-Interfaces?
+A:
+```
+show ip pim neighbor
+show ip pim interface
+```
+**Modus:** privilegiert. Die Interface-Ansicht zeigt auch, wer DR ist.
+T: Befehl Mittel
+
+Q: Welcher Befehl zeigt, welcher RP für welche Gruppen gilt?
+A:
+```
+show ip pim rp mapping
+```
+**Modus:** privilegiert. Zeigt auch, ob der RP statisch, per Auto-RP oder per BSR gelernt wurde.
+T: Befehl Mittel
+
+Q: Welcher Befehl zeigt, welche Gruppen an welchem Interface per IGMP angemeldet sind?
+A:
+```
+show ip igmp groups
+```
+**Modus:** privilegiert. Auf Switches zeigt `show ip igmp snooping groups` die Ports.
+T: Befehl Mittel
+
+Q: Mit welchem Befehl prüfst du die RPF-Schnittstelle für eine Multicast-Quelle?
+A:
+```
+show ip rpf <quell-ip>
+```
+**Modus:** privilegiert. Kommt Multicast auf einem anderen Interface an als dem RPF-Interface, wird er verworfen.
+T: Befehl Schwer
