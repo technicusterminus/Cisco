@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Subnetting-Trainer CCNA</title>
+<style>
+:root{--bg:#f4f7fb;--card:#fff;--ink:#183047;--mut:#5b7080;--acc:#177f79;--ok:#1b9b87;--bad:#c0392b;--line:#dce5ec;--chip:#edf3f6}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1a24;--card:#17232f;--ink:#e3edf4;--mut:#93a8b7;--acc:#4fc3b7;--ok:#3ec9a7;--bad:#ff7b6b;--line:#2a3b49;--chip:#213242}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.55 -apple-system,Segoe UI,Roboto,sans-serif;padding:16px}
+main{max-width:760px;margin:0 auto}h1{font-size:1.4rem;margin:.2em 0}
+.sub{color:var(--mut);margin:0 0 14px;font-size:.95rem}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;margin:14px 0}
+.modes{display:flex;flex-wrap:wrap;gap:8px}
+.modes button{border:1px solid var(--line);background:var(--chip);color:var(--ink);border-radius:8px;padding:7px 12px;cursor:pointer;font:inherit;font-size:.9rem}
+.modes button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+.q{font-weight:600;font-size:1.1rem;margin-bottom:12px}
+.q code,.steps code{background:var(--chip);padding:1px 6px;border-radius:4px;font-family:Menlo,Consolas,monospace;font-size:.92em}
+.row{display:grid;grid-template-columns:150px 1fr auto;gap:8px;align-items:center;margin:6px 0}
+.row label{color:var(--mut);font-size:.9rem}
+input[type=text]{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;font-family:Menlo,Consolas,monospace;font-size:.95rem}
+input.ok{border-color:var(--ok)}input.bad{border-color:var(--bad)}
+.mark{width:1.4em;text-align:center;font-weight:700}.mark.ok{color:var(--ok)}.mark.bad{color:var(--bad)}
+.actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.actions button{border:0;border-radius:8px;padding:9px 16px;font:inherit;cursor:pointer;background:var(--acc);color:#fff}
+.actions button.sec{background:var(--chip);color:var(--ink);border:1px solid var(--line)}
+.steps{margin-top:14px;border-top:1px dashed var(--line);padding-top:12px;color:var(--ink);font-size:.95rem}
+.steps ol{padding-left:20px;margin:6px 0}.stat{color:var(--mut);font-size:.9rem;margin-top:10px}
+.hide{display:none}
+@media(max-width:560px){.row{grid-template-columns:1fr auto}.row label{grid-column:1/-1}}
+</style>
+</head>
+<body>
+<main>
+<h1>Subnetting-Trainer · CCNA 200-301</h1>
+<p class="sub">Zufallsaufgaben mit Lösungsweg. Läuft komplett offline im Browser.</p>
+<div class="card"><div class="modes" id="modes"></div></div>
+<div class="card" id="task"></div>
+<div class="stat" id="stat"></div>
+</main>
+<script>
+// ---------- Hilfsfunktionen ----------
+const rnd=(a,b)=>a+Math.floor(Math.random()*(b-a+1));
+const pick=a=>a[rnd(0,a.length-1)];
+const ip2n=s=>s.split('.').reduce((a,b)=>a*256+(+b),0);
+const n2ip=n=>[n>>>24&255,n>>>16&255,n>>>8&255,n&255].join('.');
+const maskN=p=>p===0?0:(0xFFFFFFFF<<(32-p))>>>0;
+const mask=p=>n2ip(maskN(p));
+const wild=p=>n2ip((~maskN(p))>>>0);
+const randHost=(lo=0,hi=255)=>[pick([10,172,192]),0,0,0].map((v,i)=>i===0?v:rnd(lo,hi));
+function randIP(){const t=pick(['10','172','192']);
+  if(t==='10')return `10.${rnd(0,255)}.${rnd(0,255)}.${rnd(1,254)}`;
+  if(t==='172')return `172.${rnd(16,31)}.${rnd(0,255)}.${rnd(1,254)}`;
+  return `192.168.${rnd(0,255)}.${rnd(1,254)}`;}
+function info(ip,p){const n=ip2n(ip),m=maskN(p),net=(n&m)>>>0,bc=(net|(~m>>>0))>>>0;
+  return{net,bc,first:p>=31?net:net+1,last:p>=31?bc:bc-1,hosts:p>=31?(p===31?2:1):Math.pow(2,32-p)-2};}
+// IPv6
+function expand(a){let [h,t]=a.split('::');const hp=h?h.split(':'):[],tp=t!==undefined&&t?t.split(':'):[];
+  if(a.includes('::')){const fill=8-hp.length-tp.length;return[...hp,...Array(fill).fill('0'),...tp].map(x=>x.padStart(4,'0'));}
+  return a.split(':').map(x=>x.padStart(4,'0'));}
+function compress(parts){const g=parts.map(x=>x.replace(/^0+(?=.)/,'').toLowerCase());
+  let best=-1,bl=0;for(let i=0;i<8;){if(g[i]==='0'){let j=i;while(j<8&&g[j]==='0')j++;if(j-i>bl){bl=j-i;best=i}i=j}else i++}
+  if(bl<2)return g.join(':');
+  const left=g.slice(0,best).join(':'),right=g.slice(best+bl).join(':');return left+'::'+right;}
+function eui64(mac){const b=mac.split(':').map(x=>parseInt(x,16));b[0]^=2;
+  const h=x=>x.toString(16).padStart(2,'0');return `${h(b[0])}${h(b[1])}:${h(b[2])}ff:fe${h(b[3])}:${h(b[4])}${h(b[5])}`;}
+const norm6=s=>s.trim().toLowerCase().replace(/\s+/g,'');
+
+// ---------- Aufgabentypen ----------
+// Jede Aufgabe: {q:html, fields:[{l,a,alt?}], steps:html}
+const gens={
+ subnet:{name:'Subnetz bestimmen',gen(){
+   const p=rnd(17,29),ip=randIP(),i=info(ip,p);
+   const k=Math.ceil(p/8)-1, mo=maskN(p)>>>(24-8*k)&255, bs=256-mo;
+   const ho=ip2n(ip)>>>(24-8*k)&255, no=Math.floor(ho/bs)*bs;
+   const pos=['ersten','zweiten','dritten','vierten'][k];
+   const rest=k<3?` Alle Oktette dahinter sind im Netz 0 und im Broadcast 255.`:'';
+   return{q:`Host <code>${ip}/${p}</code>`,
+    fields:[{l:'Netzadresse',a:n2ip(i.net)},{l:'Broadcast',a:n2ip(i.bc)},{l:'Erster Host',a:n2ip(i.first)},{l:'Letzter Host',a:n2ip(i.last)},{l:'Nutzbare Hosts',a:String(i.hosts)}],
+    steps:p%8===0?`<ol><li><b>Maske:</b> <code>/${p}</code> = <code>${mask(p)}</code>. Die Grenze liegt genau zwischen zwei Oktetten: Die ersten ${p/8} Oktette sind das Netz, der Rest ist Hostteil.</li>
+    <li><b>Netz:</b> Hostteil auf 0 setzen → <code>${n2ip(i.net)}</code>.</li>
+    <li><b>Broadcast:</b> Hostteil auf 255 setzen → <code>${n2ip(i.bc)}</code>.</li>
+    <li><b>Hosts:</b> ${32-p} Hostbits, also 2<sup>${32-p}</sup> − 2 = <code>${i.hosts}</code>. Erster Host = Netz + 1, letzter = Broadcast − 1.</li></ol>`
+    :`<ol><li><b>Maske:</b> <code>/${p}</code> = <code>${mask(p)}</code>. Die Grenze liegt im ${pos} Oktett, dort steht <code>${mo}</code>.</li>
+    <li><b>Blockgröße:</b> 256 − ${mo} = <code>${bs}</code>. Die Netze beginnen dort bei ${[0,1,2,3].map(x=>x*bs).filter(x=>x<256).join(', ')}${4*bs<256?' usw.':''}.</li>
+    <li><b>Netz:</b> Im ${pos} Oktett des Hosts steht ${ho}. Das größte Vielfache von ${bs}, das nicht größer ist: <code>${no}</code>. Netz = <code>${n2ip(i.net)}</code>.${rest}</li>
+    <li><b>Broadcast:</b> Der Block endet bei ${no} + ${bs} − 1 = ${no+bs-1}, eins vor dem nächsten Netz. Broadcast = <code>${n2ip(i.bc)}</code>.</li>
+    <li><b>Hosts:</b> ${32-p} Hostbits, also 2<sup>${32-p}</sup> − 2 = <code>${i.hosts}</code>. Netz und Broadcast fallen weg. Erster Host = Netz + 1, letzter = Broadcast − 1.</li></ol>`};}},
+ hosts:{name:'Hosts → Präfix',gen(){
+   const need=pick([2,6,12,25,30,50,60,100,120,200,250,500,1000]);let bits=1;while(Math.pow(2,bits)-2<need)bits++;
+   const p=32-bits;
+   return{q:`Ein Subnetz braucht <code>${need}</code> nutzbare Hosts. Welche kleinste passende Präfixlänge (/…)?`,
+    fields:[{l:'Präfix (nur Zahl)',a:String(p),alt:['/'+p]},{l:'Subnetzmaske',a:mask(p)},{l:'Nutzbare Hosts',a:String(Math.pow(2,bits)-2)}],
+    steps:`<ol><li><b>Adressen nötig:</b> ${need} Hosts + Netz + Broadcast = ${need+2}.</li><li><b>Nächste Zweierpotenz:</b> 2<sup>${bits}</sup> = ${Math.pow(2,bits)} ≥ ${need+2}${bits>2?`, 2<sup>${bits-1}</sup> = ${Math.pow(2,bits-1)} wäre zu klein`:''}. Du brauchst also <code>${bits}</code> Hostbits.</li><li><b>Präfix:</b> 32 − ${bits} = <code>/${p}</code>, Maske <code>${mask(p)}</code>, nutzbar ${Math.pow(2,bits)-2} Hosts.</li></ol>`};}},
+ mask:{name:'Maske ↔ Präfix',gen(){
+   const p=rnd(9,30);
+   if(Math.random()<.5)return{q:`Welche Präfixlänge hat die Maske <code>${mask(p)}</code>?`,fields:[{l:'Präfix (Zahl)',a:String(p),alt:['/'+p]}],
+     steps:`<ol><li><b>Bits je Oktett zählen:</b> 255 = 8, 254 = 7, 252 = 6, 248 = 5, 240 = 4, 224 = 3, 192 = 2, 128 = 1, 0 = 0.</li><li><b>Hier:</b> ${mask(p).split('.').map(o=>`${o} = ${({255:8,254:7,252:6,248:5,240:4,224:3,192:2,128:1,0:0})[o]}`).join(', ')}.</li><li><b>Summe:</b> ${mask(p).split('.').map(o=>({255:8,254:7,252:6,248:5,240:4,224:3,192:2,128:1,0:0})[o]).join(' + ')} = <code>/${p}</code>.</li></ol>`};
+   return{q:`Welche Subnetzmaske gehört zu <code>/${p}</code>?`,fields:[{l:'Maske',a:mask(p)}],
+     steps:`<ol><li><b>Zerlegen:</b> ${p} = ${Math.floor(p/8)} × 8 + ${p%8}. Das sind ${Math.floor(p/8)} volle Oktette mit 255${p%8?` und ${p%8} Bit im nächsten`:''}.</li>${p%8?`<li><b>Teilwert:</b> 256 − 2<sup>${8-p%8}</sup> = 256 − ${Math.pow(2,8-p%8)} = <code>${256-Math.pow(2,8-p%8)}</code>.</li>`:''}<li><b>Rest mit 0 auffüllen:</b> <code>${mask(p)}</code>.</li></ol>`};}},
+ wild:{name:'Wildcard-Maske',gen(){
+   const p=rnd(16,30);
+   return{q:`Welche Wildcard-Maske gehört zu <code>${mask(p)}</code> (<code>/${p}</code>)?`,fields:[{l:'Wildcard',a:wild(p)}],
+    steps:`<ol><li><b>Regel:</b> Wildcard = 255.255.255.255 − Maske, Oktett für Oktett. Wo die Maske 1-Bits hat, hat die Wildcard 0-Bits.</li><li><b>Hier:</b> ${mask(p).split('.').map(o=>`255 − ${o} = ${255-o}`).join(', ')} → <code>${wild(p)}</code>.</li><li>Verwendung: <code>permit ip ${n2ip(ip2n(randIP())&maskN(p))} ${wild(p)} any</code> (ACL/OSPF-network).</li></ol>`};}},
+ same:{name:'Selbes Subnetz?',gen(){
+   const p=rnd(24,29),a=randIP(),ia=info(a,p);let b;
+   const same=Math.random()<.5;
+   if(same)b=n2ip(ia.first+rnd(0,Math.max(0,ia.hosts-1)));
+   else{const sh=Math.pow(2,32-p);b=n2ip(ia.net+sh*pick([-1,1])+rnd(1,Math.max(1,sh-2)));}
+   const ib=info(b,p),eq=ia.net===ib.net;
+   return{q:`Hosts <code>${a}/${p}</code> und <code>${b}/${p}</code>. Können sie ohne Router direkt kommunizieren? (ja/nein)`,
+    fields:[{l:'ja / nein',a:eq?'ja':'nein',alt:eq?['j']:['n']}],
+    steps:`<ol><li><b>Blockgröße:</b> /${p} hat im letzten Oktett 256 − ${maskN(p)&255} = ${256-(maskN(p)&255)} Adressen je Netz.</li><li><b>Host 1</b> liegt im Netz <code>${n2ip(ia.net)}</code> bis <code>${n2ip(ia.bc)}</code>.</li><li><b>Host 2</b> liegt im Netz <code>${n2ip(ib.net)}</code> bis <code>${n2ip(ib.bc)}</code>.</li><li>${eq?'<b>Ja:</b> Beide liegen im selben Netz und erreichen sich direkt über ARP.':'<b>Nein:</b> Die Netze sind verschieden, dazwischen muss ein Router.'}</li></ol>`};}},
+ vlsm:{name:'VLSM',gen(){
+   const base=`192.168.${rnd(0,255)}.0`;const needs=[pick([100,120,60,50]),pick([25,30,28]),pick([10,12,14]),2].sort((x,y)=>y-x);
+   let cur=ip2n(base);const out=[];const f=[];let steps='<ol>';
+   needs.forEach((nd,k)=>{let bits=1;while(Math.pow(2,bits)-2<nd)bits++;const p=32-bits,sz=Math.pow(2,bits);
+     out.push({nd,p,net:cur});f.push({l:`Netz ${k+1} (${nd} Hosts)`,a:`${n2ip(cur)}/${p}`});
+     steps+=`<li>${nd} Hosts → 2<sup>${bits}</sup> = ${sz} Adressen → <code>/${p}</code>, Netz <code>${n2ip(cur)}</code>, Broadcast <code>${n2ip(cur+sz-1)}</code>; nächstes beginnt bei <code>${n2ip(cur+sz)}</code>.</li>`;cur+=sz;});
+   steps+=`</ol>Warum der größte zuerst? Große Blöcke müssen auf ihrer eigenen Grenze beginnen (ein /25 bei .0 oder .128). Fängst du groß an, liegen alle folgenden Blöcke automatisch richtig. Belegt sind ${cur-ip2n(base)} von 256 Adressen.`;
+   return{q:`Block <code>${base}/24</code>. Teile VLSM-gerecht (größter Bedarf zuerst) auf: ${needs.map(x=>`<code>${x}</code>`).join(', ')} Hosts. Gib Netzadresse/Präfix an.`,fields:f,steps};}},
+ v6short:{name:'IPv6 kürzen',gen(){
+   const parts=['2001','0db8',pick(['0000','0001','00a0','0010']),pick(['0000','0001']),'0000',pick(['0000','0000','00ff']),pick(['0000','1234']),pick(['0001','0005','00ab'])];
+   const full=parts.join(':'),s=compress(parts);
+   return{q:`Kürze <code>${full}</code> maximal.`,fields:[{l:'Kurzform',a:s,v6:true}],
+    steps:`<ol><li>Führende Nullen jeder Gruppe weglassen: <code>${parts.map(x=>x.replace(/^0+(?=.)/,'')).join(':')}</code>.</li><li>Längste Folge aus Null-Gruppen durch <code>::</code> ersetzen (nur einmal, bei Gleichstand die erste; eine einzelne Null-Gruppe wird nicht gekürzt).</li><li>Ergebnis: <code>${s}</code>.</li></ol>`};}},
+ eui:{name:'EUI-64',gen(){
+   const h=()=>rnd(0,255).toString(16).padStart(2,'0');const mac=[h(),h(),h(),h(),h(),h()];mac[0]=pick(['00','02','00','a4','3c','5c']);
+   const m=mac.join(':'),r=eui64(m);
+   return{q:`Bilde die EUI-64-Interface-ID zur MAC <code>${m}</code> (Format <code>xxxx:xxff:fexx:xxxx</code>).`,fields:[{l:'Interface-ID',a:r,v6:true}],
+    steps:`<ol><li>MAC in der Mitte teilen: <code>${mac.slice(0,3).join(':')}</code> | <code>${mac.slice(3).join(':')}</code>.</li><li><code>ff:fe</code> in die Mitte einfügen.</li><li>7. Bit des ersten Bytes (U/L) invertieren: <code>${mac[0]}</code> → <code>${(parseInt(mac[0],16)^2).toString(16).padStart(2,'0')}</code>.</li><li>Ergebnis: <code>${r}</code>.</li></ol>`};}}
+};
+// ---------- UI ----------
+let cur='subnet',task=null,stats={r:0,t:0};
+const modesEl=document.getElementById('modes'),taskEl=document.getElementById('task'),statEl=document.getElementById('stat');
+function renderModes(){modesEl.innerHTML='';
+  Object.entries({all:{name:'Gemischt'},...gens}).forEach(([k,v])=>{const b=document.createElement('button');b.textContent=v.name;b.className=k===cur?'on':'';b.onclick=()=>{cur=k;renderModes();next()};modesEl.appendChild(b)});}
+function next(){const k=cur==='all'?pick(Object.keys(gens)):cur;task=gens[k].gen();
+  let h=`<div class="q">${task.q}</div><div id="fields">`;
+  task.fields.forEach((f,i)=>{h+=`<div class="row"><label for="f${i}">${f.l}</label><input type="text" id="f${i}" autocomplete="off" spellcheck="false"><span class="mark" id="m${i}"></span></div>`});
+  h+=`</div><div class="actions"><button id="chk">Prüfen</button><button class="sec" id="sol">Lösung</button><button class="sec" id="nxt">Nächste Aufgabe</button></div><div class="steps hide" id="steps"></div>`;
+  taskEl.innerHTML=h;
+  document.getElementById('chk').onclick=check;document.getElementById('sol').onclick=solve;document.getElementById('nxt').onclick=next;
+  taskEl.querySelectorAll('input').forEach((el,i,all)=>el.addEventListener('keydown',e=>{if(e.key==='Enter'){i<all.length-1?all[i+1].focus():check()}}));
+  const f=document.getElementById('f0');if(f)f.focus();}
+function match(f,v){v=v.trim();if(f.v6)return norm6(v)===norm6(f.a);
+  if(v.toLowerCase()===f.a.toLowerCase())return true;return (f.alt||[]).some(x=>x.toLowerCase()===v.toLowerCase());}
+let counted=false;
+function check(){let ok=0;task.fields.forEach((f,i)=>{const el=document.getElementById('f'+i),m=document.getElementById('m'+i);
+  const good=match(f,el.value);el.className=good?'ok':'bad';m.className='mark '+(good?'ok':'bad');m.textContent=good?'✓':'✗';if(good)ok++});
+  if(!counted){stats.t++;if(ok===task.fields.length)stats.r++;counted=true}
+  if(ok===task.fields.length)showSteps(false);updateStat();}
+function solve(){task.fields.forEach((f,i)=>{const el=document.getElementById('f'+i);if(!match(f,el.value)){el.value=f.a;el.className='bad'}else el.className='ok'});
+  if(!counted){stats.t++;counted=true}showSteps(true);updateStat();}
+function showSteps(){const s=document.getElementById('steps');s.innerHTML='<strong>Lösungsweg</strong>'+task.steps;s.classList.remove('hide');}
+function updateStat(){statEl.textContent=`Gelöst ohne Hilfe: ${stats.r} von ${stats.t} Aufgaben`;}
+const _next=next;next=function(){counted=false;_next()};
+renderModes();next();updateStat();
+</script>
+</body>
+</html>
