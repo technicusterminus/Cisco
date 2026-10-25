@@ -1,0 +1,305 @@
+# 4 | Befehle: Switch und MAC-Tabelle
+S: https://www.cisco.com/c/en/us/support/switches/catalyst-9300-series-switches/products-command-reference-list.html | Cisco Catalyst 9300: Command References
+
+Q: Welcher Befehl zeigt, welche MAC-Adresse der Switch an welchem Port gelernt hat?
+A:
+```
+show mac address-table
+```
+**Modus:** privilegiert (`Switch#`). Jede Zeile nennt VLAN, MAC-Adresse, Typ (dynamisch oder statisch) und Port.
+T: Befehl Leicht
+
+Q: Welcher Befehl zeigt alle Switch-Ports mit Status, VLAN, Duplex und Geschwindigkeit in einer Tabelle?
+A:
+```
+show interfaces status
+```
+**Modus:** privilegiert. „connected“ heißt: Kabel steckt und Link ist da. „notconnect“ heißt: kein Link.
+T: Befehl Leicht
+
+Q: Welcher Befehl listet die VLANs eines Switches und die Ports, die ihnen zugeordnet sind?
+A:
+```
+show vlan brief
+```
+**Modus:** privilegiert. Trunk-Ports stehen hier nicht, nur Access-Ports.
+T: Befehl Leicht
+
+# 5 | Befehle: IP-Adressen am PC prüfen
+S: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/ipconfig | Microsoft: ipconfig
+
+Q: Mit welchem Befehl siehst du unter Windows IP-Adresse, Maske, Gateway, DNS-Server und MAC-Adresse auf einmal?
+A:
+```
+ipconfig /all
+```
+**Modus:** Eingabeaufforderung (Windows). Ohne `/all` fehlen MAC-Adresse, DNS-Server und DHCP-Angaben.
+T: Befehl Leicht
+
+Q: Mit welchem Befehl siehst du unter Linux die IP-Adressen aller Netzwerkkarten?
+A:
+```
+ip addr show
+```
+**Modus:** Terminal (Linux). Kurzform `ip a`. Der ältere Befehl `ifconfig` fehlt auf neuen Systemen oft.
+T: Befehl Leicht
+
+Q: Mit welchen zwei Befehlen holt sich ein Windows-PC eine neue Adresse vom DHCP-Server?
+A:
+```
+ipconfig /release
+ipconfig /renew
+```
+**Modus:** Eingabeaufforderung (Windows). Der erste Befehl gibt die Adresse zurück, der zweite fragt neu an.
+T: Befehl Leicht
+
+# 7 | Befehle: Router und Routing
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Welcher Befehl zeigt die Routing-Tabelle eines Cisco-Routers?
+A:
+```
+show ip route
+```
+**Modus:** privilegiert. Der Buchstabe vorne nennt die Herkunft: C = direkt verbunden, L = eigene Adresse, S = statisch, O = OSPF.
+T: Befehl Leicht
+
+Q: Mit welchem Befehl trägst du auf einem Cisco-Router eine statische Route in ein anderes Netz ein?
+A:
+```
+ip route <zielnetz> <maske> <next-hop-ip>
+```
+**Modus:** global (`Router(config)#`). Beispiel: `ip route 10.2.0.0 255.255.0.0 192.168.1.2`.
+T: Befehl Mittel
+
+Q: Mit welchem Befehl legst du auf einem Cisco-Router eine Default-Route an?
+A:
+```
+ip route 0.0.0.0 0.0.0.0 <next-hop-ip>
+```
+**Modus:** global. 0.0.0.0/0 passt auf jedes Ziel und wird nur genommen, wenn keine genauere Route existiert.
+T: Befehl Mittel
+
+# 8 | Befehle: DNS und Verbindungen
+S: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/nslookup | Microsoft: nslookup
+
+Q: Mit welchem Befehl fragst du einen DNS-Server direkt nach der IP-Adresse eines Namens?
+A:
+```
+nslookup <name>
+```
+**Modus:** Eingabeaufforderung (Windows) oder Terminal. Beispiel: `nslookup www.example.com`. Unter Linux und macOS geht auch `dig <name>`.
+T: Befehl Leicht
+
+Q: Mit welchem Befehl löschst du unter Windows den DNS-Zwischenspeicher?
+A:
+```
+ipconfig /flushdns
+```
+**Modus:** Eingabeaufforderung (Windows). Nützlich, wenn ein Name nach einer Änderung noch auf die alte Adresse zeigt.
+T: Befehl Leicht
+
+Q: Mit welchem Befehl siehst du unter Windows alle offenen Verbindungen und wartenden Ports mit Zahlen statt Namen?
+A:
+```
+netstat -an
+```
+**Modus:** Eingabeaufforderung (Windows). „LISTENING“ heißt: ein Dienst wartet auf diesem Port. Unter Linux: `ss -tuln`.
+T: Befehl Mittel
+
+# 10 | Befehle: Gerät absichern
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Mit welchem Befehl schützt du den privilegierten Modus eines Cisco-Geräts mit einem verschlüsselt gespeicherten Passwort?
+A:
+```
+enable secret <passwort>
+```
+**Modus:** global. `enable secret` speichert einen Hash. Das ältere `enable password` steht im Klartext in der Konfiguration.
+T: Befehl Leicht
+
+Q: Wie verlangst du an der Konsole eines Cisco-Geräts ein Passwort?
+A:
+```
+line console 0
+ password <passwort>
+ login
+```
+**Modus:** global, dann Line-Modus. Ohne `login` wird das Passwort nicht abgefragt.
+T: Befehl Mittel
+
+Q: Mit welchem Befehl verschleierst du alle Klartext-Passwörter in der Konfiguration?
+A:
+```
+service password-encryption
+```
+**Modus:** global. Das ist nur eine schwache Verschleierung (Typ 7), sie schützt vor Blicken über die Schulter, nicht vor Entschlüsselung.
+T: Befehl Mittel
+
+# 11 | Befehle: Fehlersuche
+S: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/tracert | Microsoft: tracert
+
+Q: Mit welchem Befehl prüfst du, ob ein anderes Gerät über das Netz antwortet?
+A:
+```
+ping <ip-adresse-oder-name>
+```
+**Modus:** Eingabeaufforderung oder Cisco-CLI. Ping schickt ICMP-Echo-Anfragen und zeigt, ob und wie schnell Antworten kommen.
+T: Befehl Leicht
+
+Q: Mit welchem Befehl prüfst du am PC, ob der eigene TCP/IP-Stack funktioniert, ganz ohne Netzwerk?
+A:
+```
+ping 127.0.0.1
+```
+**Modus:** Eingabeaufforderung. 127.0.0.1 ist die Loopback-Adresse des eigenen Rechners. Klappt das nicht, liegt der Fehler im Betriebssystem.
+T: Befehl Leicht
+
+Q: Mit welchem Befehl siehst du unter Windows, über welche Router ein Paket zum Ziel läuft?
+A:
+```
+tracert <ziel>
+```
+**Modus:** Eingabeaufforderung (Windows). Auf Linux, macOS und Cisco heißt der Befehl `traceroute`. Wo die Liste abbricht, liegt das Problem meist.
+T: Befehl Leicht
+
+Q: Mit welchem Befehl zeigt dir ein Windows-PC die MAC-Adressen, die er zu IP-Adressen gelernt hat?
+A:
+```
+arp -a
+```
+**Modus:** Eingabeaufforderung. Fehlt das Gateway in der Liste, kommt der PC schon auf Layer 2 nicht zum Router.
+T: Befehl Mittel
+
+Q: Welcher Cisco-Befehl zeigt Fehlerzähler eines Interfaces wie CRC-Fehler und Kollisionen?
+A:
+```
+show interfaces <interface>
+```
+**Modus:** privilegiert. Beispiel: `show interfaces gigabitEthernet 0/1`. Steigende CRC-Fehler deuten auf ein schlechtes Kabel hin.
+T: Befehl Mittel
+
+# 12 | Befehle: Cisco-CLI bedienen
+S: https://www.cisco.com/c/en/us/support/ios-nx-os-software/ios-xe-17/products-command-reference-list.html | Cisco IOS XE 17: Command References
+
+Q: Mit welchem Befehl wechselst du vom Benutzermodus (`>`) in den privilegierten Modus (`#`)?
+A:
+```
+enable
+```
+**Modus:** Benutzermodus. Erst im privilegierten Modus darfst du Konfigurationen ansehen und speichern.
+T: Befehl Leicht Betrieb
+
+Q: Mit welchem Befehl kommst du vom privilegierten Modus in den globalen Konfigurationsmodus?
+A:
+```
+configure terminal
+```
+**Modus:** privilegiert. Kurz `conf t`. Der Prompt endet danach auf `(config)#`.
+T: Befehl Leicht Betrieb
+
+Q: Mit welchem Befehl springst du aus jedem Konfigurationsmodus direkt zurück in den privilegierten Modus?
+A:
+```
+end
+```
+**Modus:** jeder Konfigurationsmodus. `exit` geht nur eine Ebene zurück, `end` ganz raus. Tastenkürzel: Strg+Z.
+T: Befehl Leicht Betrieb
+
+Q: Mit welchem Befehl gibst du einem Cisco-Gerät einen Namen?
+A:
+```
+hostname <name>
+```
+**Modus:** global. Der Name erscheint sofort im Prompt, z. B. `SW1(config)#`.
+T: Befehl Leicht
+
+Q: Mit welchem Befehl wechselst du in die Konfiguration eines Interfaces?
+A:
+```
+interface <typ> <nummer>
+```
+**Modus:** global. Beispiel: `interface gigabitEthernet 0/1`. Der Prompt endet danach auf `(config-if)#`.
+T: Befehl Leicht
+
+Q: Mit welchen Befehlen gibst du einem Router-Interface eine IPv4-Adresse und schaltest es ein?
+A:
+```
+interface <interface>
+ ip address <ip-adresse> <maske>
+ no shutdown
+```
+**Modus:** Interface. Router-Interfaces sind ab Werk abgeschaltet, ohne `no shutdown` bleibt der Link down.
+T: Befehl Leicht
+
+Q: Mit welchem Befehl beschriftest du ein Interface, z. B. mit dem Namen der Gegenstelle?
+A:
+```
+description <text>
+```
+**Modus:** Interface. Der Text erscheint in `show interfaces` und hilft bei der Fehlersuche.
+T: Befehl Leicht
+
+Q: Welcher Befehl zeigt alle Interfaces mit IP-Adresse und Status in einer kurzen Liste?
+A:
+```
+show ip interface brief
+```
+**Modus:** privilegiert. Kurz `sh ip int br`. „up/up“ heißt: Kabel und Protokoll sind in Ordnung.
+T: Befehl Leicht
+
+Q: Welcher Befehl zeigt die aktuell laufende Konfiguration?
+A:
+```
+show running-config
+```
+**Modus:** privilegiert. Die Running-Config liegt im RAM und ist nach einem Neustart weg, wenn du sie nicht speicherst.
+T: Befehl Leicht
+
+Q: Welcher Befehl zeigt die gespeicherte Konfiguration, mit der das Gerät beim nächsten Start hochfährt?
+A:
+```
+show startup-config
+```
+**Modus:** privilegiert. Die Startup-Config liegt im NVRAM.
+T: Befehl Leicht
+
+Q: Mit welchem Befehl speicherst du die laufende Konfiguration dauerhaft?
+A:
+```
+copy running-config startup-config
+```
+**Modus:** privilegiert. Kurzform `write memory` oder `wr`. Danach übersteht die Konfiguration einen Neustart.
+T: Befehl Leicht
+
+Q: Welcher Befehl zeigt Softwareversion, Modell und Laufzeit seit dem letzten Neustart?
+A:
+```
+show version
+```
+**Modus:** privilegiert. Die Zeile „uptime is …“ verrät, ob das Gerät kürzlich neu gestartet ist.
+T: Befehl Leicht
+
+Q: Wie führst du einen `show`-Befehl aus, ohne den Konfigurationsmodus zu verlassen?
+A:
+```
+do <show-befehl>
+```
+**Modus:** jeder Konfigurationsmodus. Beispiel: `do show ip interface brief`.
+T: Befehl Mittel Betrieb
+
+Q: Wie lässt du dir an der Cisco-CLI alle Befehle anzeigen, die an dieser Stelle möglich sind?
+A:
+```
+?
+```
+**Modus:** überall. `show ?` listet alle Möglichkeiten nach `show`. Die Tab-Taste ergänzt einen angefangenen Befehl.
+T: Befehl Leicht Betrieb
+
+Q: Mit welchem Befehl startest du ein Cisco-Gerät neu?
+A:
+```
+reload
+```
+**Modus:** privilegiert. Ungespeicherte Änderungen gehen verloren, das Gerät fragt vorher nach.
+T: Befehl Leicht
