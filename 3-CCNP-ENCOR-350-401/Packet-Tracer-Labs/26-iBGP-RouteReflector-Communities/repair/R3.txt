@@ -1,0 +1,25 @@
+hostname R3
+no ip domain-lookup
+service timestamps log datetime msec
+line con 0
+ exec-timeout 0 0
+ logging synchronous
+interface Loopback0
+ ip address 10.255.0.3 255.255.255.255
+ no shutdown
+interface GigabitEthernet0/0
+ ip address 10.0.13.2 255.255.255.252
+ no shutdown
+interface GigabitEthernet0/1
+ ip address 192.0.2.5 255.255.255.252
+ no shutdown
+router ospf 1
+ network 10.0.0.0 0.255.255.255 area 0
+ip bgp-community new-format
+router bgp 65001
+ bgp router-id 10.255.0.3
+ neighbor 10.255.0.1 remote-as 65001
+ neighbor 10.255.0.1 next-hop-self
+ neighbor 10.255.0.1 send-community
+ neighbor 192.0.2.6 remote-as 65201
+end

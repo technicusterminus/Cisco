@@ -1,0 +1,36 @@
+hostname R3
+no ip domain-lookup
+service timestamps log datetime msec
+line con 0
+ exec-timeout 0 0
+ logging synchronous
+interface Loopback0
+ ip address 10.255.0.3 255.255.255.255
+ no shutdown
+interface GigabitEthernet0/0
+ ip address 10.0.13.2 255.255.255.252
+ no shutdown
+interface GigabitEthernet0/1
+ ip address 10.0.34.1 255.255.255.252
+ no shutdown
+ip prefix-list LOCAL-ONLY seq 5 permit 10.4.1.0/24
+route-map E2O deny 5
+ match ip address prefix-list LOCAL-ONLY
+route-map E2O deny 10
+ match tag 9
+route-map E2O permit 20
+ set tag 2
+ set metric 100
+route-map O2E deny 10
+ match tag 2
+route-map O2E permit 20
+ set tag 1
+router ospf 1
+ network 10.0.13.0 0.0.0.3 area 1
+ network 10.255.0.3 0.0.0.0 area 0
+ redistribute eigrp 100 route-map E2O
+router eigrp 100
+ network 10.0.34.0 0.0.0.3
+ no auto-summary
+ redistribute ospf 1 metric 10000 100 255 1 1500 route-map O2E
+end

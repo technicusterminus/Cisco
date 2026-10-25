@@ -1,0 +1,213 @@
+# Lab 05 – VLANs, Trunks und EtherChannel
+
+**Dauer:** 90 min · **Niveau:** leicht bis mittel
+
+Drei Switches, Router-on-a-Stick und drei Hosts: 802.1Q-Trunks (Native VLAN, Allowed VLANs, DTP, VTP) und EtherChannel mit LACP, PAgP und statischem Modus.
+
+**Lernziele:** Nach diesem Lab kannst du …
+
+- VLANs, 802.1Q-Trunks und Router-on-a-Stick aufbauen.
+- EtherChannel mit LACP bündeln und Modus-Fehler erkennen.
+- Mit `show interfaces trunk` und `show etherchannel summary` systematisch Layer 2 prüfen.
+
+| ENCOR-Ziel (`Ziel::…`) | Thema |
+|---|---|
+| 3.1.a | 802.1Q und Trunks |
+| 3.1.b | EtherChannel |
+
+**So arbeitest du:** Teil A = Bauen, Teil B = Reparieren, Teil C = Üben. Die Konfigurationsdateien liegen in `build/` (Ausgangszustand zum Einfügen in die CLI), `repair/` (fertig gebaut, mit Fehlern) und `solutions/` (Musterlösung und Fehlerliste, erst nach eigenem Versuch öffnen). Anleitung zum Einfügen: siehe [Arbeiten mit den Dateien](../README.md#arbeiten-mit-den-dateien).
+
+## Topologie
+
+```mermaid
+graph LR
+  n0["SW1<br/>3560-24PS"]
+  n1["SW2<br/>3560-24PS"]
+  n2["SW3<br/>3560-24PS"]
+  n3["R1<br/>2911"]
+  n4["H1<br/>PC-PT"]
+  n5["H2<br/>PC-PT"]
+  n6["H3<br/>PC-PT"]
+  n0 ---|"Fa0/1 ↔ Fa0/1"| n1
+  n0 ---|"Fa0/2 ↔ Fa0/2"| n1
+  n0 ---|"Fa0/3 ↔ Fa0/1"| n2
+  n0 ---|"Fa0/4 ↔ Fa0/2"| n2
+  n0 ---|"Fa0/5 ↔ Gi0/0"| n3
+  n1 ---|"Fa0/5 ↔ Fa0"| n4
+  n2 ---|"Fa0/5 ↔ Fa0"| n5
+  n2 ---|"Fa0/6 ↔ Fa0"| n6
+```
+
+**Entwurfsskizze (aus dem CML-Lab; Portnamen der Switches siehe Verkabelungstabelle):**
+
+```
+                      ┌── Po1 (LACP, 2 Links) ── SW2 ── H1 (VLAN10)
+ R1 ══trunk══ SW1 ════┤
+                      └── Po2 (PAgP, 2 Links) ── SW3 ──┬── H2 (VLAN20)
+                                                       └── H3 (VLAN10)
+```
+
+### Geräte
+
+| Gerät | Modell in Packet Tracer | Rolle |
+|---|---|---|
+| SW1 | 3560-24PS | Switch |
+| SW2 | 3560-24PS | Switch |
+| SW3 | 3560-24PS | Switch |
+| R1 | 2911 | Router |
+| H1 | PC-PT | Host |
+| H2 | PC-PT | Host |
+| H3 | PC-PT | Host |
+
+### Verkabelung
+
+| Von | Port | Nach | Port | Kabel |
+|---|---|---|---|---|
+| SW1 | Fa0/1 | SW2 | Fa0/1 | Copper Cross-Over |
+| SW1 | Fa0/2 | SW2 | Fa0/2 | Copper Cross-Over |
+| SW1 | Fa0/3 | SW3 | Fa0/1 | Copper Cross-Over |
+| SW1 | Fa0/4 | SW3 | Fa0/2 | Copper Cross-Over |
+| SW1 | Fa0/5 | R1 | Gi0/0 | Copper Straight-Through |
+| SW2 | Fa0/5 | H1 | Fa0 | Copper Straight-Through |
+| SW3 | Fa0/5 | H2 | Fa0 | Copper Straight-Through |
+| SW3 | Fa0/6 | H3 | Fa0 | Copper Straight-Through |
+
+### Adressplan (Ausgangszustand)
+
+| Gerät | Interface | Adresse | Maske | Gateway | DNS |
+|---|---|---|---|---|---|
+| R1 | Gi0/0.10 | 10.10.10.1 | 255.255.255.0 | | |
+| R1 | Gi0/0.20 | 10.10.20.1 | 255.255.255.0 | | |
+| H1 | Fa0 (GUI) | 10.10.10.11 | 255.255.255.0 | 10.10.10.1 |  |
+| H2 | Fa0 (GUI) | 10.10.20.12 | 255.255.255.0 | 10.10.20.1 |  |
+| H3 | Fa0 (GUI) | 10.10.10.13 | 255.255.255.0 | 10.10.10.1 |  |
+
+| VLAN | Name | Subnetz | Gateway (R1 Subinterface) |
+|---|---|---|---|
+| 10 | USERS | 10.10.10.0/24 | .1 (`Gi0/0.10`) |
+| 20 | SERVERS | 10.10.20.0/24 | .1 (`Gi0/0.20`) |
+| 99 | NATIVE | – | ungenutzt |
+
+H1 10.10.10.11 (SW2 Fa0/5), H2 10.10.20.12 (SW3 Fa0/5), H3 10.10.10.13 (SW3 Fa0/6). Verkabelung: SW1 Fa0/1–0/2 ↔ SW2 Fa0/1–0/2, SW1 Fa0/3–0/4 ↔ SW3 Fa0/1–0/2, SW1 Fa0/5 ↔ R1 Gi0/0.
+
+### Portzuordnung der Switches (CML → Packet Tracer)
+
+Aufgaben, Verkabelung, Konfigurationen und Fehlerlisten verwenden die Packet-Tracer-Ports. Die Tabelle zeigt, welcher Port der CML-Vorlage dazu gehört. Nur die Skizze nennt noch die CML-Ports. Umrechnung: `GiX/Y` → `Fa0/(X·4+Y+1)`.
+
+| Switch | CML-Port | PT-Port |
+|---|---|---|
+| SW1 | Gi0/0 | Fa0/1 |
+| SW1 | Gi0/1 | Fa0/2 |
+| SW1 | Gi0/2 | Fa0/3 |
+| SW1 | Gi0/3 | Fa0/4 |
+| SW1 | Gi1/0 | Fa0/5 |
+| SW2 | Gi0/0 | Fa0/1 |
+| SW2 | Gi0/1 | Fa0/2 |
+| SW2 | Gi1/0 | Fa0/5 |
+| SW3 | Gi0/0 | Fa0/1 |
+| SW3 | Gi0/1 | Fa0/2 |
+| SW3 | Gi1/0 | Fa0/5 |
+| SW3 | Gi1/1 | Fa0/6 |
+
+> **Packet-Tracer-Hinweis:** **Eignung: geeignet.** Alle verwendeten Funktionen gibt es in Packet Tracer; Ausgabeformate einzelner `show`-Befehle weichen leicht ab. Die CML-Switches (Gi-Ports) sind hier 3560-24PS bzw. 2960 mit FastEthernet-Ports: Die Portzuordnung steht unter dem Adressplan.
+
+## Teil A – Bauen
+Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
+
+1. **VLANs anlegen.** Lege auf allen Switches VLAN 10 (USERS), 20 (SERVERS) und 99 (NATIVE) an. Stelle VTP auf `vtp mode transparent`.
+   - **Prüfen:** `show vlan brief` zeigt die drei VLANs, `show vtp status` den Modus Transparent.
+   - **Denkfrage:** Warum ist ein neuer Switch im VTP-Modus Server oder Client gefährlich?
+2. **Trunk zum Router.** Mache SW1 Fa0/5 zum festen Trunk (`switchport mode trunk`, `switchport nonegotiate`), mit Native VLAN 99 und den erlaubten VLANs 10 und 20. R1 bekommt die Subinterfaces `Gi0/0.10` und `Gi0/0.20` mit `encapsulation dot1Q` und je einer IP-Adresse.
+   - **Prüfen:** `show interfaces trunk` auf SW1 listet den Trunk. Später pingt H1 sein Gateway 10.10.10.1.
+3. **EtherChannel mit LACP.** Bündle die beiden Links SW1–SW2 zu Po1: SW1 `channel-group 1 mode active`, SW2 `mode passive`. Konfiguriere Po1 als Trunk (VLAN 10 und 20, Native 99).
+   - **Prüfen:** `show etherchannel summary` zeigt `Po1(SU)` und beide Ports mit `(P)`.
+   - **Denkfrage:** Welche Modus-Paare bilden einen Channel: active/passive, passive/passive, on/active?
+4. **EtherChannel mit PAgP.** Bündle SW1–SW3 zu Po2: SW1 `mode desirable`, SW3 `mode auto`.
+   - **Prüfen:** `show etherchannel summary` zeigt `Po2(SU)` mit Protokoll PAgP.
+   - **Denkfrage:** Was unterscheidet PAgP von LACP?
+5. **Hosts anschließen.** Konfiguriere die Ports von H1 (VLAN 10), H2 (VLAN 20) und H3 (VLAN 10) als Access-Ports mit `spanning-tree portfast`.
+   - **Prüfen:** H1 pingt H3 (gleiches VLAN, nur über Layer 2) und H2 (anderes VLAN, über R1).
+6. **Lastverteilung.** Setze `port-channel load-balance src-dst-ip`.
+   - **Prüfen:** `show etherchannel load-balance` zeigt die neue Methode.
+   - **Denkfrage:** Warum nutzt eine einzelne Verbindung immer nur einen Link des Bündels?
+7. **Native VLAN falsch setzen.** Stelle auf SW3 an Po2 bewusst Native VLAN 1 ein.
+   - **Prüfen:** Das Log meldet `%CDP-4-NATIVE_VLAN_MISMATCH`. Stelle danach wieder 99 ein.
+   - **Denkfrage:** Welchen Angriff erschwert ein ungenutztes Native VLAN?
+8. **Trunks ausdünnen.** Erlaube auf jedem Trunk nur die VLANs, die dahinter wirklich gebraucht werden.
+   - **Prüfen:** `show interfaces trunk` hat drei Blöcke: allowed, allowed and active, forwarding. Achte darauf, dass jedes benötigte VLAN in allen dreien steht.
+
+<details><summary>Antworten zu den Denkfragen</summary>
+
+- **Zu 1:** Hat der neue Switch eine höhere Revisionsnummer, übernehmen alle anderen seine VLAN-Datenbank. Fehlen dort VLANs, verschwinden sie im ganzen Netz, und die Ports darin gehen offline. Im Modus Transparent gleicht ein Switch nichts ab.
+- **Zu 3:** active/active und active/passive bilden einen Channel. passive/passive nicht, weil keine Seite anfängt. on/active auch nicht: `on` sendet keine LACP-Nachrichten.
+- **Zu 4:** PAgP ist Cisco-eigen und kennt die Modi desirable und auto. LACP ist der IEEE-Standard (802.3ad) mit active und passive. Beide bündeln bis zu 8 aktive Links. LACP kann zusätzlich bis zu 8 Ports als Reserve halten.
+- **Zu 6:** Der Switch berechnet aus den gewählten Feldern einen Hash, und der bestimmt den Link. Gleiche Verbindung, gleicher Hash, gleicher Link. So kommen die Pakete einer Verbindung nie in falscher Reihenfolge an.
+- **Zu 7:** Double Tagging (VLAN Hopping): Ein Angreifer im Native VLAN schickt einen Frame mit zwei Tags. Der erste Switch entfernt das äußere Tag, der nächste leitet nach dem inneren weiter. Ist das Native VLAN ein ungenutztes VLAN wie 99, sitzt kein Angreifer darin.
+
+</details>
+
+## Teil B – Reparieren
+
+Baue die Topologie wie oben (oder behalte deine aus Teil A), setze alle Geräte zurück (`erase startup-config`, `reload` bzw. neues Gerät) und füge dann die Dateien aus `repair/` ein. Es stecken **4 Fehler** drin. Behandle jede Meldung als Ticket: erst Symptom nachstellen, dann Layer für Layer eingrenzen, beheben und beweisen. Ändere nur, was kaputt ist.
+
+**Ticket 1:** Po1 kommt nicht hoch: Auf SW1 sind die Ports `s` (suspended), H1 hat keine Verbindung.
+
+**Ticket 2:** H2 (VLAN 20) hat weder Gateway noch Verbindung, H3 (VLAN 10) funktioniert.
+
+**Ticket 3:** Alle Hosts in VLAN 20 erreichen ihr Gateway 10.10.20.1 nicht, VLAN 10 ist in Ordnung.
+
+**Ticket 4:** H3 (10.10.10.13) erreicht weder H1 noch das Gateway.
+
+## Verifikation
+```
+show vlan brief
+show interfaces trunk
+show etherchannel summary
+show etherchannel load-balance
+show lacp neighbor
+show pagp neighbor
+show vtp status
+```
+
+| Befehl | Das solltest du sehen |
+|---|---|
+| `show etherchannel summary` auf SW1 | `Po1(SU)` mit `Fa0/1(P) Fa0/2(P)` (LACP), `Po2(SU)` mit PAgP |
+| Ping von jedem Host | jeder Host erreicht sein Gateway, H1 erreicht H2 über R1 |
+| `show interfaces trunk` | Native VLAN 99 auf allen Trunks |
+
+## Teil C – Üben
+
+Beantworte zuerst selbst, dann klappe die Antwort auf.
+
+1. Zwei Switches stehen auf `dynamic auto`. Entsteht ein Trunk?
+<details><summary>Antwort</summary>
+
+**Nein, es entsteht kein Trunk.** `dynamic auto` wartet nur und fragt selbst nicht. Zwei wartende Seiten bleiben Access-Ports. Mindestens eine Seite muss `dynamic desirable` oder `trunk` sein.
+
+</details>
+
+2. Ein Port ist in einem Channel gelistet, aber als `s` (suspended) markiert. Typische Ursache?
+<details><summary>Antwort</summary>
+
+**Die Parameter oder der Modus passen nicht zur Gegenseite.** Zum Beispiel `on` gegen `active`, eine andere VLAN-Liste oder andere Speed- und Duplex-Werte. Der Switch nimmt den Port dann nicht ins Bündel auf.
+
+</details>
+
+3. Wozu `switchport nonegotiate`?
+<details><summary>Antwort</summary>
+
+**Es schaltet DTP ab, also das Aushandeln eines Trunks.** So kann ein angeschlossenes Gerät keinen Trunk erzwingen. Voraussetzung: Der Port steht fest auf `access` oder `trunk`.
+
+</details>
+
+## Prüfungsbezug
+- LACP: active/active und active/passive bilden einen Channel, passive/passive nicht.
+- PAgP: desirable/desirable und desirable/auto bilden einen Channel.
+- `on` verhandelt nichts und passt nur zu `on`.
+- Speed, Duplex, Trunk-Modus, Native VLAN und erlaubte VLANs müssen auf allen Mitgliedsports gleich sein.
+- DTP: auto/auto ergibt Access, desirable baut einen Trunk auf, `switchport nonegotiate` schaltet DTP ab.
+
+## Lösungen
+
+- `solutions/<Gerät>.cfg`: Konfiguration zu Teil A (ohne Basis-Adressen)
+- `solutions/FAULTS.md`: Fehlerliste zu Teil B (Spoiler!)

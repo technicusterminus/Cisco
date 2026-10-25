@@ -1,0 +1,38 @@
+hostname R1
+no ip domain-lookup
+service timestamps log datetime msec
+line con 0
+ exec-timeout 0 0
+ logging synchronous
+interface Loopback0
+ ip address 1.1.1.1 255.255.255.255
+ no shutdown
+interface GigabitEthernet0/0
+ ip address 10.0.12.1 255.255.255.252
+ no shutdown
+ip route 2.2.2.2 255.255.255.255 10.0.12.2
+username admin privilege 15 algorithm-type scrypt secret Adm1nSecret
+username helpdesk privilege 5 algorithm-type scrypt secret Help1Secret
+enable algorithm-type scrypt secret EnableSecret1
+privilege exec level 5 show ip interface brief
+privilege exec level 5 ping
+aaa new-model
+tacacs server TAC1
+ address ipv4 10.0.12.99
+ key TacKey123
+ timeout 2
+aaa group server tacacs+ TACGRP
+ server name TAC1
+aaa authentication login default local
+aaa authentication login VTY_LIST group TACGRP
+aaa accounting exec default start-stop group TACGRP
+login block-for 60 attempts 3 within 30
+login on-failure log
+line vty 0 4
+ login authentication VTY-LIST
+ authorization exec VTY_LIST
+ transport input telnet
+ exec-timeout 0 0
+line con 0
+ exec-timeout 5 0
+end

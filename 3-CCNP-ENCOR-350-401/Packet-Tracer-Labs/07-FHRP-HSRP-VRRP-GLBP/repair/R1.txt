@@ -1,0 +1,40 @@
+hostname R1
+no ip domain-lookup
+service timestamps log datetime msec
+line con 0
+ exec-timeout 0 0
+ logging synchronous
+interface GigabitEthernet0/0
+ no shutdown
+interface GigabitEthernet0/1
+ ip address 10.0.12.1 255.255.255.252
+ no shutdown
+interface GigabitEthernet0/2
+ ip address 10.0.13.1 255.255.255.252
+ no shutdown
+track 1 interface GigabitEthernet0/2 line-protocol
+interface GigabitEthernet0/0.10
+ encapsulation dot1Q 10
+ ip address 10.10.10.2 255.255.255.0
+ standby version 2
+ standby 10 ip 10.10.10.1
+ standby 10 priority 110
+ standby 10 track 1 decrement 5
+interface GigabitEthernet0/0.20
+ encapsulation dot1Q 20
+ ip address 10.10.20.2 255.255.255.0
+ vrrp 20 ip 10.10.20.1
+ vrrp 20 priority 100
+interface GigabitEthernet0/0.30
+ encapsulation dot1Q 30
+ ip address 10.10.30.2 255.255.255.0
+ glbp 30 ip 10.10.30.1
+ glbp 30 priority 110
+ glbp 30 preempt
+ glbp 30 load-balancing round-robin
+router ospf 1
+ passive-interface default
+ no passive-interface GigabitEthernet0/1
+ no passive-interface GigabitEthernet0/2
+ network 10.0.0.0 0.255.255.255 area 0
+end
