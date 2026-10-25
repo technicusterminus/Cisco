@@ -1,0 +1,237 @@
+# 3.1.a | GRE
+S: https://www.rfc-editor.org/rfc/rfc2784 | RFC 2784: GRE
+
+Q: Wie viel Overhead erzeugt GRE über IPv4, und was bedeutet das für MTU und MSS?
+A: **24 Byte (20 IP + 4 GRE), also IP-MTU 1476 am Tunnel und TCP-MSS 1436.** Konfiguration: `ip mtu 1476` und `ip tcp adjust-mss 1436`. Die MSS ergibt sich aus 1476 − 40 Byte (IP und TCP).
+T: Rechnen Mittel
+
+Q: Der GRE-Tunnel geht kurz hoch und fällt dann mit %TUN-5-RECURDOWN ab. Was ist die Ursache?
+A: **Rekursives Routing: Die Route zum Tunnelziel führt über den Tunnel selbst.** Meist lernt ein IGP die Tunnel-Destination über das Tunnelinterface. Abhilfe: Die Underlay-Route zur Tunnel-Destination über das physische Interface erzwingen, z. B. statische /32 oder Filter im IGP.
+T: Falle Mittel
+
+Q: Wie konfigurierst du einen einfachen GRE-Tunnel mit Keepalive und Tunnelschlüssel?
+A:
+```
+interface Tunnel0
+ ip address 10.0.0.1 255.255.255.252
+ tunnel source Loopback0
+ tunnel destination 192.0.2.2
+ tunnel key 100
+ keepalive 5 3
+```
+Der Schlüssel unterscheidet mehrere Tunnel zwischen denselben Endpunkten. GRE-Keepalive prüft die Gegenstelle, auch wenn nur ein Peer es sendet.
+T: CLI Leicht
+
+Q: Wozu dienen Tunnel Source und Destination, und was passiert bei fehlender Route zum Ziel?
+A: **Source ist die Adresse im äußeren IP-Header, Destination der Peer.** Fehlt die Route zur Destination oder das Source-Interface ist down, bleibt der Tunnel down (line protocol down). Mit Loopback als Source läuft der Tunnel bei Link-Ausfall weiter.
+T: Wissen Leicht
+
+# 3.1.b | IPsec und IKE
+S: https://www.rfc-editor.org/rfc/rfc7296 | RFC 7296: IKEv2
+
+Q: Wie unterscheiden sich IKEv1 und IKEv2 im Ablauf?
+A: **IKEv1: Phase 1 (Main Mode 6 Nachrichten, Aggressive Mode 3), Phase 2 (Quick Mode 3). IKEv2: IKE_SA_INIT und IKE_AUTH (je 2 Nachrichten) erzeugen IKE SA und erste Child SA.** IKEv2 bringt EAP, MOBIKE, NAT-T und Dead Peer Detection fest mit.
+T: Vergleich Mittel
+
+Q: Welche Protokolle und Ports nutzt IPsec?
+A: **ESP (IP-Protokoll 50), AH (51), IKE über UDP 500 und bei NAT-T UDP 4500.** AH schützt auch den äußeren IP-Header und scheitert deshalb an NAT. ESP bietet Verschlüsselung und Integrität.
+T: Wissen Leicht
+
+Q: Wann verwendest du Transport Mode statt Tunnel Mode?
+A: **Transport Mode lässt den ursprünglichen IP-Header stehen und spart Overhead. Er passt, wenn Quelle und Ziel der IPsec-Endpunkte identisch sind, z. B. bei GRE over IPsec.** Tunnel Mode kapselt das komplette Paket und eignet sich für Site-to-Site ohne GRE.
+T: Vergleich Mittel
+
+Q: Wie sieht eine minimale IKEv2-Konfiguration mit Pre-Shared Key und IPsec-Profil aus?
+A:
+```
+crypto ikev2 keyring KR
+ peer ANY
+  address 0.0.0.0 0.0.0.0
+  pre-shared-key CiscoKey
+crypto ikev2 profile IKEPROF
+ match identity remote address 0.0.0.0
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local KR
+crypto ipsec transform-set TS esp-aes 256 esp-sha256-hmac
+ mode transport
+crypto ipsec profile IPSECPROF
+ set transform-set TS
+ set ikev2-profile IKEPROF
+interface Tunnel0
+ tunnel protection ipsec profile IPSECPROF
+```
+Standardwerte für Proposal und Policy verwendet IOS automatisch, wenn man keine eigenen definiert.
+T: CLI Schwer
+
+Q: Warum ist die Tunnelinterface-Konfiguration `tunnel mode ipsec ipv4` (VTI) nützlich?
+A: **Ein Virtual Tunnel Interface macht IPsec zu einem routbaren Interface, das IGPs und Multicast trägt und keine 4 Byte GRE-Header braucht.** Nachteile: Es ist Point-to-Point, und pro Tunnel gilt nur eine Protokollfamilie (IPv4 oder IPv6). Für Dual-Stack oder Multipoint nutzt man GRE over IPsec bzw. DMVPN.
+T: Wissen Schwer
+
+# 3.1.c | DMVPN
+S: https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/sec_conn_dmvpn/configuration/xe-16/sec-conn-dmvpn-xe-16-book.html | Cisco DMVPN Guide
+
+Q: Aus welchen Bausteinen besteht DMVPN?
+A: **mGRE (ein Tunnelinterface für viele Peers), NHRP (Zuordnung Tunnel- zu NBMA-Adresse), ein dynamisches Routingprotokoll und optional IPsec.** Der Hub ist NHS, Spokes registrieren sich per NHRP Registration.
+T: Wissen Leicht
+
+Q: Wie unterscheiden sich die drei DMVPN-Phasen?
+A: **Phase 1: Spokes mit Punkt-zu-Punkt-GRE, aller Verkehr über den Hub. Phase 2: Spoke-to-Spoke per NHRP-Resolution, kein Summarizing am Hub, Next Hop bleibt der Spoke. Phase 3: Hub sendet NHRP Redirect, Spokes installieren NHRP-Shortcuts, Summarization am Hub ist möglich.** Phase 3 benötigt `ip nhrp redirect` (Hub) und `ip nhrp shortcut` (Spoke).
+T: Vergleich Mittel
+
+Q: Was musst du bei EIGRP für Phase 2 am Hub deaktivieren?
+A:
+```
+interface Tunnel0
+ no ip split-horizon eigrp 100
+ no ip next-hop-self eigrp 100
+```
+Split Horizon würde Spoke-Routen nicht an andere Spokes weitergeben. Ohne `no next-hop-self` wäre der Hub der Next Hop, und es käme nie zum direkten Tunnel.
+T: CLI Mittel
+
+Q: Welchen OSPF-Netzwerktyp nutzt du für DMVPN Phase 2, und was gilt für die Spokes?
+A: **Broadcast mit Hub als DR, Spokes mit `ip ospf priority 0`.** So bleibt der Next Hop erhalten. Für Phase 3 passen auch Point-to-Multipoint oder Point-to-Multipoint non-broadcast, weil NHRP die Shortcuts ergänzt.
+T: Wissen Schwer
+
+Q: Spoke-to-Spoke-Verkehr in Phase 3 läuft weiter über den Hub. Was prüfst du?
+A: **`ip nhrp redirect` am Hub und `ip nhrp shortcut` an den Spokes, dann `show ip nhrp` und `show dmvpn` auf dynamische Einträge.** Prüfe außerdem, ob Spoke-Routen vom Hub zusammengefasst sind: In Phase 3 ist das erlaubt, das Redirect löst die Auflösung aus. Ohne Redirect bleibt der Verkehr beim Hub.
+T: Szenario Schwer
+
+Q: Wie funktioniert die NHRP-Auflösung zwischen zwei Spokes in Phase 3?
+A: **Spoke A sendet Daten an den Hub, der Hub antwortet mit NHRP Traffic Indication (Redirect). Spoke A sendet Resolution Request an den Hub, der leitet ihn an Spoke B weiter, B antwortet direkt an A.** Beide installieren danach eine NHRP-Shortcut-Route.
+T: Wissen Schwer
+
+Q: Wie sicherst du den DMVPN-Tunnel mit IPsec, wenn mehrere Tunnel dieselbe Source nutzen?
+A: **`tunnel protection ipsec profile NAME shared` am Tunnelinterface.** Ohne `shared` kollidieren IKE-SAs, wenn zwei Tunnelinterfaces dieselbe Source-Adresse verwenden.
+T: Wissen Schwer
+
+Q: Welche Dual-Hub-Designs gibt es, und worin unterscheiden sie sich?
+A: **Single Cloud: ein Tunnelinterface und ein DMVPN-Netz mit zwei Hubs. Dual Cloud: je Hub ein eigenes Tunnelinterface und DMVPN-Netz.** Dual Cloud bietet getrennte Pfade, aber mehr Konfiguration. Beide Hubs sind NHS, Routing wählt den bevorzugten.
+T: Vergleich Mittel
+
+Q: Wie fügt man bei BGP als Overlay-Protokoll dynamische Spokes hinzu?
+A:
+```
+router bgp 65000
+ bgp listen range 10.0.0.0/24 peer-group SPOKES
+ neighbor SPOKES peer-group
+ neighbor SPOKES remote-as 65000
+```
+Der Hub akzeptiert Peerings aus dem Bereich, ohne jeden Spoke einzeln zu konfigurieren.
+T: CLI Mittel
+
+# 3.2.a | MPLS und LDP
+S: https://www.rfc-editor.org/rfc/rfc5036 | RFC 5036: LDP
+
+Q: Wie baut LDP Nachbarschaften und Sessions auf?
+A: **Hellos per UDP 646 an 224.0.0.2, dann TCP-Session auf Port 646 zwischen den Transport-Adressen.** Die höhere Router-ID startet die TCP-Verbindung aktiv. Die Transport-Adresse ist standardmäßig die LDP-Router-ID, meist Loopback0.
+T: Wissen Mittel
+
+Q: Welche Labels sind reserviert?
+A: **0 Explicit Null, 1 Router Alert, 2 IPv6 Explicit Null, 3 Implicit Null, 13 GAL.** Labels 0–15 sind reserviert. Implicit Null (3) löst Penultimate Hop Popping aus.
+T: Wissen Mittel
+
+Q: Was ist Penultimate Hop Popping, und warum nutzt man es?
+A: **Der vorletzte Router entfernt das Label, damit der Egress-LSR nur einen IP-Lookup statt Label- und IP-Lookup macht.** Der Egress kündigt dafür Implicit Null (3) an. Mit Explicit Null (0) bleibt das Label für EXP/QoS erhalten.
+T: Wissen Mittel
+
+Q: Für welche Präfixe vergibt LDP standardmäßig Labels?
+A: **Für alle IGP-Routen in der Routing-Tabelle, nicht für BGP-Routen.** Mit `mpls ldp label allocate global prefix-list NAME` begrenzt man das auf Loopbacks. Weniger Labels sparen Speicher.
+T: Wissen Mittel
+
+Q: Wie konfigurierst du LDP-Basis und Label-Filter?
+A:
+```
+mpls label protocol ldp
+mpls ldp router-id Loopback0 force
+interface GigabitEthernet0/1
+ mpls ip
+mpls ldp label
+ allocate global prefix-list LOOPBACKS
+```
+Die Prefix-List begrenzt die Label-Vergabe auf Loopbacks. `force` setzt die Router-ID sofort.
+T: CLI Mittel
+
+Q: Welche MTU braucht ein MPLS-Interface?
+A: **Mindestens 1500 + 4 Byte pro Label.** Bei L3VPN (zwei Labels) also 1508. Mit `mpls mtu` am Interface setzt man das. Fehlt die Anpassung, werden große Pakete fragmentiert oder verworfen.
+T: Rechnen Mittel
+
+Q: Wie verhinderst du, dass Kunden per Traceroute die Core-Topologie sehen?
+A: **Mit `no mpls ip propagate-ttl forwarded` am PE.** Dann wird der IP-TTL nicht ins Label-TTL kopiert, und der Core erscheint als ein Hop. Lokal erzeugte Traceroutes sind weiterhin sichtbar.
+T: Wissen Schwer
+
+Q: Wozu dient LDP-IGP-Synchronisation?
+A: **Ein Link wird im IGP erst bevorzugt, wenn die LDP-Session besteht.** Sonst würde Verkehr einen Pfad ohne Labels nehmen und verloren gehen. Aktivierung: `mpls ldp sync` unter OSPF oder IS-IS.
+T: Wissen Schwer
+
+# 3.2.b | MPLS L3VPN
+S: https://www.rfc-editor.org/rfc/rfc4364 | RFC 4364: BGP/MPLS IP VPNs
+
+Q: Wie unterscheiden sich Route Distinguisher und Route Target?
+A: **Der RD macht Präfixe eindeutig (VPNv4 = 64-Bit RD + 32-Bit IPv4). Das RT steuert Import und Export zwischen VRFs.** RD allein bestimmt nichts über Konnektivität. Der Export setzt RT als Extended Community.
+T: Vergleich Leicht
+
+Q: Welche zwei Labels trägt ein Paket im L3VPN-Core?
+A: **Das äußere Transport-Label (LDP) bis zum Egress-PE und das innere VPN-Label (von MP-BGP), das die VRF auswählt.** Der vorletzte Router entfernt das äußere Label, der Egress-PE wertet das VPN-Label aus.
+T: Wissen Mittel
+
+Q: Wie sieht die Basis-Konfiguration einer VRF mit MP-BGP auf dem PE aus?
+A:
+```
+vrf definition CUST
+ rd 65000:1
+ address-family ipv4
+  route-target export 65000:1
+  route-target import 65000:1
+interface GigabitEthernet0/2
+ vrf forwarding CUST
+router bgp 65000
+ neighbor 10.255.0.2 remote-as 65000
+ address-family vpnv4
+  neighbor 10.255.0.2 activate
+  neighbor 10.255.0.2 send-community extended
+ address-family ipv4 vrf CUST
+  redistribute connected
+```
+Ohne `send-community extended` kommen die Route Targets nicht an.
+T: CLI Mittel
+
+Q: Zwei Kundensites teilen dieselbe AS-Nummer. Welche Befehle lösen den AS-Path-Loop?
+A: **Am PE `neighbor x as-override`, alternativ am CE `allowas-in`.** `as-override` ersetzt die Kunden-AS im Pfad durch die Provider-AS. `allowas-in` erlaubt dem CE, die eigene AS im Pfad zu akzeptieren.
+T: Szenario Mittel
+
+Q: Wie vermeidest du Schleifen, wenn OSPF als PE-CE-Protokoll läuft und ein Backdoor-Link existiert?
+A: **Das DN-Bit in LSA Typ 3 verhindert, dass ein PE zurückverteilte Routen erneut in BGP einspeist. Einen Vorzug für den MPLS-Pfad gegenüber dem Backdoor-Link erzielt man mit einem Sham Link.** Ohne Sham Link sind Routen über den Backdoor Intra-Area und gewinnen gegen Inter-Area-Routen über das Backbone.
+T: Szenario Schwer
+
+Q: Wie konfigurierst du einen Sham Link?
+A:
+```
+interface Loopback100
+ vrf forwarding CUST
+ ip address 10.100.1.1 255.255.255.255
+router ospf 10 vrf CUST
+ area 0 sham-link 10.100.1.1 10.100.1.2 cost 10
+```
+Die Endpunkte sind /32-Loopbacks in der VRF und werden per BGP (nicht per OSPF) angekündigt.
+T: CLI Schwer
+
+Q: Wozu dient die OSPF Domain ID bei PE-CE-OSPF?
+A: **Haben beide PEs dieselbe Domain ID, erscheinen Routen beim Remote-CE als Inter-Area (LSA 3). Unterscheidet sich die Domain ID, erscheinen sie als externe Routen (LSA 5).** Der Standardwert ist die OSPF-Prozess-ID, daher bei abweichenden Prozess-IDs explizit `domain-id` setzen.
+T: Falle Schwer
+
+Q: Wie verhindert EIGRP als PE-CE-Protokoll Schleifen bei Backdoor-Links?
+A: **Mit dem Site of Origin (SoO), das als Extended Community mitgesendet wird.** Ein Router verwirft Routen, die sein eigenes SoO tragen. Konfiguration über Route-Map und `set extcommunity soo`, angewendet am CE-Interface.
+T: Wissen Schwer
+
+Q: Wie realisierst du ein Extranet zwischen zwei VRFs?
+A: **Gemeinsame Route Targets: Der Export einer VRF wird in der anderen importiert.** Für Shared Services eignet sich ein eigenes RT, das alle Kunden importieren und die Service-VRF exportiert.
+T: Wissen Mittel
+
+Q: Wie unterscheiden sich 6PE und 6VPE?
+A: **6PE transportiert globales IPv6 über einen IPv4-MPLS-Core per MP-BGP mit Label (`send-label`). 6VPE transportiert VRF-IPv6 über VPNv6.** Beide nutzen das IPv4-gemappte IPv6 als Next Hop (::FFFF:a.b.c.d). Der Core benötigt kein IPv6.
+T: Vergleich Schwer
+
+Q: Welche Optionen gibt es für Inter-AS-MPLS-VPN?
+A: **Option A: VRF-to-VRF am ASBR. Option B: MP-eBGP VPNv4 zwischen ASBRs. Option C: Multihop-eBGP zwischen Route Reflectors, Labeled-Unicast für Loopbacks.** A skaliert schlecht, B bündelt Labels am ASBR, C ist am besten skalierbar.
+T: Vergleich Schwer

@@ -1,0 +1,160 @@
+# 1.6.a | Multicast auf Layer 2: IGMP, MLD und Snooping
+S: https://www.rfc-editor.org/rfc/rfc3376 | RFC 3376: IGMPv3
+S: https://www.rfc-editor.org/rfc/rfc2236 | RFC 2236: IGMPv2
+
+Q: Wie unterscheiden sich IGMPv1, v2 und v3?
+A: **v1: nur Join, Leave durch Timeout. v2: Leave-Nachricht und Querier-Wahl. v3: Source-Filtering (Include/Exclude) und damit SSM.** Alle drei laufen zwischen Host und Router. v3 sendet Reports an 224.0.0.22, v2 an die Gruppenadresse.
+T: Vergleich Mittel
+
+Q: Welcher Router ist der IGMP-Querier, und wie wird er bestimmt?
+A: **Der Router mit der niedrigsten IP-Adresse im Segment (IGMPv2/v3).** In IGMPv1 ist es der PIM-DR. Ein Querier schickt General Queries (Standard alle 60 Sekunden an 224.0.0.1), die Hosts antworten mit Reports.
+T: Wissen Mittel
+
+Q: Wozu dient IGMP Snooping, und was passiert ohne Querier?
+A: **Der Switch lernt aus IGMP-Reports, welche Ports Mitglieder sind, und leitet Multicast nur dorthin.** Ohne Router im VLAN gibt es keinen Querier, die Einträge laufen ab und der Verkehr wird geflutet oder verworfen. Abhilfe: `ip igmp snooping querier` am Switch.
+T: Szenario Mittel
+
+Q: Wie sorgst du dafür, dass IGMP Snooping auch ohne Multicast-Router im VLAN funktioniert?
+A:
+```
+ip igmp snooping vlan 10 querier
+ip igmp snooping vlan 10 querier address 10.1.10.250
+```
+Der Switch übernimmt die Rolle des Queriers (ohne Routing). Er benötigt eine IP-Adresse im VLAN. Mit einem vorhandenen Router übernimmt der mit der niedrigsten IP die Rolle.
+T: CLI Mittel
+
+Q: Wozu dient PIM Snooping?
+A: **Es beschränkt Multicast auf Ports, hinter denen PIM-Router sitzen, die den Verkehr tatsächlich brauchen.** IGMP Snooping erkennt nur Hosts, PIM Snooping auch die Router-Ports und Joins zwischen Routern am selben Segment. Ohne PIM Snooping gehen PIM-Joins an alle Router-Ports.
+T: Wissen Schwer
+
+Q: Wie begrenzt du an einem Switch-Port, welche Gruppen ein Host beitreten darf?
+A:
+```
+ip igmp profile 1
+ permit
+ range 239.1.1.1 239.1.1.10
+interface GigabitEthernet0/5
+ ip igmp filter 1
+ ip igmp max-groups 3
+```
+Ein Profil mit `permit` oder `deny` und Gruppenbereichen. `max-groups` begrenzt die Zahl der Gruppen pro Port. Auf einem Router nutzt du `ip igmp access-group ACL` oder `ip igmp limit`.
+T: CLI Schwer
+
+Q: Wie bildet sich die MAC-Adresse zu einer IPv4-Multicast-Adresse?
+A: **01:00:5E plus die unteren 23 Bit der IP-Adresse.** Die oberen 5 Bit der 28 Gruppen-Bits fallen weg, also teilen sich 32 IP-Gruppen dieselbe MAC. Beispiel: 239.129.1.1 und 224.1.1.1 landen beide auf 01:00:5E:01:01:01.
+T: Rechnen Mittel
+
+Q: Wozu dient MLD?
+A: **MLD ist das IPv6-Gegenstück zu IGMP.** MLDv1 entspricht IGMPv2, MLDv2 entspricht IGMPv3. MLD läuft als ICMPv6-Nachrichten an FF02::16 (v2-Reports). MLD Snooping arbeitet wie IGMP Snooping.
+T: Wissen Mittel
+
+Q: Was ist IPv6 Embedded RP?
+A: **Die Adresse des RP steckt in der Multicast-Gruppenadresse selbst (RFC 3956).** Format FF7x:0yyy:RIID::/… mit RP-Präfix-Länge und RIID. Router leiten die RP-Adresse daraus ab, ohne BSR oder statische Konfiguration. Das RP muss mit der RIID als Interface-ID konfiguriert sein.
+T: Wissen Schwer
+
+# 1.6.b | RPF-Prüfung
+S: https://www.rfc-editor.org/rfc/rfc7761 | RFC 7761: PIM-SM
+
+Q: Was ist der RPF-Check?
+A: **Ein Multicast-Paket wird nur akzeptiert, wenn es auf dem Interface ankommt, über das der Router Unicast-Verkehr zur Quelle senden würde.** Sonst verwirft er es. Das verhindert Schleifen. Für (*,G) gilt der RPF-Check gegen den RP, für (S,G) gegen die Quelle.
+T: Wissen Leicht
+
+Q: Multicast kommt nicht an. `show ip rpf 10.1.1.10` zeigt ein anderes Interface als das, auf dem der Verkehr ankommt. Was tust du?
+A: **Die Unicast-Route anpassen oder eine statische Multicast-Route setzen: `ip mroute 10.1.1.0 255.255.255.0 192.168.2.1`.** Die `ip mroute` beeinflusst nur den RPF-Check, nicht das Unicast-Routing. Eine alternative RPF-Quelle liefert auch MP-BGP oder MBGP.
+T: Szenario Mittel
+
+Q: Welche Quelle nutzt der Router für den RPF-Check, und in welcher Reihenfolge?
+A: **Er wählt aus Multicast-Routing-Tabelle (mroute, MBGP), Unicast-Tabelle; bei mehreren Treffern gewinnt die niedrigste AD, bei Gleichstand die längste Maske.** Statische `ip mroute` hat Vorrang vor dynamischen Quellen mit höherer AD.
+T: Wissen Schwer
+
+Q: Welcher Befehl zeigt dir den RPF-Nachbarn und das RPF-Interface für eine Quelle oder einen RP?
+A:
+```
+show ip rpf 10.1.1.10
+show ip mroute 239.1.1.1
+```
+`show ip rpf` zeigt Interface und Nachbarn, `show ip mroute` die Flags (S, C, F, J, T), das Incoming Interface und die Outgoing-Interface-List.
+T: CLI Leicht
+
+# 1.6.c | PIM: Dense, Sparse, RP, Bidir, SSM und Anycast RP
+S: https://www.rfc-editor.org/rfc/rfc7761 | RFC 7761: PIM-SM
+S: https://www.rfc-editor.org/rfc/rfc5059 | RFC 5059: BSR
+
+Q: Wie unterscheiden sich PIM Dense Mode und Sparse Mode?
+A: **Dense flutet an alle und lässt unerwünschte Zweige per Prune abschneiden. Sparse baut Bäume nur auf Anforderung (Join) über einen Rendezvous Point.** Dense eignet sich nur für kleine Netze mit vielen Empfängern. Sparse ist die Regel.
+T: Vergleich Leicht
+
+Q: Wie läuft PIM-SM von der Quelle bis zum Empfänger ab?
+A: **Der DR der Quelle registriert sich per Register-Nachricht (unicast) beim RP. Empfänger-DR sendet (*,G)-Join zum RP. Das RP leitet Daten an den Shared Tree, dann schaltet der Empfänger-DR zum Source-Tree (SPT) um.** Das RP sendet bei SPT-Verbindung ein Register-Stop. Der Wechsel geschieht standardmäßig beim ersten Paket (`spt-threshold 0`).
+T: Wissen Mittel
+
+Q: Wie verhinderst du das Umschalten auf den Source-Tree?
+A: **Mit `ip pim spt-threshold infinity`.** Der Empfänger-DR bleibt dann dauerhaft im Shared Tree über den RP. Sinnvoll bei vielen kleinen Quellen oder wenn der RP zentral liegt. Der Standard schaltet beim ersten Paket um.
+T: Wissen Mittel
+
+Q: Ein Empfänger bekommt Multicast, die Quelle sendet, aber der RP erhält keine Register. Was prüfst du?
+A: **PIM auf dem Quellen-Interface, den RP-Mapping-Eintrag (`show ip pim rp mapping`) und die Erreichbarkeit des RP.** Der Quellen-DR muss den RP für diese Gruppe kennen und per Unicast erreichen. Der Register-Tunnel-Status steht in `show ip pim tunnel`.
+T: Szenario Mittel
+
+Q: Wie konfigurierst du einen statischen RP für 239.0.0.0/8 und nur diese Gruppen?
+A:
+```
+ip access-list standard GROUPS
+ permit 239.0.0.0 0.255.255.255
+ip pim rp-address 10.255.0.1 GROUPS
+```
+Ohne ACL gilt der RP für alle Gruppen. Die Gruppenzuordnung zu RPs nennt man Group-to-RP-Mapping. Statisch, Auto-RP oder BSR liefern dasselbe Ergebnis, nur die Verteilung unterscheidet sich.
+T: CLI Mittel
+
+Q: Wie funktioniert Auto-RP, und was ist das Henne-Ei-Problem?
+A: **Kandidaten senden RP-Announcements (224.0.1.39), der Mapping Agent wählt und sendet RP-Discovery (224.0.1.40).** Beide Gruppen laufen im Dense Mode. Wenn nur Sparse Mode konfiguriert ist, braucht man `ip pim sparse-dense-mode` oder `ip pim autorp listener`, damit die Pakete fließen.
+T: Wissen Schwer
+
+Q: Wie konfigurierst du BSR mit einem Kandidaten-RP?
+A:
+```
+ip pim bsr-candidate Loopback0 0 100
+ip pim rp-candidate Loopback0 group-list GROUPS
+```
+BSR-Kandidaten wählen per Priorität und Hash den Bootstrap Router, der die RP-Set-Information per PIM-Nachrichten flutet (RFC 5059). Auto-RP ist proprietär, BSR ein offener Standard.
+T: CLI Schwer
+
+Q: Wie schützt `ip pim accept-rp` vor falschen RPs?
+A: **Der Router akzeptiert Joins nur für RPs und Gruppen, die in der ACL erlaubt sind.** Beispiel: `ip pim accept-rp 10.255.0.1 GROUPS`. `ip pim accept-rp auto-rp` erlaubt RPs aus Auto-RP. Ohne Filter nimmt der Router jede Join-Adresse an.
+T: Wissen Schwer
+
+Q: Wie unterscheiden sich Bidirectional PIM und Sparse Mode?
+A: **Bidir kennt keine Quell-Bäume und keine Register-Pakete, der Verkehr läuft immer über den Shared Tree.** Es skaliert bei vielen Quellen, weil der State nur (*,G) ist. Ein Designated Forwarder pro Segment verhindert Schleifen. Aktivieren: `ip pim bidir-enable`, `ip pim rp-address x bidir`.
+T: Vergleich Schwer
+
+Q: Was ist SSM, und was brauchst du dafür?
+A: **Source-Specific Multicast: Empfänger melden (S,G) direkt, es gibt keinen RP und keinen Shared Tree.** Standardbereich 232.0.0.0/8. Nötig sind IGMPv3 (oder IGMPv3lite/URD) auf Hosts und Router und `ip pim ssm default`.
+T: Wissen Mittel
+
+Q: Wie begrenzt du einen Multicast-Bereich an einer Domänengrenze?
+A:
+```
+ip access-list standard ADMIN
+ deny 239.0.0.0 0.255.255.255
+ permit any
+interface GigabitEthernet0/2
+ ip multicast boundary ADMIN
+```
+Die ACL bestimmt, welche Gruppen die Grenze passieren dürfen. Der Bereich 239.0.0.0/8 (Administratively Scoped) ist für lokale Nutzung gedacht.
+T: CLI Mittel
+
+Q: Wie funktioniert Anycast RP mit MSDP?
+A: **Mehrere RPs teilen sich dieselbe Loopback-Adresse; der Empfänger nutzt den nächsten. MSDP tauscht zwischen ihnen Source-Active-Meldungen aus, damit jeder RP alle Quellen kennt.** Jeder RP bekommt eine eigene Adresse als MSDP-Originator-ID: `ip msdp peer x connect-source Loopback1`, `ip msdp originator-id Loopback1`.
+T: Wissen Schwer
+
+Q: Warum ist bei Anycast RP die Router-ID bzw. Originator-ID wichtig?
+A: **Weil alle RPs dieselbe Anycast-Adresse nutzen und MSDP daher eine eindeutige Quelladresse braucht.** Der MSDP-Peer verwendet die Unicast-Loopback als Source. Fehlt `originator-id`, kann der RP-Check (RPF) an der SA-Nachricht scheitern.
+T: Wissen Schwer
+
+Q: Welche Flags zeigt `show ip mroute` für (*,G) und (S,G), und was bedeuten sie?
+A: **S Sparse, C Connected-Receiver, J SPT-Join, T SPT-Bit, F Register-Flag, P Pruned, R RP-Bit.** (*,G) trägt `S`, (S,G) bei vorhandenem SPT `T`. `J` zeigt, dass der Router gerade zum SPT wechselt. `P` auf allen Outgoing-Interfaces bedeutet: Der Eintrag wird nicht weitergeleitet.
+T: Exhibit Schwer
+
+Q: Warum erhält ein Empfänger mit `ip igmp join-group 239.1.1.1` keine Streams, obwohl die Quelle sendet?
+A: **Meist fehlt PIM auf einem Interface oder der RP ist nicht erreichbar.** Prüfe der Reihe nach `show ip pim neighbor`, `show ip pim rp mapping`, `show ip mroute 239.1.1.1` und `show ip rpf <Quelle>`. Der Empfänger-DR muss einen (*,G)-Eintrag haben und ein Incoming Interface Richtung RP.
+T: Szenario Mittel

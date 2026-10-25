@@ -1,0 +1,301 @@
+# 1.1.a | Switch-Administration: MAC-Tabelle, MTU, Errdisable
+S: https://standards.ieee.org/ieee/802.1Q/10323/ | IEEE 802.1Q
+
+Q: Ein Server ist 10 Minuten still, danach wird der Traffic zu ihm im ganzen VLAN geflutet. Was ist passiert?
+A: **Der MAC-Eintrag ist nach dem Aging-Timer (Standard 300 s) aus der Tabelle gefallen.** Ein Frame an eine unbekannte Unicast-MAC wird in allen Ports des VLANs geflutet (Unknown Unicast Flooding), bis der Server wieder sendet und die Quelle neu gelernt wird.
+T: Szenario Leicht
+
+Q: Wie änderst du das MAC-Aging für VLAN 10 auf 600 Sekunden?
+A:
+```
+mac address-table aging-time 600 vlan 10
+```
+Ohne `vlan` gilt der Wert für alle VLANs. Mit 0 schaltest du das Altern ab, was bei vielen Hosts die Tabelle füllt.
+T: CLI Leicht
+
+Q: Wie legst du einen statischen MAC-Eintrag an, sodass Frames an 0011.2233.4455 in VLAN 20 nur über Gi0/5 gehen?
+A:
+```
+mac address-table static 0011.2233.4455 vlan 20 interface GigabitEthernet0/5
+```
+Der Eintrag altert nicht und wird vom Switch nicht überschrieben.
+T: CLI Mittel
+
+Q: Mit welchem Eintrag verwirfst du gezielt jeden Verkehr zu einer bestimmten MAC in einem VLAN?
+A: **`mac address-table static <MAC> vlan <ID> drop`.** Der Switch verwirft Frames an diese Ziel-MAC. Prüfe den Eintrag mit `show mac address-table static`.
+T: CLI Mittel
+
+Q: Im Log erscheint `%SW_MATM-4-MACFLAP_NOTIF` für dieselbe MAC auf zwei Ports im Wechsel. Was vermutest du zuerst?
+A: **Eine Schleife oder dieselbe MAC an zwei Stellen (zum Beispiel ein falsch gebrückter Host oder ein fehlerhafter Loop-Schutz).** Die MAC wird ständig zwischen den Ports neu gelernt. Prüfe die STP-Topologie (`show spanning-tree`), Server-NICs im Active/Active-Betrieb und virtuelle Switches.
+T: Szenario Mittel
+
+Q: Welchen Befehl nutzt du, um die dynamisch gelernten MAC-Adressen eines VLANs und Ports zu sehen?
+A:
+```
+show mac address-table dynamic vlan 10 interface GigabitEthernet0/1
+```
+Ohne Filter erscheinen alle Einträge. `show mac address-table count` zeigt, wie voll die Tabelle ist.
+T: CLI Leicht
+
+Q: Über PPPoE (DSL) laufen Webseiten teilweise nicht, Pings mit großen Paketen schon. Welche MTU und welchen MSS setzt du?
+A: **MTU 1492 und `ip tcp adjust-mss 1452`.** PPPoE belegt 8 Byte (6 PPPoE, 2 PPP) der 1500 Byte Ethernet-Payload. Die MSS ergibt sich aus 1492 minus 20 (IP) minus 20 (TCP). Ohne die Anpassung scheitert Path-MTU-Discovery, wenn ICMP gefiltert wird.
+T: Szenario Mittel
+
+Q: Du schickst ein Paket mit 1500 Byte IP-Länge über einen 802.1Q-Trunk. Welche Mindest-MTU braucht der Switch und warum?
+A: **Der Switch muss Frames mit 1522 Byte (1500 Payload + 14 Header + 4 Tag + 4 FCS) verarbeiten.** Moderne Switches lassen den Tag zu. Bei Q-in-Q kommt ein zweiter Tag dazu (1526 Byte), dann braucht der Provider-Switch oft eine größere System-MTU.
+T: Rechnen Mittel
+
+Q: Wie unterscheiden sich L2-MTU und L3-MTU (`ip mtu`) auf einem Router-Interface?
+A: **Die L2-MTU begrenzt die Payload des Frames (`mtu`), die L3-MTU (`ip mtu`) die Paketgröße, bei der IP fragmentiert.** `ip mtu` kann kleiner sein als `mtu`, aber nicht größer. Bei OSPF müssen beide Nachbarn dieselbe Interface-MTU in den DBD-Paketen melden, sonst bleibt die Nachbarschaft in EXSTART.
+T: Vergleich Mittel
+
+Q: Welche Standardwerte haben `errdisable recovery` und wie schaltest du den automatischen Neustart für BPDU Guard ein?
+A:
+```
+errdisable recovery cause bpduguard
+errdisable recovery interval 120
+```
+Die Wiederherstellung ist standardmäßig aus. Der Standard-Intervall ist 300 Sekunden. Ohne `recovery` bleibt der Port in err-disabled, bis du `shutdown` und `no shutdown` eingibst.
+T: CLI Mittel
+
+Q: Mit welchen Befehlen findest du heraus, warum ein Port err-disabled ist?
+A: **`show interfaces status err-disabled` zeigt die Ports mit dem Grund, `show errdisable detection` die aktiven Auslöser, `show errdisable recovery` die Timer.** Der Grund (zum Beispiel `bpduguard`, `psecure-violation`, `link-flap`, `udld`, `channel-misconfig`) bestimmt, wo du die Ursache suchst.
+T: CLI Mittel
+
+# 1.1.b | Layer-2-Discovery: CDP und LLDP
+S: https://standards.ieee.org/ieee/802.1AB/ | IEEE 802.1AB (LLDP)
+
+Q: Welche Standard-Timer nutzen CDP und LLDP?
+A: **CDP: Hello 60 s, Holdtime 180 s. LLDP: Hello 30 s, Holdtime 120 s.** Beide lassen sich ändern (`cdp timer`, `cdp holdtime`, `lldp timer`, `lldp holdtime`). LLDP-Holdtime ist das Vierfache des Hello (TTL-Multiplikator 4).
+T: Wissen Leicht
+
+Q: Welches Protokoll ist auf einem IOS-Switch ab Werk an, CDP oder LLDP?
+A: **CDP.** LLDP musst du global mit `lldp run` aktivieren. Danach senden und empfangen alle Interfaces. Pro Interface steuerst du das mit `lldp transmit` und `lldp receive`.
+T: Wissen Leicht
+
+Q: Welche Zieladresse und welches Format nutzen CDP und LLDP?
+A: **CDP: Multicast 01:00:0C:CC:CC:CC, SNAP-Kapselung. LLDP: Multicast 01:80:C2:00:00:0E, EtherType 0x88CC.** Die LLDP-Adresse wird von Bridges nicht weitergeleitet, die CDP-Adresse dagegen schon (außer der Switch versteht CDP). Das erklärt, warum CDP über einen dummen Switch hinweg sichtbar sein kann.
+T: Wissen Schwer
+
+Q: Welche TLVs muss jeder LLDP-Frame enthalten?
+A: **Chassis ID, Port ID, Time To Live und End of LLDPDU.** Alle anderen TLVs (Port Description, System Name, System Capabilities, Management Address, organisationsspezifische TLVs wie LLDP-MED) sind optional.
+T: Wissen Mittel
+
+Q: Zwei Router sind per Kabel verbunden, haben aber keine IP-Adressen. Zeigt `show cdp neighbors` etwas?
+A: **Ja, CDP läuft auf Layer 2 und braucht keine IP-Adresse.** Das ist ein gutes Werkzeug, um die Verkabelung zu prüfen, ohne dass Layer 3 steht. Voraussetzung: Das Interface ist `no shutdown`, und auf beiden Seiten ist CDP aktiv.
+T: Szenario Leicht
+
+Q: Im Log steht `%CDP-4-NATIVE_VLAN_MISMATCH`. Was bedeutet das und was ist die Folge?
+A: **Die Native VLANs der beiden Trunk-Enden sind verschieden.** Untagged Frames landen im jeweils anderen VLAN (VLAN-Leaking), STP-BPDUs des Native VLANs laufen in falsche Instanzen. Mit `show interfaces trunk` siehst du die Native VLAN beider Seiten.
+T: Szenario Mittel
+
+Q: Wozu dient LLDP-MED, und was kommt zusätzlich zu LLDP dazu?
+A: **Es erweitert LLDP für Endgeräte wie IP-Telefone.** Zusätzliche TLVs für Voice-VLAN, QoS-Markierung (DSCP/CoS), PoE-Leistung und Standortinformationen für Notrufe. Der Switch kann dem Telefon die Voice VLAN per LLDP-MED mitteilen.
+T: Wissen Mittel
+
+Q: Wie verhinderst du, dass CDP-Informationen an einem Kundenport nach außen gehen?
+A:
+```
+interface GigabitEthernet0/10
+ no cdp enable
+```
+Global schaltest du CDP mit `no cdp run` ab. Ein Gerät, das CDP-Pakete gar nicht senden soll, ist ein Aufklärungsrisiko: Hostname, Plattform, IOS-Version und Management-IP stehen sonst im Klartext im Netz.
+T: CLI Leicht
+
+# 1.1.c | VLANs, Trunks, Q-in-Q und Voice VLAN
+S: https://standards.ieee.org/ieee/802.1Q/10323/ | IEEE 802.1Q
+
+Q: Aus welchen Feldern besteht der 802.1Q-Tag, und wie viele VLANs sind nutzbar?
+A: **4 Byte: TPID 0x8100 (16 Bit), PCP (3 Bit, Priorität), DEI (1 Bit), VLAN-ID (12 Bit).** Die 12 Bit ergeben 4096 Werte, nutzbar sind 1–4094 (0 und 4095 sind reserviert). VLAN 1002–1005 sind für FDDI und Token Ring reserviert.
+T: Wissen Leicht
+
+Q: Du ergänzt auf einem Trunk VLAN 30 mit `switchport trunk allowed vlan 30`. Danach fällt der Verkehr in den anderen VLANs aus. Warum?
+A: **Der Befehl ersetzt die Liste, er hängt nicht an.** Richtig wäre `switchport trunk allowed vlan add 30`. Das ist eine der häufigsten Fehlerquellen im Lab: erst `show interfaces trunk` prüfen, bevor du die Liste änderst.
+T: Falle Mittel
+
+Q: Was passiert mit dem Verkehr im Native VLAN auf einem 802.1Q-Trunk?
+A: **Er wird untagged gesendet.** Der Empfänger ordnet untagged Frames seinem eigenen Native VLAN zu. Weicht das Native VLAN ab, wandert der Verkehr in ein anderes VLAN. Mit `vlan dot1q tag native` (global) wird auch das Native VLAN getaggt.
+T: Wissen Mittel
+
+Q: Zwei Switches stehen beide auf `switchport mode dynamic auto`. Wird daraus ein Trunk?
+A: **Nein, beide warten passiv, es bleibt ein Access-Port.** Ein Trunk entsteht bei `desirable` auf mindestens einer Seite oder bei `trunk`. Mit `switchport nonegotiate` schaltest du DTP ab, dann musst du `switchport mode trunk` auf beiden Seiten setzen.
+T: Falle Leicht
+
+Q: Wie schaltest du einen Port als Q-in-Q-Tunnel-Port und was ändert sich auf der Leitung?
+A:
+```
+interface GigabitEthernet0/1
+ switchport access vlan 100
+ switchport mode dot1q-tunnel
+```
+Der Port nimmt Kundenframes (mit oder ohne eigenen Tag) entgegen und setzt einen zusätzlichen äußeren Tag mit VLAN 100. Auf dem Trunk im Provider-Netz tragen die Frames also zwei Tags. Die System-MTU muss 4 Byte mehr erlauben.
+T: CLI Schwer
+
+Q: Wie sorgst du dafür, dass CDP, STP und VTP des Kunden durch ein Q-in-Q-Netz getunnelt werden?
+A: **`l2protocol-tunnel cdp`, `l2protocol-tunnel stp` und `l2protocol-tunnel vtp` am Tunnel-Port.** Der Eingangsswitch ändert die Ziel-MAC des Protokollpakets, der Ausgangsswitch stellt sie wieder her. Ohne Tunneling würde ein dot1q-Tunnel-Port die Pakete verwerfen oder lokal verarbeiten.
+T: Wissen Schwer
+
+Q: Wie konfigurierst du einen Access-Port für PC (VLAN 10) und IP-Telefon (VLAN 150)?
+A:
+```
+interface GigabitEthernet0/3
+ switchport mode access
+ switchport access vlan 10
+ switchport voice vlan 150
+ spanning-tree portfast
+```
+Das Telefon erfährt die Voice VLAN per CDP oder LLDP-MED und taggt seine Frames mit VLAN 150. Der PC dahinter sendet untagged in VLAN 10.
+T: CLI Mittel
+
+Q: Auf einem Switch lässt sich VLAN 3000 nicht anlegen. Was ist die Ursache?
+A: **VLAN 3000 liegt im erweiterten Bereich (1006–4094), und der Switch ist in VTP-Version 1 oder 2 im Server- oder Client-Modus.** Erweiterte VLANs gehen nur in VTP transparent oder in VTP 3. Dort legst du sie lokal an.
+T: Falle Mittel
+
+Q: Ein neuer Switch mit höherer Konfigurationsrevision wird an das Netz gehängt und löscht alle VLANs. Wie vermeidest du das?
+A: **Neue Switches vorher auf VTP transparent setzen oder die Revision durch einen Moduswechsel auf 0 zurücksetzen.** In VTP 3 gibt es zusätzlich einen Primary Server, nur er darf Änderungen ausrollen. Auch das Verwenden einer VTP-Domain mit Passwort hilft.
+T: Szenario Schwer
+
+# 1.1.d | EtherChannel: LACP, PAgP und Layer-3-Bündel
+S: https://standards.ieee.org/ieee/802.1AX/6768/ | IEEE 802.1AX (LACP)
+
+Q: Welche Modus-Kombinationen bilden einen EtherChannel?
+A: **LACP: active/active, active/passive. PAgP: desirable/desirable, desirable/auto. Statisch: on/on.** Passive/passive (LACP) und auto/auto (PAgP) bilden keinen Channel. LACP und PAgP lassen sich nicht mischen, `on` verhandelt nichts und passt nur zu `on`.
+T: Vergleich Leicht
+
+Q: In `show etherchannel summary` steht bei einem Port das Flag `s` (suspended), bei einem anderen `I`. Was bedeuten sie?
+A: **`s`: Der Port ist suspendiert, weil die Konfiguration nicht zu den anderen Mitgliedern passt oder die Gegenseite nicht antwortet. `I`: Der Port läuft als Einzelport (stand-alone).** Weitere Flags: `P` gebündelt, `D` down, `H` Hot-Standby, `U` in Benutzung, `S` Layer 2, `R` Layer 3.
+T: Exhibit Mittel
+
+Q: Welche Parameter müssen bei allen Mitgliedern eines Layer-2-EtherChannels übereinstimmen?
+A: **Speed, Duplex, Switchport-Modus, Native VLAN, erlaubte VLANs und STP-Einstellungen.** Weicht ein Port ab, wird er suspendiert. Konfiguriere Änderungen immer auf der Port-Channel-Schnittstelle, sie wird an die Mitglieder weitergegeben.
+T: Wissen Mittel
+
+Q: Wie viele Links bündelt LACP aktiv, und wie legst du fest, welche Ports bei mehr als 8 Kandidaten aktiv sind?
+A: **Bis zu 8 aktive Links und bis zu 8 im Standby.** Der Switch mit der niedrigeren System-Priorität (`lacp system-priority`, dann niedrigere MAC) entscheidet. Die Port-Priorität (`lacp port-priority`, niedriger gewinnt) bestimmt, welche Ports aktiv werden. `lacp max-bundle` begrenzt die aktive Zahl.
+T: Wissen Schwer
+
+Q: Wie konfigurierst du ein Layer-3-EtherChannel mit LACP und der Adresse 10.0.12.1/30?
+A:
+```
+interface range GigabitEthernet0/1 - 2
+ no switchport
+ channel-group 1 mode active
+interface Port-channel1
+ ip address 10.0.12.1 255.255.255.252
+```
+Die IP-Adresse gehört auf das Port-Channel-Interface, nicht auf die Mitglieder. Die Mitglieder müssen vor dem `channel-group` Layer-3-Ports sein.
+T: CLI Mittel
+
+Q: Ein EtherChannel verteilt den Verkehr zwischen zwei Hosts nur auf einen Link. Warum?
+A: **Der Hash-Algorithmus (`port-channel load-balance`) ergibt für diese Flows immer dieselbe Zahl.** Zwischen zwei Hosts bleibt die Verteilung bei `src-dst-ip` immer gleich. Wähle bei wenigen Hosts einen Algorithmus mit Ports (`src-dst-port` auf Plattformen, die ihn bieten) und prüfe mit `test etherchannel load-balance`.
+T: Szenario Mittel
+
+Q: Wozu dienen `lacp rate fast` und `port-channel min-links`?
+A: **`lacp rate fast` schickt LACPDUs jede Sekunde statt alle 30 Sekunden und erkennt Ausfälle schneller. `min-links` legt fest, wie viele Mitglieder mindestens aktiv sein müssen, sonst geht der Port-Channel down.** Letzteres schickt den Verkehr auf einen redundanten Pfad, bevor ein Einzellink überlastet wird.
+T: Wissen Mittel
+
+Q: Wie sieht STP einen Layer-2-EtherChannel, und was passiert beim Ausfall eines Mitglieds?
+A: **Als einen einzigen logischen Link mit gebündelter Bandbreite.** Fällt ein Mitglied aus, bleibt der Channel up und STP sieht keinen Linkausfall. Die Pfadkosten orientieren sich an der Bandbreite des Bündels.
+T: Wissen Mittel
+
+# 1.1.e | Spanning Tree: PVST, RSTP, MST und Schutzfunktionen
+S: https://standards.ieee.org/ieee/802.1D/10304/ | IEEE 802.1D
+S: https://standards.ieee.org/ieee/802.1Q/10323/ | IEEE 802.1Q (RSTP, MSTP)
+
+Q: Aus welchen Teilen besteht die Bridge-ID bei PVST+, und wie wird die Root Bridge bestimmt?
+A: **Priorität (4 Bit, Vielfache von 4096) + VLAN-ID (12 Bit, Extended System ID) + MAC-Adresse (48 Bit).** Die Bridge mit der niedrigsten Bridge-ID wird Root. Standard-Priorität ist 32768, effektiv 32768 + VLAN-ID.
+T: Wissen Leicht
+
+Q: Wie setzt du einen Switch als Root für VLAN 10, und was macht `root primary` genau?
+A:
+```
+spanning-tree vlan 10 root primary
+```
+Der Befehl setzt die Priorität auf 24576, oder 4096 unter die Priorität der aktuellen Root, falls das nicht genügt. `root secondary` setzt 28672. Mit `spanning-tree vlan 10 priority 4096` legst du den Wert fest.
+T: CLI Mittel
+
+Q: Wie unterscheiden sich die kurzen und langen STP-Kosten?
+A: **Kurz (Standard bei PVST+): 10 Mbit/s=100, 100 Mbit/s=19, 1 Gbit/s=4, 10 Gbit/s=2. Lang: 1 Gbit/s=20000, 10 Gbit/s=2000.** Mit `spanning-tree pathcost method long` schaltest du auf lang um. Mixed-Methoden zwischen Switches führen zu unerwarteten Root-Ports.
+T: Vergleich Mittel
+
+Q: In welcher Reihenfolge wählt STP Root-Port und designierten Port bei gleichen Kosten?
+A: **1. niedrigste Root-Path-Cost, 2. niedrigste Sender-Bridge-ID, 3. niedrigste Sender-Port-Priority, 4. niedrigste Sender-Port-ID.** Die Prioritäten des Senders zählen, nicht die des eigenen Ports. Das ist die klassische Falle bei Parallel-Links: Die Port-Priorität stellst du auf dem Switch ein, der näher an der Root ist.
+T: Falle Schwer
+
+Q: Wie lange dauert der klassische STP-Übergang eines Ports von Blocking nach Forwarding und woraus setzt sich das zusammen?
+A: **Bis zu 50 s: Max Age 20 s (Warten auf BPDUs), Listening 15 s, Learning 15 s.** Hello ist 2 s. Die Werte stellst du mit `spanning-tree vlan 10 hello-time/forward-time/max-age` an der Root ein, sie werden per BPDU verteilt.
+T: Rechnen Mittel
+
+Q: Was ist ein Topology Change Notification (TCN) und was bewirkt es auf den Switches?
+A: **Ein Switch meldet einen Topologiewechsel Richtung Root. Die Root setzt dann das TC-Flag in ihren BPDUs.** Alle Switches verkürzen das MAC-Aging auf die Forward-Delay-Zeit (15 s), damit falsch gelernte MACs schnell verschwinden. Mit PortFast lösen Access-Port-Wechsel kein TCN aus.
+T: Wissen Mittel
+
+Q: Wie verhalten sich BPDU Guard und BPDU Filter im Vergleich?
+A: **BPDU Guard setzt den Port bei einer empfangenen BPDU in err-disabled. BPDU Filter unterdrückt Senden und Empfangen von BPDUs.** Global (`portfast bpdufilter default`) kehrt ein PortFast-Port bei einer BPDU zum normalen STP-Betrieb zurück. Pro Interface (`spanning-tree bpdufilter enable`) ignoriert er BPDUs ganz, das kann Schleifen erzeugen.
+T: Vergleich Schwer
+
+Q: Du aktivierst `spanning-tree bpdufilter enable` am Port zu einem anderen Switch. Was passiert?
+A: **Der Port sendet und verarbeitet keine BPDUs und geht in den Forwarding-Zustand. Zwei Switches können dadurch eine Schleife bilden.** Wende die Interface-Variante nur an Ports an, an denen garantiert nie ein Switch hängt.
+T: Falle Schwer
+
+Q: Was bewirkt Root Guard, und wie sieht der Zustand aus?
+A: **Der Port darf nie Root-Port werden. Empfängt er eine bessere (superiore) BPDU, geht er in den Zustand root-inconsistent (blockiert).** Sobald keine superioren BPDUs mehr kommen, erholt er sich selbst. Root Guard gilt für alle VLANs des Ports und sitzt an Ports Richtung Kunde oder Nicht-Root.
+T: Wissen Mittel
+
+Q: Was verhindert Loop Guard, und in welchem Zustand landet der Port?
+A: **Er verhindert, dass ein Port, der keine BPDUs mehr bekommt (zum Beispiel wegen einer unidirektionalen Verbindung), in Forwarding wechselt.** Der Port geht in loop-inconsistent (blockiert) und erholt sich, wenn BPDUs zurückkehren. Loop Guard wirkt auf Root- und Alternate-Ports, nicht auf designierte Ports.
+T: Wissen Mittel
+
+Q: Darf auf demselben Port Loop Guard und Root Guard aktiv sein?
+A: **Nein.** Root Guard verlangt, dass der Port designiert bleibt, Loop Guard wirkt auf Ports, die nicht designiert sind. Die Befehle schließen sich gegenseitig aus, die IOS-Konfiguration lehnt die Kombination ab.
+T: Falle Mittel
+
+Q: Wie unterscheiden sich UDLD (normal) und UDLD aggressive?
+A: **Normal erkennt unidirektionale Links und meldet sie, bei aggressive wird der Port nach Verlust der Nachbar-Informationen in err-disabled gesetzt.** Aggressive versucht acht Mal, die Verbindung wieder aufzubauen. UDLD wird mit `udld enable` (Fiber) oder pro Port aktiviert.
+T: Vergleich Mittel
+
+Q: Welche Rollen und Zustände kennt RSTP?
+A: **Rollen: Root, Designated, Alternate, Backup (und Disabled). Zustände: Discarding, Learning, Forwarding.** Alternate ist der Ersatz für den Root-Port, Backup der Ersatz für einen designierten Port am selben Segment.
+T: Wissen Leicht
+
+Q: Wann wechselt RSTP schnell in Forwarding und wann nicht?
+A: **Schnell geht es auf Point-to-Point-Links (Full Duplex) per Proposal/Agreement und an Edge-Ports (PortFast).** Auf Shared-Links (Half Duplex) fällt RSTP auf Timer zurück. Mit `spanning-tree link-type point-to-point` erzwingst du den Typ.
+T: Wissen Mittel
+
+Q: Nach wie vielen verpassten BPDUs erklärt RSTP einen Nachbarn für verloren?
+A: **Nach drei Hello-Intervallen (Standard 6 s).** RSTP nutzt die BPDU als Keepalive und braucht kein Max Age, das gilt nur für Informationen von nicht-RSTP-Nachbarn.
+T: Wissen Mittel
+
+Q: Was muss bei MST auf allen Switches einer Region übereinstimmen?
+A: **Region-Name, Revisionsnummer und die VLAN-zu-Instanz-Zuordnung (als Digest).** Weicht etwas ab, gehören die Switches zu verschiedenen Regionen und sprechen an der Grenze über den CST. `show spanning-tree mst configuration digest` zeigt den Hash.
+T: Wissen Mittel
+
+Q: Du ordnest auf SW1 VLAN 20 der MST-Instanz 1 zu, auf SW2 vergisst du das. Was passiert?
+A: **Der Digest unterscheidet sich, die Switches bilden zwei Regionen.** Die Folge: Die Instanzen werden nicht gemeinsam verwaltet, die Topologie wird nur über den CST (Instanz 0) verbunden, und Load-Balancing geht verloren. Prüfe mit `show spanning-tree mst configuration`.
+T: Falle Mittel
+
+Q: Welche Instanzen gibt es in MSTP außerhalb der Region, und wie spricht MST mit PVST+?
+A: **Innerhalb der Region läuft die IST (Instanz 0), zwischen Regionen der CST.** An der Grenze zu PVST+ simuliert MST PVST+: Der MST-Switch sendet BPDUs pro VLAN. Die MST-Region muss Root für alle VLANs sein oder für keines, sonst setzt der Port den Zustand PVST-Simulation-inconsistent.
+T: Wissen Schwer
+
+Q: Was leistet Bridge Assurance und was ist die Voraussetzung?
+A: **Es schickt BPDUs auf allen Ports des Typs `network`, auch auf blockierten, und setzt den Port bei fehlenden BPDUs in BA-inconsistent.** Beide Seiten müssen es unterstützen, sonst blockiert die Seite ohne BA den Port. Aktiviere es mit `spanning-tree bridge assurance` und `spanning-tree portfast network`.
+T: Wissen Schwer
+
+Q: Was prüft der STP-Dispute-Mechanismus?
+A: **Er erkennt unidirektionale Links, wenn ein designierter Port eine inferiore BPDU mit Learning-Flag empfängt.** Der Port wechselt dann in den Zustand Blocking (dispute), bis die Unstimmigkeit endet. Er ist in Rapid-PVST und MST standardmäßig aktiv.
+T: Wissen Schwer
+
+Q: Welche Funktion hilft Access-Switches mit zwei Uplinks, nach Ausfall des Root-Ports schneller zu schalten, ohne dass man RSTP einsetzt?
+A: **UplinkFast schaltet bei Ausfall des Root-Ports sofort auf den blockierten Uplink um.** BackboneFast verkürzt die Wartezeit auf Max Age, wenn ein indirekter Ausfall durch eine inferiore BPDU erkannt wird. In Rapid-PVST und MST sind diese Funktionen im Protokoll eingebaut.
+T: Vergleich Mittel
+
+Q: Wie lässt du dir den Zustand aller STP-Schutzfunktionen anzeigen?
+A:
+```
+show spanning-tree inconsistentports
+show spanning-tree summary
+show spanning-tree vlan 10 detail
+```
+`inconsistentports` listet Ports in root-, loop-, bpdu- oder BA-inconsistent. In `summary` stehen aktivierte Schutzfunktionen und die Zahl der Ports je Zustand.
+T: CLI Mittel

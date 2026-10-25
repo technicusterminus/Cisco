@@ -1,0 +1,157 @@
+# 1.3.a | EIGRP: Nachbarschaften
+S: https://www.rfc-editor.org/rfc/rfc7868 | RFC 7868: Cisco's EIGRP
+
+Q: Welche fünf EIGRP-Pakettypen gibt es und was tun sie?
+A: **Hello (Nachbarn finden, Keepalive), Update (Routen), Query (Weg suchen), Reply (Antwort auf Query) und ACK.** Update, Query und Reply sind zuverlässig (RTP mit Sequenznummern und ACK). Hello und ACK sind unzuverlässig. Hello-Multicast: 224.0.0.10 und FF02::A.
+T: Wissen Leicht
+
+Q: Welche Parameter müssen für eine EIGRP-Nachbarschaft übereinstimmen, welche nicht?
+A: **Müssen passen: AS-Nummer, K-Werte, Authentisierung und gemeinsames Subnetz (die Quelladresse des Hellos).** Hello- und Hold-Timer müssen nicht gleich sein, jeder Router nennt seine Hold-Time im Hello. Auch die Router-ID ist nur für die Eindeutigkeit wichtig.
+T: Falle Mittel
+
+Q: Zwei Router sind in AS 100 mit identischen Netzwerken, aber ohne Nachbarschaft. `debug eigrp packets` meldet „K-value mismatch“. Was prüfst du?
+A: **`metric weights` im Prozess.** Standard ist K1=1, K2=0, K3=1, K4=0, K5=0. Eine Abweichung auf einer Seite verhindert die Nachbarschaft. Ein Router, der `shutdown` im Prozess ausführt, sendet ein Hello mit allen K-Werten auf 255 und beendet so Nachbarschaften sofort (Goodbye).
+T: Szenario Mittel
+
+Q: Wie konfigurierst du einen statischen EIGRP-Nachbarn?
+A:
+```
+router eigrp 100
+ network 10.0.12.0 0.0.0.3
+ neighbor 10.0.12.2 GigabitEthernet0/1
+```
+Mit einem statischen Nachbarn verschickt der Router am Interface keine Multicast-Hellos, sondern Unicast an diese Adresse. Beide Seiten brauchen den Eintrag, sonst kommt keine Nachbarschaft zustande.
+T: CLI Mittel
+
+Q: Was bewirkt `passive-interface` unter EIGRP?
+A: **Das Interface sendet keine Hellos und bildet keine Nachbarschaft, das Netz wird aber weiter angekündigt.** Im Gegensatz zu OSPF unterbindet es die Nachbarschaft vollständig. Nutze es für Access-Netze und mit `passive-interface default` plus gezielten `no passive-interface`-Ausnahmen.
+T: Wissen Leicht
+
+Q: Du siehst im Log `%DUAL-5-NBRCHANGE: … Neighbor … is down: holding time expired`. Was bedeutet das?
+A: **Der Router hat innerhalb der Hold-Time kein Hello und kein anderes Paket vom Nachbarn erhalten.** Standard ist 15 s bei 5 s Hello (60/180 s auf Low-Speed-NBMA). Ursachen: Paketverlust, Layer-2-Probleme, zu hohe CPU oder ein Filter. Bei `neighbor is down: retry limit exceeded` fehlten dagegen ACKs für zuverlässige Pakete.
+T: Exhibit Mittel
+
+# 1.3.b | EIGRP: Metrik und Wide Metrics
+S: https://www.rfc-editor.org/rfc/rfc7868 | RFC 7868: Cisco's EIGRP
+
+Q: Wie berechnet sich die klassische EIGRP-Metrik mit Standard-K-Werten?
+A: **256 × (10^7 / niedrigste Bandbreite in kbit/s + Summe der Verzögerungen in Zehnerschritten µs).** Die Bandbreite ist die kleinste Schnittstellenbandbreite entlang des Pfads, die Verzögerung ist die Summe aller Interface-Delays (in Einheiten von 10 µs). Beispiel: 1 Gbit/s ergibt 10^7/10^6 = 10.
+T: Rechnen Mittel
+
+Q: Ein Pfad hat die niedrigste Bandbreite 100000 kbit/s und eine Gesamtverzögerung von 30 Einheiten (Delay in 10 µs). Welche klassische Metrik ergibt sich?
+A: **256 × (100 + 30) = 33280.** 10^7 / 100000 = 100, dazu die Delay-Summe von 30 Einheiten (je 10 µs). Die Summe 130 mal 256 ergibt 33280.
+T: Rechnen Schwer
+
+Q: Warum ersetzen Wide Metrics die klassische Metrik, und was ist anders?
+A: **Die klassische 32-Bit-Metrik unterscheidet Links über 10 Gbit/s nicht mehr (alle haben Bandbreitenanteil 1).** Wide Metrics (Named Mode) nutzen 64 Bit, Delay in Pikosekunden und erkennen auch 40 und 100 Gbit/s. Für die RIB wird die Metrik mit `metric rib-scale` (Standard 128) auf 32 Bit heruntergerechnet.
+T: Wissen Schwer
+
+Q: Wie nimmst du Einfluss auf den EIGRP-Pfad, ohne die Bandbreite zu ändern?
+A: **Über die Verzögerung (`delay` am Interface) oder `offset-list`.** Das Interface-`bandwidth` beeinflusst auch QoS und Prozentwerte (`ip bandwidth-percent`), deshalb ist `delay` der sicherere Hebel. Offset-Lists addieren Metrikwerte pro Route oder Interface.
+T: Szenario Mittel
+
+# 1.3.c | EIGRP: DUAL und allgemeine Abläufe
+S: https://www.rfc-editor.org/rfc/rfc7868 | RFC 7868: Cisco's EIGRP
+
+Q: Wie unterscheiden sich Feasible Distance, Reported Distance und Feasibility Condition?
+A: **FD ist die beste bekannte Metrik zum Ziel, RD die Metrik, die der Nachbar nennt. Feasibility Condition: RD des Nachbarn < FD des Successors.** Ein Nachbar, der das erfüllt, ist ein Feasible Successor (garantiert schleifenfrei) und schaltet ohne Query sofort um.
+T: Vergleich Mittel
+
+Q: Der Successor fällt aus und es existiert kein Feasible Successor. Was passiert?
+A: **Die Route geht in den Zustand „Active“, der Router schickt Queries an alle Nachbarn und wartet auf Replies.** Erst wenn alle geantwortet haben, wählt er einen neuen Successor. Antwortet ein Nachbar nicht innerhalb der Active-Zeit (Standard 3 Minuten), liegt Stuck-in-Active (SIA) vor.
+T: Szenario Mittel
+
+Q: Wie begrenzt du die Reichweite von Queries und damit das Risiko von SIA?
+A: **Mit Summarization, EIGRP-Stub und Distribute-Lists.** Ein Router, der für ein Ziel eine Summary hat, antwortet mit „unreachable“ auf Queries für Teilnetze. Stub-Router erhalten gar keine Queries. Weniger Hops im Query-Pfad bedeutet kürzere Konvergenz.
+T: Wissen Mittel
+
+Q: Welche Timer gelten für Hello und Hold im Standard?
+A: **Hello 5 s, Hold 15 s. Auf Multipoint-Interfaces mit 1,544 Mbit/s oder weniger (Frame Relay, ATM) sind es 60 s und 180 s.** Passe sie bei Bedarf mit `ip hello-time eigrp 100 2` und `ip hold-time eigrp 100 6` an (Named Mode: `hello-interval` und `hold-time` unter `af-interface`).
+T: Wissen Leicht
+
+Q: Wie sieht ein sauberes EIGRP-Shutdown aus, und warum ist es besser als ein Interface-Shutdown?
+A: **`shutdown` unter dem EIGRP-Prozess (oder Address-Family).** Der Router schickt ein „Goodbye“-Hello, die Nachbarn setzen die Nachbarschaft sofort zurück und warten nicht auf den Hold-Timer. Das ist nützlich für Wartungsarbeiten ohne langen Ausfall.
+T: Wissen Mittel
+
+Q: Woran erkennst du in `show ip eigrp topology`, dass eine Route Active ist?
+A: **Der Status steht auf „A“ statt „P“.** „P“ heißt Passive und ist der Normalzustand. Eine dauerhaft aktive Route weist auf einen Nachbarn hin, der Queries nicht beantwortet. Dort suchst du mit `show ip eigrp topology active`.
+T: Exhibit Mittel
+
+# 1.3.d | EIGRP: Load Balancing
+S: https://www.rfc-editor.org/rfc/rfc7868 | RFC 7868: Cisco's EIGRP
+
+Q: Wie aktivierst du Unequal-Cost Load Balancing mit EIGRP?
+A:
+```
+router eigrp 100
+ variance 3
+ maximum-paths 6
+```
+Ein Pfad wird genutzt, wenn seine Metrik innerhalb von FD × Variance liegt **und** der Nachbar ein Feasible Successor ist. Fehlt die Feasibility Condition, nutzt der Router den Pfad nicht, egal wie hoch die Variance ist.
+T: CLI Mittel
+
+Q: Ein Pfad mit Metrik 2500 soll neben dem Successor mit Metrik 1000 genutzt werden, aber er erscheint trotz `variance 2` nicht. Warum?
+A: **Die Metrik liegt über FD × Variance (1000 × 2 = 2000).** Mit `variance 3` wäre die Grenze 3000. Voraussetzung bleibt, dass der Nachbar die Feasibility Condition erfüllt, sonst nutzt EIGRP den Pfad auch dann nicht.
+T: Falle Schwer
+
+Q: Wie verteilt EIGRP den Verkehr bei Unequal-Cost-Pfaden?
+A: **Proportional zur Metrik (`traffic-share balanced`, Standard).** Der Pfad mit der niedrigeren Metrik bekommt mehr Verkehr. Mit `traffic-share min across-interfaces` nutzt EIGRP nur den besten Pfad, hält die anderen aber bereit.
+T: Wissen Mittel
+
+# 1.3.e | EIGRP: Named Mode
+S: https://www.rfc-editor.org/rfc/rfc7868 | RFC 7868: Cisco's EIGRP
+
+Q: Wie sieht ein EIGRP-Prozess im Named Mode aus?
+A:
+```
+router eigrp CORE
+ address-family ipv4 unicast autonomous-system 100
+  af-interface default
+   passive-interface
+  af-interface GigabitEthernet0/1
+   no passive-interface
+  topology base
+  exit-af-topology
+  network 10.0.0.0 0.255.255.255
+ exit-address-family
+```
+Der Prozessname ist frei, die AS-Nummer steht in der Address-Family. `af-interface` bündelt Interface-Parameter, `topology base` bündelt Metrik- und Redistribution-Einstellungen.
+T: CLI Mittel
+
+Q: Wie wandelst du eine klassische EIGRP-Konfiguration in Named Mode um?
+A: **Mit `eigrp upgrade-cli NAME`.** Der Befehl konvertiert die klassische Konfiguration in den Named Mode. Danach liegen Interface-Befehle wie `ip hello-time eigrp` unter `af-interface`.
+T: Wissen Mittel
+
+Q: Welche Befehle zeigen EIGRP-Nachbarn und Topologie im Named Mode?
+A: **`show eigrp address-family ipv4 neighbors` und `show eigrp address-family ipv4 topology`.** Der klassische Befehl `show ip eigrp neighbors` funktioniert ebenfalls, wenn die Syntax der Version das erlaubt. Für IPv6 nutzt du `show eigrp address-family ipv6 …`.
+T: CLI Leicht
+
+Q: Wo stellst du im Named Mode Hello-Timer, Authentisierung und Summary-Route ein?
+A: **Unter `af-interface <Interface>`:** `hello-interval`, `hold-time`, `authentication mode`, `summary-address`, `passive-interface`. Metrik-Wichtungen (`metric weights`), `maximum-paths` und `variance` stehen unter `topology base`.
+T: Wissen Mittel
+
+# 1.3.f | EIGRP: Optimierung, Stub, LFA und Leak-Maps
+S: https://www.rfc-editor.org/rfc/rfc7868 | RFC 7868: Cisco's EIGRP
+
+Q: Was bewirkt `eigrp stub` ohne Parameter?
+A: **Der Router kündigt nur verbundene Netze und Summaries an (`connected summary`).** Hub-Router schicken ihm keine Queries mehr. Optionen: `receive-only`, `static`, `redistributed`, `leak-map`. Der Stub muss auf dem Spoke gesetzt sein, der Hub erfährt es per Hello.
+T: Wissen Mittel
+
+Q: Ein Stub-Router soll zusätzlich eine bestimmte Route weitergeben. Wie machst du das?
+A:
+```
+route-map LEAK permit 10
+ match ip address prefix-list R1
+router eigrp 100
+ eigrp stub connected leak-map LEAK
+```
+Die Leak-Map erlaubt gezielt Routen, die der Stub gelernt hat, an seine Nachbarn weiterzugeben, obwohl er Stub ist. Ohne Leak-Map sendet er nur verbundene Netze und Summaries.
+T: CLI Schwer
+
+Q: Was ist EIGRP Loop-Free Alternate Fast Reroute?
+A: **Der Router berechnet vorab einen Reserve-Next-Hop, der bei Ausfall des Primärpfads sofort in der FIB aktiv wird.** Aktiviert mit `fast-reroute per-prefix all` im Topology-Base. Die Umschaltung läuft in unter 50 ms, bevor DUAL neu rechnet. Voraussetzung ist ein Feasible Successor.
+T: Wissen Schwer
+
+Q: Wie viel der Interface-Bandbreite darf EIGRP für Steuerverkehr verwenden?
+A: **Standardmäßig 50 Prozent (`ip bandwidth-percent eigrp 100 50`).** Bei niedrigen Bandbreiten kann das zu Verzögerung der Updates führen. Du stellst höhere Werte ein oder erhöhst die Interface-Bandbreite, wenn Updates sich stauen.
+T: Wissen Mittel

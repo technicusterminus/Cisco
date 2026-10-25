@@ -1,0 +1,218 @@
+# 1.5.a | BGP: iBGP- und eBGP-Peering
+S: https://www.rfc-editor.org/rfc/rfc4271 | RFC 4271: A Border Gateway Protocol 4 (BGP-4)
+
+Q: Welche fünf BGP-Nachrichtentypen gibt es?
+A: **OPEN, UPDATE, KEEPALIVE, NOTIFICATION und ROUTE-REFRESH.** OPEN handelt AS, Hold-Time, Router-ID und Fähigkeiten aus. UPDATE trägt Routen und Attribute. NOTIFICATION meldet einen Fehler und beendet die Sitzung. ROUTE-REFRESH fordert die Neuübertragung an, ohne die Sitzung zu beenden.
+T: Wissen Leicht
+
+Q: Warum geben iBGP-Router Routen, die sie von einem iBGP-Nachbarn gelernt haben, nicht an andere iBGP-Nachbarn weiter?
+A: **Als Schleifenschutz: Im iBGP gibt es keinen AS-Pfad, der Schleifen erkennt.** Deshalb braucht man ein Full Mesh, Route Reflectors oder Confederations. Der AS-Pfad bleibt innerhalb des AS unverändert.
+T: Wissen Mittel
+
+Q: Warum ist `next-hop-self` an iBGP-Nachbarn oft nötig?
+A: **Weil iBGP den Next-Hop aus eBGP unverändert weitergibt.** Ein iBGP-Router erreicht die externe Adresse des eBGP-Peers häufig nicht über das IGP, dann ist die Route nicht nutzbar (Next-Hop unreachable). `neighbor x next-hop-self` setzt den eigenen Wert.
+T: Falle Mittel
+
+Q: Wie baust du eine iBGP-Sitzung zwischen Loopbacks auf, und was brauchst du darunter?
+A:
+```
+router bgp 65001
+ neighbor 2.2.2.2 remote-as 65001
+ neighbor 2.2.2.2 update-source Loopback0
+```
+Beide Seiten brauchen `update-source` und eine Route (IGP) zur Loopback des anderen. Ohne Update-Source nutzt der Router die Adresse des ausgehenden Interfaces und die Gegenseite lehnt die Verbindung ab.
+T: CLI Leicht
+
+Q: Wie erlaubst du eBGP zu einem Nachbarn, der zwei Hops entfernt ist, und wie schützt du die Sitzung davor, dass Angreifer von weiter weg sich einschleichen?
+A: **`neighbor 192.0.2.1 ebgp-multihop 2`, besser mit GTSM: `neighbor 192.0.2.1 ttl-security hops 2`.** GTSM sendet mit TTL 255 und akzeptiert nur Pakete mit TTL ≥ 255 − hops, also hier ≥ 253. Weiter entfernte Angreifer kommen dadurch nicht an. Beide Optionen schließen sich gegenseitig aus.
+T: Szenario Schwer
+
+Q: Wie vereinfachst du die Konfiguration vieler Nachbarn mit gleichen Einstellungen?
+A: **Mit Peer-Groups oder Peer-Templates.** `neighbor INT peer-group` plus `neighbor INT remote-as 65001` und `neighbor 10.0.0.2 peer-group INT`. Templates (`template peer-session`, `template peer-policy`) sind flexibler, weil sie vererbt werden und sich kombinieren lassen.
+T: CLI Mittel
+
+Q: Wie akzeptierst du eingehende Sitzungen von Nachbarn aus einem Netz, ohne jeden einzeln zu konfigurieren?
+A:
+```
+router bgp 65001
+ bgp listen range 10.0.0.0/24 peer-group CLIENTS
+ neighbor CLIENTS peer-group
+ neighbor CLIENTS remote-as 65001
+```
+Der Router wartet passiv auf Sitzungen aus dem Bereich (Dynamic Neighbors). Er baut sie nicht selbst auf. `bgp listen limit` begrenzt die Zahl.
+T: CLI Schwer
+
+Q: Was bedeutet AS 23456 und wie schreibt man 4-Byte-AS-Nummern?
+A: **AS_TRANS: der Platzhalter, den Router ohne 4-Byte-Unterstützung für 4-Byte-ASNs sehen.** Schreibweisen: asplain (65546) und asdot (1.10). Mit `bgp asnotation dot` zeigt IOS asdot. Private 4-Byte-Bereiche: 4200000000–4294967294.
+T: Wissen Mittel
+
+Q: Ein BGP-Nachbar steht auf `Idle (Admin)`. Was bedeutet das?
+A: **Jemand hat den Nachbarn mit `neighbor x shutdown` abgeschaltet.** Der Router versucht keine Verbindung. Wenn `Idle` ohne Zusatz steht, wartet der Router auf den nächsten Verbindungsversuch oder es fehlt eine Route zum Nachbarn.
+T: Exhibit Leicht
+
+Q: Beide Seiten bauen gleichzeitig eine TCP-Verbindung zueinander auf. Welche bleibt?
+A: **Die Verbindung, die der Router mit der höheren BGP-Router-ID aufgebaut hat (Connection Collision Detection).** Die andere wird mit einer Notification beendet. Mit `neighbor x transport connection-mode passive` stellst du einen Router auf reines Warten.
+T: Wissen Schwer
+
+# 1.5.b | BGP: Pfadwahl
+S: https://www.rfc-editor.org/rfc/rfc4271 | RFC 4271: A Border Gateway Protocol 4 (BGP-4)
+
+Q: In welcher Reihenfolge wählt Cisco-BGP den besten Pfad?
+A: **Weight (höher) → Local Preference (höher) → lokal erzeugt → kürzester AS-Pfad → Origin (IGP < EGP < ?) → MED (niedriger) → eBGP vor iBGP → niedrigste IGP-Metrik zum Next-Hop → ältester eBGP-Pfad → niedrigste Router-ID → kürzeste Cluster-Liste → niedrigste Nachbaradresse.** Voraussetzung ist, dass der Next-Hop erreichbar ist (und die Route valid).
+T: Wissen Mittel
+
+Q: Auf welchen Routern wirkt Weight, und wird es an Nachbarn gesendet?
+A: **Weight ist rein lokal (nur auf dem Router, auf dem es gesetzt wird) und wird nie an Nachbarn gesendet.** Standard: 32768 für lokal erzeugte Pfade, 0 für gelernte. Es wirkt als erstes Kriterium. Setze es per `neighbor x weight` oder Route-Map.
+T: Wissen Leicht
+
+Q: Wie beeinflusst Local Preference den ausgehenden Verkehr eines ganzen AS?
+A: **Local Preference wird innerhalb des AS an alle iBGP-Nachbarn verteilt, die Route mit dem höchsten Wert gewinnt.** Standard 100. Setze sie am Eingang mit einer Route-Map: `set local-preference 200`. Sie wird nicht an eBGP-Nachbarn gesendet.
+T: Wissen Mittel
+
+Q: Wann vergleicht BGP den MED zweier Pfade?
+A: **Nur, wenn beide Pfade aus demselben Nachbar-AS stammen.** Mit `bgp always-compare-med` vergleichst du immer. Fehlt der MED, behandelt IOS ihn als 0 (best), `bgp bestpath med missing-as-worst` macht daraus den schlechtesten Wert. `bgp deterministic-med` sorgt für reihenfolgeunabhängige Entscheidungen.
+T: Wissen Schwer
+
+Q: Wie beeinflusst du den eingehenden Verkehr in dein AS?
+A: **Mit AS-Path-Prepending, MED oder Communities des Providers.** Prepending verlängert den Pfad (`set as-path prepend 65001 65001`) und macht die Route weniger attraktiv. MED wirkt nur auf direkt benachbarte AS. Local Preference dagegen steuert nur den ausgehenden Verkehr.
+T: Szenario Mittel
+
+Q: Was passiert bei gleichem AS-Pfad und Origin, wenn ein eBGP- und ein iBGP-Pfad zur Auswahl stehen?
+A: **eBGP gewinnt (nach MED).** Der eBGP-Pfad hat kürzere interne Distanz, und es verhindert Schleifen durch den iBGP-Weg. Erst danach vergleicht BGP die IGP-Metrik zum Next-Hop.
+T: Wissen Mittel
+
+Q: Wie aktivierst du BGP Multipath?
+A:
+```
+router bgp 65001
+ maximum-paths 4
+ maximum-paths ibgp 4
+```
+Pfade müssen bis zum Kriterium „IGP-Metrik zum Next-Hop“ gleich sein. Für eBGP-Multipath muss das Nachbar-AS gleich sein (oder `bgp bestpath as-path multipath-relax`).
+T: CLI Schwer
+
+Q: Wozu dient BGP Additional Paths?
+A: **Ein Router kündigt mehr als nur den besten Pfad an (Path-ID im NLRI).** Das beschleunigt die Konvergenz, besonders mit Route Reflectors, weil Clients Alternativen kennen. Aktiviert mit `bgp additional-paths send receive` und `neighbor x advertise additional-paths …`.
+T: Wissen Schwer
+
+Q: Was ist AIGP und wann nutzt man es?
+A: **Accumulated IGP Metric: Ein optionales, nicht-transitives Attribut, das IGP-Metriken über mehrere AS summiert.** Es lässt BGP den Pfad mit der niedrigsten Gesamtmetrik wählen, wenn ein Betreiber mehrere AS als eine Domäne führt. Es steht im Vergleich vor dem AS-Pfad.
+T: Wissen Schwer
+
+# 1.5.c | BGP: Policies, Communities und Anbindungsdesigns
+S: https://www.rfc-editor.org/rfc/rfc1997 | RFC 1997: BGP Communities Attribute
+
+Q: Welche Well-Known-Communities gibt es und was bewirken sie?
+A: **no-export (65535:65281): nicht an eBGP-Nachbarn außerhalb des AS (oder der Confederation). no-advertise (65535:65282): an niemanden weitergeben. local-AS (65535:65283): nicht außerhalb des lokalen AS (Confederation-Sub-AS).** internet ist die Gruppe aller Routen.
+T: Wissen Mittel
+
+Q: Du setzt `set community 65001:100` und die vorherigen Communities sind weg. Wie bleiben sie erhalten?
+A: **Mit `additive`: `set community 65001:100 additive`.** Ohne `additive` ersetzt `set community` alle bestehenden Werte. Außerdem musst du `neighbor x send-community [both]` setzen, sonst werden Communities nicht gesendet.
+T: Falle Mittel
+
+Q: Wie filterst du nach Communities?
+A:
+```
+ip community-list standard CL permit 65001:100
+route-map IN permit 10
+ match community CL
+ set local-preference 200
+```
+Mit `ip bgp-community new-format` zeigt IOS Communities als AA:NN statt als Dezimalzahl. Für reguläre Ausdrücke nutzt du `expanded`.
+T: CLI Mittel
+
+Q: Wie baust du Dual-Homing zu zwei Providern mit einem Primär- und einem Backup-Provider?
+A: **Local Preference auf Routen des Primär-Providers erhöhen, beim Backup mit Prepending ausgehend nachhelfen.** Eingehend: Prefix beim Backup-Provider mehrfach prependen. Ausgehend: `set local-preference 200` für Routen vom Primär. Zusätzlich Filter, damit du kein Transit-AS wirst.
+T: Szenario Mittel
+
+Q: Wie verhinderst du, dass dein AS bei Dual-Homing zum Transit zwischen zwei Providern wird?
+A: **Mit ausgehendem Filter: nur eigene Präfixe (AS-Path-ACL `^$`) an die Provider senden.** Beispiel: `ip as-path access-list 1 permit ^$` und `neighbor x filter-list 1 out`. Sonst gibst du die Routen des einen Providers an den anderen weiter.
+T: Szenario Mittel
+
+Q: Wie wirkt die bedingte Ankündigung (`advertise-map` / `non-exist-map`)?
+A: **Ein Präfix wird nur angekündigt, wenn ein anderes Präfix (nicht) in der BGP-Tabelle ist.** `neighbor x advertise-map ADV non-exist-map NON` kündigt ADV nur an, wenn NON nicht existiert. Nutzung: Backup-Pfad nur anbieten, wenn der Primärpfad weg ist.
+T: Wissen Schwer
+
+# 1.5.d | BGP: AS-Path-Manipulation
+S: https://www.rfc-editor.org/rfc/rfc4271 | RFC 4271: A Border Gateway Protocol 4 (BGP-4)
+
+Q: Welche regulären Ausdrücke brauchst du für AS-Pfad-Filter am häufigsten?
+A: **`^$` lokal erzeugt, `^65001_` aus dem Nachbar-AS 65001, `_65002$` ursprünglich aus AS 65002, `_65003_` über AS 65003, `.*` alles.** `_` steht für Anfang, Ende oder Trennzeichen. `show ip bgp regexp ^65001_` testet den Ausdruck.
+T: Wissen Mittel
+
+Q: Dein Router lehnt eine Route ab, weil sein eigenes AS im AS-Pfad steht. Wie erlaubst du das gezielt?
+A: **`neighbor x allowas-in [Anzahl]`.** Nötig z. B., wenn zwei Standorte des Kunden dieselbe AS-Nummer nutzen und über den Provider verbunden sind. Alternativ ersetzt der Provider mit `neighbor x as-override` die Kunden-AS durch die eigene.
+T: Szenario Mittel
+
+Q: Wie entfernst du private AS-Nummern vor dem Provider?
+A: **`neighbor x remove-private-as`.** Mit `all` werden alle privaten ASN entfernt, mit `replace-as` durch die eigene ersetzt. Ohne `all` greift es nur, wenn der Pfad ausschließlich aus privaten ASN besteht.
+T: Wissen Mittel
+
+Q: Was macht `neighbor x local-as 65100` und wann nutzt man es?
+A: **Der Router gibt gegenüber diesem Nachbarn ein anderes AS vor (zusätzliche Identität).** Nützlich bei AS-Migrationen: Kunden müssen ihre Konfiguration nicht gleichzeitig ändern. Standardmäßig steht die Fake-AS im Pfad; `no-prepend` und `replace-as` ändern das.
+T: Wissen Schwer
+
+Q: Wie prependest du in einer Route-Map den eigenen AS dreimal?
+A:
+```
+route-map OUT permit 10
+ set as-path prepend 65001 65001 65001
+```
+Prepende nur das eigene AS. Fremde AS-Nummern einzufügen kann Loop-Prevention beim Nachbarn auslösen und gilt als schlechter Stil. Aktivieren per `neighbor x route-map OUT out`.
+T: CLI Leicht
+
+# 1.5.e | BGP: Konvergenz und Skalierung
+S: https://www.rfc-editor.org/rfc/rfc4456 | RFC 4456: BGP Route Reflection
+
+Q: Welche Regeln gelten für einen Route Reflector?
+A: **Route aus einem Client → an alle Clients und Nicht-Clients. Route aus einem Nicht-Client → nur an Clients. Route von eBGP → an alle.** Der RR fügt ORIGINATOR_ID und CLUSTER_LIST hinzu. Er spiegelt nur den besten Pfad.
+T: Wissen Mittel
+
+Q: Was schützt vor Schleifen bei Route Reflektoren?
+A: **ORIGINATOR_ID (Router-ID des Erstellers) und CLUSTER_LIST (Liste der Cluster-IDs).** Ein Router verwirft eine Route, in der seine eigene Router-ID als Originator oder seine Cluster-ID in der Liste steht. Bei mehreren RRs in einem Cluster setzt man dieselbe `bgp cluster-id`.
+T: Wissen Mittel
+
+Q: Wie konfigurierst du einen RR?
+A:
+```
+router bgp 65001
+ neighbor 10.0.0.1 remote-as 65001
+ neighbor 10.0.0.1 route-reflector-client
+```
+Es genügt der Befehl am RR. Die Clients brauchen keine Besonderheit. Prüfe `show ip bgp neighbors | include reflector`.
+T: CLI Leicht
+
+Q: Was macht `aggregate-address 10.0.0.0 255.0.0.0 as-set summary-only`?
+A: **Es erzeugt die Summary, unterdrückt die Einzelrouten und fasst die AS-Pfade der Einzelrouten als AS_SET zusammen.** Das bewahrt Informationen über die AS-Herkunft und verhindert Schleifen im Fall von Aggregation über mehrere AS.
+T: Wissen Mittel
+
+Q: Wie beschleunigst du BGP-Konvergenz bei Linkausfall?
+A: **BGP Fast External Fallover (Standard: ein), BFD, kürzere Timer und Next-Hop-Tracking.** `bgp fast-external-fallover` setzt die eBGP-Sitzung sofort zurück, wenn das direkt verbundene Interface down geht. `bgp nexthop trigger delay` steuert die Reaktion auf IGP-Änderungen (Standard 5 s).
+T: Wissen Schwer
+
+Q: Welche Mindestabstände für UPDATEs nutzt IOS?
+A: **eBGP: 30 s, iBGP: deutlich kürzer (`neighbor x advertisement-interval`).** Das gilt als Batching für Änderungen am selben Präfix. In Labs lohnt es sich, das für schnelleren Test zu senken.
+T: Wissen Mittel
+
+# 1.5.f | BGP: Soft Reconfiguration, Route Refresh und Schutz
+S: https://www.rfc-editor.org/rfc/rfc2918 | RFC 2918: Route Refresh Capability for BGP-4
+
+Q: Wie wendest du eine geänderte Route-Map ohne Sitzungsreset an?
+A: **`clear ip bgp x soft in` (eingehend) oder `soft out` (ausgehend).** Eingehend nutzt IOS Route Refresh (beide Seiten müssen die Fähigkeit mitbringen) oder Soft Reconfiguration. `clear ip bgp *` ohne `soft` setzt dagegen die Sitzung zurück.
+T: CLI Leicht
+
+Q: Wie unterscheiden sich Soft Reconfiguration und Route Refresh?
+A: **Soft Reconfiguration speichert unveränderte Routen lokal (Speicher), Route Refresh fordert sie beim Nachbarn erneut an.** Soft Reconfiguration brauchst du, wenn du mit `show ip bgp neighbors x received-routes` die Routen vor dem Inbound-Filter sehen willst. Route Refresh spart Speicher.
+T: Vergleich Mittel
+
+Q: Wie begrenzt du die Zahl der Präfixe, die ein Nachbar schicken darf?
+A:
+```
+neighbor 192.0.2.1 maximum-prefix 1000 80 restart 5
+```
+Bei 80 % der Grenze erscheint eine Warnung, bei Überschreiten wird die Sitzung beendet und nach 5 Minuten neu gestartet. Ohne `restart` bleibt sie unten bis `clear ip bgp`.
+T: CLI Mittel
+
+Q: Wie dämpfst du instabile Routen?
+A: **Mit Route Flap Dampening (`bgp dampening`).** Jedes Flappen kostet 1000 Strafpunkte, bei über 2000 wird die Route unterdrückt, unter 750 wieder freigegeben, die Halbwertszeit beträgt 15 Minuten. Das ist im Internet wegen der Verzögerung nicht mehr üblich.
+T: Wissen Mittel

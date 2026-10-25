@@ -1,0 +1,123 @@
+# 2.1.a | SD-Access: Fabric-Rollen und Underlay
+S: https://www.cisco.com/c/en/us/td/docs/solutions/CVD/Campus/cisco-sda-design-guide.html | Cisco SD-Access Design Guide
+
+Q: Welche Rollen hat ein SD-Access-Fabric?
+A: **Control Plane Node, Border Node, Edge Node, dazu Intermediate Nodes im Underlay, Fabric-WLC und Fabric-APs.** Der Control Plane Node ist LISP Map-Server und Map-Resolver. Edge Nodes bedienen Endgeräte, Border Nodes verbinden das Fabric nach außen.
+T: Wissen Leicht
+
+Q: Welche Protokolle bilden Control Plane und Data Plane im SD-Access-Fabric?
+A: **LISP für die Control Plane, VXLAN-GPO für die Data Plane.** Das VXLAN-Gruppenpolicy-Format trägt neben der VNI auch das Scalable Group Tag (SGT). Die Policy-Plane stellen Cisco ISE und TrustSec.
+T: Wissen Leicht
+
+Q: Wie läuft die Endpunkt-Registrierung im Fabric ab?
+A: **Der Edge Node lernt einen Endpunkt (EID) und sendet eine LISP Map-Register an den Control Plane Node.** Will ein Edge Node ein Ziel erreichen, fragt er per Map-Request nach dem RLOC, also der Loopback des Ziel-Edge. Dann kapselt er per VXLAN direkt dorthin.
+T: Wissen Mittel
+
+Q: Was ist die Aufgabe des Border Nodes bei unbekannten Zielen?
+A: **Er dient als Proxy-Tunnel-Router für alles, was nicht im Fabric registriert ist.** Edge Nodes senden Verkehr zu Zielen ohne Map-Reply (Negative Map-Reply) an den Border. Ein Default Border reicht diesen Verkehr nach außen weiter.
+T: Wissen Mittel
+
+Q: Wie unterscheiden sich Internal, External und Anywhere Border?
+A: **Internal Border: Netze innerhalb der Organisation (z. B. Rechenzentrum). External Border: unbekannte Ziele, also Internet. Anywhere Border: beides in einem Node.** Der External Border dient als Default für alle EIDs, die nicht registriert sind.
+T: Vergleich Mittel
+
+Q: Welche Underlay-Anforderungen hat ein SD-Access-Fabric?
+A: **Reines Layer-3-Routing zwischen allen Fabric-Nodes mit erreichbaren Loopbacks, und MTU von mindestens 9100 empfohlen.** Cisco Catalyst Center automatisiert das mit LAN Automation per IS-IS und Routed Access. VXLAN fügt 50 Byte Overhead hinzu.
+T: Wissen Mittel
+
+Q: Welchen Overhead erzeugt VXLAN, und woraus besteht er?
+A: **50 Byte: 14 Ethernet + 20 IP + 8 UDP + 8 VXLAN.** UDP-Zielport 4789. Bei Standard-MTU 1500 im Underlay bleibt nur 1450 Byte nutzbare Payload.
+T: Rechnen Leicht
+
+Q: Wozu dient LAN Automation im Catalyst Center?
+A: **Es richtet das Underlay automatisch ein: Seed-Gerät konfigurieren, neue Switches per PnP finden und mit IS-IS, Loopbacks und Point-to-Point-Links versehen.** Das Ergebnis ist ein Routed-Access-Underlay ohne STP.
+T: Wissen Mittel
+
+# 2.1.b | SD-Access: Segmentierung, Anycast Gateway und Transit
+S: https://www.cisco.com/c/en/us/td/docs/solutions/CVD/Campus/cisco-sda-design-guide.html | Cisco SD-Access Design Guide
+
+Q: Wie trennt SD-Access Makro- und Mikro-Segmentierung?
+A: **Makro-Segmentierung über Virtual Networks (VN, entspricht VRF), Mikro-Segmentierung über Scalable Groups (SGT) innerhalb eines VN.** Zwischen VNs gibt es standardmäßig keine Kommunikation. SGT-Policy (SGACL) kommt aus ISE und wird am Ziel-Edge durchgesetzt.
+T: Wissen Leicht
+
+Q: Wie hängen VNI, VN und VLAN im Fabric zusammen?
+A: **Jedes VN bekommt eine Layer-3-VNI, jedes Fabric-Subnetz (IP Pool) eine Layer-2-VNI.** Die LISP Instance ID entspricht der VNI. Dasselbe VLAN kann an verschiedenen Edges lokal sein, weil die L2-VNI das Subnetz fabric-weit bindet.
+T: Wissen Schwer
+
+Q: Was ist ein Anycast Gateway?
+A: **Dieselbe Gateway-IP und -MAC liegen auf allen Edge Nodes.** Endpunkte behalten beim Roaming ihr Gateway, und es gibt kein FHRP. Jeder Edge ist die erste Layer-3-Hop-Station.
+T: Wissen Mittel
+
+Q: Wie wird ein Endpunkt einer Scalable Group zugewiesen?
+A: **Dynamisch per 802.1X oder MAB über ISE (SGT im Authorization Profile) oder statisch per Port/IP-Pool-Zuweisung im Catalyst Center.** Der SGT reist dann im VXLAN-GPO-Header durch das Fabric.
+T: Wissen Mittel
+
+Q: Wo unterscheiden sich IP Transit und SD-Access Transit?
+A: **IP Transit übergibt Verkehr per VRF-Lite an das WAN (VXLAN endet am Border, SGT geht verloren, außer SXP oder Inline Tagging). SD-Access Transit hält VXLAN mit SGT zwischen Fabric Sites durchgängig.** SD-Access Transit braucht ein WAN mit passender MTU und eigene Transit Control Plane Nodes.
+T: Vergleich Schwer
+
+Q: Wie sieht die Standard-Übergabe am Border zu externen Netzen aus?
+A: **Pro VN eine VRF-Lite-Instanz mit eigenem VLAN/SVI zum Fusion Router, meist mit eBGP.** Der Fusion Router verbindet die VRFs (Route Leaking) mit Shared Services wie DHCP, DNS oder Internet.
+T: Wissen Mittel
+
+Q: Wie wird Multicast im Fabric übertragen?
+A: **Entweder per Head-End-Replication (Unicast-Kopien im VXLAN) oder per nativem Multicast im Underlay (PIM-SSM).** Mit Underlay-Multicast braucht man PIM im Underlay, spart aber Replikation am Edge.
+T: Wissen Schwer
+
+Q: Wozu dient Layer-2-Flooding im Fabric?
+A: **Es erlaubt Broadcast und Link-Local-Multicast (z. B. für Bonjour) innerhalb eines Subnetzes im Fabric.** Dafür nutzt das Fabric Multicast im Underlay pro L2-VNI. Standardmäßig ist es aus, weil ARP über die LISP Control Plane aufgelöst wird.
+T: Wissen Schwer
+
+# 2.2.a | SD-WAN: Architektur und Komponenten
+S: https://www.cisco.com/c/en/us/td/docs/routers/sdwan/configuration/sdwan-xe-gs-book/system-overview.html | Cisco SD-WAN Overview
+
+Q: Welche Aufgaben haben vManage, vSmart und vBond?
+A: **vManage: Management, Templates, Monitoring. vSmart: Control Plane (OMP), Policy. vBond: Orchestrator, erste Authentifizierung und NAT-Erkennung.** vBond verteilt die Liste von vSmart und vManage an neue Geräte. WAN Edge Router bilden die Data Plane.
+T: Vergleich Leicht
+
+Q: Wie baut ein neuer WAN Edge die Control Connections auf?
+A: **Zuerst DTLS/TLS zu vBond, dann zu vSmart und vManage, dann OMP mit vSmart.** Geräte authentifizieren sich per Zertifikat und Serial-Number-Whitelist. Der vBond-Tunnel wird danach abgebaut.
+T: Wissen Mittel
+
+Q: Was ist ein TLOC?
+A: **Ein Transport Locator: System-IP, Color und Encapsulation (IPsec oder GRE).** TLOCs sind die Endpunkte der Data-Plane-Tunnel zwischen WAN Edges. OMP verbreitet sie als eigene Route-Art.
+T: Wissen Leicht
+
+Q: Welche Route-Arten kennt OMP?
+A: **OMP Routes (Präfixe aus Service-VPNs), TLOC Routes (Transport-Endpunkte) und Service Routes (Dienste wie Firewall).** OMP läuft zwischen WAN Edge und vSmart, nicht zwischen den Edges selbst.
+T: Wissen Mittel
+
+Q: Was bedeutet die Unterscheidung zwischen public und private Colors?
+A: **Public Colors (z. B. biz-internet, 3g) bilden Tunnel über NAT-Adressen. Private Colors (mpls, private1) nutzen die private Adresse.** Mit `restrict` bildet ein TLOC Tunnel nur zu TLOCs derselben Color.
+T: Wissen Schwer
+
+Q: Wofür stehen VPN 0 und VPN 512?
+A: **VPN 0 ist das Transport-VPN mit den WAN-Interfaces und Control Connections. VPN 512 ist das Out-of-Band-Management-VPN.** Alle anderen VPNs sind Service-VPNs für Benutzerverkehr.
+T: Wissen Leicht
+
+Q: Wie überwachen WAN Edges die Tunnel?
+A: **BFD läuft innerhalb der IPsec-Tunnel und misst Loss, Latenz und Jitter.** Die Werte speisen die Application-Aware Routing Policy. Standard: Hello-Intervall 1 Sekunde, Multiplier 7.
+T: Wissen Mittel
+
+# 2.2.b | SD-WAN: Templates und Policies
+S: https://www.cisco.com/c/en/us/td/docs/routers/sdwan/configuration/policies/ios-xe-17/policies-book-xe.html | Cisco SD-WAN Policies
+
+Q: Wie unterscheiden sich Device Templates, Feature Templates und CLI Templates?
+A: **Feature Templates konfigurieren einzelne Funktionen und werden in Device Templates kombiniert. CLI Templates sind freie Konfigurationstexte.** vManage pusht sie per NETCONF auf die Geräte. Gerätespezifische Werte setzt man mit Variablen.
+T: Vergleich Mittel
+
+Q: Wo wirken Centralized Control Policy, Centralized Data Policy und Localized Policy?
+A: **Control Policy läuft auf vSmart und verändert OMP-Routen und TLOCs. Data Policy wird auf vSmart definiert, aber an den Edges durchgesetzt. Localized Policy wird direkt am Edge angewendet (QoS, ACL, Route-Policy).** Jede Policy greift per Site-Liste und Richtung.
+T: Vergleich Schwer
+
+Q: Wie baust du Hub-and-Spoke, wenn das Standardverhalten Full Mesh ist?
+A: **Mit einer Centralized Control Policy, die Spoke-TLOCs vor anderen Spokes verbirgt oder Spoke-Routen nur mit Hub-TLOC als Next Hop ankündigt.** Ohne Policy kündigt vSmart alle Routen an alle Sites an.
+T: Szenario Schwer
+
+Q: Wie funktioniert Application-Aware Routing?
+A: **Eine SLA-Klasse definiert Schwellen für Loss, Latenz und Jitter. Eine App-Route-Policy leitet passenden Verkehr über den Pfad, der die SLA erfüllt.** Die Messwerte stammen aus BFD. Erfüllt kein Pfad die SLA, nutzt der Edge den besten verfügbaren Pfad.
+T: Wissen Mittel
+
+Q: In welche Richtung wirkt eine Centralized Data Policy?
+A: **From-Service (Verkehr aus dem LAN), From-Tunnel (aus dem WAN) oder All.** Die Richtung wählt man im Policy-Anwendungsschritt zusammen mit der Site-Liste.
+T: Wissen Mittel
