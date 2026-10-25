@@ -1,0 +1,5 @@
+hostname: SW-LAB1
+interfaces:
+  - {name: GigabitEthernet0/1, desc: "Uplink", mode: trunk, vlans: [10, 20]}
+  - {name: GigabitEthernet0/2, desc: "H1", mode: access, vlan: 10}
+  - {name: GigabitEthernet0/3, desc: "", mode: access, vlan: 20, shutdown: true}

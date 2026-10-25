@@ -1,0 +1,4 @@
+{# Aufgabe 6a: Template so schreiben, dass render.py "OK" meldet.
+   Variablen: hostname, interfaces (Liste von Dicts mit name, desc, mode, vlan bzw. vlans, optional shutdown).
+   Tipps: {% for i in interfaces %}, {% if i.desc %}, {{ i.vlans | join(',') }}. render.py nutzt trim_blocks und lstrip_blocks. #}
+hostname {{ hostname }}

@@ -1,0 +1,18 @@
+hostname {{ hostname }}
+!
+{% for i in interfaces %}
+interface {{ i.name }}
+{% if i.desc %}
+ description {{ i.desc }}
+{% endif %}
+ switchport mode {{ i.mode }}
+{% if i.mode == 'trunk' %}
+ switchport trunk allowed vlan {{ i.vlans | join(',') }}
+{% else %}
+ switchport access vlan {{ i.vlan }}
+{% endif %}
+{% if i.shutdown %}
+ shutdown
+{% endif %}
+!
+{% endfor %}
