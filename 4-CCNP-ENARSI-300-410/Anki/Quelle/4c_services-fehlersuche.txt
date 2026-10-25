@@ -1,0 +1,130 @@
+# 4.1.b | Gerätezugang: Fehlersuche
+
+Q: `show ip ssh` meldet „SSH Disabled - version 2.0“. Was fehlt?
+A: **Ein RSA-Schlüsselpaar.** Der SSH-Server startet erst, wenn ein Schlüssel existiert. Mit `crypto key generate rsa modulus 2048` ist SSH sofort aktiv, ohne Neustart.
+T: Exhibit Leicht
+
+Q: Ein Admin kann sich per SSH anmelden, landet aber im User-Modus und `enable` scheitert mit „% No password set“. Was fehlt?
+A: **Ein Enable-Secret (`enable algorithm-type scrypt secret ...`) oder ein Benutzer mit Privilege 15 samt EXEC-Autorisierung.** Ohne Enable-Passwort lässt IOS den Wechsel in den privilegierten Modus über VTY nicht zu.
+T: Szenario Leicht
+
+Q: Nach einem Neustart funktioniert SSH nicht mehr, vorher ging es. Was ist ein typischer Grund?
+A: **Der RSA-Schlüssel wurde nicht gespeichert oder Hostname bzw. Domainname wurden nach dem Erzeugen geändert und nicht gespeichert.** Auf manchen Plattformen geht der Schlüssel mit `write memory` in den NVRAM, ohne Speichern ist er nach dem Neustart weg.
+T: Szenario Mittel
+
+Q: Welcher Befehl zeigt, wer gerade am Router angemeldet ist und über welche Line?
+A: **`show users`.** Du siehst Line, Benutzer, Quelladresse und Leerlaufzeit. `show ssh` listet zusätzlich die SSH-Sitzungen mit Version und Verschlüsselung.
+T: CLI Leicht
+
+# 4.2 | SNMP: Fehlersuche
+S: https://www.rfc-editor.org/rfc/rfc3414 | RFC 3414: User-based Security Model (USM) for SNMPv3
+
+Q: Der Manager fragt mit SNMPv3 authPriv an, der Router antwortet nicht. Die Gruppe ist mit `v3 auth` angelegt. Wo liegt der Fehler?
+A: **Die Sicherheitsstufe passt nicht: Die Gruppe erlaubt nur authNoPriv, der Manager verlangt authPriv.** Die Gruppe muss mit `v3 priv` angelegt werden, und der Benutzer braucht einen `priv`-Schlüssel.
+T: Szenario Mittel
+
+Q: `show snmp` zeigt steigende Zähler bei „Unknown community name“. Was bedeutet das?
+A: **Ein Gerät fragt mit einer Community an, die der Router nicht kennt.** Entweder ist der Manager falsch konfiguriert, oder jemand probiert Community-Strings aus. Im zweiten Fall hilft eine ACL am Community-Befehl.
+T: Exhibit Leicht
+
+Q: Traps kommen beim Manager nicht an, Abfragen per SNMP funktionieren. Was prüfst du?
+A: **`snmp-server enable traps`, den Eintrag `snmp-server host` mit passender Version und Community bzw. Benutzer, UDP 162 auf dem Weg und die Quelladresse (`snmp-server trap-source Loopback0`).** Viele Manager verwerfen Traps von unbekannten Absendern.
+T: Szenario Mittel
+
+Q: Darf man SNMP mit Schreibrecht (RW) über v2c freigeben?
+A: **Technisch ja, sicherheitlich nein.** Mit einer mitgeschnittenen RW-Community kann jeder die Konfiguration ändern oder sogar kopieren. Schreibzugriff, wenn überhaupt, nur über SNMPv3 mit authPriv und einer View, die genau das Nötige erlaubt.
+T: Wissen Mittel
+
+# 4.3 | Logging und Debug: Fehlersuche
+S: https://www.rfc-editor.org/rfc/rfc5424 | RFC 5424: The Syslog Protocol
+
+Q: Was bedeutet in der Meldung `%LINEPROTO-5-UPDOWN: Line protocol on Interface Gi0/1, changed state to down` die Zahl 5?
+A: **Die Severity: 5 ist Notifications.** Die Meldung besteht aus Facility (LINEPROTO), Severity (5) und Mnemonic (UPDOWN). Danach kommt der Text.
+T: Exhibit Leicht
+
+Q: Der Syslog-Server bekommt Meldungen, aber alle mit falscher Uhrzeit. Was prüfst du am Router?
+A: **NTP-Synchronisation (`show ntp status`), Zeitzone (`clock timezone`) und ob die Zeitstempel `localtime` nutzen.** Ohne NTP startet die Uhr nach einem Neustart oft bei 1993 oder einem anderen Standardwert.
+T: Szenario Leicht
+
+Q: Die Konsole ist durch Log-Meldungen kaum bedienbar. Wie schaffst du Ruhe, ohne Logs zu verlieren?
+A: **Mit `logging console warnings` (oder `no logging console`) und `logging buffered` für die volle Ausgabe.** Die Meldungen landen im Puffer, den du mit `show logging` liest, und auf dem Syslog-Server.
+T: CLI Leicht
+
+Q: Wie leitest du Debug-Ausgaben nur in den Puffer statt auf die Konsole?
+A: **`logging buffered 128000 debugging` und `no logging console` bzw. `logging console informational`.** Debug-Meldungen haben Stufe 7. Nur Ziele, die bis Stufe 7 eingestellt sind, bekommen sie.
+T: CLI Mittel
+
+Q: Wie verhinderst du, dass ein Meldungssturm den Router überlastet?
+A: **Mit `logging rate-limit`, etwa `logging rate-limit 100 except errors`.** Der Router gibt dann höchstens 100 Meldungen pro Sekunde aus, wichtige Meldungen bis Errors aber immer.
+T: CLI Mittel
+
+# 4.4 | DHCP: Fehlersuche
+S: https://www.rfc-editor.org/rfc/rfc2131 | RFC 2131: Dynamic Host Configuration Protocol
+
+Q: Clients bekommen eine 169.254.x.x-Adresse. Was sagt dir das?
+A: **Der Client hat keine Antwort von einem DHCP-Server bekommen und sich selbst eine APIPA-Adresse gegeben.** Prüfe der Reihe nach: Helper am Gateway, Erreichbarkeit des Servers, passender Pool, freie Adressen, ACLs und DHCP Snooping am Switch.
+T: Szenario Leicht
+
+Q: `show ip dhcp pool` zeigt für LAN20 „Leased addresses: 244, Total addresses: 254“, und neue Clients bekommen nichts. Was ist los?
+A: **Der Pool ist praktisch voll: 244 vergeben plus die ausgeschlossenen Adressen.** Bei 10 ausgeschlossenen Adressen bleibt nichts frei. Lösungen: kürzere Lease, größeres Netz oder alte Bindings und Konflikte freigeben.
+T: Exhibit Mittel
+
+Q: Mit welchem Debug verfolgst du, warum der IOS-DHCP-Server einem Client nicht antwortet?
+A: **`debug ip dhcp server events` und für die Paketdetails `debug ip dhcp server packet`.** Dort siehst du, ob Discover ankommen, welcher Pool gewählt wird und ob etwa ein Konflikt oder fehlender Pool die Antwort verhindert.
+T: CLI Mittel
+
+Q: Ein Client im Netz 10.20.0.0/24 bekommt eine Adresse aus dem Pool für 10.30.0.0/24. Woran liegt das am wahrscheinlichsten?
+A: **Die `ip helper-address` steht am falschen Interface, nämlich an einem Interface im Netz 10.30.0.0.** Der Relay schreibt seine eigene Interface-Adresse in giaddr, und der Server wählt danach den Pool.
+T: Szenario Mittel
+
+# 4.5 | IP SLA: Fehlersuche
+S: https://www.cisco.com/en/US/docs/ios-xml/ios/ipsla/configuration/15-2s/sla_udp_jitter.html | Cisco: Configuring IP SLAs UDP Jitter Operations
+
+Q: `show ip sla statistics 1` zeigt „Latest operation return code: Timeout“ und `show track 1` „Reachability is Down“. Das Ziel antwortet aber auf manuelle Pings. Woran kann das liegen?
+A: **Die SLA nutzt eine andere Quelle oder einen anderen Weg als dein manueller Ping.** Prüfe `source-interface` bzw. `source-ip` in der SLA und ob das Ziel von dieser Quelle aus erreichbar ist. Auch eine ACL oder CoPP beim Ziel kann genau diese Quelle blocken.
+T: Exhibit Mittel
+
+Q: Eine UDP-Jitter-Operation meldet „No connection“. Was fehlt meist?
+A: **Der Responder auf dem Zielgerät (`ip sla responder`).** Ohne ihn verwirft das Ziel die Steuerpakete, und die Messung startet nicht. Auch eine Firewall, die UDP 1967 (IP-SLA-Control) blockt, führt dazu.
+T: Szenario Mittel
+
+Q: Eine getrackte Default-Route verschwindet nicht, obwohl der Track Down ist. Was prüfst du?
+A: **Ob die Route wirklich mit `track 1` konfiguriert ist und ob dieselbe Route noch einmal ohne Track existiert.** `show ip route static` und `show running-config | include ip route` zeigen doppelte Einträge. Eine zweite, ungetrackte Zeile bleibt unabhängig vom Track stehen.
+T: Szenario Mittel
+
+Q: Wie kombinierst du zwei IP-SLA-Tests so, dass eine Route nur fällt, wenn beide Ziele unerreichbar sind?
+A: **Mit einer Track-Liste: `track 10 list boolean or` mit `object 1` und `object 2`.** Bei `or` ist die Liste Up, solange ein Ziel antwortet. Ein einzelnes gestörtes Ziel schaltet so nicht gleich den ganzen Ausgang ab.
+T: CLI Schwer
+
+# 4.6 | NetFlow: Fehlersuche
+S: https://www.rfc-editor.org/rfc/rfc7011 | RFC 7011: IP Flow Information Export (IPFIX) Protocol
+
+Q: `show flow monitor MON cache` bleibt leer, obwohl Verkehr über Gi0/1 läuft. Was prüfst du?
+A: **Ob der Monitor in der richtigen Richtung am richtigen Interface hängt (`show flow interface Gi0/1`) und ob der Record zum Verkehr passt.** Ein IPv4-Record erfasst keinen IPv6-Verkehr, dafür braucht es `ipv6 flow monitor` mit eigenem Record.
+T: Szenario Mittel
+
+Q: Der Collector bekommt Flows, aber alle mit derselben, unbekannten Absenderadresse. Wie machst du die Quelle stabil?
+A: **Mit `source Loopback0` im Flow Exporter.** Ohne Angabe nutzt der Router das Ausgangsinterface. Viele Collectoren ordnen Flows dem Gerät über die Absenderadresse zu.
+T: CLI Leicht
+
+Q: Wozu dient ein Sampler bei Flexible NetFlow?
+A: **Er wertet nur einen Teil der Pakete aus, etwa jedes hundertste, um CPU und Speicher zu schonen.** Die Byte- und Paketzahlen muss der Collector dann hochrechnen. Für Sicherheitsanalysen, die jeden Flow brauchen, ist Sampling ungeeignet.
+T: Wissen Mittel
+
+Q: Wie unterscheidet sich die klassische NetFlow-Konfiguration von Flexible NetFlow?
+A: **Klassisch: `ip flow ingress` am Interface und `ip flow-export destination` global, mit festem Format. Flexible NetFlow: eigene Records, Exporter und Monitore.** Auf aktuellen IOS-XE-Plattformen gibt es oft nur noch Flexible NetFlow.
+T: Vergleich Mittel
+
+# 4.7 | Catalyst Center Assurance: Anwendung
+
+Q: Ein Access-Switch zeigt in Assurance Health Score 3. Wie gehst du vor?
+A: **Im Device 360 nachsehen, welche Kennzahl den Wert drückt (CPU, Speicher, Erreichbarkeit, Interface-Fehler), und die zugehörigen Issues öffnen.** Assurance zeigt dort meist auch vorgeschlagene Prüfschritte und Befehle.
+T: Szenario Leicht
+
+Q: Wie zeigt Catalyst Center, ob ein Problem gerade erst entstanden ist oder schon länger besteht?
+A: **Über die Zeitleiste in Device 360 und Client 360, mit der man rückwirkend Zustände anzeigen kann.** So erkennst du, ob ein Health Score plötzlich gefallen ist oder dauerhaft schlecht ist, und kannst es mit Änderungen oder Ereignissen vergleichen.
+T: Wissen Mittel
+
+Q: Wozu dienen die „Suggested Actions“ bei einem Issue in Assurance?
+A: **Sie schlagen konkrete Prüfschritte vor, oft mit `show`-Befehlen, die Catalyst Center direkt auf dem Gerät ausführen kann.** Das beschleunigt die erste Diagnose, ersetzt aber nicht das Verständnis des Problems.
+T: Wissen Leicht

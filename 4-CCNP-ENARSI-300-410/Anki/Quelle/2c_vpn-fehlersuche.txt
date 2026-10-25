@@ -1,0 +1,97 @@
+# 2.1 | MPLS: Fehlersuche
+S: https://www.rfc-editor.org/rfc/rfc5036 | RFC 5036: LDP Specification
+
+Q: Ein Traceroute durchs MPLS-Netz zeigt bei jedem Hop die Labels. Mit welchem Befehl prüfst du, ob ein LSP zu 4.4.4.4/32 durchgängig ist?
+A: **`traceroute mpls ipv4 4.4.4.4/32` (MPLS LSP Ping/Traceroute).** Anders als ein normaler Traceroute prüft er den LSP selbst und meldet, an welchem Router das Label-Switching bricht. Voraussetzung ist MPLS OAM auf den Routern.
+S: https://www.rfc-editor.org/rfc/rfc8029 | RFC 8029: Detecting MPLS Data-Plane Failures
+T: CLI Schwer
+
+Q: In `show mpls forwarding-table` steht bei 4.4.4.4/32 als Outgoing Label „No Label“, obwohl der Nachbar LDP spricht. Was bedeutet das?
+A: **Der Router hat vom Next-Hop-Nachbarn kein Label für dieses Präfix und leitet unlabelt (per IP) weiter.** Ursachen: LDP-Sitzung zu genau diesem Nachbarn fehlt, oder der Nachbar vergibt für das Präfix kein Label, etwa weil es bei ihm anders zusammengefasst ist. In einem L3VPN bricht damit der Verkehr ab, weil der P-Router das VPN-Label nicht versteht.
+T: Exhibit Schwer
+
+Q: LDP-Nachbarn verlieren nach jeder IGP-Konvergenz kurz ihre Sitzung, und Pakete werden ohne Label weitergeleitet. Welche Funktion hilft?
+A: **LDP-IGP-Synchronisation: `mpls ldp sync` unter `router ospf`.** OSPF meldet einen Link dann erst mit normalen Kosten, wenn LDP auf ihm steht. So nimmt Verkehr keinen Weg, auf dem noch keine Labels vorhanden sind.
+T: Szenario Schwer
+
+Q: Ein Router hat zwei LDP-Nachbarn mit derselben LDP-Router-ID. Was passiert?
+A: **Nur einer baut eine Sitzung auf, weil LDP Nachbarn über die LDP-ID unterscheidet.** Die LDP-ID ist die Router-ID plus Label Space, etwa 2.2.2.2:0. Doppelte IDs entstehen, wenn Loopbacks kopiert wurden.
+T: Szenario Mittel
+
+Q: Welche Bedeutung hat „:0“ in einer LDP-ID wie 2.2.2.2:0?
+A: **Label Space 0 heißt: plattformweiter Label-Raum.** Der Router nutzt für ein Präfix dasselbe Label auf allen Interfaces. Das ist bei Frame-Mode-MPLS über Ethernet der Normalfall.
+T: Wissen Mittel
+
+# 2.2 | MPLS L3VPN: Fehlersuche
+
+Q: Die VPN-Routen eines Kunden stehen auf PE2 korrekt in der VRF, trotzdem kommen Pakete von PE1 nicht an. Was prüfst du im Kern?
+A: **Ob es einen durchgehenden LSP zur Loopback von PE2 gibt.** Ohne Transport-Label werfen P-Router die Pakete weg, weil sie das VPN-Label nicht kennen. `show mpls forwarding-table 4.4.4.4` auf jedem Hop zeigt, wo das Label fehlt.
+T: Szenario Mittel
+
+Q: Mit welchem Befehl prüfst du auf einem PE, welche VPN-Routen er per MP-BGP von anderen PEs bekommt?
+A: **`show bgp vpnv4 unicast all` (oder `show ip bgp vpnv4 all`).** Die Ausgabe ist nach RD gruppiert. Mit `show bgp vpnv4 unicast vrf KUNDE-A` siehst du nur die Routen dieser VRF.
+T: CLI Leicht
+
+Q: Ein CE spricht OSPF mit dem PE. Seine Routen erscheinen in der VRF auf PE1, aber nicht am anderen Standort. Was fehlt auf PE1 typischerweise?
+A: **Die Redistribution von OSPF in MP-BGP: `redistribute ospf 10` unter `address-family ipv4 vrf KUNDE-A` in BGP.** Ohne sie bleiben die Routen in der VRF, MP-BGP kennt sie nicht. In Gegenrichtung braucht OSPF `redistribute bgp 65000` im VRF-Prozess.
+T: Szenario Mittel
+
+Q: Wie pingst du von einem PE aus einen Host in der Kunden-VRF?
+A: **Mit `ping vrf KUNDE-A 10.20.0.5`.** Ohne `vrf` sucht der PE in der globalen Tabelle, wo es keine Kundenrouten gibt. Als Quelle kannst du mit `source` ein Interface in der VRF angeben.
+T: CLI Leicht
+
+Q: Zwei PEs peeren per VPNv4, aber die Routen kommen ohne RT an und werden in keine VRF importiert. Was ist passiert?
+A: **Extended Communities werden nicht mitgeschickt.** IOS ergänzt `send-community extended` normalerweise beim Aktivieren in VPNv4. Wurde es entfernt oder eine Peer-Group falsch angelegt, fehlen die RTs, und ohne passendes RT importiert keine VRF die Route.
+T: Falle Schwer
+
+# 2.3 | DMVPN: Fehlersuche
+S: https://www.cisco.com/c/en/us/support/docs/security/dynamic-multipoint-vpn-dmvpn/222585-configure-bgp-over-dmvpn-phase-3.pdf | Cisco: Configure BGP over DMVPN Phase 3
+
+Q: Im Log steht „Tunnel0 temporarily disabled due to recursive routing“. Was ist passiert?
+A: **Der Router will die Tunnel-Zieladresse über den Tunnel selbst erreichen.** Meist lernt er die öffentliche Adresse des Hubs per Routing-Protokoll über den Tunnel. Lösung: das Außennetz nicht über den Tunnel annoncieren oder eine statische Route bzw. FVRF für die Außenadressen nutzen.
+T: Szenario Mittel
+
+Q: Ein Spoke registriert sich beim Hub, aber EIGRP-Nachbarschaft kommt nicht zustande. Was prüfst du auf dem Spoke?
+A: **Ob Multicast zum Hub gemappt ist, also `multicast` am Ende von `ip nhrp nhs ... nbma ...` bzw. `ip nhrp map multicast <Hub-NBMA>`.** Ohne dieses Mapping schickt der Spoke seine Hellos nicht über den Tunnel.
+T: Szenario Mittel
+
+Q: In `show crypto isakmp sa` auf dem Spoke steht der Zustand MM_NO_STATE. Was bedeutet das?
+A: **IKE-Phase 1 kommt nicht über den ersten Schritt hinaus.** Typisch: Die Gegenseite antwortet nicht (UDP 500 blockiert), oder die Policies passen nicht zusammen. Ein funktionierender Tunnel zeigt QM_IDLE.
+T: Exhibit Mittel
+
+Q: IKE Phase 1 steht (QM_IDLE), aber in `show crypto ipsec sa` gibt es keine SAs. Wo suchst du den Fehler?
+A: **Bei Phase 2: Transform-Set oder Modus passen nicht zusammen.** Mit `debug crypto ipsec` siehst du Meldungen wie „proposal not acceptable“. Bei DMVPN müssen alle Router kompatible Transform-Sets im IPsec-Profil haben.
+T: Szenario Mittel
+
+Q: Welche drei Zustände kann ein Eintrag in `show dmvpn` haben, und was heißen sie?
+A: **UP: Tunnel und NHRP stehen. NHRP: Registrierung oder Auflösung läuft noch bzw. hängt. IKE: IPsec-Aufbau läuft noch bzw. hängt.** Bleibt ein Eintrag dauerhaft auf NHRP oder IKE, liegt der Fehler in dieser Schicht.
+T: Exhibit Mittel
+
+Q: In DMVPN Phase 2 läuft der erste Spoke-to-Spoke-Ping über den Hub, die folgenden direkt. Ist das ein Fehler?
+A: **Nein, so funktioniert es.** Während der Spoke per NHRP die NBMA-Adresse des anderen Spokes auflöst und IPsec aufbaut, schickt er die ersten Pakete über den Hub. Danach läuft der Verkehr direkt. Der erste Traceroute zeigt deshalb oft noch den Hub.
+T: Falle Mittel
+
+Q: Nach dem Wechsel von Phase 2 auf Phase 3 bleiben die Shortcuts aus, alles läuft über den Hub. Hub hat `ip nhrp redirect`. Was fehlt?
+A: **`ip nhrp shortcut` auf den Spokes.** Ohne den Befehl ignorieren die Spokes die Redirects des Hubs und schicken weiter alles über ihn.
+T: Szenario Leicht
+
+Q: Ein Spoke hat eine dynamische öffentliche IP. Nach einem Wechsel seiner Adresse erreicht ihn der Hub minutenlang nicht. Warum?
+A: **Der Hub hat noch die alte NBMA-Adresse im NHRP-Cache, bis der Spoke sich neu registriert.** Die Registrierungen kommen standardmäßig alle ein Drittel der Holdtime. Kürzere `ip nhrp registration timeout` beschleunigt die Erholung.
+T: Szenario Schwer
+
+Q: Welche Befehle prüfst du der Reihe nach, wenn ein Spoke nicht über DMVPN erreichbar ist?
+A: **Erst die Unterlage (`ping` zur Hub-NBMA-Adresse), dann IPsec (`show crypto isakmp sa`, `show crypto ipsec sa`), dann NHRP (`show dmvpn`), dann Routing (`show ip route`, Nachbarschaften).** Jede Schicht baut auf der vorherigen auf. Ein Fehler unten zeigt sich oben immer mit.
+T: Wissen Mittel
+
+Q: Wie lautet der DMVPN-Tunnelzustand in `show interfaces Tunnel0`, wenn kein einziger Spoke registriert ist?
+A: **Up/up.** Ein mGRE-Interface ist up, sobald Quelle und Modus stimmen, es hat ja kein festes Ziel. Der Interface-Zustand sagt bei DMVPN also wenig, maßgeblich ist `show dmvpn`.
+T: Falle Mittel
+
+Q: Wie verhinderst du, dass ein Spoke bei Ausfall seines einzigen Hubs ganz abgeschnitten ist?
+A: **Mit einem zweiten Hub (Dual Hub): zwei `ip nhrp nhs`-Einträge auf demselben Tunnel oder zwei getrennte DMVPN-Wolken.** Das Routing-Protokoll bevorzugt einen Hub und schwenkt bei Ausfall um. Der Blueprint verlangt nur Single Hub, das Prinzip solltest du trotzdem kennen.
+T: Wissen Mittel
+
+Q: Welche NHRP-Nachrichtentypen solltest du für DMVPN kennen?
+A: **Registration Request/Reply (Spoke meldet sich am Hub), Resolution Request/Reply (Spoke fragt nach der NBMA-Adresse eines anderen) und Redirect (Hub schickt in Phase 3 den Hinweis auf einen direkteren Weg).**
+S: https://www.rfc-editor.org/rfc/rfc2332 | RFC 2332: NBMA Next Hop Resolution Protocol (NHRP)
+T: Wissen Mittel

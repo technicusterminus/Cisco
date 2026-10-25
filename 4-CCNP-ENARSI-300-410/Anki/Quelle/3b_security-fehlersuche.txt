@@ -1,0 +1,134 @@
+# 3.1 | AAA: Fehlersuche und Feinheiten
+S: https://www.rfc-editor.org/rfc/rfc8907 | RFC 8907: The TACACS+ Protocol
+
+Q: Du setzt `aaa new-model` und `aaa authentication login default group tacacs+`. Plötzlich verlangt auch die Konsole eine Anmeldung. Warum, und welches Risiko entsteht?
+A: **Die Liste `default` gilt für alle Lines, auch für die Konsole.** Solange es nur `aaa new-model` ohne Liste gibt, fragen die VTYs die lokale Datenbank ab, die Konsole aber gar nicht. Mit der Default-Liste und ohne `local` als Ausweichmethode hilft bei ausgefallenem Server nur noch ein Passwort-Recovery.
+T: Falle Mittel
+
+Q: Was bewirkt `aaa authentication login default group tacacs+` ohne weitere Methode, wenn alle TACACS+-Server ausfallen?
+A: **Niemand kann sich mehr anmelden.** Es gibt keine Ausweichmethode. Darum hängt man fast immer `local` an und hält einen lokalen Notfallbenutzer bereit.
+T: Szenario Leicht
+
+Q: Wie stellst du ein, dass der Router bei mehreren TACACS+-Servern nicht zu lange auf einen ausgefallenen wartet?
+A: **Mit einem kürzeren Timeout pro Server, etwa `timeout 3` unter `tacacs server`.** Der Router geht der Reihe nach durch die Server der Gruppe. Bei langen Timeouts dauert die Anmeldung entsprechend länger, bevor der nächste Server oder `local` versucht wird.
+T: CLI Mittel
+
+Q: Wie fasst du bestimmte TACACS+-Server in einer eigenen Gruppe zusammen?
+A:
+```
+aaa group server tacacs+ ADMIN-TAC
+ server name ISE1
+ server name ISE2
+aaa authentication login default group ADMIN-TAC local
+```
+So kannst du für Geräteverwaltung andere Server nutzen als für andere Zwecke.
+T: CLI Mittel
+
+Q: Accounting meldet keine Befehle an den Server, obwohl die Anmeldung über TACACS+ läuft. Was fehlt meist?
+A: **Die passende Accounting-Zeile für das Privilege Level: `aaa accounting commands 15 default start-stop group tacacs+`.** Für jedes Level, dessen Befehle protokolliert werden sollen, braucht es eine eigene Zeile.
+T: Szenario Mittel
+
+Q: Was ist der Unterschied zwischen `start-stop` und `stop-only` beim Accounting?
+A: **`start-stop` schickt beim Beginn und am Ende einer Aktion eine Meldung, `stop-only` nur am Ende.** Bei Befehls-Accounting reicht meist `start-stop` für eine vollständige Spur, `stop-only` spart Nachrichten.
+T: Vergleich Leicht
+
+Q: Ein Benutzer mit Privilege 15 kann `show running-config` nicht ausführen, obwohl er im privilegierten Modus ist. Befehlsautorisierung per TACACS+ ist aktiv. Wo liegt der Fehler?
+A: **Am TACACS+-Server: Das Befehls-Set des Benutzers erlaubt `show running-config` nicht.** Bei Befehlsautorisierung entscheidet der Server für jeden einzelnen Befehl. `debug aaa authorization` zeigt, ob der Server ablehnt.
+T: Szenario Mittel
+
+# 3.2.a | IPv4-ACLs: Fehlersuche
+S: https://www.cisco.com/c/en/us/support/docs/security/ios-firewall/23602-confaccesslists.html | Cisco: Configure and Filter IP Access Lists
+
+Q: Eine Extended ACL steht inbound auf dem LAN-Interface: `permit tcp any any eq 443` und `deny ip any any`. DHCP-Clients bekommen keine Adresse mehr. Warum?
+A: **DHCP-Discover (UDP 67) trifft das `deny`.** Die ACL am Client-Interface filtert auch Pakete an den Router selbst, also auch an den Relay-Agenten. Lösung: `permit udp any any eq bootps` vor das `deny`.
+T: Szenario Mittel
+
+Q: Mit `deny ip any any log` am Ende einer ACL steigt die CPU-Last stark. Warum?
+A: **Jedes geloggte Paket wird zur CPU gebracht, um die Log-Meldung zu erzeugen.** Bei viel geblocktem Verkehr belastet das die CPU. IOS begrenzt die Meldungen zwar mit `ip access-list logging interval`, die Prüfung bleibt aber teuer.
+T: Szenario Mittel
+
+Q: In welcher Reihenfolge prüft IOS die Einträge einer ACL, und was folgt daraus?
+A: **Von oben nach unten, der erste Treffer entscheidet.** Spezifische Einträge gehören deshalb vor allgemeine. Ein `permit ip any any` ganz oben macht alle folgenden Zeilen wirkungslos.
+T: Wissen Leicht
+
+Q: Du willst Pings ins LAN erlauben, aber die Antworten der LAN-Hosts nach außen nicht blockieren. Die ACL steht outbound am LAN-Interface. Welche Zeile brauchst du?
+A: **`permit icmp any 10.1.0.0 0.0.255.255 echo`.** Outbound am LAN-Interface prüft die ACL nur Pakete ins LAN, also die Echo Requests. Die Echo Replies gehen in die andere Richtung und sind von dieser ACL nicht betroffen.
+T: Szenario Mittel
+
+Q: Welche Wildcard trifft nur die ungeraden Hosts in 10.1.1.0/24?
+A: **`10.1.1.1 0.0.0.254`.** Das letzte Bit muss 1 sein, die anderen sieben Bit des letzten Oktetts sind frei. So erfasst die Zeile 1, 3, 5 bis 255.
+T: Rechnen Schwer
+
+Q: Ein Admin ändert die nummerierte ACL 110 mit `no access-list 110 permit tcp any any eq 22`. Was passiert?
+A: **Die ganze ACL 110 wird gelöscht, nicht nur die Zeile.** Im globalen Modus löscht `no access-list 110 ...` bei nummerierten ACLs alles. Einzelne Zeilen entfernt man im ACL-Modus mit `ip access-list extended 110` und `no 20`.
+T: Falle Mittel
+
+Q: Was ist der Unterschied zwischen `ip access-group` und `access-class`?
+A: **`ip access-group` filtert Verkehr an einem Interface, `access-class` filtert Verbindungen zu den Lines (VTY) des Routers.** Für Fernzugang auf den Router ist `access-class` einfacher, weil es unabhängig vom Eingangsinterface wirkt.
+T: Vergleich Leicht
+
+# 3.2.c | uRPF: Fehlersuche
+S: https://www.rfc-editor.org/rfc/rfc3704 | RFC 3704: Ingress Filtering for Multihomed Networks
+
+Q: Auf einem LAN-Interface mit DHCP-Clients ist uRPF Strict aktiv. Werden die DHCP-Discover-Pakete mit Quelle 0.0.0.0 verworfen?
+A: **Nein, uRPF lässt Pakete mit Quelle 0.0.0.0 und Ziel 255.255.255.255 ausdrücklich durch.** Sonst würde DHCP und BOOTP an jedem uRPF-Interface brechen. Für andere Ausnahmen nutzt man eine ACL am `ip verify unicast`-Befehl.
+T: Szenario Schwer
+
+Q: Ein Router hat nur eine Default-Route zum Provider. Was bewirkt uRPF Strict mit `allow-default` auf dem Uplink?
+A: **Fremde Quellen passen über die Default-Route und gehen durch, aber Pakete mit Absendern aus den eigenen Netzen werden verworfen.** Für die eigenen Präfixe zeigt die Route auf ein LAN-Interface, nicht auf den Uplink. So blockt uRPF gefälschte interne Absender, die von außen kommen. Ohne `allow-default` würde Strict dagegen jedes Paket verwerfen, dessen Quelle nur über die Default-Route erreichbar ist.
+T: Szenario Schwer
+
+Q: Wo setzt man uRPF Strict am wirkungsvollsten ein?
+A: **Am Rand zu Netzen mit eindeutigem Routing, etwa an Kunden- oder LAN-Interfaces mit nur einem Weg.** Dort ist klar, welche Quellen kommen dürfen. Gefälschte Absender aus diesen Netzen werden direkt am Eingang verworfen.
+T: Wissen Mittel
+
+# 3.3 | CoPP: Fehlersuche und Aufbau
+S: https://www.rfc-editor.org/rfc/rfc6192 | RFC 6192: Protecting the Router Control Plane
+
+Q: In `show policy-map control-plane` steigt bei der Klasse CM-MGMT der Zähler „exceeded“ schnell an, SSH-Sitzungen hängen. Was tust du?
+A: **Die Policer-Rate der Managementklasse anheben oder SSH in eine eigene Klasse mit passender Rate legen.** Steigende Exceed-Zähler heißen, dass Pakete über der Grenze liegen und verworfen werden. Danach prüfst du, ob tatsächlich so viel Verkehr erwartet ist oder ein Scan läuft.
+T: Exhibit Mittel
+
+Q: Wie prüfst du schrittweise, ob eine neue CoPP-Policy legitimen Verkehr trifft, bevor du verwirfst?
+A: **Erst alle Klassen mit `conform-action transmit exceed-action transmit` laufen lassen und die Zähler beobachten.** So siehst du, welcher Verkehr in welcher Klasse landet und wie viel davon. Erst danach setzt du `exceed-action drop`.
+T: Szenario Mittel
+
+Q: Warum sollte man eine Klasse für ICMP in CoPP begrenzen statt ICMP ganz zu verbieten?
+A: **Weil ICMP für Fehlersuche und Path MTU Discovery gebraucht wird.** Ganz verboten fehlen Ping, Traceroute-Antworten und „Fragmentation needed“-Meldungen. Eine niedrige Rate schützt die CPU vor Ping-Fluten, lässt aber normale Nutzung zu.
+T: Wissen Mittel
+
+Q: Was ist die übliche Grundstruktur einer CoPP-Policy?
+A: **Klassen nach Wichtigkeit: kritisch (Routing-Protokolle), wichtig (Management wie SSH, SNMP), normal (ICMP), unerwünscht (verwerfen) und `class-default`.** Jede Klasse bekommt eine eigene Rate. Routing-Protokolle bekommen die großzügigste, damit Nachbarschaften auch unter Last stehen.
+T: Wissen Mittel
+
+Q: Eine CoPP-Klasse für SNMP nutzt die ACL `permit udp any any eq snmp`. Der Monitoring-Server liegt bei 10.1.1.50. Wie machst du die Klasse genauer?
+A: **Mit `permit udp host 10.1.1.50 any eq snmp` und einer zweiten Klasse, die SNMP von allen anderen Quellen verwirft.** So bekommt der echte Server seine Rate, und Abfragen von anderen Adressen erreichen die CPU gar nicht.
+T: Szenario Mittel
+
+Q: Kann CoPP auf einem Catalyst-Switch mit IOS XE frei konfiguriert werden?
+A: **Nur teilweise: Viele Catalyst-Switches haben eine fest eingebaute System-CoPP-Policy, deren Raten man anpassen, aber nicht beliebig umbauen kann.** Auf Routern wie ISR und ASR baut man die Policy selbst. Die Prinzipien (Klassen, Raten, Zähler) gelten trotzdem gleich.
+T: Wissen Schwer
+
+# 3.4 | IPv6 First Hop Security: Feinheiten
+S: https://www.rfc-editor.org/rfc/rfc6105 | RFC 6105: IPv6 Router Advertisement Guard
+
+Q: Warum reicht RA Guard allein nicht gegen alle gefälschten Router Advertisements?
+A: **Weil Angreifer RAs in IPv6-Erweiterungsheadern oder Fragmenten verstecken können, die ein einfacher RA Guard nicht untersucht.** RFC 7113 beschreibt dafür strengere Prüfungen. Moderne Implementierungen verwerfen deshalb verdächtig fragmentierte ND-Pakete.
+S: https://www.rfc-editor.org/rfc/rfc7113 | RFC 7113: Implementation Advice for IPv6 RA-Guard
+T: Wissen Schwer
+
+Q: Wo hängst du eine RA-Guard-Policy mit `device-role router` an?
+A: **An den Port, an dem der echte Router oder der Uplink zum Router hängt.** Dort sind RAs erlaubt. An allen Access-Ports zu Endgeräten kommt eine Policy mit `device-role host`.
+T: CLI Leicht
+
+Q: Was passiert bei IPv6 Source Guard mit einem Host, der eine statische IPv6-Adresse hat und noch keinen Verkehr geschickt hat?
+A: **Er fehlt zunächst in der Binding Table, bis seine ersten ND-Nachrichten (etwa Duplicate Address Detection) gesehen wurden.** Danach wird er eingetragen. Verschickt er Daten ohne vorheriges ND, verwirft Source Guard sie.
+T: Szenario Schwer
+
+Q: Was prüft ND Inspection bei einer Neighbor Advertisement?
+A: **Ob die darin behauptete Zuordnung von IPv6- und MAC-Adresse zur Binding Table passt.** Behauptet ein Gerät, eine fremde Adresse zu besitzen, wird die Nachricht verworfen. Das verhindert Neighbor-Spoofing, das Gegenstück zu ARP-Spoofing.
+T: Wissen Mittel
+
+Q: Was ist IPv6 Destination Guard?
+A: **Er verwirft Pakete an Adressen im lokalen Präfix, die nicht in der Binding Table stehen.** So kann ein Angreifer den Router nicht mit Anfragen an viele nicht existierende Adressen dazu bringen, massenhaft Neighbor Solicitations zu schicken.
+T: Wissen Schwer

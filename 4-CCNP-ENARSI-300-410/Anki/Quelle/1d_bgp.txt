@@ -1,0 +1,216 @@
+# 1.11.a | BGP: Address Families IPv4 und IPv6
+S: https://www.rfc-editor.org/rfc/rfc4760 | RFC 4760: Multiprotocol Extensions for BGP-4
+
+Q: Wie baust du eine BGP-Sitzung für IPv6-Präfixe zu 2001:db8:12::2 in AS 65002 auf?
+A:
+```
+router bgp 65001
+ no bgp default ipv4-unicast
+ neighbor 2001:db8:12::2 remote-as 65002
+ address-family ipv6 unicast
+  neighbor 2001:db8:12::2 activate
+  network 2001:db8:1::/48
+```
+Wegen `no bgp default ipv4-unicast` ist der Nachbar ohne `activate` in keiner Address Family aktiv, und die Sitzung kommt gar nicht erst hoch.
+T: CLI Mittel
+
+Q: Was bewirkt `no bgp default ipv4-unicast`?
+A: **Neue Nachbarn werden nicht mehr automatisch für IPv4 Unicast aktiviert.** Standardmäßig tauscht IOS mit jedem Nachbarn IPv4-Präfixe aus. Mit dem Befehl aktivierst du jede Address Family pro Nachbar bewusst mit `activate`.
+T: Wissen Leicht
+
+Q: Du tauschst IPv6-Präfixe über eine IPv4-BGP-Sitzung aus. Die Routen kommen an, sind aber nicht nutzbar. Warum?
+A: **Der Next Hop ist eine IPv4-gemappte IPv6-Adresse (::FFFF:10.0.12.1), die niemand erreichen kann.** Lösung: auf dem Absender per Route-Map `set ipv6 next-hop 2001:db8:12::1` eine echte IPv6-Adresse setzen, oder für IPv6 eine eigene Sitzung über IPv6 aufbauen.
+T: Falle Schwer
+
+Q: Woran erkennst du in `show bgp ipv6 unicast summary`, dass die Sitzung steht und wie viele Präfixe ankommen?
+A: **In der Spalte „State/PfxRcd“ steht eine Zahl statt eines Zustands wie Idle oder Active.** Die Zahl ist die Anzahl empfangener Präfixe. Ein Wort in dieser Spalte heißt immer, dass die Sitzung nicht Established ist.
+T: Exhibit Leicht
+
+# 1.11.b | BGP: Nachbarschaft und Sitzung
+S: https://www.rfc-editor.org/rfc/rfc4271 | RFC 4271: A Border Gateway Protocol 4 (BGP-4)
+
+Q: Welche Zustände durchläuft eine BGP-Sitzung bis zum Austausch von Routen?
+A: **Idle, Connect, Active, OpenSent, OpenConfirm, Established.** Connect und Active betreffen den TCP-Aufbau auf Port 179, OpenSent und OpenConfirm den Austausch der OPEN-Nachrichten. Erst in Established fließen UPDATEs.
+T: Wissen Leicht
+
+Q: Ein BGP-Nachbar steht dauerhaft auf „Active“. Was bedeutet das, und was prüfst du?
+A: **Der Router versucht aktiv, eine TCP-Verbindung aufzubauen, und es klappt nicht.** Prüfe: Ist die Nachbaradresse erreichbar (`ping` mit passender Quelle)? Stimmen `remote-as` und Nachbar-IP auf beiden Seiten? Blockiert eine ACL TCP 179? Passt `update-source`?
+T: Szenario Mittel
+
+Q: R1 und R2 sollen eBGP über ihre Loopbacks sprechen. Welche zwei Befehle braucht R1 neben `neighbor 2.2.2.2 remote-as 65002`?
+A: **`neighbor 2.2.2.2 update-source Loopback0` und `neighbor 2.2.2.2 ebgp-multihop 2`.** eBGP schickt Pakete standardmäßig mit TTL 1, das reicht nicht zur Loopback des Nachbarn. Dazu braucht jede Seite eine Route zur Loopback der anderen.
+T: CLI Mittel
+
+Q: R1 peert iBGP zur Loopback 2.2.2.2 von R2, R2 peert zu 1.1.1.1. Nur R1 hat `update-source Loopback0`. Kommt die Sitzung zustande?
+A: **Ja, sofern R1 die Verbindung aufbaut, weil R1 dann von 1.1.1.1 aus sendet, was R2 erwartet.** Versucht dagegen R2 den Aufbau, sendet er von seiner Interface-Adresse, und R1 lehnt ab, weil er 2.2.2.2 erwartet. Das macht die Sitzung unzuverlässig. Beide Seiten brauchen `update-source`.
+T: Falle Schwer
+
+Q: Was macht `neighbor 10.0.12.2 password Geheim123`?
+A: **Es schaltet die TCP-MD5-Signatur (RFC 2385) für die BGP-Sitzung ein.** Stimmt das Passwort auf der Gegenseite nicht oder fehlt es, verwirft TCP die Segmente, und die Sitzung bleibt in Active. Im Log stehen dann Meldungen wie „Invalid MD5 digest“.
+T: Wissen Mittel
+
+Q: Welche Keepalive- und Hold-Timer nutzt BGP standardmäßig, und was gilt, wenn beide Seiten verschiedene Hold-Timer haben?
+A: **Keepalive 60 s, Hold 180 s. Bei unterschiedlichen Werten gilt der kleinere Hold-Timer.** Er wird in der OPEN-Nachricht ausgehandelt. Hold 0 schaltet Keepalives ganz ab.
+T: Wissen Leicht
+
+Q: Welche privaten AS-Nummern gibt es, und wie entfernst du sie vor der Weitergabe an den Provider?
+A: **64512–65534 (2 Byte) und 4200000000–4294967294 (4 Byte). Entfernen mit `neighbor x remove-private-as`.** Das Kommando streicht private AS-Nummern aus dem AS_PATH, wenn die Route an diesen eBGP-Nachbarn geht.
+S: https://www.rfc-editor.org/rfc/rfc6996 | RFC 6996: Autonomous System Reservation for Private Use
+T: Wissen Mittel
+
+Q: Welche asdot-Schreibweise hat AS 65546?
+A: **1.10.** Asdot teilt die 4-Byte-Nummer in zwei 16-Bit-Hälften: 65546 = 1 × 65536 + 10. Mit `bgp asnotation dot` zeigt IOS AS-Nummern in dieser Form an.
+S: https://www.rfc-editor.org/rfc/rfc6793 | RFC 6793: BGP Support for Four-Octet AS Number Space
+T: Rechnen Mittel
+
+Q: Ein alter Router kennt nur 2-Byte-AS-Nummern. Welche AS-Nummer sieht er bei einem Nachbarn mit AS 4200000001?
+A: **23456 (AS_TRANS).** Der neue Router meldet AS_TRANS im alten AS-Feld und die echte Nummer in einem eigenen Attribut (AS4_PATH). So bleibt die Schleifenvermeidung trotzdem korrekt.
+S: https://www.rfc-editor.org/rfc/rfc6793 | RFC 6793: BGP Support for Four-Octet AS Number Space
+T: Wissen Schwer
+
+Q: Du hast eine Inbound-Route-Map geändert. Wie wendest du sie an, ohne die Sitzung abzubauen?
+A: **Mit `clear ip bgp 10.0.12.2 soft in`.** Dank der Route-Refresh-Fähigkeit schickt der Nachbar alle Routen erneut, und die neue Policy wird angewendet. Ein hartes `clear ip bgp 10.0.12.2` würde die Sitzung abbauen und alle Routen kurz entfernen.
+S: https://www.rfc-editor.org/rfc/rfc2918 | RFC 2918: Route Refresh Capability for BGP-4
+T: CLI Leicht
+
+Q: Wozu dient `neighbor x soft-reconfiguration inbound`, wenn es doch Route Refresh gibt?
+A: **Es speichert alle empfangenen Routen ungefiltert lokal, damit du sie mit `show ip bgp neighbors x received-routes` sehen kannst.** Das kostet Speicher. Für reines Neuanwenden einer Policy braucht man es heute nicht mehr.
+T: Vergleich Mittel
+
+Q: Was besagte die BGP-Synchronisationsregel, und warum ist sie heute aus?
+A: **Eine per iBGP gelernte Route durfte nur benutzt und weitergegeben werden, wenn das IGP sie auch kannte.** Damals wurde BGP oft ins IGP redistribuiert. Mit iBGP-Full-Mesh oder Route Reflectors ist das unnötig, darum ist Synchronisation seit IOS 12.2(8)T standardmäßig aus.
+T: Wissen Mittel
+
+Q: Was bringt eine Peer-Group?
+A: **Mehrere Nachbarn teilen sich dieselbe Konfiguration und Outbound-Policy.** Das spart Konfigurationszeilen. Früher sparte es auch CPU, weil Updates einmal berechnet wurden. Das übernehmen heute die dynamischen Update-Groups automatisch.
+T: Wissen Leicht
+
+Q: Warum gibt ein iBGP-Router von einem iBGP-Nachbarn gelernte Routen nicht an andere iBGP-Nachbarn weiter?
+A: **Wegen der iBGP-Split-Horizon-Regel: Innerhalb eines AS ändert sich das AS_PATH nicht, also gäbe es keine Schleifenerkennung.** Darum braucht iBGP entweder ein Full Mesh oder Route Reflectors.
+T: Wissen Leicht
+
+Q: R3 lernt per iBGP von R2 die Route 203.0.113.0/24 mit Next Hop 10.0.12.1 (der eBGP-Nachbar von R2). R3 kennt 10.0.12.1 nicht. Was passiert, und wie behebst du es?
+A: **Die Route steht bei R3 in der BGP-Tabelle, ist aber ungültig und wird nicht installiert.** iBGP behält den Next Hop des eBGP-Nachbarn. Lösung: `neighbor 3.3.3.3 next-hop-self` auf R2, oder das Transitnetz 10.0.12.0 im IGP bekannt machen.
+T: Szenario Mittel
+
+Q: Woran erkennst du in `show ip bgp`, dass eine Route nicht genutzt wird, weil der Next Hop fehlt?
+A: **Vor der Route fehlen `*` (gültig) und `>` (beste).** `show ip bgp 203.0.113.0` zeigt dann beim Pfad „(inaccessible)“ hinter dem Next Hop.
+T: Exhibit Mittel
+
+# 1.11.c | BGP: Pfadwahl
+S: https://www.cisco.com/c/en/us/support/docs/ip/border-gateway-protocol-bgp/13753-25.html | Cisco: BGP Best Path Selection Algorithm
+
+Q: In welcher Reihenfolge prüft IOS die BGP-Pfadattribute bei der Best-Path-Wahl?
+A: **Weight, Local Preference, lokal erzeugt, kürzester AS_PATH, Origin, MED, eBGP vor iBGP, kleinste IGP-Metrik zum Next Hop, ältester eBGP-Pfad, kleinste Router-ID, kleinste Cluster-List, kleinste Nachbaradresse.** Vorher muss der Next Hop erreichbar sein.
+H: Eselsbrücke: „We Love Oranges AS Oranges Mean Pure Refreshment“ (Weight, Local Pref, Originate, AS-Path, Origin, MED, Paths eBGP, Router-ID).
+T: Wissen Mittel
+
+Q: Welcher Wert ist bei Weight und welcher bei Local Preference besser, und wie weit reichen sie?
+A: **Bei beiden gewinnt der höhere Wert. Weight gilt nur lokal auf dem Router, Local Preference im ganzen AS.** Weight ist Cisco-spezifisch, Standard 0, für selbst erzeugte Routen 32768. Local Preference ist standardmäßig 100.
+T: Vergleich Leicht
+
+Q: Dein AS hat zwei Provider. Ausgehender Verkehr soll bevorzugt über ISP-A laufen. Welches Attribut setzt du, und wo?
+A: **Local Preference, eingehend auf den Routen von ISP-A, etwa 200.** Local Preference wird per iBGP an alle Router im AS verteilt, alle wählen dann ISP-A für ausgehenden Verkehr.
+```
+route-map ISP-A-IN permit 10
+ set local-preference 200
+router bgp 65001
+ neighbor 192.0.2.1 route-map ISP-A-IN in
+```
+T: Szenario Mittel
+
+Q: Eingehender Verkehr aus dem Internet soll bevorzugt über ISP-A kommen. Was ist das übliche Mittel?
+A: **AS-Path-Prepending ausgehend Richtung ISP-B, etwa `set as-path prepend 65001 65001`.** Andere AS sehen den Weg über ISP-B dann als länger. Eine Garantie ist das nicht, weil fremde AS mit Local Preference anders entscheiden können.
+T: Szenario Mittel
+
+Q: Was ist die Rangfolge beim Origin-Attribut?
+A: **IGP (i) vor EGP (e) vor Incomplete (?).** IGP heißt: per `network` eingespeist. Incomplete heißt meist: per Redistribution eingespeist. EGP stammt vom alten Exterior Gateway Protocol und kommt praktisch nicht mehr vor.
+T: Wissen Leicht
+
+Q: Zwei Wege zum selben Präfix kommen von zwei verschiedenen Nachbar-AS, einer mit MED 50, einer mit MED 10. Wird MED verglichen?
+A: **Standardmäßig nein.** IOS vergleicht MED nur zwischen Pfaden aus demselben Nachbar-AS. Mit `bgp always-compare-med` wird MED immer verglichen.
+T: Falle Mittel
+
+Q: Wozu dient MED, und in welche Richtung wirkt es?
+A: **Mit MED sagst du einem Nachbar-AS, über welchen von mehreren Übergängen es in dein AS hineinschicken soll.** Kleinere MED wird bevorzugt. MED wird an den Nachbarn gesendet und dort nicht weiter an andere AS gegeben.
+T: Wissen Mittel
+
+Q: In `show ip bgp` steht vor einer Route `r>`. Was bedeutet das?
+A: **Die Route ist die beste BGP-Route, konnte aber nicht in die Routingtabelle (RIB-Failure).** Meist gibt es eine Route mit kleinerer AD auf dasselbe Präfix, etwa OSPF oder statisch. `show ip bgp rib-failure` zeigt den Grund.
+T: Exhibit Mittel
+
+Q: Was bedeuten Next Hop 0.0.0.0 und Weight 32768 in `show ip bgp`?
+A: **Die Route wurde lokal auf diesem Router in BGP eingespeist.** Per `network`, `redistribute` oder `aggregate-address` erzeugte Routen bekommen automatisch Weight 32768 und gewinnen damit lokal gegen gelernte Wege.
+T: Exhibit Leicht
+
+Q: `network 10.10.0.0 mask 255.255.0.0` steht in BGP, die Route wird aber nicht angekündigt. In der Routingtabelle stehen nur 10.10.1.0/24 und 10.10.2.0/24. Warum?
+A: **Der `network`-Befehl verlangt einen exakten Eintrag mit genau diesem Präfix in der Routingtabelle.** Ein /16 gibt es dort nicht. Lösung: eine statische Route `ip route 10.10.0.0 255.255.0.0 Null0` oder `aggregate-address` statt `network`.
+T: Falle Mittel
+
+# 1.11.d | BGP: Route Reflectors
+S: https://www.rfc-editor.org/rfc/rfc4456 | RFC 4456: BGP Route Reflection
+
+Q: Wie viele iBGP-Sitzungen braucht ein Full Mesh mit 10 Routern, und wie viele mit einem Route Reflector?
+A: **Full Mesh 45, mit einem Route Reflector 9.** Full Mesh: n × (n − 1) / 2 = 10 × 9 / 2 = 45. Mit RR braucht jeder Client nur eine Sitzung zum RR.
+T: Rechnen Leicht
+
+Q: Nach welchen Regeln gibt ein Route Reflector Routen weiter?
+A: **Von einem Client gelernt: an alle Clients und Nicht-Clients. Von einem Nicht-Client gelernt: nur an Clients. Von eBGP gelernt: an alle.** Nicht-Clients untereinander brauchen weiterhin ein Full Mesh.
+T: Wissen Mittel
+
+Q: Wie machst du R2 zum Route-Reflector-Client von R1?
+A: **Auf R1: `neighbor 2.2.2.2 route-reflector-client`.** Der Client selbst braucht keine besondere Konfiguration, er weiß nicht einmal, dass er Client ist.
+T: CLI Leicht
+
+Q: Welche Attribute verhindern Schleifen zwischen Route Reflectors?
+A: **ORIGINATOR_ID und CLUSTER_LIST.** ORIGINATOR_ID ist die Router-ID des Erzeugers im AS, ein Router verwirft Routen mit seiner eigenen ID. In der CLUSTER_LIST trägt jeder RR seine Cluster-ID ein, findet er sie schon, verwirft er die Route.
+T: Wissen Mittel
+
+Q: Ein RR spiegelt eine eBGP-Route an seine Clients. Welchen Next Hop sehen die Clients?
+A: **Den ursprünglichen Next Hop, also meist die Adresse des eBGP-Nachbarn am Rand.** Ein RR ändert beim Reflektieren den Next Hop nicht. Der Randrouter braucht deshalb weiterhin `next-hop-self`, oder das Transitnetz muss im IGP bekannt sein.
+T: Falle Mittel
+
+# 1.11.e | BGP: Policy, Filter und Pfadmanipulation
+S: https://www.rfc-editor.org/rfc/rfc1997 | RFC 1997: BGP Communities Attribute
+
+Q: Wie verhinderst du, dass dein AS mit zwei Providern zum Transit-AS zwischen ihnen wird?
+A: **Ausgehend zu beiden Providern nur eigene Routen erlauben, mit `ip as-path access-list 1 permit ^$` und `neighbor x filter-list 1 out`.** `^$` trifft einen leeren AS_PATH, also Routen aus dem eigenen AS. Was von Provider A kommt, hat dessen AS im Pfad und wird an Provider B nicht weitergegeben.
+T: Szenario Mittel
+
+Q: Welche Routen trifft der reguläre Ausdruck `^65010_`?
+A: **Alle Routen, die direkt vom Nachbar-AS 65010 gelernt wurden.** `^` steht für den Anfang des AS_PATH, also das zuletzt durchlaufene AS. `_` passt auf ein Trennzeichen wie Leerzeichen oder Pfadende.
+T: Wissen Mittel
+
+Q: Was ist der Unterschied zwischen `^65010$`, `_65010$` und `_65010_`?
+A: **`^65010$`: nur 65010 im Pfad, also direkt von dort und dort erzeugt. `_65010$`: in 65010 erzeugt, egal auf welchem Weg. `_65010_`: 65010 kommt irgendwo im Pfad vor.** Mit `show ip bgp regexp _65010$` testest du einen Ausdruck, bevor du ihn als Filter nutzt.
+T: Vergleich Mittel
+
+Q: Du setzt per Route-Map die Community `no-export` auf Routen an einen iBGP-Nachbarn, aber dort kommt sie nicht an. Was fehlt?
+A: **`neighbor x send-community`.** IOS schickt Communities standardmäßig nicht mit. Ohne diesen Befehl wird das Attribut beim Senden entfernt.
+T: Falle Mittel
+
+Q: Was bewirken die Well-known Communities `no-export` und `no-advertise`?
+A: **`no-export`: Die Route darf das AS nicht verlassen. `no-advertise`: Die Route darf an gar keinen Nachbarn weitergegeben werden.** Beide werden vom Empfänger ohne eigene Konfiguration beachtet.
+T: Vergleich Leicht
+
+Q: Wie filterst du eingehend vom Provider alles außer der Default-Route?
+A:
+```
+ip prefix-list ONLY-DEFAULT permit 0.0.0.0/0
+router bgp 65001
+ neighbor 192.0.2.1 prefix-list ONLY-DEFAULT in
+```
+Die Prefix-List trifft nur exakt 0.0.0.0/0, alles andere fällt unter das implizite `deny`.
+T: CLI Leicht
+
+Q: Kannst du für denselben Nachbarn gleichzeitig eine Prefix-List, eine Filter-List und eine Route-Map in derselben Richtung nutzen?
+A: **Ja, die Route muss dann alle Filter passieren.** Eine Route-Map kann aber das Gleiche wie die anderen beiden und dazu Attribute setzen. Übersichtlicher ist es, alles in einer Route-Map zu bündeln.
+T: Wissen Mittel
+
+Q: Wie setzt du Weight 200 für alle Routen von Nachbar 10.0.13.3?
+A: **`neighbor 10.0.13.3 weight 200` unter `router bgp`.** Das gilt nur auf diesem Router. Für gezielte Präfixe nutzt du eine Inbound-Route-Map mit `set weight`.
+T: CLI Leicht
+
+Q: Du willst BGP in einer VRF mit VRF-Lite nutzen und bekommst „VRF KUNDE-A does not have an RD configured“. Was fehlt?
+A: **Ein Route Distinguisher in der VRF, etwa `rd 65001:10` unter `vrf definition KUNDE-A`.** IOS verlangt für `address-family ipv4 vrf` in BGP ein RD, auch wenn ohne MPLS keine VPN-Routen ausgetauscht werden.
+T: Falle Schwer

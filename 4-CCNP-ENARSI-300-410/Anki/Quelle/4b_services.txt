@@ -1,0 +1,234 @@
+# 4.4 | DHCP für IPv4: Server, Relay, Optionen
+S: https://www.rfc-editor.org/rfc/rfc2131 | RFC 2131: Dynamic Host Configuration Protocol
+S: https://www.rfc-editor.org/rfc/rfc3046 | RFC 3046: DHCP Relay Agent Information Option (Option 82)
+
+Q: Wie richtest du auf R1 einen DHCP-Pool für 10.20.0.0/24 ein, ohne die ersten zehn Adressen zu vergeben?
+A:
+```
+ip dhcp excluded-address 10.20.0.1 10.20.0.10
+ip dhcp pool LAN20
+ network 10.20.0.0 255.255.255.0
+ default-router 10.20.0.1
+ dns-server 10.1.1.53
+ lease 1
+```
+`excluded-address` steht global, nicht im Pool. `lease 1` heißt ein Tag.
+T: CLI Leicht
+
+Q: Clients in VLAN 20 bekommen keine Adresse. Der DHCP-Server steht in einem anderen Netz. Was fehlt am Gateway?
+A: **`ip helper-address 10.1.1.67` am Interface zum VLAN 20 (z. B. SVI 20).** Der Router nimmt den DHCP-Broadcast an und schickt ihn als Unicast an den Server. Ohne Helper bleibt der Broadcast im VLAN.
+T: Szenario Leicht
+
+Q: Woher weiß der DHCP-Server bei einem Relay, aus welchem Pool er eine Adresse vergeben soll?
+A: **Aus dem Feld giaddr, in das der Relay-Agent die IP-Adresse seines Client-Interfaces schreibt.** Der Server sucht den Pool, zu dem diese Adresse passt. Deshalb muss die Helper-Zeile am Interface zum Client stehen, nicht am Uplink.
+T: Wissen Mittel
+
+Q: Welche UDP-Dienste leitet `ip helper-address` standardmäßig weiter, nicht nur DHCP?
+A: **Acht Dienste: DHCP/BOOTP (67/68), TFTP (69), DNS (53), Time (37), NetBIOS-Name (137), NetBIOS-Datagram (138), TACACS (49) und IEN-116 (42).** Unerwünschte nimmst du mit `no ip forward-protocol udp <Port>` heraus.
+T: Wissen Schwer
+
+Q: Ein IOS-DHCP-Server antwortet Clients hinter einem Access-Switch mit DHCP Snooping nicht. Im Debug steht etwas von „giaddr“ und Option 82. Was ist los?
+A: **Der Switch fügt Option 82 ein, setzt aber giaddr auf 0.0.0.0. IOS verwirft solche Pakete standardmäßig als unzulässig.** Lösungen: auf dem Switch `no ip dhcp snooping information option` oder auf dem Relay-Router `ip dhcp relay information trust-all`.
+T: Falle Schwer
+
+Q: Ein Client bekommt eine Adresse, die schon ein anderes Gerät statisch nutzt. Wie verhindert IOS so etwas, und wo siehst du es?
+A: **Der IOS-Server pingt eine Adresse vor der Vergabe an. Antwortet jemand, wird sie als Konflikt markiert und übersprungen.** `show ip dhcp conflict` listet diese Adressen, `clear ip dhcp conflict *` gibt sie wieder frei.
+T: Szenario Mittel
+
+Q: Mit welchem Befehl siehst du, welche Adressen der IOS-DHCP-Server vergeben hat?
+A: **`show ip dhcp binding`.** Pro Eintrag stehen IP-Adresse, Client-ID bzw. MAC, Ablauf der Lease und Typ. `show ip dhcp pool` zeigt die Auslastung pro Pool.
+T: CLI Leicht
+
+Q: Welche DHCP-Option brauchen Cisco-IP-Telefone für ihren TFTP-Server, und wie setzt du sie?
+A: **Option 150, im Pool mit `option 150 ip 10.1.1.69`.** Option 66 ist die herstellerneutrale Variante und enthält einen Namen statt einer Liste von Adressen.
+T: CLI Mittel
+
+Q: Welche vier Nachrichten laufen bei einer DHCP-Vergabe ab, und welche sind Broadcasts?
+A: **Discover, Offer, Request, Acknowledge (DORA).** Discover und Request schickt der Client als Broadcast. Offer und Ack kommen je nach Broadcast-Flag des Clients als Broadcast oder Unicast.
+T: Wissen Leicht
+
+Q: Wie lässt du ein Router-Interface seine Adresse per DHCP beziehen, etwa am Internet-Anschluss?
+A: **`ip address dhcp` am Interface.** Eine vom Server gelieferte Default-Route installiert IOS mit AD 254, also schwächer als fast alle anderen Routen.
+T: CLI Leicht
+
+# 4.4 | DHCP für IPv6
+S: https://www.rfc-editor.org/rfc/rfc8415 | RFC 8415: Dynamic Host Configuration Protocol for IPv6 (DHCPv6)
+
+Q: Was steuern die M- und O-Flags im Router Advertisement?
+A: **M=1: Adressen per Stateful DHCPv6. O=1: Adresse per SLAAC, weitere Daten wie DNS per Stateless DHCPv6.** Beide 0: nur SLAAC, DNS dann per RDNSS im RA.
+T: Wissen Leicht
+
+Q: Clients bekommen per DHCPv6 Adresse und DNS-Server, haben aber kein Default-Gateway. Woran liegt das?
+A: **DHCPv6 verteilt kein Default-Gateway, das kommt immer aus dem Router Advertisement.** Sendet der Router keine RAs (etwa `ipv6 nd ra suppress`), fehlt das Gateway.
+T: Falle Mittel
+
+Q: Wie richtest du Stateless DHCPv6 für DNS auf Gi0/1 ein?
+A:
+```
+ipv6 dhcp pool STATELESS
+ dns-server 2001:db8::53
+ domain-name example.local
+interface GigabitEthernet0/1
+ ipv6 dhcp server STATELESS
+ ipv6 nd other-config-flag
+```
+Das O-Flag sagt den Clients, dass sie zusätzliche Daten per DHCPv6 holen sollen. Ihre Adresse bilden sie weiter per SLAAC.
+T: CLI Mittel
+
+Q: Wie leitest du DHCPv6 an einen Server in einem anderen Netz weiter?
+A: **Mit `ipv6 dhcp relay destination 2001:db8:1::67` am Client-Interface.** Clients schicken ihre Anfragen an die Multicast-Adresse FF02::1:2, der Router leitet sie als Unicast an den Server.
+T: CLI Mittel
+
+Q: Welche Ports nutzt DHCPv6?
+A: **UDP 546 für den Client und UDP 547 für Server und Relay.** Das ist wichtig für IPv6-ACLs, die DHCPv6 erlauben sollen.
+T: Wissen Leicht
+
+Q: Was ist DHCPv6 Prefix Delegation?
+A: **Ein Router bekommt vom Provider nicht nur eine Adresse, sondern ein ganzes Präfix (z. B. /56), das er auf seine LANs verteilt.** Auf IOS: `ipv6 dhcp client pd PREFIX-ISP` am WAN-Interface und `ipv6 address PREFIX-ISP ::1:0:0:0:1/64` an einem LAN-Interface.
+T: Wissen Schwer
+
+# 4.5 | IP SLA und Object Tracking
+S: https://www.cisco.com/en/US/docs/ios-xml/ios/ipsla/configuration/15-2s/sla_udp_jitter.html | Cisco: Configuring IP SLAs UDP Jitter Operations
+
+Q: Wie prüfst du alle 10 Sekunden per Ping, ob 203.0.113.1 erreichbar ist, und hängst eine Default-Route daran?
+A:
+```
+ip sla 1
+ icmp-echo 203.0.113.1 source-interface GigabitEthernet0/0
+ frequency 10
+ip sla schedule 1 life forever start-time now
+track 1 ip sla 1 reachability
+ip route 0.0.0.0 0.0.0.0 203.0.113.1 track 1
+```
+Fällt der Track auf Down, verschwindet die Default-Route, und eine Floating Static Route über den zweiten Provider übernimmt.
+T: CLI Mittel
+
+Q: Du hast IP SLA und Track konfiguriert, aber `show ip sla statistics` zeigt keine Messungen. Was fehlt meist?
+A: **Der Zeitplan: `ip sla schedule 1 life forever start-time now`.** Ohne Schedule läuft die Operation nicht. Das ist der häufigste Fehler beim Einrichten.
+T: Falle Leicht
+
+Q: Die SLA prüft 8.8.8.8 über ISP-A und schaltet die Default-Route über ISP-A. Fällt ISP-A aus, wechselt die Route zu ISP-B und kurz danach wieder zurück, immer im Kreis. Warum?
+A: **Nach dem Wechsel geht der SLA-Ping über ISP-B, erreicht 8.8.8.8 wieder, und die Route über ISP-A kommt zurück.** Lösung: Eine Hostroute `ip route 8.8.8.8 255.255.255.255 203.0.113.1` zwingt den Test über ISP-A. Dann bleibt er bei Ausfall von ISP-A sicher rot.
+T: Szenario Schwer
+
+Q: Was braucht eine UDP-Jitter-Messung auf der Gegenseite?
+A: **Einen IP-SLA-Responder: `ip sla responder` auf dem Zielgerät.** Der Responder antwortet auf die Testpakete und fügt Zeitstempel ein, sodass Laufzeiten pro Richtung, Jitter und Verlust gemessen werden können.
+T: Wissen Mittel
+
+Q: Welche Werte liefert eine UDP-Jitter-Operation?
+A: **Laufzeit (einfach und hin und zurück), Jitter pro Richtung, Paketverlust und bei Sprach-Codecs einen MOS-Wert.** Damit prüft man, ob eine Strecke für Sprache oder Video taugt, nicht nur, ob sie erreichbar ist.
+T: Wissen Mittel
+
+Q: Was ist der Unterschied zwischen `track 1 ip sla 1 reachability` und `track 1 ip sla 1 state`?
+A: **`reachability` ist Up, solange Antworten kommen, auch wenn ein Schwellwert überschritten ist. `state` ist nur Up, wenn die Operation OK meldet, also auch innerhalb des Schwellwerts.** Mit `state` und `threshold` kannst du also auch auf zu hohe Laufzeit reagieren.
+T: Vergleich Schwer
+
+Q: Wie verhinderst du, dass eine Route bei einem einzelnen verlorenen Ping sofort wegfällt?
+A: **Mit einer Verzögerung am Track: `delay down 30 up 60`.** Der Track wechselt erst, wenn der neue Zustand 30 bzw. 60 Sekunden anhält. So vermeidest du Flattern bei kurzen Störungen.
+T: CLI Mittel
+
+Q: Mit welchen Befehlen prüfst du IP SLA und Tracking?
+A: **`show ip sla statistics` zeigt das letzte Ergebnis und die Erfolgszähler, `show track` den Zustand jedes Tracks und wie oft er gewechselt hat.** `show ip sla configuration` zeigt Ziel, Frequenz, Timeout und Schwellwert.
+T: CLI Leicht
+
+Q: Wie müssen `frequency`, `timeout` und `threshold` einer IP-SLA-Operation zueinander stehen?
+A: **Threshold ≤ Timeout ≤ Frequenz.** Der Timeout (in ms) ist die Wartezeit auf eine Antwort, der Threshold markiert zu langsame Antworten. Ein Timeout länger als die Frequenz (in s) würde Messungen überlappen lassen, das lehnt IOS ab.
+T: Falle Schwer
+
+Q: Welche Operationstypen bietet IP SLA außer ICMP Echo?
+A: **Unter anderem UDP Jitter, UDP Echo, TCP Connect, HTTP und DNS.** TCP Connect prüft etwa, ob ein Server auf Port 443 eine Verbindung annimmt. HTTP misst die Zeit bis zur Antwort einer Webseite.
+T: Wissen Leicht
+
+# 4.6 | NetFlow v9, Flexible NetFlow, IPFIX
+S: https://www.rfc-editor.org/rfc/rfc3954 | RFC 3954: Cisco Systems NetFlow Services Export Version 9
+S: https://www.rfc-editor.org/rfc/rfc7011 | RFC 7011: IP Flow Information Export (IPFIX) Protocol
+
+Q: Was ist der Unterschied zwischen NetFlow v5, v9 und IPFIX?
+A: **v5 hat ein festes Format nur für IPv4. v9 ist vorlagenbasiert und flexibel, auch für IPv6 und MPLS. IPFIX ist der IETF-Standard auf Basis von v9 (oft „v10“ genannt).** Bei v9 und IPFIX schickt der Exporter Templates, die beschreiben, wie die Datensätze aufgebaut sind.
+T: Vergleich Leicht
+
+Q: Aus welchen drei Bausteinen besteht Flexible NetFlow?
+A: **Flow Record (welche Felder), Flow Exporter (wohin und wie) und Flow Monitor (verbindet beide und wird an ein Interface gehängt).** Optional kommt ein Sampler dazu, der nur jedes n-te Paket auswertet.
+T: Wissen Leicht
+
+Q: Was ist der Unterschied zwischen `match` und `collect` in einem Flow Record?
+A: **`match` definiert Schlüsselfelder: Pakete mit gleichen Werten gehören zum selben Flow. `collect` definiert Nicht-Schlüsselfelder, die pro Flow nur gesammelt werden, etwa Bytes und Pakete.** Typische Schlüssel sind Quell- und Zieladresse, Ports, Protokoll und Eingangsinterface.
+T: Vergleich Mittel
+
+Q: Wie konfigurierst du Flexible NetFlow, das eingehende IPv4-Flows auf Gi0/1 per IPFIX an 10.1.1.70 Port 2055 schickt?
+A:
+```
+flow record REC
+ match ipv4 source address
+ match ipv4 destination address
+ match transport source-port
+ match transport destination-port
+ match ipv4 protocol
+ collect counter bytes
+ collect counter packets
+flow exporter EXP
+ destination 10.1.1.70
+ source Loopback0
+ transport udp 2055
+ export-protocol ipfix
+flow monitor MON
+ record REC
+ exporter EXP
+interface GigabitEthernet0/1
+ ip flow monitor MON input
+```
+T: CLI Mittel
+
+Q: Der Collector zeigt keine Flows, obwohl `show flow monitor MON cache` Einträge hat. Was prüfst du?
+A: **Ob der Exporter Pakete schickt (`show flow exporter EXP statistics`) und ob Ziel, Port und Protokollversion beim Collector passen.** Typisch sind falscher Port, eine Firewall auf dem Weg oder ein Collector, der kein IPFIX, sondern nur v9 versteht.
+T: Szenario Mittel
+
+Q: Ein Collector wird neu gestartet und zeigt danach minutenlang keine Daten, obwohl der Router exportiert. Woran liegt das?
+A: **Der Collector hat die Templates verloren und kann die Datensätze nicht lesen, bis der Router die Templates erneut schickt.** Mit `template data timeout 60` im Exporter sendet der Router sie häufiger.
+T: Falle Schwer
+
+Q: Was bestimmen der Active und der Inactive Timeout im Flow-Cache?
+A: **Inactive: Ein Flow ohne neue Pakete wird nach dieser Zeit exportiert (Standard 15 s). Active: Ein laufender Flow wird nach dieser Zeit zwischendurch exportiert (Standard 1800 s).** Für zeitnahe Auswertung langer Verbindungen setzt man den Active Timeout oft auf 60 s.
+T: Wissen Mittel
+
+Q: Wie kann eine Flow-Analyse zeigen, welcher Host einen Uplink auslastet?
+A: **Über die Byte-Zähler pro Flow, gruppiert nach Quelladresse.** `show flow monitor MON cache sort highest counter bytes top 10` zeigt die größten Flows direkt am Router, ohne Collector.
+T: CLI Schwer
+
+Q: Warum erfasst `ip flow monitor MON input` nicht den Verkehr, der den Router auf diesem Interface verlässt?
+A: **Weil `input` nur eingehende Pakete erfasst.** Für ausgehenden Verkehr brauchst du zusätzlich `ip flow monitor MON output`. Wer beide Richtungen auf allen Interfaces erfasst, zählt Verkehr doppelt.
+T: Falle Leicht
+
+# 4.7 | Catalyst Center Assurance
+
+Q: Was zeigt der Network Health Score in Catalyst Center Assurance?
+A: **Den Anteil der Geräte mit gutem Health Score (8 bis 10) an allen überwachten Geräten.** Ein Wert von 90 % heißt: 9 von 10 Geräten sind gesund. Pro Gerätetyp (Core, Access, Router usw.) gibt es eigene Werte.
+T: Wissen Mittel
+
+Q: Welche Farben und Bereiche hat der Device Health Score?
+A: **1–3 schlecht (rot), 4–7 mittel (orange), 8–10 gut (grün).** Der Wert setzt sich aus Kennzahlen wie CPU, Speicher, Erreichbarkeit und Interface-Fehlern zusammen.
+T: Wissen Leicht
+
+Q: Ein Benutzer meldet, dass er seit gestern Mittag eine Anwendung nicht erreicht. Welche Assurance-Funktion hilft, das zu untersuchen?
+A: **Client 360 mit der Zeitleiste.** Du siehst den Zustand des Clients zu jedem Zeitpunkt, Onboarding-Ereignisse, das Gerät, an dem er hing, und gemeldete Issues. Damit kannst du in die Vergangenheit zurückgehen, statt nur den aktuellen Zustand zu sehen.
+T: Szenario Mittel
+
+Q: Was macht Path Trace in Catalyst Center?
+A: **Es zeigt den Weg eines Flows zwischen zwei Endpunkten durch das Netz, mit Interfaces und ACLs auf jedem Hop.** So findest du etwa die ACL, die einen bestimmten Port blockt, ohne jedes Gerät einzeln zu prüfen.
+T: Wissen Leicht
+
+Q: Was ist ein „Issue“ in Catalyst Center Assurance?
+A: **Ein erkanntes Problem mit Beschreibung, betroffenen Geräten oder Clients und vorgeschlagenen Schritten zur Behebung.** Issues entstehen aus Regeln über Telemetrie, Syslog und SNMP. Sie lassen sich bestätigen, ignorieren oder als gelöst markieren.
+T: Wissen Leicht
+
+Q: Woher bezieht Catalyst Center Assurance seine Daten?
+A: **Aus SNMP, Syslog, NetFlow und Streaming-Telemetrie der Geräte, dazu aus ISE und anderen Integrationen.** Je mehr Quellen angebunden sind, desto genauer werden Health Scores und Issues.
+T: Wissen Mittel
+
+Q: Was zeigt Device 360?
+A: **Den Zustand eines Geräts über die Zeit: Health Score, CPU und Speicher, Interfaces, Nachbarn, Issues und die Topologie drumherum.** Es ist die Detailansicht für die Fehlersuche an einem einzelnen Switch oder Router.
+T: Wissen Leicht
+
+Q: Ein Switch erscheint in Assurance ohne Health Score, obwohl er im Inventory ist. Was prüfst du?
+A: **Ob er erreichbar und „Managed“ ist und ob Telemetrie, SNMP und Syslog an Catalyst Center gehen.** Ohne gültige Zugangsdaten oder mit blockierten Ports bekommt Assurance keine Daten.
+T: Szenario Mittel

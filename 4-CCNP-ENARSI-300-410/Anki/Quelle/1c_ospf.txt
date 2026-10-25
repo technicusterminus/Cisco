@@ -1,0 +1,203 @@
+# 1.10.a | OSPF: Address Families IPv4 und IPv6
+S: https://www.rfc-editor.org/rfc/rfc5340 | RFC 5340: OSPF for IPv6 (OSPFv3)
+S: https://www.rfc-editor.org/rfc/rfc5838 | RFC 5838: Support of Address Families in OSPFv3
+
+Q: Wie aktivierst du OSPFv3 für IPv6 mit der Address-Family-Syntax auf Gi0/0 in Area 0?
+A:
+```
+router ospfv3 1
+ router-id 1.1.1.1
+ address-family ipv6 unicast
+interface GigabitEthernet0/0
+ ospfv3 1 ipv6 area 0
+```
+OSPFv3 wird am Interface aktiviert, `network`-Befehle gibt es nicht. Mit `ospfv3 1 ipv4 area 0` trägt derselbe Prozess auch IPv4.
+T: CLI Mittel
+
+Q: Warum bekommt OSPFv3 auf einem reinen IPv6-Router keine Router-ID?
+A: **Weil auch OSPFv3 eine 32-Bit-Router-ID im IPv4-Format braucht und sie sonst von einer IPv4-Adresse ableitet.** Ohne IPv4-Adresse musst du sie mit `router-id 1.1.1.1` setzen, sonst startet der Prozess nicht.
+T: Szenario Leicht
+
+Q: Welche Adresse steht in OSPFv3 als Next Hop in der Routingtabelle?
+A: **Die Link-Local-Adresse des Nachbarn.** OSPFv3 bildet Nachbarschaften über Link-Local-Adressen. Deshalb siehst du in `show ipv6 route ospf` Next Hops wie FE80::2 zusammen mit dem Ausgangsinterface.
+T: Wissen Leicht
+
+Q: Welche neuen LSA-Typen bringt OSPFv3 mit, und wozu?
+A: **Type 8 (Link-LSA) und Type 9 (Intra-Area-Prefix-LSA).** In OSPFv3 beschreiben Type 1 und 2 nur noch die Topologie. Die Präfixe stehen getrennt in Type 9, die Link-Local-Adresse und Präfixe eines Links in Type 8, das nur auf diesem Link verteilt wird.
+T: Wissen Schwer
+
+Q: Wie wird OSPFv3 klassisch authentisiert?
+A: **Über IPsec (AH oder ESP), etwa `ospfv3 authentication ipsec spi 256 sha1 <Schlüssel>` am Interface.** OSPFv3 hat im Paketkopf kein eigenes Authentisierungsfeld mehr. Neuere Versionen unterstützen zusätzlich den Authentication Trailer nach RFC 7166.
+T: Wissen Mittel
+
+# 1.10.b | OSPF: Nachbarschaft und Authentisierung
+S: https://www.rfc-editor.org/rfc/rfc2328 | RFC 2328: OSPF Version 2
+
+Q: Welche Werte müssen bei zwei OSPF-Nachbarn übereinstimmen?
+A: **Area-ID, Hello- und Dead-Intervall, Subnetz und Maske (außer bei Point-to-Point), Authentisierung und die Stub-Flags der Area.** Dazu müssen die Router-IDs verschieden sein. Die MTU wird erst beim Austausch der Datenbank geprüft.
+T: Wissen Leicht
+
+Q: Zwei OSPF-Nachbarn hängen dauerhaft im Zustand EXSTART. Was ist die häufigste Ursache?
+A: **Unterschiedliche Interface-MTU.** Im Database Description-Paket steht die MTU. Der Router mit der kleineren MTU lehnt die größeren Pakete ab, und der Austausch kommt nicht voran. Lösung: MTU angleichen, als Notbehelf `ip ospf mtu-ignore`.
+T: Szenario Leicht
+
+Q: Auf einem Ethernet-Segment mit vier Routern sehen zwei DROTHER-Router einander nur im Zustand 2-WAY. Ist das ein Fehler?
+A: **Nein, das ist korrekt.** Auf Broadcast-Netzen bilden DROTHER nur mit DR und BDR eine volle Nachbarschaft (FULL). Untereinander bleiben sie bei 2-WAY, so sinkt die Zahl der Adjazenzen.
+T: Falle Leicht
+
+Q: Im Log steht „Detected router with duplicate router ID“. Welche Folgen hat das?
+A: **Direkte Nachbarn mit gleicher ID bauen keine Nachbarschaft auf. Liegen die Router weiter auseinander, überschreiben sich ihre LSAs ständig.** Das zeigt sich als ständige SPF-Läufe und flatternde Routen. Die Router-ID wird mit `router-id` gesetzt und greift erst nach `clear ip ospf process`.
+T: Szenario Mittel
+
+Q: Wie wählt OSPF die Router-ID, wenn keine konfiguriert ist?
+A: **Die höchste IPv4-Adresse eines Loopback-Interfaces, ohne Loopback die höchste Adresse eines aktiven physischen Interfaces.** Die Wahl fällt beim Start des Prozesses und ändert sich danach nicht von selbst, auch wenn sich Adressen ändern.
+T: Wissen Leicht
+
+Q: Wie konfigurierst du MD5-Authentisierung für OSPF auf Gi0/0?
+A:
+```
+interface GigabitEthernet0/0
+ ip ospf authentication message-digest
+ ip ospf message-digest-key 1 md5 Geheim123
+```
+Statt der ersten Zeile geht auch `area 0 authentication message-digest` unter `router ospf` für die ganze Area. Key-ID und Schlüssel müssen auf beiden Seiten gleich sein.
+T: CLI Mittel
+
+Q: Wie nutzt du bei OSPFv2 HMAC-SHA-256 statt MD5?
+A:
+```
+key chain OSPF-KC
+ key 1
+  key-string Geheim123
+  cryptographic-algorithm hmac-sha-256
+interface GigabitEthernet0/0
+ ip ospf authentication key-chain OSPF-KC
+```
+Das folgt RFC 5709. Im Key Chain wird der Algorithmus pro Schlüssel festgelegt.
+S: https://www.rfc-editor.org/rfc/rfc5709 | RFC 5709: OSPFv2 HMAC-SHA Cryptographic Authentication
+T: CLI Schwer
+
+Q: R1 hat `area 1 stub`, R2 nicht. Was passiert?
+A: **Die Nachbarschaft kommt nicht zustande.** Das E-Bit im Hello zeigt, ob die Area externe LSAs zulässt. Stimmt es nicht überein, verwerfen beide die Hellos. `debug ip ospf hello` zeigt „Mismatched Stub/Transit area option bit“.
+T: Szenario Mittel
+
+Q: Mit welchem Befehl prüfst du schnell, auf welchen Interfaces OSPF läuft, in welcher Area und mit welchem Zustand?
+A: **`show ip ospf interface brief`.** Pro Interface siehst du Prozess, Area, IP, Kosten, Zustand (DR, BDR, DROTH, P2P) und die Zahl der Nachbarn. Fehlt ein Interface, ist es nicht in OSPF aufgenommen.
+T: CLI Leicht
+
+Q: Ein Interface ist passiv. Wird sein Netz in OSPF angekündigt?
+A: **Ja.** Passiv heißt nur: keine Hellos, keine Nachbarschaft. Das Netz steht weiter im Router-LSA. Typisch für LAN-Interfaces mit Clients, an denen kein Router hängen soll.
+T: Wissen Leicht
+
+# 1.10.c | OSPF: Netzwerktypen
+S: https://www.rfc-editor.org/rfc/rfc2328 | RFC 2328: OSPF Version 2
+
+Q: Welche OSPF-Netzwerktypen wählen einen DR, und welche Timer haben sie?
+A: **Broadcast (Hello 10/Dead 40) und Non-Broadcast (30/120) wählen einen DR. Point-to-Point (10/40), Point-to-Multipoint (30/120) und Point-to-Multipoint Non-Broadcast (30/120) nicht.** Non-Broadcast-Typen brauchen manuell konfigurierte Nachbarn mit `neighbor`.
+T: Vergleich Mittel
+
+Q: R1 hat auf einem Ethernet-Link `ip ospf network point-to-point`, R2 den Standard Broadcast. Die Nachbarschaft wird FULL, aber Routen fehlen. Warum?
+A: **Weil beide den Link unterschiedlich im Router-LSA beschreiben: R1 als Point-to-Point, R2 als Transitnetz mit DR.** Die Timer passen (beide 10/40), darum entsteht die Nachbarschaft. Die SPF-Berechnung findet aber keine beidseitige Verbindung und verwirft die Wege.
+T: Falle Schwer
+
+Q: Warum lohnt sich `ip ospf network point-to-point` auf einem Ethernet-Link zwischen genau zwei Routern?
+A: **Es gibt keine DR-Wahl und kein Type-2-LSA.** Die Nachbarschaft wird schneller FULL, weil die Wartezeit für die DR-Wahl entfällt, und die Datenbank wird kleiner.
+T: Szenario Mittel
+
+Q: Was ist das Besondere an Point-to-Multipoint in der Routingtabelle?
+A: **Jeder Router kündigt seine Interface-Adresse als /32-Hostroute an.** So erreichen sich Spokes über den Hub, auch wenn sie keine direkte Layer-2-Verbindung haben. Eine DR-Wahl gibt es nicht.
+T: Wissen Mittel
+
+Q: In einem Hub-and-Spoke-Netz mit OSPF-Netzwerktyp Broadcast wird ein Spoke DR. Was passiert, und wie verhinderst du es?
+A: **Die anderen Spokes erreichen den DR nicht direkt und bekommen keine vollständige Datenbank.** Lösung: Auf allen Spokes `ip ospf priority 0`, damit nur der Hub DR werden kann.
+T: Szenario Mittel
+
+Q: Du erhöhst auf R3 die OSPF-Priorität auf 255, aber R1 bleibt DR. Warum?
+A: **Weil die DR-Wahl nicht präemptiv ist.** Ein amtierender DR bleibt, bis er ausfällt oder der OSPF-Prozess neu startet. Erst danach gewinnt die höchste Priorität, bei Gleichstand die höchste Router-ID.
+T: Falle Leicht
+
+# 1.10.c | OSPF: Area-Typen und Router-Rollen
+S: https://www.rfc-editor.org/rfc/rfc2328 | RFC 2328: OSPF Version 2
+S: https://www.rfc-editor.org/rfc/rfc3101 | RFC 3101: The OSPF Not-So-Stubby Area (NSSA) Option
+
+Q: Welche LSA-Typen gibt es in OSPFv2, und wer erzeugt sie?
+A: **Type 1 Router-LSA (jeder Router), Type 2 Network-LSA (DR), Type 3 Summary-LSA (ABR), Type 4 ASBR-Summary (ABR), Type 5 External (ASBR), Type 7 NSSA-External (ASBR in NSSA).** Type 1 und 2 bleiben in ihrer Area, Type 5 flutet die ganze Domäne außer Stub-Areas.
+T: Wissen Mittel
+
+Q: Wozu braucht OSPF das Type-4-LSA?
+A: **Es sagt Routern in anderen Areas, wie sie den ASBR erreichen.** Das Type-5-LSA nennt nur die Router-ID des ASBR. Ohne Type 4 wüsste ein Router außerhalb der ASBR-Area nicht, wie weit der ASBR entfernt ist.
+T: Wissen Mittel
+
+Q: Was ist der Unterschied zwischen Stub und Totally Stubby Area?
+A: **Stub blockt Type-5-LSAs und bekommt eine Default-Route per Type 3. Totally Stubby blockt zusätzlich alle anderen Type-3-LSAs, nur die Default-Route bleibt.** Konfiguration: `area 1 stub` auf allen Routern der Area, beim ABR für Totally Stubby `area 1 stub no-summary`.
+T: Vergleich Mittel
+
+Q: In Area 1 hängt ein Router, der statische Routen redistribuieren muss. Die Area soll trotzdem keine Type-5-LSAs aus dem Rest des Netzes bekommen. Welchen Area-Typ wählst du?
+A: **NSSA.** Der ASBR in Area 1 erzeugt Type-7-LSAs, der ABR übersetzt sie in Type 5 für den Rest der Domäne. Type 5 von außen kommt nicht hinein. In einer reinen Stub-Area wäre der ASBR verboten.
+T: Szenario Mittel
+
+Q: Area 1 ist NSSA. Die Router in Area 1 haben keine Default-Route. Wie bekommt die Area eine?
+A: **Mit `area 1 nssa default-information-originate` auf dem ABR.** Anders als bei Stub-Areas erzeugt der ABR in einer NSSA nicht automatisch eine Default-Route. Bei Totally NSSA (`area 1 nssa no-summary`) kommt sie dagegen automatisch als Type 3.
+T: Falle Mittel
+
+Q: Welche Router-Rollen gibt es in OSPF?
+A: **Interner Router (alle Interfaces in einer Area), Backbone-Router (mindestens ein Interface in Area 0), ABR (Interfaces in Area 0 und einer weiteren Area) und ASBR (speist externe Routen ein).** Ein Router kann mehrere Rollen haben, etwa ABR und ASBR zugleich.
+T: Wissen Leicht
+
+Q: Ein Router hat Interfaces in Area 1 und Area 2, aber keines in Area 0. Ist er ein ABR?
+A: **Nicht im funktionalen Sinn: Er tauscht keine Inter-Area-Routen zwischen Area 1 und 2 aus.** Inter-Area-Verkehr muss immer über Area 0 laufen. Er braucht eine Verbindung zu Area 0, notfalls über einen Virtual Link.
+T: Falle Mittel
+
+Q: Was zeigt `show ip ospf database` im Abschnitt „Summary Net Link States (Area 1)“?
+A: **Die Type-3-LSAs in Area 1, also die Inter-Area-Präfixe, die ein ABR in diese Area einspeist.** In der Spalte „ADV Router“ steht die Router-ID des ABR. Steht dort nur ein einziger Eintrag mit Link ID 0.0.0.0, ist die Area Totally Stubby.
+T: Exhibit Mittel
+
+# 1.10.c | OSPF: Virtual Links
+S: https://www.rfc-editor.org/rfc/rfc2328 | RFC 2328: OSPF Version 2
+
+Q: Area 3 hängt nur an Area 1, nicht an Area 0. Wie verbindest du sie, ohne neue Leitungen zu ziehen?
+A: **Mit einem Virtual Link durch Area 1 zwischen dem ABR zu Area 0 und dem ABR zu Area 3.** Auf beiden: `area 1 virtual-link <Router-ID des anderen>`. Der Virtual Link gehört logisch zu Area 0 und macht den entfernten ABR zum Backbone-Router.
+T: Szenario Mittel
+
+Q: Welche Adresse trägst du in `area 1 virtual-link` ein?
+A: **Die Router-ID des gegenüberliegenden ABR, keine Interface-Adresse.** Die Area-Nummer ist die Transit-Area, durch die der Virtual Link läuft, nicht die Area, die angebunden werden soll.
+T: Falle Mittel
+
+Q: Kann ein Virtual Link durch eine Stub-Area laufen?
+A: **Nein.** Die Transit-Area muss alle Routen kennen, auch externe. Stub- und NSSA-Areas sind deshalb als Transit-Area ausgeschlossen.
+T: Wissen Leicht
+
+Q: Wann brauchst du einen Virtual Link außer zum Anbinden einer entfernten Area?
+A: **Wenn Area 0 in zwei Teile zerfallen ist.** Ein Virtual Link durch eine andere Area verbindet die beiden Backbone-Teile wieder. Das kommt etwa vor, wenn zwei Firmennetze mit eigenem Area 0 zusammengeführt werden.
+T: Szenario Mittel
+
+# 1.10.d | OSPF: Pfadwahl
+S: https://www.rfc-editor.org/rfc/rfc2328 | RFC 2328: OSPF Version 2
+
+Q: Für dasselbe Präfix kennt R1 eine Intra-Area-Route mit Kosten 200 und eine Inter-Area-Route mit Kosten 20. Welche gewinnt?
+A: **Die Intra-Area-Route.** OSPF vergleicht zuerst den Routentyp: intra-area vor inter-area vor E1/N1 vor E2/N2. Die Kosten zählen erst innerhalb desselben Typs.
+T: Falle Mittel
+
+Q: Was ist der Unterschied zwischen E1- und E2-Routen?
+A: **Bei E1 werden die internen Kosten zum ASBR zur externen Metrik addiert, bei E2 bleibt die externe Metrik überall gleich.** E1 bevorzugt also den nächsten Ausgang, E2 nur den mit der besseren externen Metrik.
+T: Vergleich Leicht
+
+Q: Zwei ASBR speisen 0.0.0.0/0 als E2 mit Metrik 20 ein. Welchen Ausgang wählt ein Router?
+A: **Den ASBR mit den geringeren internen Kosten (Forward Metric).** Bei gleicher E2-Metrik entscheidet OSPF nach der Entfernung zum ASBR. In `show ip route 0.0.0.0` siehst du sie als „forward metric“.
+T: Szenario Schwer
+
+Q: Wie berechnet IOS die OSPF-Kosten eines Interfaces, und warum haben 1G und 10G standardmäßig dieselben Kosten?
+A: **Kosten = Referenzbandbreite / Interface-Bandbreite, Referenz standardmäßig 100 Mbit/s, Minimum 1.** Alles ab 100 Mbit/s bekommt Kosten 1. Mit `auto-cost reference-bandwidth 100000` (in Mbit/s) unterscheidet OSPF bis 100 Gbit/s.
+T: Rechnen Leicht
+
+Q: Du änderst die Referenzbandbreite nur auf R1. Was passiert?
+A: **R1 rechnet andere Kosten als die übrigen Router, und es kann zu asymmetrischen oder suboptimalen Wegen kommen.** IOS warnt deshalb, dass der Wert auf allen Routern gleich sein sollte. Eine Nachbarschaft scheitert daran nicht.
+T: Falle Mittel
+
+Q: Wie filterst du am ABR, dass 10.5.0.0/16 nicht als Type 3 in Area 2 ankommt?
+A: **Mit `area 2 filter-list prefix NO-10-5 in` und einer passenden Prefix-List.** `in` heißt hier: in Area 2 hinein. Dieser Filter wirkt auf die LSAs selbst, anders als eine Distribute-List.
+T: CLI Schwer
+
+Q: Mit welchem Befehl änderst du die OSPF-Kosten nur für ein Interface?
+A: **`ip ospf cost 50` am Interface.** Das überschreibt die Berechnung aus der Bandbreite. Für Load Balancing über zwei gleich teure Wege nutzt OSPF bis zu `maximum-paths` Wege (Standard 4).
+T: CLI Leicht

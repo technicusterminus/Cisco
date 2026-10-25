@@ -1,0 +1,260 @@
+# 3.1 | AAA mit TACACS+, RADIUS und lokaler Datenbank
+S: https://www.rfc-editor.org/rfc/rfc8907 | RFC 8907: The TACACS+ Protocol
+S: https://www.rfc-editor.org/rfc/rfc2865 | RFC 2865: Remote Authentication Dial In User Service (RADIUS)
+
+Q: Was unterscheidet TACACS+ und RADIUS bei Transport, Verschlüsselung und Aufgabenteilung?
+A: **TACACS+ nutzt TCP 49, verschlüsselt das ganze Paket und trennt Authentisierung, Autorisierung und Accounting. RADIUS nutzt UDP 1812/1813, verschlüsselt nur das Passwort und verbindet Authentisierung mit Autorisierung.** Für Geräteverwaltung mit Befehlsautorisierung nimmt man deshalb TACACS+, für Netzzugang (802.1X, VPN) RADIUS.
+T: Vergleich Leicht
+
+Q: Welcher Befehl schaltet AAA auf IOS überhaupt erst ein, und was ändert sich danach sofort?
+A: **`aaa new-model`.** Danach gelten die AAA-Methodenlisten, die alten `login`- und `password`-Zeilen unter den Lines verlieren ihre Wirkung. Ohne Methodenliste fragen die VTYs die lokale Benutzerdatenbank ab, nur die Konsole bleibt dann ohne Prüfung.
+T: Wissen Leicht
+
+Q: Wie sorgst du dafür, dass die Anmeldung über TACACS+ läuft und bei Ausfall der Server die lokale Datenbank greift?
+A: **`aaa authentication login default group tacacs+ local`.** Die Methoden werden von links nach rechts versucht. Für die Lines gilt automatisch die Liste `default`.
+T: CLI Leicht
+
+Q: Der TACACS+-Server lehnt den Benutzer admin wegen falschem Passwort ab. Der lokale Benutzer admin hat das richtige Passwort. Kommt er mit `group tacacs+ local` herein?
+A: **Nein. Die nächste Methode wird nur versucht, wenn der Server nicht antwortet (ERROR), nicht wenn er ablehnt (FAIL).** Eine Ablehnung ist eine gültige Antwort und beendet die Anmeldung.
+T: Falle Mittel
+
+Q: Wie verhinderst du, dass du dich bei einem AAA-Fehler auch an der Konsole aussperrst?
+A: **Mit einer eigenen Methodenliste nur für die Konsole: `aaa authentication login CONSOLE local` und unter `line con 0` den Befehl `login authentication CONSOLE`.** Ein lokaler Benutzer mit `secret` muss dafür existieren.
+T: Szenario Mittel
+
+Q: Ein Admin meldet sich per TACACS+ an, landet aber im User-EXEC-Modus statt direkt in Privilege Level 15. Was fehlt?
+A: **Die EXEC-Autorisierung: `aaa authorization exec default group tacacs+ local`.** Erst damit übernimmt der Router das Privilege Level, das der Server für den Benutzer liefert.
+T: Szenario Mittel
+
+Q: Wie lässt du jeden Befehl in Level 15 vom TACACS+-Server freigeben und protokollieren?
+A:
+```
+aaa authorization commands 15 default group tacacs+ local
+aaa accounting commands 15 default start-stop group tacacs+
+```
+Für Befehle im Konfigurationsmodus kommt `aaa authorization config-commands` hinzu.
+T: CLI Mittel
+
+Q: Wie legst du einen TACACS+-Server mit der neuen Syntax an?
+A:
+```
+tacacs server ISE1
+ address ipv4 10.1.1.10
+ key Geheim123
+ip tacacs source-interface Loopback0
+```
+Der Server prüft oft die Quelladresse des Routers. Mit `source-interface` ist sie stabil, unabhängig vom Ausgangsinterface.
+T: CLI Mittel
+
+Q: Mit welchem Befehl testest du eine AAA-Anmeldung gegen den Server, ohne dich selbst abzumelden?
+A: **`test aaa group tacacs+ admin Passwort legacy`.** Die Ausgabe zeigt, ob der Server den Benutzer annimmt. Zur Fehlersuche hilft zusätzlich `debug aaa authentication` und `debug tacacs`.
+T: CLI Mittel
+
+Q: Der RADIUS-Server antwortet nie, obwohl Adresse und Schlüssel stimmen. Welche Port-Falle gibt es?
+A: **RADIUS kennt zwei Portpaare: offiziell 1812/1813, historisch 1645/1646.** Nutzen Router und Server verschiedene Paare, kommt keine Antwort. Darum die Ports beim `radius server` mit `auth-port` und `acct-port` ausdrücklich passend zum Server setzen.
+T: Falle Mittel
+
+Q: Welcher lokale Passwort-Typ ist auf IOS heute zu empfehlen?
+A: **Typ 9 (scrypt): `username admin privilege 15 algorithm-type scrypt secret Passwort`.** Typ 7 ist nur verschleiert und sofort umkehrbar, Typ 5 (MD5) gilt als schwach.
+T: Wissen Leicht
+
+Q: Der TACACS+-Server ist erreichbar, aber alle Anmeldungen schlagen fehl, und im Debug steht „invalid reply“. Was prüfst du?
+A: **Den Shared Key auf Router und Server.** Bei falschem Schlüssel kann der Router die verschlüsselte Antwort nicht lesen. Danach prüfst du, ob der Server die Quelladresse des Routers als Gerät kennt.
+T: Szenario Mittel
+
+# 3.2.a | IPv4-ACLs: Standard, Extended, zeitbasiert
+S: https://www.cisco.com/c/en/us/support/docs/security/ios-firewall/23602-confaccesslists.html | Cisco: Configure Commonly Used IP ACLs
+
+Q: Wo platziert man Standard- und wo Extended-ACLs, und warum?
+A: **Standard-ACLs nahe am Ziel, Extended-ACLs nahe an der Quelle.** Standard-ACLs prüfen nur die Quelladresse, nahe der Quelle würden sie zu viel blocken. Extended-ACLs sind genau genug, um unerwünschten Verkehr früh zu stoppen.
+T: Wissen Leicht
+
+Q: Nach einer neuen Inbound-ACL auf Gi0/0 bricht die OSPF-Nachbarschaft ab. Die ACL erlaubt nur TCP 22 und 443. Was ist passiert?
+A: **Das implizite `deny any` am Ende blockt auch die OSPF-Hellos (IP-Protokoll 89).** Inbound-ACLs filtern alles, was am Interface ankommt, auch Routing-Protokolle. Lösung: `permit ospf any any` vor die anderen Einträge.
+T: Szenario Leicht
+
+Q: Filtert eine Outbound-ACL auf einem Interface auch Pakete, die der Router selbst erzeugt, etwa Pings vom Router?
+A: **Nein, Outbound-ACLs prüfen nur durchgeleiteten Verkehr.** Selbst erzeugter Verkehr umgeht sie. Für den Zugriff auf den Router selbst nutzt man Inbound-ACLs, `access-class` auf den VTYs oder CoPP.
+T: Falle Mittel
+
+Q: Wie erlaubst du HTTP-Zugriff ins Internet nur werktags von 8 bis 17 Uhr?
+A:
+```
+time-range WORK
+ periodic weekdays 8:00 to 17:00
+ip access-list extended WEB
+ permit tcp 10.1.0.0 0.0.255.255 any eq 80 time-range WORK
+```
+Die Regel gilt nur innerhalb des Zeitfensters. Außerhalb greift die nächste Zeile oder das implizite `deny`.
+T: CLI Mittel
+
+Q: Eine zeitbasierte ACL greift zur falschen Uhrzeit. Was prüfst du?
+A: **Die Uhrzeit des Routers mit `show clock`, also Zeitzone, Sommerzeit und NTP.** Die Time-Range nutzt die lokale Uhr. Läuft der Router auf UTC, verschiebt sich das Fenster um die Zeitzonendifferenz.
+T: Szenario Leicht
+
+Q: Wie fügst du in eine bestehende benannte ACL eine Zeile zwischen Sequenz 10 und 20 ein?
+A: **`ip access-list extended NAME` und dann z. B. `15 permit tcp any host 10.1.1.5 eq 443`.** Benannte ACLs (und nummerierte im ACL-Modus) erlauben Sequenznummern. Mit `ip access-list resequence NAME 10 10` nummerierst du danach wieder sauber.
+T: CLI Leicht
+
+Q: Was bewirkt `access-class 10 in` unter `line vty 0 4`?
+A: **Nur Quelladressen, die ACL 10 erlaubt, dürfen sich per Telnet oder SSH am Router anmelden.** Die ACL prüft die Quelladresse der Verbindung zum Router. Sie filtert keinen durchgeleiteten Verkehr.
+T: Wissen Leicht
+
+Q: Wie viele Hosts deckt `permit 10.1.4.0 0.0.3.255` ab, und welcher Bereich ist das?
+A: **1024 Adressen, von 10.1.4.0 bis 10.1.7.255.** Die Wildcard 0.0.3.255 lässt die letzten 10 Bit frei: 2¹⁰ = 1024. Das entspricht dem Präfix 10.1.4.0/22.
+T: Rechnen Mittel
+
+Q: Was zeigt `show ip access-lists`, und warum hilft das bei der Fehlersuche?
+A: **Alle ACLs mit Trefferzählern pro Zeile.** Steigt der Zähler einer `deny`-Zeile, weißt du, dass sie den Verkehr blockt. Das implizite `deny` am Ende zählt nicht mit. Wer es sehen will, setzt eine explizite `deny ip any any log` ans Ende.
+T: CLI Leicht
+
+Q: Was erlaubt `permit tcp any 10.1.0.0 0.0.255.255 established`?
+A: **Nur TCP-Pakete mit gesetztem ACK- oder RST-Bit, also Antworten auf Verbindungen, die von innen aufgebaut wurden.** Neue Verbindungen von außen (nur SYN) werden nicht erlaubt. Das ist ein einfacher Schutz, aber keine echte Stateful Firewall.
+T: Wissen Mittel
+
+# 3.2.b | IPv6 Traffic Filter
+S: https://www.rfc-editor.org/rfc/rfc4861 | RFC 4861: Neighbor Discovery for IPv6
+
+Q: Wie wendest du eine IPv6-ACL auf ein Interface an?
+A: **Mit `ipv6 traffic-filter NAME in` (oder `out`).** IPv6-ACLs sind immer benannt und werden mit `ipv6 access-list NAME` angelegt. Auf den VTYs heißt der Befehl `ipv6 access-class`.
+T: CLI Leicht
+
+Q: Welche Einträge stehen am Ende jeder IPv6-ACL unsichtbar?
+A: **`permit icmp any any nd-na`, `permit icmp any any nd-ns` und danach `deny ipv6 any any`.** Neighbor Discovery ist für IPv6 so wichtig wie ARP für IPv4. Deshalb erlaubt IOS NS und NA vor dem impliziten `deny`.
+T: Wissen Mittel
+
+Q: Du schreibst ans Ende einer IPv6-ACL `deny ipv6 any any log`. Kurz darauf sind Nachbarn nicht mehr erreichbar. Warum?
+A: **Dein explizites `deny` steht vor den impliziten ND-Erlaubnissen und blockt Neighbor Solicitation und Advertisement.** Die Geräte können keine Link-Layer-Adressen mehr auflösen. Lösung: vor dem `deny` die ND-Nachrichten ausdrücklich erlauben.
+T: Falle Mittel
+
+Q: Wie unterscheidet sich die Syntax für Adressen in IPv6-ACLs von IPv4?
+A: **IPv6 nutzt Präfixlängen statt Wildcards, z. B. `permit tcp 2001:db8:1::/48 any eq 443`.** Für einzelne Hosts schreibt man `host 2001:db8::5`. Wildcard-Masken gibt es für IPv6 nicht.
+T: Vergleich Leicht
+
+Q: Mit welchem Befehl siehst du die Treffer in IPv6-ACLs?
+A: **`show ipv6 access-list`.** Wie bei IPv4 stehen die Zähler pro Zeile. Die unsichtbaren ND-Einträge erscheinen nicht.
+T: CLI Leicht
+
+# 3.2.c | Unicast Reverse Path Forwarding
+S: https://www.rfc-editor.org/rfc/rfc3704 | RFC 3704: Ingress Filtering for Multihomed Networks
+
+Q: Welchen Angriff erschwert uRPF?
+A: **Gefälschte Quelladressen (IP-Spoofing).** Der Router prüft bei jedem eingehenden Paket die Quelladresse gegen seine Routingtabelle und verwirft Pakete, deren Quelle so nicht stimmen kann.
+T: Wissen Leicht
+
+Q: Was ist der Unterschied zwischen uRPF Strict Mode und Loose Mode?
+A: **Strict (`ip verify unicast source reachable-via rx`): Die Quelle muss über genau das Eingangsinterface erreichbar sein. Loose (`reachable-via any`): Die Quelle muss nur irgendeine Route haben.** Strict ist genauer, Loose verträgt asymmetrisches Routing.
+T: Vergleich Mittel
+
+Q: Ein Standort hat zwei Provider, ausgehender Verkehr geht über ISP-A, Antworten kommen teils über ISP-B zurück. Nach dem Aktivieren von uRPF Strict auf beiden Uplinks fehlen Antworten. Warum, und was tust du?
+A: **Strict uRPF verwirft auf ISP-B alle Pakete, deren Quelle laut Routingtabelle über ISP-A erreicht wird.** Bei asymmetrischem Routing nimmt man deshalb Loose Mode auf den Uplinks.
+T: Szenario Mittel
+
+Q: Zählt bei uRPF Loose Mode eine Default-Route als gültige Route zur Quelle?
+A: **Nein, nicht ohne `allow-default`.** Sonst würde jede Quelle über die Default-Route passen, und uRPF wäre wirkungslos. Ein Eintrag Richtung Null0 zählt ebenfalls nicht als gültig.
+T: Falle Schwer
+
+Q: Was braucht uRPF als Voraussetzung auf dem Router?
+A: **CEF.** uRPF prüft die Quelladresse in der FIB. Ohne `ip cef` lässt sich uRPF nicht aktivieren.
+T: Wissen Leicht
+
+Q: Wie siehst du, ob uRPF Pakete verwirft?
+A: **Mit `show ip interface Gi0/0`, dort steht die Zahl der „verification drops“.** `show ip traffic` zeigt die Summe über alle Interfaces unter „unicast RPF“.
+T: CLI Mittel
+
+Q: Wie lässt du bestimmte Pakete trotz uRPF-Fehler durch?
+A: **Mit einer ACL am Ende des Befehls: `ip verify unicast source reachable-via rx 100`.** Fällt ein Paket bei uRPF durch, prüft der Router ACL 100. Erlaubt sie das Paket, wird es weitergeleitet. So lassen sich Ausnahmen für bekannte Quellen mit asymmetrischem Weg schaffen. Mit `deny ... log` in der ACL siehst du außerdem, welche Pakete uRPF verwirft.
+T: CLI Schwer
+
+# 3.3 | Control Plane Policing
+S: https://www.rfc-editor.org/rfc/rfc6192 | RFC 6192: Protecting the Router Control Plane
+
+Q: Was schützt CoPP, und wo wird die Policy angewendet?
+A: **Die CPU des Routers vor zu viel Verkehr, der an ihn selbst gerichtet ist. Angewendet wird sie unter `control-plane` mit `service-policy input POLICY`.** Weitergeleiteter Verkehr ist nicht betroffen, nur Pakete zur Control Plane wie Routing-Protokolle, SSH oder SNMP.
+T: Wissen Leicht
+
+Q: Wie baust du eine CoPP-Klasse, die SSH auf 256 kbit/s begrenzt?
+A:
+```
+ip access-list extended COPP-SSH
+ permit tcp any any eq 22
+class-map match-all CM-SSH
+ match access-group name COPP-SSH
+policy-map PM-COPP
+ class CM-SSH
+  police 256000 conform-action transmit exceed-action drop
+control-plane
+ service-policy input PM-COPP
+```
+T: CLI Mittel
+
+Q: In einer CoPP-ACL steht `deny tcp any any eq 23`. Wird Telnet dadurch verworfen?
+A: **Nein. `deny` heißt in einer Class-Map-ACL nur „gehört nicht zu dieser Klasse“.** Das Paket wird mit der nächsten Klasse verglichen und landet notfalls in `class-default`. Soll Telnet verworfen werden, braucht es eine eigene Klasse mit `permit` in der ACL und `drop` in der Policy.
+T: Falle Mittel
+
+Q: Welche ACL-Einträge braucht eine CoPP-Klasse für BGP, damit beide Richtungen getroffen werden?
+A: **`permit tcp any any eq 179` und `permit tcp any eq 179 any`.** Je nachdem, wer die Sitzung aufgebaut hat, ist 179 der Ziel- oder der Quellport. Mit nur einer Zeile fällt die Hälfte der Sitzungen in `class-default`.
+T: Falle Mittel
+
+Q: Wie matchst du OSPF und EIGRP in einer CoPP-ACL?
+A: **Mit den IP-Protokollen: `permit ospf any any` (Protokoll 89) und `permit eigrp any any` (Protokoll 88).** Beide laufen direkt über IP ohne Ports.
+T: Wissen Leicht
+
+Q: Nach dem Aktivieren von CoPP flattern die OSPF-Nachbarschaften. Was prüfst du zuerst?
+A: **Ob die OSPF-Pakete in einer zu knapp begrenzten Klasse oder in `class-default` landen.** `show policy-map control-plane` zeigt pro Klasse die Zähler für conform und exceed. Steigen bei OSPF die Exceed-Zähler, werden Hellos verworfen.
+T: Szenario Mittel
+
+Q: Welche Rolle spielt die Reihenfolge der Klassen in einer CoPP-Policy?
+A: **Ein Paket landet in der ersten Klasse, die zutrifft.** Steht eine breite Klasse (z. B. „alles TCP“) vor SSH, wird SSH dort begrenzt und nie in seiner eigenen Klasse gezählt. Spezifische Klassen gehören deshalb nach oben.
+T: Wissen Mittel
+
+Q: Welche Ports musst du für eine CoPP-Managementklasse mit SNMP, HTTP und HTTPS berücksichtigen?
+A: **SNMP UDP 161 (Traps zum Router UDP 162 sind selten nötig), HTTP TCP 80, HTTPS TCP 443.** Dazu SSH TCP 22 und Telnet TCP 23, falls noch erlaubt.
+T: Wissen Leicht
+
+Q: Was passiert mit Verkehr zur CPU, der in keiner selbst definierten Klasse landet?
+A: **Er fällt in `class-default` und wird dort so behandelt, wie es die Policy für diese Klasse vorgibt.** Ohne Eintrag für `class-default` wird er nicht begrenzt. Eine knappe Grenze in `class-default` fängt unbekannten Verkehr ab, kann aber vergessene Protokolle treffen.
+T: Wissen Mittel
+
+# 3.4 | IPv6 First Hop Security
+S: https://www.rfc-editor.org/rfc/rfc6105 | RFC 6105: IPv6 Router Advertisement Guard
+S: https://www.rfc-editor.org/rfc/rfc7610 | RFC 7610: DHCPv6-Shield
+
+Q: Ein Client im LAN verteilt falsche Router Advertisements und wird so zum Default-Gateway der anderen. Welche FHS-Funktion verhindert das?
+A: **RA Guard.** Der Switch verwirft RAs an Ports, die als Host-Port markiert sind. Nur an Ports, an denen ein echter Router hängt, sind RAs erlaubt.
+T: Szenario Leicht
+
+Q: Wie konfigurierst du RA Guard auf einem Access-Port?
+A:
+```
+ipv6 nd raguard policy HOSTS
+ device-role host
+interface GigabitEthernet1/0/5
+ ipv6 nd raguard attach-policy HOSTS
+```
+Am Uplink zum Router nutzt man eine Policy mit `device-role router`.
+T: CLI Mittel
+
+Q: Was macht DHCPv6 Guard?
+A: **Er verwirft DHCPv6-Server-Nachrichten (Advertise, Reply) an Ports, an denen kein berechtigter Server hängt.** So kann kein Gerät im LAN sich als DHCPv6-Server ausgeben und falsche DNS-Server oder Adressen verteilen.
+T: Wissen Leicht
+
+Q: Was ist die Binding Table bei IPv6 First Hop Security?
+A: **Eine Tabelle, die IPv6-Adresse, MAC-Adresse, Port und VLAN jedes Geräts zuordnet.** Der Switch füllt sie durch Mitlesen von ND- und DHCPv6-Nachrichten. ND Inspection und Source Guard prüfen Pakete gegen diese Tabelle.
+T: Wissen Mittel
+
+Q: Was ist der Unterschied zwischen ND Inspection und IPv6 Source Guard?
+A: **ND Inspection prüft Neighbor-Discovery-Nachrichten gegen die Binding Table und verwirft gefälschte. Source Guard prüft jedes Datenpaket und verwirft solche, deren Quelladresse nicht zum Port gehört.** ND Inspection schützt vor Adress-Diebstahl über ND, Source Guard vor Spoofing im Datenverkehr.
+T: Vergleich Mittel
+
+Q: Welche IPv4-Gegenstücke haben ND Inspection, IPv6 Source Guard und DHCPv6 Guard?
+A: **ND Inspection entspricht Dynamic ARP Inspection, IPv6 Source Guard entspricht IP Source Guard, DHCPv6 Guard entspricht dem Server-Schutz von DHCP Snooping.** RA Guard hat kein direktes Gegenstück, weil IPv4 das Gateway nicht per Router Advertisement verteilt.
+T: Vergleich Mittel
+
+Q: Unter welchem Namen fasst IOS XE die IPv6-FHS-Funktionen heute zusammen, und welcher Befehl zeigt die Binding Table?
+A: **SISF (Switch Integrated Security Features) mit `device-tracking`. Die Tabelle zeigt `show device-tracking database`.** Dort stehen Adresse, MAC, Port, VLAN und Zustand jedes Eintrags.
+T: CLI Mittel
+
+Q: Warum reicht IPv4-DHCP-Snooping nicht aus, um ein IPv6-Netz am Access-Port zu schützen?
+A: **Weil IPv6 Adressen und Gateways über eigene Protokolle verteilt: Router Advertisements und DHCPv6.** DHCP Snooping sieht davon nichts. Ein Angreifer kann also trotz IPv4-Schutz ein falsches IPv6-Gateway anbieten.
+T: Szenario Mittel

@@ -1,0 +1,199 @@
+# 1.9.a | EIGRP: Address Families IPv4 und IPv6
+S: https://www.rfc-editor.org/rfc/rfc7868 | RFC 7868: Cisco's Enhanced Interior Gateway Routing Protocol
+
+Q: Was ist der Unterschied zwischen EIGRP Classic Mode und Named Mode?
+A: **Classic Mode konfiguriert pro AS-Nummer (`router eigrp 100`) und Interface-Einstellungen am Interface. Named Mode bündelt alles unter einem Namen mit Address Families, `af-interface` und `topology base`.** Nur der Named Mode kann Wide Metrics, HMAC-SHA-256 und IPv4 und IPv6 in einem Prozess.
+T: Vergleich Leicht
+
+Q: Wie aktivierst du EIGRP für IPv6 im Named Mode, und auf welchen Interfaces läuft es dann?
+A:
+```
+router eigrp CORE
+ address-family ipv6 unicast autonomous-system 100
+  eigrp router-id 1.1.1.1
+```
+EIGRP läuft danach auf allen Interfaces mit IPv6-Adresse. Einzelne nimmst du mit `af-interface Gi0/2` und `shutdown` heraus.
+T: CLI Mittel
+
+Q: R1 hat nur IPv6-Adressen und keine IPv4-Adresse. Warum kommt EIGRP für IPv6 nicht hoch?
+A: **Weil EIGRP eine 32-Bit-Router-ID braucht und sie sonst aus einer IPv4-Adresse nimmt.** Ohne IPv4 gibt es keine ID. Lösung: `eigrp router-id 1.1.1.1` im Prozess bzw. in der Address Family.
+T: Szenario Mittel
+
+Q: Mit welchen Adressen bilden EIGRP-Nachbarn für IPv6 ihre Nachbarschaft?
+A: **Mit ihren Link-Local-Adressen (FE80::/10).** Deshalb muss das Global-Unicast-Präfix auf beiden Seiten nicht gleich sein. Die Hellos gehen an die Multicast-Adresse FF02::A.
+T: Wissen Mittel
+
+Q: Wie aktivierst du EIGRP für IPv6 im Classic Mode auf Gi0/0?
+A: **Mit `ipv6 eigrp 100` direkt am Interface und `ipv6 router eigrp 100` global.** Anders als bei IPv4 gibt es keine `network`-Befehle. `ipv6 unicast-routing` muss global aktiv sein.
+T: CLI Mittel
+
+# 1.9.b | EIGRP: Nachbarschaft und Authentisierung
+S: https://www.rfc-editor.org/rfc/rfc7868 | RFC 7868: Cisco's Enhanced Interior Gateway Routing Protocol
+
+Q: Welche Werte müssen bei zwei EIGRP-Nachbarn übereinstimmen, damit eine Nachbarschaft entsteht?
+A: **AS-Nummer, K-Werte, gemeinsames Subnetz der primären Adresse und gegebenenfalls die Authentisierung.** Hello- und Hold-Timer müssen nicht gleich sein. Jeder Router teilt dem Nachbarn seinen eigenen Hold-Timer mit.
+T: Wissen Leicht
+
+Q: Im Log von R1 steht „K-value mismatch“. Was ist passiert, und wie behebst du es?
+A: **Einer der Router hat mit `metric weights` andere K-Werte gesetzt.** EIGRP baut dann keine Nachbarschaft auf, weil beide sonst unterschiedliche Metriken rechnen würden. Die K-Werte müssen auf beiden Seiten gleich sein, am besten auf dem Standard (K1=1, K3=1, sonst 0).
+T: Szenario Leicht
+
+Q: R1 hat Hello 5 s und Hold 15 s, R2 Hello 30 s und Hold 90 s. Bleibt die Nachbarschaft stabil?
+A: **Ja.** Jeder Router teilt dem Nachbarn seine eigene Hold-Zeit mit. R2 wartet 15 s auf R1, der alle 5 s sendet. R1 wartet 90 s auf R2, der alle 30 s sendet. Unterschiedliche Timer stören EIGRP nicht.
+T: Falle Mittel
+
+Q: R2 hat Hello 30 s, aber Hold nur 20 s. Was passiert mit der Nachbarschaft zu R1?
+A: **Sie fällt immer wieder, weil R1 nur 20 s auf ein Hello von R2 wartet, R2 aber nur alle 30 s sendet.** Die Hold-Zeit muss größer sein als das eigene Hello-Intervall. Üblich ist das Dreifache.
+T: Szenario Mittel
+
+Q: Im Log steht „neighbor 10.1.1.2 not on common subnet for GigabitEthernet0/0“. Was ist die Ursache?
+A: **Die primären IP-Adressen beider Seiten liegen nicht im selben Subnetz.** EIGRP prüft das Quell-Subnetz der Hellos. Häufige Ursache ist eine falsche Maske, etwa /24 auf der einen und /30 auf der anderen Seite, bei der eine Adresse außerhalb des Bereichs liegt.
+T: Szenario Leicht
+
+Q: Wie konfigurierst du EIGRP-Authentisierung mit MD5 im Classic Mode auf Gi0/0?
+A:
+```
+key chain EIGRP-KEYS
+ key 1
+  key-string Geheim123
+interface GigabitEthernet0/0
+ ip authentication mode eigrp 100 md5
+ ip authentication key-chain eigrp 100 EIGRP-KEYS
+```
+Beide Zeilen am Interface brauchen die AS-Nummer. Der Key Chain allein schaltet noch nichts ein.
+T: CLI Mittel
+
+Q: Beide Router haben den gleichen Key-String, die MD5-Authentisierung schlägt trotzdem fehl. R1 nutzt Key-ID 1, R2 Key-ID 2. Warum?
+A: **Bei EIGRP-MD5 schickt der Absender die Key-ID mit, und der Empfänger prüft mit dem Schlüssel derselben ID.** Hat R2 keinen Key 1, kann er nicht prüfen. Die Key-IDs müssen also zusammenpassen, nicht nur die Strings.
+T: Falle Mittel
+
+Q: Wie konfigurierst du HMAC-SHA-256 für EIGRP im Named Mode?
+A:
+```
+router eigrp CORE
+ address-family ipv4 unicast autonomous-system 100
+  af-interface GigabitEthernet0/0
+   authentication mode hmac-sha-256 Geheim123
+```
+SHA-256 gibt es nur im Named Mode. Mit `af-interface default` gilt es für alle Interfaces der Address Family.
+T: CLI Mittel
+
+Q: Ein Interface ist mit `passive-interface` konfiguriert. Was bewirkt das bei EIGRP?
+A: **Es werden keine Hellos geschickt und keine angenommen, also entsteht dort keine Nachbarschaft. Das Netz des Interfaces wird aber weiter angekündigt.** Das ist bei EIGRP und OSPF gleich, bei RIP würde das Interface nur nicht senden, aber empfangen.
+T: Wissen Leicht
+
+Q: Mit welchem Befehl siehst du, wie lange eine EIGRP-Nachbarschaft schon besteht und ob Pakete hängen?
+A: **`show ip eigrp neighbors`.** „Uptime“ zeigt die Dauer, „Q Cnt“ wartende Pakete. Ein dauerhaft hoher Q Cnt oder eine immer wieder kurze Uptime deuten auf Paketverlust oder einen MTU-Fehler hin.
+T: Exhibit Mittel
+
+Q: Die EIGRP-Nachbarschaft kommt hoch, fällt nach etwa einer Minute mit „retry limit exceeded“ wieder ab und baut sich neu auf. Was ist typisch die Ursache?
+A: **Multicast-Hellos kommen an, aber Unicast-Pakete (Updates mit Bestätigung) nicht.** Nach 16 erfolglosen Wiederholungen bricht EIGRP ab. Ursachen sind etwa eine einseitige ACL, ein MTU-Problem auf dem Weg oder fehlendes Multicast-Mapping über NBMA.
+T: Szenario Schwer
+
+Q: Auf welche Multicast-Adresse schickt EIGRP für IPv4 seine Hellos, und welches IP-Protokoll nutzt es?
+A: **224.0.0.10, IP-Protokoll 88.** EIGRP läuft direkt über IP, nicht über TCP oder UDP. Für ACLs heißt das: `permit eigrp any host 224.0.0.10`.
+T: Wissen Leicht
+
+# 1.9.c | EIGRP: Loop-freie Pfadwahl
+S: https://www.rfc-editor.org/rfc/rfc7868 | RFC 7868: Cisco's Enhanced Interior Gateway Routing Protocol
+
+Q: Was ist die Feasibility Condition bei EIGRP?
+A: **Ein Nachbar ist nur dann Feasible Successor, wenn seine Reported Distance kleiner ist als die Feasible Distance des aktuellen Successors.** Die RD ist die Metrik, die der Nachbar selbst zum Ziel hat. Ist sie kleiner als dein eigener bester Wert, kann der Weg über ihn nicht über dich zurückführen.
+T: Wissen Mittel
+
+Q: R1 hat zu 10.9.0.0/16 diese Wege: über R2 FD 2 000 000 bei RD 1 500 000, über R3 FD 2 500 000 bei RD 1 800 000, über R4 FD 3 000 000 bei RD 2 100 000. Wer ist Successor, wer Feasible Successor?
+A: **R2 ist Successor (kleinste FD 2 000 000). R3 ist Feasible Successor, R4 nicht.** Die RD von R3 (1 800 000) liegt unter 2 000 000, die von R4 (2 100 000) darüber. Der Weg über R4 könnte also über R1 selbst führen.
+T: Rechnen Mittel
+
+Q: Was passiert, wenn der Successor ausfällt und ein Feasible Successor existiert?
+A: **Der Feasible Successor wird sofort lokal übernommen, ohne Queries.** Die Route bleibt passiv. Das macht EIGRP so schnell: Die Ausweichroute ist schon vorab als schleifenfrei bewiesen.
+T: Wissen Leicht
+
+Q: Was passiert, wenn der Successor ausfällt und es keinen Feasible Successor gibt?
+A: **Die Route geht in den Zustand „Active“, und R1 schickt Queries an alle Nachbarn.** Erst wenn alle geantwortet haben, wählt er einen neuen Successor. Bis dahin ist das Ziel nicht erreichbar.
+T: Wissen Leicht
+
+Q: Was bedeutet „Stuck in Active“ (SIA), und wie reagiert EIGRP heute darauf?
+A: **Eine Route bleibt Active, weil ein Nachbar auf die Query nicht antwortet.** Nach der Hälfte des Active-Timers (90 von 180 Sekunden) schickt der Router eine SIA-Query. Kommt darauf eine SIA-Reply, wartet er weiter. Kommt nichts, baut er nur die Nachbarschaft zu diesem Nachbarn ab.
+T: Wissen Mittel
+
+Q: In einem großen EIGRP-Netz kommen immer wieder SIA-Meldungen. Was ist die nachhaltige Lösung?
+A: **Den Query-Bereich begrenzen, vor allem mit Stub-Routern und Summaries.** Ein Stub-Router bekommt keine Queries. Hinter einer Summary kennt der Nachbar das Einzelnetz nicht und antwortet sofort mit „unerreichbar“. So laufen Queries nicht durchs ganze Netz.
+T: Szenario Mittel
+
+Q: Mit welchem Befehl siehst du auch Wege, die die Feasibility Condition nicht erfüllen?
+A: **`show ip eigrp topology all-links`.** Ohne `all-links` zeigt die Topologietabelle nur Successor und Feasible Successor. Mit `show ip eigrp topology 10.9.0.0/16` siehst du die Details eines Ziels mit FD und RD jedes Nachbarn.
+T: CLI Mittel
+
+Q: In `show ip eigrp topology` steht bei 10.9.0.0/16 „via 10.0.12.2 (2172416/28160)“. Was bedeuten die Zahlen?
+A: **2 172 416 ist die Feasible Distance über diesen Nachbarn, 28 160 seine Reported Distance.** Die erste Zahl ist deine Gesamtmetrik über den Nachbarn, die zweite die Metrik, die der Nachbar selbst meldet.
+T: Exhibit Leicht
+
+# 1.9.d | EIGRP: Stub
+S: https://www.rfc-editor.org/rfc/rfc7868 | RFC 7868: Cisco's Enhanced Interior Gateway Routing Protocol
+
+Q: Was meldet ein Router mit `eigrp stub` ohne weitere Optionen an seine Nachbarn?
+A: **Seine verbundenen Netze und seine Summaries (`connected summary`).** Andere gelernte Routen gibt er nicht weiter. Die Nachbarn schicken ihm keine Queries mehr.
+T: Wissen Leicht
+
+Q: Ein Filialrouter mit zwei Uplinks zu zwei Zentralroutern wird zur Transitstrecke zwischen ihnen. Wie verhinderst du das?
+A: **Mit `eigrp stub` auf dem Filialrouter.** Er gibt dann keine von einem Hub gelernten Routen an den anderen Hub weiter. Ohne Stub könnte die Zentrale beim Ausfall ihrer direkten Verbindung den Umweg über die Filiale nehmen.
+T: Szenario Mittel
+
+Q: Was bewirkt `eigrp stub receive-only`?
+A: **Der Router meldet gar keine Routen, er empfängt nur.** Seine Netze müssen die Nachbarn dann statisch oder per Redistribution kennen. Das passt zu Spokes, deren Netze die Zentrale ohnehin selbst ankündigt.
+T: Wissen Mittel
+
+Q: Nach `eigrp stub` sind die statischen Routen der Filiale in der Zentrale verschwunden, obwohl sie redistribuiert werden. Warum?
+A: **Weil `eigrp stub` ohne Option nur `connected` und `summary` erlaubt.** Redistribuierte statische Routen brauchen `eigrp stub connected summary static` oder `redistributed`. Die Optionen ersetzen sich, sie addieren sich nicht zum Standard.
+T: Falle Mittel
+
+Q: Wo konfigurierst du `eigrp stub`, auf dem Stub-Router oder auf seinem Nachbarn?
+A: **Nur auf dem Stub-Router selbst.** Er meldet seinen Stub-Status im Hello. Der Nachbar erkennt ihn daran und schickt keine Queries mehr. In `show ip eigrp neighbors detail` siehst du beim Nachbarn „Stub Peer Advertising (CONNECTED SUMMARY) Routes“.
+T: Falle Leicht
+
+# 1.9.e | EIGRP: Load Balancing
+S: https://www.rfc-editor.org/rfc/rfc7868 | RFC 7868: Cisco's Enhanced Interior Gateway Routing Protocol
+
+Q: Wie viele gleich teure Wege installiert EIGRP standardmäßig, und wie änderst du das?
+A: **Vier, einstellbar mit `maximum-paths` (bis 32 je nach Plattform).** Im Named Mode steht der Befehl unter `topology base`.
+T: Wissen Leicht
+
+Q: R1 hat zu einem Ziel einen Successor mit FD 1 000 000 und einen Feasible Successor mit FD 2 500 000. Welcher `variance`-Wert ist mindestens nötig, damit beide genutzt werden?
+A: **`variance 3`.** Ein Weg wird genutzt, wenn seine FD ≤ Variance × beste FD ist. 2 × 1 000 000 = 2 000 000 reicht nicht, 3 × 1 000 000 = 3 000 000 schon.
+T: Rechnen Mittel
+
+Q: Du setzt `variance 5`, aber ein Weg mit FD 1,5 × Successor-FD wird trotzdem nicht genutzt. Warum?
+A: **Weil er kein Feasible Successor ist.** Unequal-Cost-Load-Balancing nutzt nur Wege, die die Feasibility Condition erfüllen. Ein Weg mit zu hoher Reported Distance bleibt ausgeschlossen, egal wie groß die Variance ist.
+T: Falle Mittel
+
+Q: Wie wird der Verkehr bei EIGRP-Unequal-Cost-Load-Balancing auf die Wege verteilt?
+A: **Im umgekehrten Verhältnis zur Metrik: Der bessere Weg bekommt mehr Verkehr.** Mit `traffic-share balanced` (Standard) teilt CEF anteilig auf. `traffic-share min across-interfaces` installiert alle Wege, nutzt aber nur den besten.
+T: Wissen Schwer
+
+# 1.9.f | EIGRP: Metrik
+S: https://www.rfc-editor.org/rfc/rfc7868 | RFC 7868: Cisco's Enhanced Interior Gateway Routing Protocol
+
+Q: Wie rechnet EIGRP Classic die Metrik mit den Standard-K-Werten?
+A: **Metrik = 256 × (10⁷ / kleinste Bandbreite in kbit/s + Summe der Delays in Zehn-Mikrosekunden).** Es zählen die kleinste Bandbreite und die Summe der Verzögerungen aller ausgehenden Interfaces auf dem Weg. Last und Zuverlässigkeit sind mit K2, K4, K5 = 0 ausgeschaltet.
+T: Wissen Mittel
+
+Q: Ein Weg führt über ein 100-Mbit/s-Interface (Delay 100 µs) und ein 10-Mbit/s-Interface (Delay 1000 µs). Wie hoch ist die EIGRP-Classic-Metrik?
+A: **284 160.** Bandbreitenteil: 10⁷ / 10 000 kbit/s = 1000. Delay-Teil: (100 + 1000) µs / 10 = 110. Summe 1110, mal 256 = 284 160.
+T: Rechnen Schwer
+
+Q: Du willst, dass EIGRP einen Weg weniger bevorzugt, ohne die Bandbreite zu ändern. Welchen Wert änderst du, und warum nicht die Bandbreite?
+A: **Den Delay mit `delay` am Interface.** Er wird entlang des Weges addiert und wirkt sich deshalb sauber auf alle nachfolgenden Router aus. Die Bandbreite beeinflusst auch QoS und andere Protokolle wie OSPF-Kosten.
+T: Szenario Mittel
+
+Q: Warum gibt es im Named Mode Wide Metrics?
+A: **Weil die Classic-Metrik ab 1 Gbit/s nicht mehr unterscheiden kann.** Bei 10⁷ / Bandbreite ergeben 1, 10 und 100 Gbit/s nahezu denselben Wert. Wide Metrics rechnen 64-bittig in Pikosekunden und skalieren für die RIB mit `metric rib-scale` (Standard 128) herunter.
+T: Wissen Schwer
+
+Q: In `show ip route` steht bei einer Named-Mode-Route eine andere Metrik als in `show eigrp address-family ipv4 topology`. Ist das ein Fehler?
+A: **Nein, die RIB zeigt die durch den RIB-Scale (128) geteilte Wide Metric.** Die Topologietabelle rechnet 64-bittig, die Routingtabelle hat nur 32 Bit. Für Vergleiche schaust du in die Topologietabelle.
+T: Falle Schwer
+
+Q: Ändert `bandwidth` am Interface die tatsächliche Übertragungsrate?
+A: **Nein, nur den Wert, den Routing-Protokolle und QoS zur Berechnung benutzen.** Die echte Geschwindigkeit stellst du mit `speed` ein oder sie ergibt sich aus der Leitung. Ein falscher `bandwidth`-Wert verzerrt EIGRP und OSPF.
+T: Falle Leicht

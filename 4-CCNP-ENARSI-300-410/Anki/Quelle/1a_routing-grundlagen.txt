@@ -1,0 +1,366 @@
+# 1.1 | Administrative Distance
+S: https://www.cisco.com/c/en/us/support/docs/ip/border-gateway-protocol-bgp/15986-admin-distance.html | Cisco: What Is Administrative Distance?
+
+Q: R1 lernt 10.20.0.0/16 gleichzeitig über OSPF (Kosten 50) und über EIGRP intern (Metrik 3 000 000). Welche Route landet in der Routingtabelle?
+A: **Die EIGRP-Route, weil EIGRP intern die Administrative Distance 90 hat und OSPF 110.** Metriken verschiedener Protokolle sind nicht vergleichbar. Der Router vergleicht zuerst die AD und erst innerhalb desselben Protokolls die Metrik.
+T: Szenario Leicht
+
+Q: Welche Administrative Distance haben eBGP, EIGRP intern, OSPF, IS-IS, RIP, EIGRP extern und iBGP?
+A: **eBGP 20, EIGRP intern 90, OSPF 110, IS-IS 115, RIP 120, EIGRP extern 170, iBGP 200.** Dazu: direkt verbunden 0, statisch 1, EIGRP-Summary 5, unbekannt 255. Eine Route mit AD 255 wird nie installiert.
+H: Eselsbrücke für die Reihenfolge: „E-E-O-I-R-E-I“, also eBGP, EIGRP, OSPF, IS-IS, RIP, EIGRP ext, iBGP.
+T: Wissen Leicht
+
+Q: Du willst eine statische Default-Route nur als Backup, falls die per OSPF gelernte Default-Route wegfällt. Wie konfigurierst du sie?
+A: **Mit einer AD über 110, also eine Floating Static Route: `ip route 0.0.0.0 0.0.0.0 203.0.113.1 250`.** Solange OSPF die Route liefert, gewinnt AD 110. Fällt sie weg, rückt die statische Route mit AD 250 nach.
+T: CLI Leicht
+
+Q: Eine Floating Static Route mit AD 250 erscheint nie in der Routingtabelle, obwohl die OSPF-Route weg ist. Was prüfst du zuerst?
+A: **Ob der Next Hop der statischen Route erreichbar ist.** Eine statische Route mit Next-Hop-Adresse wird nur installiert, wenn der Router den Next Hop rekursiv auflösen kann. Ist der Next Hop nur über die weggefallene OSPF-Route erreichbar gewesen, bleibt auch das Backup draußen.
+T: Szenario Mittel
+
+Q: R1 lernt 172.16.0.0/16 über eBGP und gleichzeitig über OSPF aus dem eigenen Netz. Du willst, dass der interne OSPF-Pfad gewinnt. Welche BGP-Lösung gibt es dafür?
+A: **`network 172.16.0.0 mask 255.255.0.0 backdoor` unter `router bgp`.** Damit bekommt die eBGP-Route die lokale AD 200 statt 20, und OSPF mit 110 gewinnt. Der Router kündigt das Netz dabei nicht selbst an.
+T: Szenario Mittel
+
+Q: Wie hebst du für OSPF-Prozess 1 nur die AD externer Routen auf 175 an?
+A: **`router ospf 1` und dann `distance ospf external 175`.** Intra- und Inter-Area-Routen behalten 110. So kannst du gezielt verhindern, dass redistribuierte OSPF-Routen eine bessere AD als EIGRP extern (170) haben.
+T: CLI Mittel
+
+Q: Wie setzt du in EIGRP AS 100 die AD für interne Routen auf 95 und für externe auf 175?
+A: **`router eigrp 100` und `distance eigrp 95 175`.** Der erste Wert gilt für interne, der zweite für externe Routen. Im Named Mode steht der Befehl unter `topology base` in der Address Family.
+T: CLI Mittel
+
+Q: Welche drei Werte setzt `distance bgp 20 200 200`, und was bedeutet der dritte?
+A: **eBGP 20, iBGP 200 und lokal 200.** „Lokal“ betrifft Routen, die der Router selbst in BGP erzeugt, etwa per `aggregate-address` oder `network ... backdoor`.
+T: Wissen Mittel
+
+Q: Du sollst nur die Routen, die R1 von Nachbar 10.0.0.2 per OSPF lernt, mit AD 120 versehen. Wie geht das, und welche Adresse trägst du ein?
+A: **`distance 120 2.2.2.2 0.0.0.0` unter `router ospf`, wobei 2.2.2.2 die Router-ID des Absenders ist.** Bei OSPF identifiziert der Befehl die Quelle über die Router-ID, die das LSA erzeugt hat, nicht über die Interface-Adresse. Bei EIGRP und RIP ist es die Next-Hop-Adresse des Nachbarn.
+H: Falle: Mit der Interface-Adresse des OSPF-Nachbarn passiert schlicht nichts.
+T: Falle Schwer
+
+Q: R1 hat eine statische Route 10.5.0.0/16 und lernt 10.5.1.0/24 über OSPF. Ein Paket geht an 10.5.1.7. Welche Route wird benutzt?
+A: **Die OSPF-Route 10.5.1.0/24, weil das längste Präfix gewinnt.** Die AD entscheidet nur zwischen Routen auf genau dasselbe Präfix. Präfixe unterschiedlicher Länge stehen beide in der Tabelle, beim Forwarding gilt Longest Match.
+T: Falle Leicht
+
+Q: In `show ip route` steht `O E2 10.9.0.0/16 [110/20]`. Was bedeuten die beiden Zahlen in der Klammer?
+A: **110 ist die Administrative Distance, 20 die Metrik.** Bei OSPF E2 ist 20 der Standardwert für redistribuierte Routen, unabhängig davon, wie weit der ASBR entfernt ist.
+T: Exhibit Leicht
+
+# 1.2 | Route-Maps: Abgleich, Attribute, Tags
+S: https://www.cisco.com/c/en/us/support/docs/ip/enhanced-interior-gateway-routing-protocol-eigrp/8606-redist.html | Cisco: Redistributing Routing Protocols
+
+Q: Eine Route-Map hat nur die Sequenz 10 mit `permit` und `match ip address prefix-list A`. Was passiert mit einer Route, die nicht auf Liste A passt?
+A: **Sie wird verworfen, weil am Ende jeder Route-Map ein implizites `deny` steht.** Soll alles andere unverändert durchgehen, brauchst du eine leere Sequenz `route-map X permit 20` ohne `match`.
+T: Falle Leicht
+
+Q: In einer Route-Map-Sequenz stehen `match tag 10 20` und darunter `match ip address prefix-list P`. Wann trifft die Sequenz zu?
+A: **Wenn die Route Tag 10 oder 20 hat und zusätzlich auf Liste P passt.** Mehrere Werte in einer `match`-Zeile sind ODER-verknüpft, verschiedene `match`-Zeilen UND-verknüpft.
+T: Wissen Mittel
+
+Q: Was macht eine Route-Map-Sequenz ganz ohne `match`-Anweisung?
+A: **Sie trifft auf jede Route zu.** Bei `permit` werden die `set`-Anweisungen auf alles angewendet, was bis dahin nicht getroffen wurde. Bei `deny` wird alles Übrige verworfen.
+T: Wissen Leicht
+
+Q: Du filterst mit `match ip address 10` in einer Route-Map. ACL 10 enthält `deny 10.1.1.0 0.0.0.255`. Die Sequenz ist `permit`. Was passiert mit 10.1.1.0/24?
+A: **Die Route trifft diese Sequenz nicht und wird an die nächste Sequenz weitergereicht.** Ein `deny` in der ACL heißt hier nur „passt nicht“. Ob die Route verworfen wird, entscheidet das `permit` oder `deny` der Route-Map-Sequenz.
+H: Merke: ACL oder Prefix-List wählt aus, die Route-Map entscheidet.
+T: Falle Mittel
+
+Q: Welche Präfixe erlaubt `ip prefix-list P permit 10.0.0.0/8 ge 24 le 24`?
+A: **Genau alle /24-Netze innerhalb von 10.0.0.0/8.** Die ersten 8 Bit müssen passen, die Präfixlänge muss mindestens und höchstens 24 sein. 10.0.0.0/8 selbst und etwa 10.1.0.0/16 passen nicht.
+T: Rechnen Mittel
+
+Q: Welche Präfixe erlaubt `ip prefix-list P permit 172.16.0.0/16 le 20`?
+A: **172.16.0.0/16 selbst und alle Teilnetze darin mit Länge /17 bis /20.** Ohne `ge` beginnt der Bereich bei der Länge des angegebenen Präfixes. Ein /24 aus 172.16.0.0/16 passt also nicht.
+T: Rechnen Mittel
+
+Q: Mit welcher Prefix-List-Zeile erlaubst du jedes beliebige Präfix?
+A: **`permit 0.0.0.0/0 le 32`.** Null Bit müssen passen, jede Länge von /0 bis /32 ist erlaubt. `permit 0.0.0.0/0` allein trifft nur die Default-Route.
+T: Falle Leicht
+
+Q: Du willst beim Redistribuieren von EIGRP in OSPF alle Routen mit Tag 110 versehen. Wie sieht die Route-Map aus?
+A:
+```
+route-map EIGRP-TO-OSPF permit 10
+ set tag 110
+router ospf 1
+ redistribute eigrp 100 route-map EIGRP-TO-OSPF
+```
+Weil die Sequenz kein `match` hat, bekommt jede redistribuierte Route Tag 110. Den Tag kannst du später an einem anderen Redistributionspunkt mit `match tag 110` erkennen.
+T: CLI Mittel
+
+Q: Wozu dienen Route-Tags beim Redistribuieren?
+A: **Als Markierung, woher eine Route ursprünglich stammt, damit man sie später gezielt filtern kann.** Der Tag reist mit der Route durch das Zielprotokoll. Typisch ist, bei der Rück-Redistribution alles mit dem eigenen Tag zu verwerfen und so Schleifen zu verhindern.
+T: Wissen Leicht
+
+Q: Mit welchem Befehl prüfst du, wie oft die Sequenzen einer Route-Map bei der Policy-Based Routing getroffen wurden?
+A: **`show route-map NAME`.** Die Ausgabe zeigt pro Sequenz die Match-Zähler für PBR („Policy routing matches“). Bei Redistribution zählt die Route-Map keine Treffer, dort prüfst du das Ergebnis in Routingtabelle und Datenbank.
+T: CLI Mittel
+
+Q: Welche Rolle spielt `continue` in einer Route-Map?
+A: **Nach einem Treffer wird nicht abgebrochen, sondern bei der angegebenen Sequenz weitergeprüft.** So kann eine Route mehrere `set`-Blöcke durchlaufen, etwa erst Community setzen, dann Local Preference. Ohne `continue` endet die Auswertung beim ersten Treffer.
+T: Wissen Schwer
+
+# 1.3 | Loop-Prevention: Filter, Tags, Split Horizon, Poisoning
+S: https://www.rfc-editor.org/rfc/rfc7868 | RFC 7868: Cisco's Enhanced Interior Gateway Routing Protocol
+
+Q: Zwei Router redistribuieren beide zwischen EIGRP und OSPF. Danach geht der Weg zu einem externen EIGRP-Netz (D EX) plötzlich durch die OSPF-Domäne. Was ist passiert?
+A: **R1 hat das Netz in OSPF redistribuiert, und R2 lernt es dort als OSPF E2 mit AD 110. Das schlägt seine eigene EIGRP-externe Route mit AD 170.** R2 schickt den Verkehr deshalb über OSPF zu R1 statt direkt über EIGRP. EIGRP-interne Routen (AD 90) betrifft das nicht, sie gewinnen gegen OSPF.
+T: Szenario Mittel
+
+Q: Wie verhinderst du bei gegenseitiger Redistribution an zwei Punkten, dass OSPF-Routen über EIGRP wieder in OSPF zurückkommen?
+A: **Mit Tags: Beim Weg OSPF→EIGRP alle Routen mit Tag 110 versehen und beim Weg EIGRP→OSPF alles mit Tag 110 verwerfen.** Dasselbe in Gegenrichtung mit einem zweiten Tag. Beide Redistributionspunkte brauchen die gleiche Logik.
+```
+route-map EIGRP-TO-OSPF deny 10
+ match tag 110
+route-map EIGRP-TO-OSPF permit 20
+ set tag 90
+```
+T: CLI Schwer
+
+Q: Was bewirkt Split Horizon bei Distanzvektor-Protokollen wie EIGRP?
+A: **Eine Route wird nicht über das Interface zurückgemeldet, über das sie gelernt wurde.** Damit glaubt der Nachbar nicht, dass er über dich zu seinem eigenen Netz kommt. Das verhindert einfache Zweier-Schleifen.
+T: Wissen Leicht
+
+Q: Am DMVPN-Hub (Phase 1) sehen die Spokes die Netze der anderen Spokes nicht, obwohl EIGRP-Nachbarschaften zu allen bestehen. Was fehlt?
+A: **`no ip split-horizon eigrp 100` auf dem Tunnel-Interface des Hubs.** Alle Spokes hängen am selben mGRE-Interface. Split Horizon verbietet dem Hub, Routen von Spoke A über genau dieses Interface an Spoke B weiterzugeben.
+H: Named Mode: `af-interface Tunnel0` → `no split-horizon`.
+T: Szenario Mittel
+
+Q: Was ist Route Poisoning?
+A: **Eine ausgefallene Route wird aktiv mit unendlicher Metrik gemeldet, statt sie nur wegzulassen.** Nachbarn löschen sie dadurch sofort. RIP nutzt Metrik 16, EIGRP eine unendliche Verzögerung.
+T: Wissen Leicht
+
+Q: Was ist Poison Reverse, und wie unterscheidet es sich von Split Horizon?
+A: **Die Route wird über das Lern-Interface zurückgemeldet, aber mit unendlicher Metrik.** Split Horizon schweigt, Poison Reverse sagt ausdrücklich „über mich nicht erreichbar“. Das ist robuster, kostet aber mehr Updates.
+T: Vergleich Mittel
+
+Q: Welcher OSPF-Mechanismus verhindert, dass Inter-Area-Routen zwischen zwei Nicht-Backbone-Areas kreisen?
+A: **Alle Inter-Area-Routen müssen über Area 0 laufen, und ein ABR übernimmt Type-3-LSAs aus Nicht-Backbone-Areas nicht in andere Nicht-Backbone-Areas.** OSPF ist zwischen Areas ein Distanzvektor-Verfahren, die Sterntopologie um Area 0 verhindert Schleifen.
+T: Wissen Schwer
+
+Q: Wie verhindert BGP Schleifen zwischen autonomen Systemen?
+A: **Über das AS_PATH: Sieht ein Router seine eigene AS-Nummer im Pfad, verwirft er die Route.** Innerhalb eines AS verhindert die iBGP-Split-Horizon-Regel Schleifen: iBGP-gelernte Routen werden nicht an andere iBGP-Nachbarn weitergegeben.
+T: Wissen Leicht
+
+Q: Du filterst bei OSPF mit `distribute-list prefix BLOCK in` unter `router ospf 1`. Warum sehen die Nachbarn die Route trotzdem?
+A: **Weil die Distribute-List bei OSPF nur die Installation in die lokale Routingtabelle verhindert, nicht das LSA.** OSPF muss eine identische Datenbank in der Area haben. LSAs filtern kannst du nur an ABR (`area X filter-list prefix`) oder ASBR (Redistribution, `summary-address ... not-advertise`).
+T: Falle Mittel
+
+# 1.4 | Redistribution
+S: https://www.cisco.com/c/en/us/support/docs/ip/enhanced-interior-gateway-routing-protocol-eigrp/8606-redist.html | Cisco: Redistributing Routing Protocols
+
+Q: Du redistribuierst OSPF in EIGRP 100 mit `redistribute ospf 1`, aber auf den EIGRP-Nachbarn erscheint nichts. Woran liegt das?
+A: **Es fehlt eine Seed-Metrik.** EIGRP kann OSPF-Kosten nicht übernehmen, und ohne Metrik gelten die Routen als unendlich weit entfernt. Lösung: `redistribute ospf 1 metric 100000 100 255 1 1500` oder `default-metric` im EIGRP-Prozess.
+T: Szenario Leicht
+
+Q: Welche fünf Werte stehen in `redistribute ospf 1 metric 100000 100 255 1 1500`?
+A: **Bandbreite 100 000 kbit/s, Delay 100 (in Zehn-Mikrosekunden), Zuverlässigkeit 255, Last 1, MTU 1500.** Mit den Standard-K-Werten zählen nur Bandbreite und Delay für die Metrik.
+T: Wissen Mittel
+
+Q: Welche Seed-Metrik bekommen Routen beim Redistribuieren in OSPF standardmäßig, und welchen Typ?
+A: **Metrik 20 als E2, bei Routen aus BGP Metrik 1.** E2 heißt: Die Metrik bleibt in der ganzen Domäne gleich, die internen Kosten zum ASBR werden nicht addiert.
+T: Wissen Mittel
+
+Q: Musst du auf aktuellen IOS-XE-Versionen beim Redistribuieren in OSPF noch `subnets` angeben?
+A: **Nein, IOS XE ergänzt `subnets` automatisch.** Auf alten IOS-Versionen (12.x) wurden ohne `subnets` nur klassful Netze übernommen. In älteren Prüfungsfragen taucht das noch als Falle auf.
+T: Falle Leicht
+
+Q: Du redistribuierst OSPF in BGP mit `redistribute ospf 1`. Externe OSPF-Routen fehlen in BGP. Warum?
+A: **Ohne Zusatz übernimmt BGP nur OSPF-interne Routen (intra- und inter-area).** Für externe brauchst du `redistribute ospf 1 match internal external 1 external 2`.
+T: Falle Mittel
+
+Q: Du redistribuierst BGP in OSPF, aber nur die eBGP-Routen kommen an, die iBGP-Routen nicht. Ist das ein Fehler?
+A: **Nein, das ist Absicht: IOS redistribuiert standardmäßig nur eBGP-Routen in IGPs.** Mit `bgp redistribute-internal` gehen auch iBGP-Routen mit. Das ist riskant, weil iBGP-Routen oft aus dem eigenen IGP stammen und so Schleifen entstehen.
+T: Falle Schwer
+
+Q: Warum musst du beim Redistribuieren von verbundenen Netzen in EIGRP keine Metrik angeben?
+A: **Weil EIGRP für Connected und Static die Werte des Ausgangsinterfaces nimmt.** Bandbreite und Delay sind vorhanden. Eine Seed-Metrik brauchst du nur, wenn die Quelle keine EIGRP-tauglichen Werte liefert, etwa OSPF, RIP oder BGP.
+T: Wissen Mittel
+
+Q: R1 redistribuiert EIGRP in OSPF. Kommt das Transitnetz 10.12.0.0/30 zwischen R1 und seinem EIGRP-Nachbarn mit, obwohl es bei R1 als „connected“ in der Routingtabelle steht?
+A: **Ja, sofern das Interface im EIGRP-Prozess ist.** `redistribute eigrp` übernimmt neben den EIGRP-Routen auch die verbundenen Netze, die der Prozess per `network` abdeckt. Fehlt das Netz in OSPF, liegt das Interface nicht im Prozess. Dann hilft zusätzlich `redistribute connected`.
+T: Szenario Schwer
+
+Q: Mit welchem Befehl erkennst du in OSPF, welcher Router eine externe Route einspeist?
+A: **`show ip ospf database external 10.9.0.0`.** Im Feld „Advertising Router“ steht die Router-ID des ASBR. Außerdem siehst du dort Metrik-Typ, Metrik und Route-Tag.
+T: CLI Mittel
+
+Q: Wie erzeugst du in OSPF eine Default-Route, auch wenn der Router selbst keine hat?
+A: **`default-information originate always`.** Ohne `always` kündigt der Router 0.0.0.0/0 nur an, solange er selbst eine Default-Route in der Routingtabelle hat. `always` ist praktisch für Tests, kann aber Verkehr in ein schwarzes Loch schicken.
+T: CLI Mittel
+
+Q: Wie unterscheidest du in der Routingtabelle eine EIGRP-Route, die aus OSPF redistribuiert wurde, von einer internen?
+A: **Sie steht als `D EX` mit AD 170 statt `D` mit AD 90.** In `show ip eigrp topology 10.9.0.0/16` siehst du zusätzlich das Quellprotokoll, die Quell-AS und den ursprünglichen Router.
+T: Exhibit Leicht
+
+# 1.5 | Summarization (manuell und automatisch)
+S: https://www.rfc-editor.org/rfc/rfc4632 | RFC 4632: Classless Inter-domain Routing (CIDR)
+
+Q: Fasse 10.4.0.0/24 bis 10.4.7.0/24 zu einer Route zusammen. Welches Präfix ergibt sich?
+A: **10.4.0.0/21.** Acht /24-Netze sind 2³ Netze, also werden 3 Bit weniger gebraucht: 24 − 3 = 21. Der Block beginnt bei einem Vielfachen von 8 im dritten Oktett (0), also passt er genau.
+T: Rechnen Leicht
+
+Q: Kannst du 10.4.4.0/24 bis 10.4.11.0/24 als 10.4.4.0/21 zusammenfassen?
+A: **Nein, weil ein /21 im dritten Oktett immer bei einem Vielfachen von 8 beginnt.** 10.4.4.0/21 gibt es nicht, der Router würde es als 10.4.0.0/21 (0–7) interpretieren. Du brauchst 10.4.4.0/22 (4–7) und 10.4.8.0/22 (8–11).
+T: Rechnen Mittel
+
+Q: Wie fasst du in EIGRP AS 100 die Netze 10.4.0.0/21 auf Gi0/1 zusammen?
+A: **`ip summary-address eigrp 100 10.4.0.0 255.255.248.0` auf Gi0/1.** EIGRP fasst pro Interface zusammen. Lokal entsteht eine Route nach Null0 mit AD 5, die verhindert, dass Pakete an nicht vorhandene Teilnetze im Kreis laufen.
+H: Named Mode: unter `af-interface GigabitEthernet0/1` mit `summary-address 10.4.0.0/21`.
+T: CLI Mittel
+
+Q: Wozu dient die automatisch angelegte Null0-Route bei einer Summary?
+A: **Sie verwirft Pakete an Adressen im Summary-Bereich, für die es kein spezifischeres Netz gibt.** Ohne sie würde der Router solche Pakete über seine Default-Route zurückschicken, und der Nachbar schickt sie wieder her: eine Schleife.
+T: Wissen Mittel
+
+Q: Wo fasst du in OSPF Routen zusammen, und mit welchen Befehlen?
+A: **Am ABR mit `area 1 range` für Inter-Area-Routen und am ASBR mit `summary-address` für externe Routen.** Ein normaler interner Router kann nicht zusammenfassen, weil alle Router einer Area dieselbe LSA-Datenbank haben müssen.
+T: Vergleich Mittel
+
+Q: Die Netze 10.1.x.x liegen in Area 1 und sollen zusammengefasst in Area 0 erscheinen. Du konfigurierst auf dem ABR `area 0 range 10.1.0.0 255.255.0.0`, aber nichts passiert. Warum?
+A: **`area range` muss die Area nennen, in der die Ursprungsnetze liegen.** Richtig ist `area 1 range 10.1.0.0 255.255.0.0`. Der ABR fasst dann die Type-1- und Type-2-Informationen aus Area 1 zu einem Type-3-LSA für die anderen Areas zusammen.
+T: Falle Mittel
+
+Q: Seit welcher Version ist `auto-summary` bei EIGRP standardmäßig aus, und warum ist es problematisch?
+A: **Seit IOS 15.0 ist es aus, weil es an Classful-Grenzen zusammenfasst.** Bei nicht zusammenhängenden Netzen (z. B. 10.0.0.0/8 an zwei Standorten, getrennt durch 172.16.0.0) melden beide Seiten 10.0.0.0/8, und der Verkehr landet am falschen Ort.
+T: Wissen Mittel
+
+Q: Was braucht BGP, damit `aggregate-address 10.4.0.0 255.255.248.0` eine Summary erzeugt?
+A: **Mindestens eine Teilroute von 10.4.0.0/21 muss bereits in der BGP-Tabelle stehen.** Mit `summary-only` werden die Teilrouten unterdrückt, nur die Summary geht raus. `as-set` übernimmt die AS-Pfade der Teilrouten, damit keine Schleifen entstehen.
+T: Wissen Mittel
+
+Q: Wie meldest du in EIGRP eine Summary, gibst aber ein einzelnes Teilnetz zusätzlich weiter?
+A: **Mit einer Leak-Map: `ip summary-address eigrp 100 10.4.0.0 255.255.248.0 leak-map LEAK`.** Die Route-Map LEAK wählt das Teilnetz aus, das neben der Summary weitergegeben wird. Das ist nützlich, wenn ein Standort für ein bestimmtes Netz einen anderen Ausgang braucht.
+T: CLI Schwer
+
+Q: Ein Standort hängt an zwei Routern. Beide melden die gleiche EIGRP-Summary. Ein Teilnetz fällt hinter Router A aus. Was passiert mit Verkehr dorthin?
+A: **Er geht weiter teilweise zu Router A und wird dort von der Null0-Route verworfen.** Die Summary verbirgt den Ausfall, solange noch ein anderes Teilnetz der Summary existiert. Das ist der Preis für die kleinere Routingtabelle.
+T: Szenario Schwer
+
+# 1.6 | Policy-Based Routing
+S: https://www.cisco.com/c/en/us/support/docs/ip/ip-routed-protocols/48003-pbrtracking.html | Cisco: PBR with Next-Hop Tracking
+
+Q: Gäste-Verkehr aus 10.50.0.0/24 soll über den Zweit-Provider 198.51.100.1 rausgehen, alles andere normal geroutet werden. Wie konfigurierst du das auf Gi0/1 (LAN-Seite)?
+A:
+```
+ip access-list extended GUEST
+ permit ip 10.50.0.0 0.0.0.255 any
+route-map PBR-GUEST permit 10
+ match ip address GUEST
+ set ip next-hop 198.51.100.1
+interface GigabitEthernet0/1
+ ip policy route-map PBR-GUEST
+```
+PBR wirkt auf Pakete, die über das Interface hereinkommen. Was nicht auf die ACL passt, wird normal über die Routingtabelle weitergeleitet.
+T: CLI Mittel
+
+Q: Auf welche Pakete wirkt `ip policy route-map` auf einem Interface, und auf welche nicht?
+A: **Nur auf eingehende Pakete dieses Interfaces, nicht auf ausgehende und nicht auf Verkehr, den der Router selbst erzeugt.** Für eigenen Verkehr (z. B. Ping, Syslog) brauchst du `ip local policy route-map NAME` global.
+T: Falle Mittel
+
+Q: Was ist der Unterschied zwischen `set ip next-hop` und `set ip default next-hop`?
+A: **`set ip next-hop` gilt immer vor der Routingtabelle, `set ip default next-hop` nur, wenn es keine passende spezifische Route gibt.** Bei `default next-hop` zählt eine vorhandene Default-Route nicht als passend. Damit lässt sich etwa nur Internet-Verkehr umlenken, internes Routing bleibt unberührt.
+T: Vergleich Schwer
+
+Q: Ein Paket trifft eine PBR-Sequenz mit `deny`. Was passiert damit?
+A: **Es wird nicht verworfen, sondern normal nach Routingtabelle weitergeleitet.** `deny` heißt bei PBR nur „keine Policy anwenden“. Zum Verwerfen müsstest du `set interface Null0` setzen.
+T: Falle Leicht
+
+Q: Der Next Hop in `set ip next-hop` ist ausgefallen, aber das Interface bleibt up (z. B. hinter einem Switch). Wie stellst du sicher, dass PBR dann auf normales Routing zurückfällt?
+A: **Mit `set ip next-hop verify-availability 198.51.100.1 10 track 1` und einem IP-SLA-Track auf den Next Hop.** Fällt der Track, ignoriert PBR diesen Next Hop. Ohne Tracking prüft PBR nur, ob der Next Hop in einem direkt verbundenen Netz liegt.
+T: Szenario Schwer
+
+Q: Mit welchen Befehlen prüfst du, ob PBR greift?
+A: **`show ip policy` zeigt, welche Route-Map auf welchem Interface hängt, `show route-map` die Trefferzähler.** Für Einzelentscheidungen gibt es `debug ip policy`, im Betrieb aber nur mit einer ACL eingegrenzt.
+T: CLI Mittel
+
+Q: Warum wird `set ip next-hop 192.0.2.99` ignoriert, wenn 192.0.2.99 nur über eine Route erreichbar ist?
+A: **Weil `set ip next-hop` einen direkt angebundenen Next Hop braucht.** Für einen entfernten Next Hop gibt es `set ip next-hop recursive 192.0.2.99`, das den Next Hop über die Routingtabelle auflöst.
+T: Falle Schwer
+
+# 1.7 | VRF-Lite
+S: https://www.rfc-editor.org/rfc/rfc4364 | RFC 4364: BGP/MPLS IP VPNs (VRF-Konzept)
+
+Q: Was ist VRF-Lite?
+A: **Mehrere getrennte Routingtabellen auf einem Router, ohne MPLS und ohne MP-BGP.** Jedes Interface oder Subinterface gehört zu genau einer VRF. Zwischen Routern wird die Trennung meist über ein eigenes Subinterface pro VRF weitergeführt.
+T: Wissen Leicht
+
+Q: Wie legst du die VRF KUNDE-A für IPv4 an und hängst Gi0/1.10 hinein?
+A:
+```
+vrf definition KUNDE-A
+ address-family ipv4
+interface GigabitEthernet0/1.10
+ vrf forwarding KUNDE-A
+ ip address 10.10.0.1 255.255.255.0
+```
+`vrf definition` braucht eine aktivierte Address Family, sonst nimmt das Interface keine IPv4-Adresse an.
+T: CLI Leicht
+
+Q: Du setzt `vrf forwarding KUNDE-A` auf ein Interface, das schon eine IP-Adresse hat. Was passiert?
+A: **Die IP-Adresse wird gelöscht.** IOS meldet „IP address removed due to enabling VRF“. Du musst die Adresse danach neu eintragen. Darum zuerst die VRF zuweisen, dann die Adresse.
+T: Falle Leicht
+
+Q: Ein Ping von R1 nach 10.10.0.2 schlägt fehl, obwohl das Netz direkt an Gi0/1.10 in VRF KUNDE-A hängt. Was hast du vergessen?
+A: **Den Ping in der VRF auszuführen: `ping vrf KUNDE-A 10.10.0.2`.** Ohne VRF-Angabe sucht der Router in der globalen Routingtabelle, wo das Netz nicht steht. Dasselbe gilt für `traceroute vrf` und `show ip route vrf KUNDE-A`.
+T: Szenario Leicht
+
+Q: Wie startest du OSPF in VRF KUNDE-A, und was brauchst du auf einem Nicht-PE-Router zusätzlich?
+A: **`router ospf 10 vrf KUNDE-A` und darunter `capability vrf-lite`.** OSPF in einer VRF verhält sich sonst wie auf einem MPLS-PE und prüft das Down-Bit sowie den Domain-Tag. Bei VRF-Lite würden dadurch Type-3- und Type-5-LSAs ignoriert.
+T: Falle Schwer
+
+Q: Wie konfigurierst du EIGRP für VRF KUNDE-A im Named Mode?
+A:
+```
+router eigrp CORE
+ address-family ipv4 unicast vrf KUNDE-A autonomous-system 10
+  network 10.10.0.0 0.0.255.255
+```
+Pro VRF entsteht eine eigene Address Family mit eigener AS-Nummer und eigener Topologie.
+T: CLI Mittel
+
+Q: Wie gibst du der VRF GAST eine Default-Route über 203.0.113.1, das in der globalen Tabelle liegt?
+A: **`ip route vrf GAST 0.0.0.0 0.0.0.0 203.0.113.1 global`.** Das Schlüsselwort `global` sagt, dass der Next Hop in der globalen Tabelle aufgelöst wird. Für den Rückweg brauchst du eine Route im Global, die auf das VRF-Interface zeigt, oder NAT.
+T: CLI Schwer
+
+Q: Darf dieselbe IP-Adresse in zwei VRFs auf demselben Router vorkommen?
+A: **Ja, das ist gerade der Sinn von VRFs.** Jede VRF hat eine eigene Routing- und CEF-Tabelle. Überschneidende Kundennetze sind deshalb kein Problem, solange sie nicht ohne NAT in dieselbe Tabelle geleakt werden.
+T: Wissen Leicht
+
+Q: Was ist der Unterschied zwischen `ip vrf` und `vrf definition`?
+A: **`ip vrf` ist die alte Syntax nur für IPv4, `vrf definition` die neue mit Address Families für IPv4 und IPv6.** Auf dem Interface heißt es entsprechend `ip vrf forwarding` oder `vrf forwarding`. Mit `vrf upgrade-cli` kann IOS die alte Konfiguration umwandeln.
+T: Vergleich Mittel
+
+# 1.8 | Bidirectional Forwarding Detection
+S: https://www.rfc-editor.org/rfc/rfc5880 | RFC 5880: Bidirectional Forwarding Detection
+S: https://www.rfc-editor.org/rfc/rfc5881 | RFC 5881: BFD for IPv4 and IPv6 (Single Hop)
+
+Q: Zwei Router sind über einen Provider-Switch verbunden. Fällt der Link auf der anderen Seite aus, bleibt das eigene Interface up. Wie lange braucht OSPF mit Standard-Timern, um den Ausfall zu merken, und wie verkürzt BFD das?
+A: **OSPF braucht bis zum Dead-Interval, also 40 Sekunden. BFD erkennt den Ausfall in Millisekunden und meldet ihn OSPF.** BFD schickt eigene, sehr schnelle Hellos und informiert die angemeldeten Protokolle, die dann sofort die Nachbarschaft abbauen.
+T: Szenario Leicht
+
+Q: Wie lange dauert die Fehlererkennung bei `bfd interval 50 min_rx 50 multiplier 3`?
+A: **150 ms.** Es werden alle 50 ms Pakete erwartet. Fehlen drei hintereinander (Multiplier 3), gilt die Sitzung als down: 3 × 50 ms = 150 ms.
+T: Rechnen Leicht
+
+Q: Wie meldest du OSPF und BGP bei BFD an?
+A: **OSPF mit `bfd all-interfaces` unter `router ospf` oder `ip ospf bfd` am Interface, BGP mit `neighbor 10.0.0.2 fall-over bfd`.** EIGRP nutzt `bfd all-interfaces` oder `bfd interface Gi0/0` im Prozess. Zusätzlich braucht das Interface die `bfd interval`-Zeile.
+T: CLI Mittel
+
+Q: Was ist der Unterschied zwischen dem Asynchronous Mode und der Echo-Funktion von BFD?
+A: **Im Asynchronous Mode schicken beide Seiten eigene Control-Pakete. Bei Echo schickt ein Router Pakete an sich selbst, die der Nachbar nur im Forwarding zurückleitet.** Echo prüft also den Datenpfad des Nachbarn, ohne dessen CPU zu belasten. Die Control-Pakete können dann seltener gehen.
+T: Vergleich Mittel
+
+Q: Welche Ports nutzt BFD?
+A: **UDP 3784 für Single-Hop-Control, UDP 3785 für Echo, UDP 4784 für Multihop.** Das ist wichtig für ACLs und CoPP: Wer BFD durch eine Filterregel blockiert, hat nur die langsamen Protokoll-Timer.
+T: Wissen Mittel
+
+Q: Kann BFD eine Routing-Nachbarschaft aufbauen?
+A: **Nein, BFD erkennt nur Ausfälle und meldet sie den angemeldeten Protokollen.** Die Nachbarschaft entsteht wie immer über die Hellos von OSPF, EIGRP oder BGP. Erst danach starten diese eine BFD-Sitzung.
+T: Falle Leicht
+
+Q: Mit welchem Befehl siehst du, ob eine BFD-Sitzung steht und welche Protokolle sie nutzen?
+A: **`show bfd neighbors details`.** Die Ausgabe zeigt Zustand (Up/Down), ausgehandelte Intervalle, Multiplier und unter „Registered protocols“ die angemeldeten Protokolle, etwa OSPF und BGP.
+T: CLI Leicht
