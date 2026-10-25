@@ -1,0 +1,22 @@
+hostname R2
+no ip domain-lookup
+line con 0
+ logging synchronous
+ exit
+interface GigabitEthernet0/0
+ ip address 10.16.0.2 255.255.255.0
+ no shutdown
+interface GigabitEthernet0/1
+ ip address 10.16.24.1 255.255.255.252
+ no shutdown
+router ospf 1
+ router-id 2.2.2.2
+ auto-cost reference-bandwidth 1000
+ network 10.16.0.0 0.0.0.255 area 0
+ network 10.16.24.0 0.0.0.3 area 0
+interface GigabitEthernet0/0
+ ip ospf priority 100
+interface GigabitEthernet0/1
+ ip ospf hello-interval 5
+ ip ospf network point-to-point
+end

@@ -1,0 +1,18 @@
+hostname R1
+no ip domain-lookup
+line con 0
+ logging synchronous
+ exit
+interface GigabitEthernet0/0
+ ip address 10.20.1.1 255.255.255.0
+ no shutdown
+ntp master 3
+clock timezone CET 1
+service timestamps log datetime msec
+logging host 10.20.1.100
+logging trap errors
+logging buffered 8192
+snmp-server community LabRO RO
+snmp-server location Lab
+snmp-server contact admin@lab.local
+end

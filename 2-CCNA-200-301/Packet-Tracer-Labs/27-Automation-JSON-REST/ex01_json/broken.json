@@ -1,0 +1,12 @@
+{
+  "device": {
+    "hostname": 'SW-LAB2',
+    "model": "C9200L-24P",
+    "ports": [
+      {"name": "Gi1/0/1", "enabled": true, "vlan": 10},
+      {"name": "Gi1/0/2", "enabled": True, "vlan": 20,},
+      {"name": "Gi1/0/3" "enabled": false, "vlan": 30}
+    ]
+    "location": "Musterstadt"
+  }
+}

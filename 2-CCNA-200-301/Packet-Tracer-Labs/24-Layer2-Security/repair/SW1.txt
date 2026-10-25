@@ -1,0 +1,24 @@
+hostname SW1
+no ip domain-lookup
+line con 0
+ logging synchronous
+ exit
+interface range FastEthernet0/1 - 4
+ no shutdown
+interface FastEthernet0/24
+ no shutdown
+ip dhcp snooping
+ip arp inspection vlan 1
+interface FastEthernet0/1
+ switchport mode access
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security mac-address sticky
+ switchport port-security violation shutdown
+interface FastEthernet0/2
+ switchport mode access
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security mac-address 0001.0001.0001
+ switchport port-security violation shutdown
+end

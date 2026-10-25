@@ -1,0 +1,20 @@
+hostname R1
+no ip domain-lookup
+line con 0
+ logging synchronous
+ exit
+interface GigabitEthernet0/0
+ ip address 10.26.1.1 255.255.255.192
+ no shutdown
+aaa new-model
+radius-server host 10.26.1.100 key RadKey2O26
+username backup privilege 15 secret Backup#2026
+aaa authentication login VTY-AUTH group radius
+aaa authentication login CON-AUTH local
+aaa accounting exec default start-stop group radius
+line con 0
+ login authentication CON-AUTH
+line vty 0 4
+ login authentication VTY
+ transport input telnet
+end

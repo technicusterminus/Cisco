@@ -1,0 +1,22 @@
+hostname SW3
+no ip domain-lookup
+line con 0
+ logging synchronous
+ exit
+interface range FastEthernet0/1 - 2
+ no shutdown
+interface FastEthernet0/10
+ no shutdown
+vlan 10
+ name USERS
+spanning-tree mode rapid-pvst
+spanning-tree vlan 1,10 priority 0
+interface range FastEthernet0/1 - 2
+ switchport mode trunk
+interface FastEthernet0/1
+ spanning-tree vlan 10 cost 4000
+interface FastEthernet0/10
+ switchport mode access
+ switchport access vlan 10
+ spanning-tree bpduguard enable
+end

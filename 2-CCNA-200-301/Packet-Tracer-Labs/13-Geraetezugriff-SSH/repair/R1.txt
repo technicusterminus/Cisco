@@ -1,0 +1,24 @@
+hostname R1
+no ip domain-lookup
+line con 0
+ logging synchronous
+ exit
+interface GigabitEthernet0/0
+ ip address 10.13.1.1 255.255.255.0
+ no shutdown
+enable secret Lab#2026!
+service password-encryption
+security passwords min-length 10
+crypto key generate rsa modulus 2048
+ip ssh version 2
+login block-for 60 attempts 3 within 30
+banner motd #Nur fuer autorisierte Benutzer#
+line con 0
+ password Con#2026pw
+ login
+ exec-timeout 5 0
+line vty 0 4
+ login
+ transport input telnet
+ exec-timeout 5 0
+end

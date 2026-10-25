@@ -1,0 +1,12 @@
+hostname SW1
+no ip domain-lookup
+line con 0
+ logging synchronous
+ exit
+interface range FastEthernet0/1 - 2
+ no shutdown
+interface Vlan1
+ ip address 10.13.1.2 255.255.255.0
+ no shutdown
+ip default-gateway 10.13.1.1
+end

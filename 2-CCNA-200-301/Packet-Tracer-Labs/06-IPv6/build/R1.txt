@@ -1,0 +1,15 @@
+hostname R1
+no ip domain-lookup
+line con 0
+ logging synchronous
+ exit
+interface GigabitEthernet0/0
+ ipv6 address FE80::1 link-local
+ ipv6 address 2001:db8:acad:10::1/64
+ no shutdown
+interface GigabitEthernet0/1
+ ipv6 address FE80::1 link-local
+ ipv6 address 2001:db8:acad:12::1/64
+ no shutdown
+ipv6 unicast-routing
+end

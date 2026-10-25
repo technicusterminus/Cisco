@@ -1,0 +1,23 @@
+hostname SW1
+no ip domain-lookup
+line con 0
+ logging synchronous
+ exit
+interface FastEthernet0/1
+ no shutdown
+interface FastEthernet0/23
+ no shutdown
+vlan 10
+ name USERS
+vlan 99
+ name NATIVE
+lldp run
+interface FastEthernet0/1
+ switchport mode access
+ switchport access vlan 10
+ no cdp enable
+interface FastEthernet0/23
+ switchport mode dynamic auto
+ switchport trunk native vlan 99
+ switchport trunk allowed vlan 10,99
+end

@@ -1,0 +1,28 @@
+hostname R2
+no ip domain-lookup
+line con 0
+ logging synchronous
+ exit
+interface GigabitEthernet0/0
+ ip address 172.25.2.1 255.255.255.0
+ no shutdown
+interface GigabitEthernet0/1
+ ip address 198.51.101.2 255.255.255.252
+ no shutdown
+ip route 0.0.0.0 0.0.0.0 198.51.101.1
+access-list 110 permit ip 172.25.2.0 0.0.0.255 192.168.26.0 0.0.0.255
+crypto isakmp policy 10
+ encryption aes 256
+ hash sha
+ authentication pre-share
+ group 2
+ lifetime 86400
+crypto isakmp key Lab2026vpnKeY address 198.51.100.1
+crypto ipsec transform-set TS esp-aes 256 esp-sha-hmac
+crypto map CMAP 10 ipsec-isakmp
+ set peer 198.51.100.1
+ set transform-set TS
+ match address 110
+interface GigabitEthernet0/1
+ crypto map CMAP
+end

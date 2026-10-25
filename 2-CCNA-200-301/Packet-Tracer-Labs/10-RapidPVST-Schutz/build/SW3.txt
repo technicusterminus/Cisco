@@ -1,0 +1,10 @@
+hostname SW3
+no ip domain-lookup
+line con 0
+ logging synchronous
+ exit
+interface range FastEthernet0/1 - 2
+ no shutdown
+interface FastEthernet0/10
+ no shutdown
+end

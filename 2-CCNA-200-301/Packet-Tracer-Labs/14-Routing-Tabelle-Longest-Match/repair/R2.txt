@@ -1,0 +1,16 @@
+hostname R2
+no ip domain-lookup
+line con 0
+ logging synchronous
+ exit
+interface GigabitEthernet0/0
+ ip address 192.168.14.2 255.255.255.252
+ no shutdown
+interface Loopback0
+ ip address 10.9.9.9 255.255.255.255
+ no shutdown
+interface Loopback1
+ ip address 8.8.8.8 255.255.255.255
+ no shutdown
+ip route 0.0.0.0 0.0.0.0 192.168.14.1
+end

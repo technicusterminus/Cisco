@@ -1,0 +1,9 @@
+# Antworten Aufgabe 2
+
+1. **Create = POST, Read = GET, Update = PUT oder PATCH, Delete = DELETE.** PUT ersetzt die ganze Ressource, deshalb verlangt die Mock-API bei PUT den vollständigen Inhalt. PATCH ändert nur die mitgeschickten Felder.
+2. **GET 200, GET 200, POST 201, PUT 200, PATCH 200, DELETE 204.** 201 heißt „Created“, 204 heißt „erfolgreich, aber ohne Inhalt“. Der Header `Location` nennt die URL der neu angelegten Ressource, hier `/api/v1/vlans/30`.
+3. **Jeder Code sagt, woran es liegt.** 401: Die Anmeldung fehlt oder ist ungültig. 403: Du bist angemeldet, darfst aber nicht schreiben (Read-only-Schlüssel). 404: Das VLAN gibt es nicht. 409: Konflikt, VLAN 10 existiert schon. 415: Der Server kennt den Content-Type nicht. 400: Die Anfrage ist fehlerhaft, die ID liegt außerhalb von 1 bis 4094.
+4. **Basic, Bearer-Token und API-Key. Die Mock-API nutzt API-Key und zusätzlich Basic.** Basic schickt Benutzer und Passwort Base64-kodiert, also praktisch im Klartext. Ein Bearer-Token (z. B. OAuth 2.0) steht in `Authorization: Bearer …` und läuft ab. Ein API-Key ist ein fester Schlüssel im Header. Ohne HTTPS liest jeder auf dem Weg Zugangsdaten und Daten mit.
+5. **Query-Parameter filtern oder steuern eine Abfrage, Pagination liefert große Listen in Stücken.** `?name=USERS` liefert nur passende VLANs. Pagination sieht etwa so aus: `?offset=0&limit=50`, danach `?offset=50&limit=50`.
+6. **Idempotent heißt: Derselbe Aufruf mehrfach ergibt denselben Zustand. GET, PUT und DELETE sind es, POST nicht.** Ein zweites PUT setzt denselben Namen noch einmal, ein zweites DELETE findet nichts mehr. Ein zweites POST will dagegen eine neue Ressource anlegen. PATCH ist nicht garantiert idempotent.
+7. **JSON ist bei REST am verbreitetsten, daneben XML und YAML.** XML nutzen NETCONF und ältere APIs, YAML Konfigurationsdateien wie bei Ansible. `Content-Type` sagt, in welchem Format du sendest, `Accept`, welches Format du als Antwort willst.

@@ -1,0 +1,23 @@
+hostname SW2
+no ip domain-lookup
+line con 0
+ logging synchronous
+ exit
+interface range FastEthernet0/1 - 2
+ no shutdown
+interface FastEthernet0/10
+ no shutdown
+vlan 10
+ name USERS
+spanning-tree mode pvst
+spanning-tree vlan 1,10 priority 8192
+interface range FastEthernet0/1 - 2
+ switchport mode trunk
+interface FastEthernet0/2
+ spanning-tree guard root
+interface FastEthernet0/10
+ switchport mode access
+ switchport access vlan 10
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+end

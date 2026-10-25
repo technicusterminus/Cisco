@@ -1,0 +1,17 @@
+hostname SW1
+no ip domain-lookup
+line con 0
+ logging synchronous
+ exit
+interface range FastEthernet0/1 - 2
+ no shutdown
+interface FastEthernet0/24
+ no shutdown
+interface range FastEthernet0/1 - 2
+ switchport mode access
+ spanning-tree portfast
+interface FastEthernet0/2
+ shutdown
+interface FastEthernet0/24
+ switchport mode access
+end

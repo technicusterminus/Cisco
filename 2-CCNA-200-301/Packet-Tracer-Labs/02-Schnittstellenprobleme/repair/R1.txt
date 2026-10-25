@@ -1,0 +1,11 @@
+hostname R1
+no ip domain-lookup
+line con 0
+ logging synchronous
+ exit
+interface GigabitEthernet0/0
+ ip address 192.168.2.1 255.255.255.0
+ speed 100
+ duplex full
+ no shutdown
+end
