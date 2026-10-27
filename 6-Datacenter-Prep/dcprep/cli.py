@@ -49,6 +49,8 @@ LEAF_HELP = """Verfuegbare Befehle auf Leaf/Spine:
   contract_parser.py [--vrf <Tenant:VRF>]
   show bgp ipv4 unicast vrf <Tenant:VRF>
   show ip ospf interface brief vrf <Tenant:VRF>
+  show ip eigrp neighbors vrf <Tenant:VRF> | show bfd neighbors vrf <Tenant:VRF>
+  show bgp ipv4 unicast neighbors vrf <Tenant:VRF> (Timer, Passwort, Multihop) | show track
   show service redir info                  PBR Destination Groups
   iping -V <Tenant:VRF> <a.b.c.d>          Ping vom Leaf (Quelle: BD-Gateway)
   Underlay: show ip route vrf overlay-1 | show isis adjacency vrf overlay-1
@@ -457,7 +459,8 @@ class Cli:
                                     '    *via %s%%overlay-1, [200/0], 00:05:11, bgp-65001, internal, tag 65001'
                                     % rt['nh']]))
             else:
-                tag = {'static': 'static', 'ospf': 'ospf-default, intra', 'bgp': 'bgp-%s, external, tag %s' % (
+                tag = {'static': 'static' + (', track %s' % e.A(rt['track'])['name'] if rt.get('track') else '') + (', bfd' if rt.get('bfd') else ''),
+                       'eigrp': 'eigrp-default, internal', 'ospf': 'ospf-default, intra', 'bgp': 'bgp-%s, external, tag %s' % (
                     e.fabric_asn() or '0', next((r.get('bgp', {}).get('asn') for r in self.sim.get('routers', [])
                                                  if r['name'] == rt.get('router')), ''))}[rt['proto']]
                 entries.append((n, ['%s, ubest/mbest: 1/0' % n,
@@ -526,26 +529,114 @@ class Cli:
         return _table(['Rule ID', 'SrcEPG', 'DstEPG', 'FilterID', 'Dir', 'operSt', 'Scope', 'Name', 'Action',
                        'Priority'], rows)
 
+    def _adjs(self, nid, vrf, proto):
+        e = self.e
+        for r in self.sim.get('routers', []):
+            rs = e.routers.get(r['name'], {})
+            if r.get('protocol') != proto:
+                continue
+            for a in rs.get('adjs', []):
+                if a['nid'] == nid and e.outs[a['iface']['out']]['vrf'] == vrf:
+                    yield r, rs, a
+
     def ospf(self, nid, vname):
         e = self.e
         vrf = self._vrf_by_name(vname)
         out = [' OSPF Process ID default VRF %s' % vname]
         rows = []
-        for r in self.sim.get('routers', []):
-            rs = e.routers.get(r['name'], {})
-            i = rs.get('iface')
-            if not i or i['nid'] != nid or e.outs[i['out']]['vrf'] != vrf or r.get('protocol') != 'ospf':
+        for r, rs, a in self._adjs(nid, vrf, 'ospf'):
+            if a['state'] in (None, 'DOWN', '-'):
                 continue
-            if rs.get('adj') in (None, 'DOWN', '-'):
-                continue
-            state = rs['adj'] + ('/DR' if rs['adj'] == 'FULL' and r.get('ospf', {}).get('nwT', 'bcast') == 'bcast'
-                                 else '/ -' if rs['adj'] == 'FULL' else '')
+            state = a['state'] + ('/DR' if a['state'] == 'FULL' and r.get('ospf', {}).get('nwT', 'bcast') == 'bcast'
+                                  else '/ -' if a['state'] == 'FULL' else '')
             rows.append(' %-15s %3d %-16s %8s %-15s %s' % (r.get('routerId') or str(ip_of(r['ip'])), 1, state,
-                                                           '00:10:23', str(ip_of(r['ip'])),
-                                                           e.if_name(i).capitalize()))
+                                                           '00:10:23', str(ip_of(r['ip'])), e.if_name(a['iface']).capitalize()))
+        for i in e.l3if:
+            if i['nid'] == nid and i['vrf'] == vrf and i.get('ptype') == 'vpc' and i['ospf']:
+                peer = next((x for x in e.l3if if x['dn'] == i['dn'] and x['nid'] != nid), None)
+                if peer:
+                    rid = e.outs[peer['out']]['nodes'].get(peer['nid'], {}).get('rtrId') or '0.0.0.0'
+                    rows.append(' %-15s %3d %-16s %8s %-15s %s' % (rid, 1, 'FULL/BDR' if i.get('side') == 'A' else 'FULL/DROTHER',
+                                                                   '00:10:20', str(ip_of(peer['addr'])), e.if_name(i).capitalize()))
         out.append(' Total number of neighbors: %d' % len(rows))
         out.append(' Neighbor ID     Pri State            Up Time  Address         Interface')
         return '\n'.join(out + rows)
+
+    def eigrp(self, nid, vname):
+        e = self.e
+        vrf = self._vrf_by_name(vname)
+        asn = next((o['eigrp']['asn'] for o in e.outs.values() if o['vrf'] == vrf and o.get('eigrp') and nid in o['nodes']), None)
+        if not asn:
+            return '% EIGRP ist in VRF %s auf diesem Switch nicht konfiguriert' % vname
+        out = ['EIGRP neighbors for process %s VRF %s' % (asn, vname),
+               'H   Address                 Interface       Hold  Uptime  SRTT   RTO  Q  Seq', '                                            (sec)         (ms)       Cnt Num']
+        k = 0
+        for r, rs, a in self._adjs(nid, vrf, 'eigrp'):
+            if a['state'] != 'UP':
+                continue
+            pol = a['iface']['eigrp_pol']
+            out.append('%-3d %-23s %-15s %-5s %-7s %-6s %-4s %-2s %s' % (k, str(ip_of(r['ip'])), e.if_name(a['iface']),
+                                                                         r.get('eigrp', {}).get('hold', 15), '00:12:01', '1', '50', '0', '12'))
+            k += 1
+        return '\n'.join(out)
+
+    def bfd(self, nid, vname):
+        e = self.e
+        vrf = self._vrf_by_name(vname)
+        out = ['OurAddr         NeighAddr       LD/RD                 RH/RS           Holdown(mult)     State       Int                   Vrf',
+               '-' * 120]
+        for r in self.sim.get('routers', []):
+            rs = e.routers.get(r['name'], {})
+            for b in rs.get('bfd', []):
+                i = b['iface']
+                if b['nid'] != nid or e.outs[i['out']]['vrf'] != vrf:
+                    continue
+                pol = i['bfd_pol']
+                out.append('%-15s %-15s %-21s %-15s %-17s %-11s %-21s %s' % (
+                    str(ip_of(i['addr'])), str(ip_of(r['ip'])), '1090519041/1090519042', 'Up' if b['state'] == 'Up' else 'Down',
+                    '%d(%s)' % (int(pol['minRxIntvl']) * int(pol['detectMult']), pol['detectMult']), b['state'], e.if_name(i), vname))
+                if b['state'] != 'Up':
+                    out.append('    (%s)' % ('BFD am Router nicht aktiv' if b['aci'] else 'BFD auf der ACI-Seite nicht im Protokoll aktiviert'))
+        return '\n'.join(out)
+
+    def bgp_neighbors(self, nid, vname):
+        e = self.e
+        vrf = self._vrf_by_name(vname)
+        out = []
+        for r, rs, a in self._adjs(nid, vrf, 'bgp'):
+            t = (rs.get('timers') or {}).get(nid, {})
+            o = e.outs[a['iface']['out']]
+            peer = next((p for p in a['iface']['peers'] + o['nodes'].get(nid, {}).get('peers', [])
+                         if p['addr'] == (r.get('bgp', {}).get('updateSource') or str(ip_of(r['ip'])))), None)
+            if not peer:
+                continue
+            st = {'Established': 'Established', 'Active': 'Active'}.get(a['state'], 'Idle')
+            out += ['BGP neighbor is %s, remote AS %s, ebgp link, Peer index 3' % (peer['addr'], peer['remoteAs']),
+                    '  BGP version 4, remote router ID %s' % (r.get('routerId') or str(ip_of(r['ip']))),
+                    '  BGP state = %s, up for 00:12:01' % st if st == 'Established' else '  BGP state = %s, down for 00:01:12' % st,
+                    '  Using %s as update source for this peer' % (t.get('local') or str(ip_of(a['iface']['addr']))),
+                    '  %s' % ('External BGP peer might be up to %d hops away' % peer['ttl'] if peer['ttl'] > 1 else 'Connected check is enabled'),
+                    '  Password authentication %s' % ('enabled (TCP MD5)' if peer.get('password') else 'disabled'),
+                    '  BFD %s' % ('enabled' if peer['bfd'] else 'disabled'),
+                    '  Last read 00:00:12, hold time = %s, keepalive interval is %s seconds' % (
+                        t.get('hold', '180'), t.get('keepalive', '60')),
+                    '  Configured hold time = %s, keepalive interval is %s seconds (BGP Timers Policy des VRFs)' % (
+                        t.get('aciHold', 180), t.get('aciKa', 60)),
+                    '']
+            if a.get('why'):
+                out.insert(len(out) - 1, '  Hinweis (Datacenter Prep): %s' % a['why'])
+        return '\n'.join(out) or 'Keine BGP-Nachbarn in VRF %s auf diesem Switch.' % vname
+
+    def track(self, nid):
+        e = self.e
+        out = []
+        for tl in sorted(e.store.by_class('fvTrackList')):
+            up, mem = e.track_state(tl)
+            out.append('Track %s  (%s)' % (e.A(tl)['name'], e.short(tl)))
+            out.append('  Threshold %s: Up >= %s%%  ->  State is %s' % (e.A(tl)['type'], e.A(tl)['percentageUp'], 'UP' if up else 'DOWN'))
+            for name, dst, ok in mem:
+                out.append('    IP SLA %s, destination %s: %s' % (name, dst, 'reachable (Up)' if ok else 'unreachable (Down)'))
+        return '\n'.join(out) or 'Keine Track Lists konfiguriert.'
 
     def bgp(self, nid, vname):
         e = self.e
@@ -561,13 +652,14 @@ class Cli:
         for o in e.outs.values():
             if o['vrf'] != vrf:
                 continue
-            for i in o['ifs']:
+            for i in o['ifs'] + [{'nid': n, 'peers': d.get('peers', [])} for n, d in o['nodes'].items()]:
                 if i['nid'] != nid:
                     continue
                 for p in i['peers']:
-                    r = next((r for r in self.sim.get('routers', []) if str(ip_of(r['ip'])) == p['addr']), None)
+                    r = next((r for r in self.sim.get('routers', []) if (r.get('bgp', {}).get('updateSource') or str(ip_of(r['ip']))) == p['addr']), None)
                     rs = e.routers.get(r['name'], {}) if r else {}
-                    if rs.get('adj') == 'Established':
+                    adj = next((a['state'] for a in rs.get('adjs', []) if a['nid'] == nid), None)
+                    if adj == 'Established':
                         st = str(len(r.get('advertise', [])))
                     else:
                         st = 'Idle' if not rs.get('link') else 'Active'
@@ -685,6 +777,8 @@ def _verify_methods():
         for i in e.l3if:
             if i['nid'] == nid and i['vrf'] == vrf:
                 out.append('%-20s %-20s %s' % (e.if_name(i), i['addr'], 'protocol-up/link-up/admin-up'))
+                for x in i.get('secondary', []):
+                    out.append('%-20s %-20s %s' % ('', x + ' secondary', ''))
         for o in e.outs.values():
             if o['vrf'] == vrf and nid in o['nodes'] and o['nodes'][nid]['rtrId']:
                 ra = e.A(o['nodes'][nid]['dn'])
@@ -919,7 +1013,7 @@ def _verify_methods():
         for rt in sorted(e.routes.get((vrf, nid), []), key=lambda r: ipaddress.ip_network(r['prefix'], strict=False)):
             if rt['proto'] == 'bgp' and rt.get('border'):
                 out.append('*>i%-18s %-19s %-10s %-10s %-6s %s' % (rt['prefix'], rt['nh'], '0', '100', '0', '?'))
-            elif rt['proto'] in ('bgp', 'ospf', 'static'):
+            elif rt['proto'] in ('bgp', 'ospf', 'static', 'eigrp'):
                 asn = next((r.get('bgp', {}).get('asn') for r in self.sim.get('routers', []) if r['name'] == rt.get('router')), '')
                 out.append('*>%s%-18s %-19s %-10s %-10s %-6s %s' % ('e' if rt['proto'] == 'bgp' else 'r', rt['prefix'], rt['nh'], '0', '100',
                                                                     '0', ('%s i' % asn) if rt['proto'] == 'bgp' else '?'))
@@ -1064,7 +1158,7 @@ def _verify_methods():
         if not peers:
             out.append('(keine Peers - kein aktiver Spine als Route Reflector)')
         for n in peers:
-            pfx = sum(1 for (v, x), rts in e.routes.items() if x == n['id'] for r in rts if r['proto'] in ('ospf', 'bgp', 'static') and not r.get('border'))
+            pfx = sum(1 for (v, x), rts in e.routes.items() if x == n['id'] for r in rts if r['proto'] in ('ospf', 'bgp', 'static', 'eigrp') and not r.get('border'))
             out.append('%-15s 4 %5s %7d %7d %8d %4d %4d %8s %s' % (n['tep'], asn, 120, 118, 33, 0, 0, '01:02:03', pfx))
         return '\n'.join(out)
 
@@ -1171,6 +1265,17 @@ def dispatch_extra(self, nid, c):
     m = re.match(r'^contract_parser(?:\.py)?(?: --vrf (\S+))?$', c)
     if m:
         return self.contract_parser(nid, m.group(1))
+    m = re.match(r'^show ip eigrp neighbors? vrf (\S+)$', c)
+    if m:
+        return self.eigrp(nid, m.group(1))
+    m = re.match(r'^show bfd neighbors?(?: detail)? vrf (\S+)$', c)
+    if m:
+        return self.bfd(nid, m.group(1))
+    m = re.match(r'^show bgp ipv4 unicast neighbors? vrf (\S+)$', c)
+    if m:
+        return self.bgp_neighbors(nid, m.group(1))
+    if c in ('show track', 'show track brief'):
+        return self.track(nid)
     m = re.match(r'^show bgp ipv4 unicast vrf (\S+)$', c)
     if m:
         return self.bgp_table(nid, m.group(1))

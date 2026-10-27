@@ -371,7 +371,7 @@ const Views = {
     pos[st.apic.serial] = [W / 2, 330];
     const bottom = [];
     st.hosts.forEach(x => bottom.push({ kind: 'host', o: x, x: avg(x.links.map(l => (pos[l[0]] || [0])[0])) }));
-    st.routers.forEach(x => bottom.push({ kind: 'router', o: x, x: (pos[x.serial] || [0])[0] }));
+    st.routers.forEach(x => bottom.push({ kind: 'router', o: x, x: avg((x.links || [[x.serial, x.port]]).map(l => (pos[l[0]] || [0])[0])) }));
     (st.vcenters || []).forEach(vc => vc.hosts.forEach(x => bottom.push({ kind: 'esxi', o: x, vc, x: avg(x.links.map(l => (pos[l[0]] || [0])[0])) })));
     bottom.sort((a, b) => a.x - b.x);
     let lastX = -999;
@@ -388,7 +388,7 @@ const Views = {
       s.push('<line x1="' + pa[0] + '" y1="' + pa[1] + '" x2="' + pb[0] + '" y2="' + pb[1] + '" class="lnk ' + (ok ? 'up' : 'down') + '"/>');
     });
     bottom.forEach(b => {
-      const links = b.kind === 'router' ? [[b.o.serial, b.o.port]] : b.o.links;
+      const links = b.kind === 'router' ? (b.o.links || [[b.o.serial, b.o.port]]) : b.o.links;
       if (b.kind === 'esxi') b.up = (st.vmm || []).some(v => v.hosts.some(x => x.name === b.o.name && x.ok.length));
       const cls = b.kind === 'host' ? (b.o.status.learned ? 'up' : 'warn') : b.kind === 'esxi' ? (b.up ? 'up' : 'warn') : (b.o.status.link && b.o.status.adj !== 'DOWN' && b.o.status.adj !== 'EXSTART' && b.o.status.adj !== 'Idle' ? 'up' : 'warn');
       links.forEach(([ser, port]) => {
@@ -512,10 +512,12 @@ const Views = {
     const draw = () => {
       clear(w);
       const st = App.state;
-      w.appendChild(paneHead('Simulation – Externe Router', 'Router außerhalb der Fabric für L3Outs (Static, OSPF, BGP)', [h('button', { class: 'btn primary small', onclick: () => Views.routerDialog() }, '+ Externer Router')]));
+      w.appendChild(paneHead('Simulation – Externe Router', 'Router außerhalb der Fabric für L3Outs (Static, OSPF, BGP, EIGRP) – mit zweitem Link für vPC, BFD und Ausfall-Simulation', [h('button', { class: 'btn primary small', onclick: () => Views.routerDialog() }, '+ Externer Router')]));
       w.appendChild(table([{ l: 'Name', f: r => r.name }, { l: 'Anschluss', f: r => nodeName(r.serial) + ' ' + r.port + (r.vlan ? ' vlan-' + r.vlan : ' (routed)') },
         { l: 'IP', f: r => r.ip }, { l: 'Protokoll', f: r => r.protocol + (r.protocol === 'ospf' ? ' area ' + r.ospf.area : r.protocol === 'bgp' ? ' AS ' + r.bgp.asn : '') }, { l: 'MTU', f: r => r.mtu },
-        { l: 'Nachbarschaft', f: r => stateBadge(r.status.link ? r.status.adj : 'down') }, { l: 'Kennt von ACI', f: r => (r.status.learned || []).join(', ') },
+        { l: 'Nachbarschaft', f: r => (r.status.adjs || []).length > 1 ? h('span', null, r.status.adjs.map(a => h('span', { style: { marginRight: '6px' } }, a.node + ' ', stateBadge(a.state))))
+          : stateBadge(r.status.link ? r.status.adj : 'down') },
+        { l: 'BFD', f: r => (r.status.bfd || []).map(b => b.node + ': ' + b.state).join(', ') || '—' }, { l: 'Kennt von ACI', f: r => (r.status.learned || []).join(', ') },
         { l: 'Hinweis', f: r => (r.status.reasons || []).join('; ') }], st.routers, {
         onRow: r => Views.routerDialog(r),
         actions: r => [iconBtn('🗑', 'Löschen', () => confirmBox('Router ' + r.name + ' entfernen?', async () => { await API.sim('routers', { op: 'delete', name: r.name }); await App.refreshState(); draw(); }), 'danger')],
@@ -532,22 +534,33 @@ const Views = {
     const used = new Set();
     st.links.forEach(l => { used.add(l[0] + '|' + l[1]); used.add(l[2] + '|' + l[3]); });
     st.hosts.forEach(o => o.links.forEach(l => used.add(l[0] + '|' + l[1])));
-    st.routers.filter(o => !x || o.name !== x.name).forEach(o => used.add(o.serial + '|' + o.port));
+    st.routers.filter(o => !x || o.name !== x.name).forEach(o => (o.links || [[o.serial, o.port]]).forEach(l => used.add(l[0] + '|' + l[1])));
+    (st.vcenters || []).forEach(vc => vc.hosts.forEach(o => o.links.forEach(l => used.add(l[0] + '|' + l[1]))));
+    (st.devices || []).forEach(d => d.links.forEach(l => used.add(l[0] + '|' + l[1])));
     const portOpts = [];
     leafNodes().forEach(n => { for (let p = 1; p <= n.ports; p++) { const pn = 'eth1/' + p; if (!used.has(n.serial + '|' + pn)) portOpts.push([n.serial + '|' + pn, (n.name || n.serial) + ' ' + pn]); } });
     const o = x || {};
     const f = buildForm([
       { k: 'name', l: 'Name', req: true, ph: 'wan-rtr1' },
       { k: 'att', l: 'Anschluss (Leaf/Port)', t: 'select', o: portOpts },
+      { k: 'att2', l: 'Zweiter Link (für vPC/PC)', t: 'select', o: [['', '— keiner —']].concat(portOpts) },
+      { k: 'bond', l: 'Bonding zum zweiten Link', t: 'select', o: [['none', 'keins'], ['lacp-active', 'LACP active'], ['lacp-passive', 'LACP passive'], ['static', 'statisch (mode on)']], show: v => !!v.att2 },
       { k: 'vlan', l: 'VLAN-Tag', ph: '0 = routed (ungetaggt)', help: '0 für Routed Interface, sonst VLAN für Sub-Interface oder SVI' },
       { k: 'ip', l: 'IP-Adresse/Maske', req: true, ph: '172.16.1.2/30' }, { k: 'mtu', l: 'MTU', ph: '1500' }, { k: 'routerId', l: 'Router ID', ph: '172.16.255.1' },
-      { k: 'protocol', l: 'Routing-Protokoll', t: 'radio', o: [['static', 'Static'], ['ospf', 'OSPF'], ['bgp', 'BGP']] },
+      { k: 'protocol', l: 'Routing-Protokoll', t: 'radio', o: [['static', 'Static'], ['ospf', 'OSPF'], ['bgp', 'BGP'], ['eigrp', 'EIGRP']] },
+      { k: 'easn', l: 'EIGRP AS', ph: '100', show: v => v.protocol === 'eigrp' },
+      { k: 'bfd', l: 'BFD aktiv', t: 'yesno' },
       { k: 'area', l: 'OSPF Area', ph: '0.0.0.0', show: v => v.protocol === 'ospf' },
       { k: 'areaType', l: 'OSPF Area Type', t: 'select', o: [['regular', 'regular'], ['nssa', 'nssa'], ['stub', 'stub']], show: v => v.protocol === 'ospf' },
       { k: 'nwT', l: 'OSPF Netzwerktyp', t: 'select', o: [['bcast', 'broadcast'], ['p2p', 'point-to-point']], show: v => v.protocol === 'ospf' },
       { k: 'hello', l: 'Hello / Dead', ph: '10', show: v => v.protocol === 'ospf' }, { k: 'dead', l: 'Dead Interval', ph: '40', show: v => v.protocol === 'ospf' },
       { k: 'mtuIgnore', l: 'ip ospf mtu-ignore', t: 'yesno', show: v => v.protocol === 'ospf' },
       { k: 'asn', l: 'Eigene AS-Nummer', ph: '65100', show: v => v.protocol === 'bgp' }, { k: 'peerAs', l: 'Remote-AS (ACI)', ph: '65001', show: v => v.protocol === 'bgp' },
+      { k: 'bpwd', l: 'BGP-Passwort (MD5)', show: v => v.protocol === 'bgp' },
+      { k: 'bhold', l: 'BGP Hold / Keepalive', ph: '180', show: v => v.protocol === 'bgp' }, { k: 'bka', l: 'BGP Keepalive', ph: '60', show: v => v.protocol === 'bgp' },
+      { k: 'bsrc', l: 'Update-Source (Loopback des Routers)', ph: 'leer = Interface-IP', show: v => v.protocol === 'bgp', help: 'Für eBGP über Loopbacks: Router-Loopback, die in der ACI als BGP Peer im Node Profile steht' },
+      { k: 'bpeer', l: 'Neighbor (ACI-Adresse)', ph: 'leer = Interface-IP der ACI', show: v => v.protocol === 'bgp' },
+      { k: 'down', l: 'Router ausgeschaltet', t: 'yesno', help: 'Simuliert einen Ausfall (z. B. für IP SLA / Track)' },
       { k: 'networks', l: 'Netze hinter dem Router', ph: '8.8.8.0/24, 1.1.1.0/24', help: 'Ziele, die der Router erreicht (für den Traffic-Test)' },
       { k: 'advertise', l: 'Kündigt der ACI an (OSPF/BGP)', ph: '0.0.0.0/0' },
       { k: 'staticBack', l: 'Statische Routen zurück in die ACI', ph: '10.1.0.0/16', help: 'nur nötig bei Static-L3Out ohne Routing-Protokoll' },
@@ -555,6 +568,9 @@ const Views = {
       name: o.name, att: o.serial ? o.serial + '|' + o.port : '', vlan: String(o.vlan || 0), ip: o.ip, mtu: String(o.mtu || 1500), routerId: o.routerId, protocol: o.protocol || 'ospf',
       area: (o.ospf || {}).area || '0.0.0.0', areaType: (o.ospf || {}).areaType || 'regular', nwT: (o.ospf || {}).nwT || 'bcast', hello: String((o.ospf || {}).hello || 10), dead: String((o.ospf || {}).dead || 40),
       mtuIgnore: (o.ospf || {}).mtuIgnore ? 'yes' : 'no', asn: (o.bgp || {}).asn || '65100', peerAs: (o.bgp || {}).peerAs || '65001',
+      att2: (o.links && o.links[1]) ? o.links[1][0] + '|' + o.links[1][1] : '', bond: o.bond || 'none', easn: (o.eigrp || {}).asn || '100', bfd: o.bfd ? 'yes' : 'no',
+      bpwd: (o.bgp || {}).password || '', bhold: String((o.bgp || {}).hold || 180), bka: String((o.bgp || {}).keepalive || 60), bsrc: (o.bgp || {}).updateSource || '',
+      bpeer: (o.bgp || {}).peerAddr || '', down: o.down ? 'yes' : 'no',
       networks: (o.networks || ['8.8.8.0/24']).join(', '), advertise: (o.advertise || ['0.0.0.0/0']).join(', '), staticBack: (o.staticBack || []).join(', '),
     }, {}, 'create');
     const list = s => String(s || '').split(',').map(z => z.trim()).filter(Boolean);
@@ -562,9 +578,12 @@ const Views = {
       l: 'Speichern', primary: true, fn: async () => {
         const v = f.get();
         const [serial, port] = (v.att || '|').split('|');
-        const r = { name: v.name, serial, port, vlan: Number(v.vlan || 0), ip: v.ip, mtu: Number(v.mtu || 1500), routerId: v.routerId, protocol: v.protocol,
+        const links = [[serial, port]].concat(v.att2 ? [v.att2.split('|')] : []);
+        const r = { name: v.name, serial, port, links, bond: v.att2 ? v.bond : 'none', vlan: Number(v.vlan || 0), ip: v.ip, mtu: Number(v.mtu || 1500), routerId: v.routerId, protocol: v.protocol,
           ospf: { area: v.area, areaType: v.areaType, nwT: v.nwT, hello: Number(v.hello || 10), dead: Number(v.dead || 40), mtuIgnore: v.mtuIgnore === 'yes' },
-          bgp: { asn: v.asn, peerAs: v.peerAs }, networks: list(v.networks), advertise: list(v.advertise), staticBack: list(v.staticBack) };
+          eigrp: { asn: v.easn || '100' }, bfd: v.bfd === 'yes', down: v.down === 'yes',
+          bgp: { asn: v.asn, peerAs: v.peerAs, password: v.bpwd, hold: Number(v.bhold || 180), keepalive: Number(v.bka || 60), updateSource: v.bsrc, peerAddr: v.bpeer },
+          networks: list(v.networks), advertise: list(v.advertise), staticBack: list(v.staticBack) };
         await API.sim('routers', { router: r, old: x ? x.name : null });
         toast('Router ' + v.name + ' gespeichert');
         await App.refreshState();

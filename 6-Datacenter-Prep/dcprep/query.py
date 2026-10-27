@@ -3,7 +3,7 @@ import re
 
 from .model import CLASSES, AciError, COMMON_RW
 
-HIDDEN = {'pwd'}
+HIDDEN = {'pwd', 'password', 'key'}
 SKIP_IN_SUBTREE = {'faultInst', 'healthInst'}
 
 

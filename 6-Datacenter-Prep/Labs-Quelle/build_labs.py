@@ -132,6 +132,8 @@ def task(title, text, hint=None):
 
 
 LABS = []
+BGP_TREE = mo('polUni', {}, mo('fabricInst', {}, mo('bgpInstPol', {'name': 'default'}, mo('bgpAsP', {'asn': '65001'}),
+                                                    mo('bgpRRP', {}, mo('bgpRRNodePEp', {'id': '201'}), mo('bgpRRNodePEp', {'id': '202'})))))
 
 
 def lab(**kw):
@@ -886,6 +888,237 @@ lab(id='16-service-graph-pbr', title='16 Service Graph mit Policy-Based Redirect
 
 
 # ----------------------------------------------------------------------------
+# Lab 17 - SVI auf vPC mit Secondary IP und BFD
+# ----------------------------------------------------------------------------
+VPC34 = mo('polUni', {}, mo('fabricInst', {}, mo('fabricProtPol', {}, mo('fabricExplicitGEp', {'name': 'vpc-103-104', 'id': '34'},
+           mo('fabricNodePEp', {'id': '103'}), mo('fabricNodePEp', {'id': '104'})))))
+ACC17 = access('VLAN-Pool-Core', 350, 359, 'L3Dom-Core', 'AAEP-Core', 'IPG-vPC-core', 'IntProf-Leaf103-104', 'core', 30, 30,
+               'SwProf-Leaf103-104', 103, 104, l3=True, pg_cls='infraAccBndlGrp',
+               pg_extra=[mo('infraRsLacpPol', {'tnLacpLagPolName': 'LACP-Active'})],
+               extra_infra=[mo('lacpLagPol', {'name': 'LACP-Active', 'mode': 'active'})])
+CORE17 = dict(router('core1', L103, 'eth1/30', '172.16.50.6/29', 'ospf', vlan=350, rid='10.200.255.1',
+                     networks=('10.200.0.0/16',), advertise=('10.200.0.0/16',)),
+              links=[[L103, 'eth1/30'], [L104, 'eth1/30']], bond='lacp-active', bfd=True)
+VPCPATH = 'topology/pod-1/protpaths-103-104/pathep-[IPG-vPC-core]'
+SOL17 = mo('fvTenant', {'name': 'Shop'},
+           mo('ospfIfPol', {'name': 'OSPF-BFD', 'nwT': 'bcast', 'ctrl': 'bfd'}),
+           contract('web-to-campus', ['icmp']),
+           bd('BD-Web', 'Prod', '10.10.10.1/24', 'public', 'Core'),
+           mo('fvAp', {'name': 'Webshop'}, mo('fvAEPg', {'name': 'Web'}, mo('fvRsCons', {'tnVzBrCPName': 'web-to-campus'}))),
+           mo('l3extOut', {'name': 'Core'}, mo('l3extRsEctx', {'tnFvCtxName': 'Prod'}), mo('l3extRsL3DomAtt', {'tDn': 'uni/l3dom-L3Dom-Core'}),
+              mo('ospfExtP', {'areaId': '0.0.0.1'}),
+              mo('l3extLNodeP', {'name': 'border'},
+                 mo('l3extRsNodeL3OutAtt', {'tDn': 'topology/pod-1/node-103', 'rtrId': '1.1.1.103'}),
+                 mo('l3extRsNodeL3OutAtt', {'tDn': 'topology/pod-1/node-104', 'rtrId': '1.1.1.104'}),
+                 mo('l3extLIfP', {'name': 'vpc-svi'}, mo('ospfIfP', {}, mo('ospfRsIfPol', {'tnOspfIfPolName': 'OSPF-BFD'})), mo('bfdIfP', {}),
+                    mo('l3extRsPathL3OutAtt', {'tDn': VPCPATH, 'ifInstT': 'ext-svi', 'encap': 'vlan-350', 'mtu': '1500'},
+                       mo('l3extMember', {'side': 'A', 'addr': '172.16.50.1/29'}, mo('l3extIp', {'addr': '172.16.50.3/29'})),
+                       mo('l3extMember', {'side': 'B', 'addr': '172.16.50.2/29'}, mo('l3extIp', {'addr': '172.16.50.3/29'}))))),
+              mo('l3extInstP', {'name': 'Campus'}, mo('l3extSubnet', {'ip': '10.200.0.0/16'}), mo('fvRsProv', {'tnVzBrCPName': 'web-to-campus'}))))
+lab(id='17-l3out-vpc-svi-bfd', title='17 L3Out: SVI auf vPC mit Secondary IP und BFD', topic='L3Out / Routing', level='Fortgeschritten',
+    duration='40 min', fabric='discovered',
+    goals=['Ein L3Out-SVI auf einem vPC mit Side A, Side B und Secondary IP bauen', 'OSPF zu beiden Border Leafs aufbauen',
+           'BFD für schnelle Ausfallerkennung aktivieren und verifizieren'],
+    intro='Der Campus-Core **core1** hängt mit einem **LACP-Port-Channel** an **leaf103 eth1/30** und **leaf104 eth1/30** '
+          '(vPC-Domäne 34, Policy Group **IPG-vPC-core** und L3 Domain **L3Dom-Core** mit vlan-350 bis 359 sind schon da). '
+          'core1 spricht **OSPF Area 0.0.0.1** mit **BFD** in **vlan-350**, hat die Adresse **172.16.50.6/29** und MTU 1500. '
+          'Hinter ihm liegt das Campusnetz **10.200.0.0/16**.\n\n'
+          'Adressplan: leaf103 = Side A **172.16.50.1**, leaf104 = Side B **172.16.50.2**, gemeinsame Secondary IP **172.16.50.3** '
+          '(Next Hop für Static Routes des Cores).',
+    config=[SERVER_ACCESS, VPC34, ACC17, BGP_TREE, shop_tenant(with_contracts=True)], hosts=[WEB1, APP1], routers=[CORE17],
+    tasks=[
+        task('OSPF Interface Policy', 'Im Tenant Shop: OSPF Interface Policy **OSPF-BFD**, Network Type Broadcast, Interface Control **BFD**.'),
+        task('L3Out Core', 'L3Out **Core**, VRF Prod, Domain L3Dom-Core, OSPF Area **0.0.0.1**. Node Profile mit **103** (1.1.1.103) und '
+             '**104** (1.1.1.104).'),
+        task('vPC-SVI', 'Logical Interface Profile mit OSPF Interface Profile (Policy OSPF-BFD) und BFD Interface Profile. Interface: '
+             '**SVI**, Pfadtyp **Virtual Port Channel** IPG-vPC-core, **vlan-350**, MTU **1500**, Side A 172.16.50.1/29, Side B 172.16.50.2/29, '
+             'Secondary 172.16.50.3/29.', 'MTU inherit wäre 9000 – core1 bliebe dann in EXSTART hängen.'),
+        task('External EPG und Contract', 'External EPG **Campus** mit 10.200.0.0/16, Contract **web-to-campus** (icmp): Campus provided, '
+             'Web consumed. BD-Web *Advertised Externally* und mit L3Out Core verknüpft.'),
+        task('Verifizieren', 'Auf leaf103 und leaf104: `show ip ospf neighbors vrf Shop:Prod`, `show bfd neighbors vrf Shop:Prod`, '
+             '`show ip interface brief vrf Shop:Prod` (Primary und Secondary auf vlan…). Ping von web1 zu 10.200.1.10.'),
+    ],
+    checks=[check('OSPF FULL auf leaf103 und leaf104', 'router', name='core1', adj='FULL', nodes=[103, 104]),
+            check('BFD Up zu beiden Border Leafs', 'bfd', router='core1', nodes=[103, 104]),
+            check('Secondary IP 172.16.50.3 auf Side A', 'exists', dn='uni/tn-Shop/out-Core/lnodep-border/lifp-vpc-svi/rspathL3OutAtt-[%s]/mem-A/addr-[172.16.50.3/29]' % VPCPATH),
+            check('core1 lernt 10.10.10.0/24', 'learned', router='core1', prefix='10.10.10.0/24'),
+            check('web1 → 10.200.1.10 Ping', 'traffic', src='web1', dst='10.200.1.10', proto='icmp', expect=True)],
+    solution='`' + json.dumps(SOL17) + '`\\n\\nBei einem SVI auf einem vPC bekommt jeder Leaf seine Primary IP (Side A/B), die Secondary IP '
+             'ist auf beiden aktiv. BFD läuft nur, wenn es im Protokoll (OSPF Interface Policy *BFD*) und auf dem Router aktiviert ist.')
+
+
+# ----------------------------------------------------------------------------
+# Lab 18 - eBGP ueber Loopbacks: Multihop, MD5, Timer und Summarization
+# ----------------------------------------------------------------------------
+ACC18 = access('VLAN-Pool-ISP', 300, 310, 'L3Dom-ISP', 'AAEP-ISP', 'IPG-ISP', 'IntProf-Leaf104', 'isp', 47, 47,
+               'SwProf-Leaf104', 104, 104, l3=True)
+PARTNER18 = dict(router('partner1', L104, 'eth1/47', '172.16.1.2/30', 'bgp', vlan=301, rid='192.168.255.1',
+                        networks=('192.168.50.0/24',), advertise=('192.168.50.0/24',), static_back=('1.1.1.104/32',)))
+PARTNER18['bgp'] = {'asn': '65100', 'peerAs': '65001', 'password': 'Partner#2026', 'hold': 30, 'keepalive': 10,
+                    'updateSource': '192.168.255.1', 'peerAddr': '1.1.1.104'}
+TEN18 = mo('fvTenant', {'name': 'Shop'},
+           contract('partner-to-shop', ['icmp']),
+           bd('BD-Web', 'Prod', '10.10.10.1/24', 'public', 'Partner'), bd('BD-App', 'Prod', '10.10.20.1/24', 'public', 'Partner'),
+           mo('fvAp', {'name': 'Webshop'}, mo('fvAEPg', {'name': 'Web'}, mo('fvRsProv', {'tnVzBrCPName': 'partner-to-shop'})),
+              mo('fvAEPg', {'name': 'App'}, mo('fvRsProv', {'tnVzBrCPName': 'partner-to-shop'}))),
+           mo('l3extOut', {'name': 'Partner'}, mo('l3extRsEctx', {'tnFvCtxName': 'Prod'}), mo('l3extRsL3DomAtt', {'tDn': 'uni/l3dom-L3Dom-ISP'}),
+              mo('bgpExtP', {}),
+              mo('l3extLNodeP', {'name': 'border'}, mo('l3extRsNodeL3OutAtt', {'tDn': 'topology/pod-1/node-104', 'rtrId': '1.1.1.104'}),
+                 mo('l3extLIfP', {'name': 'eth47'}, mo('l3extRsPathL3OutAtt', {'tDn': path(104, 'eth1/47'), 'ifInstT': 'sub-interface',
+                                                                              'encap': 'vlan-301', 'addr': '172.16.1.1/30'}))),
+              mo('l3extInstP', {'name': 'PartnerNet'}, mo('l3extSubnet', {'ip': '192.168.50.0/24'}), mo('fvRsCons', {'tnVzBrCPName': 'partner-to-shop'}))))
+SOL18 = mo('fvTenant', {'name': 'Shop'},
+           mo('bgpCtxPol', {'name': 'Partner-Timers', 'kaIntvl': '10', 'holdIntvl': '30'}),
+           mo('fvCtx', {'name': 'Prod'}, mo('fvRsBgpCtxPol', {'tnBgpCtxPolName': 'Partner-Timers'})),
+           mo('bgpRtSummPol', {'name': 'Summary-Only', 'ctrl': 'summary-only'}),
+           mo('l3extOut', {'name': 'Partner'},
+              mo('l3extLNodeP', {'name': 'border'},
+                 mo('l3extRsNodeL3OutAtt', {'tDn': 'topology/pod-1/node-104', 'rtrId': '1.1.1.104'},
+                    mo('ipRouteP', {'ip': '192.168.255.1/32'}, mo('ipNexthopP', {'nhAddr': '172.16.1.2'}))),
+                 mo('bgpPeerP', {'addr': '192.168.255.1', 'ttl': '2', 'password': 'Partner#2026'}, mo('bgpAsP', {'asn': '65100'}))),
+              mo('l3extInstP', {'name': 'PartnerNet'},
+                 mo('l3extSubnet', {'ip': '10.10.0.0/16', 'scope': 'export-rtctrl'},
+                    mo('l3extRsSubnetToRtSumm', {'tDn': 'uni/tn-Shop/bgprtsum-Summary-Only'})))))
+lab(id='18-ebgp-loopback-md5-summary', title='18 eBGP über Loopbacks: Multihop, MD5, Timer und Summarization', topic='L3Out / BGP',
+    level='Fortgeschritten', duration='40 min', fabric='discovered',
+    goals=['eBGP zwischen Loopbacks mit Multihop und Static Routes aufbauen', 'BGP-Session mit MD5-Passwort und eigenen Timern',
+           'Mehrere BD-Subnetze als eine Summary ankündigen'],
+    intro='Der Partner-Router **partner1** (AS 65100) hängt an **leaf104 eth1/47** (Sub-Interface vlan-301, 172.16.1.1/30 ↔ 172.16.1.2/30). '
+          'Laut Partner-Vertrag läuft BGP **zwischen den Loopbacks**: partner1 nutzt **192.168.255.1** und spricht die ACI an '
+          '**1.1.1.104** (Router ID von leaf104) an. Weitere Vorgaben: MD5-Passwort **Partner#2026**, Keepalive **10 s**, Hold **30 s**.\n\n'
+          'Der Partner möchte für den Webshop nur **eine Route 10.10.0.0/16** sehen statt der einzelnen BD-Subnetze. '
+          'L3Out **Partner**, External EPG und Contract sind vorbereitet.',
+    config=[SERVER_ACCESS, ACC18, BGP_TREE, shop_tenant(), TEN18], hosts=[WEB1, APP1], routers=[PARTNER18],
+    tasks=[
+        task('Erreichbarkeit der Loopback', 'Am Node 104 im Node Profile eine Static Route **192.168.255.1/32** mit Next Hop **172.16.1.2**.',
+             'Ohne diese Route kann leaf104 die Loopback des Partners nicht erreichen – BGP bleibt in Active.'),
+        task('BGP Peer am Node Profile', 'BGP Peer Connectivity Profile **am Node Profile** (nicht am Interface): Peer **192.168.255.1**, '
+             'Remote AS **65100**, **EBGP Multihop TTL 2**, Password **Partner#2026**.', 'Ein Peer am Node Profile nutzt die Loopback (Router ID) als Quelle.'),
+        task('BGP Timers', 'BGP Timers Policy **Partner-Timers** (Keepalive 10, Hold 30) anlegen und am VRF **Prod** auswählen.'),
+        task('Summarization', 'BGP Route Summarization Policy **Summary-Only** mit *Do not advertise more specifics*. Am External EPG '
+             '**PartnerNet** das Subnetz **10.10.0.0/16** mit **Export Route Control Subnet** und dieser Policy anlegen.'),
+        task('Verifizieren', 'leaf104: `show bgp ipv4 unicast neighbors vrf Shop:Prod` (Update Source, Multihop, Password, Hold Time), '
+             '`show bgp ipv4 unicast summary vrf Shop:Prod`. Unter Simulation > Externe Router: Was lernt partner1?'),
+    ],
+    checks=[check('BGP partner1 Established', 'router', name='partner1', adj='Established'),
+            check('Ausgehandelte Hold Time 30 s', 'bgptimer', router='partner1', hold=30),
+            check('partner1 lernt die Summary 10.10.0.0/16', 'learned', router='partner1', prefix='10.10.0.0/16'),
+            check('partner1 lernt 10.10.10.0/24 nicht mehr einzeln', 'learned', router='partner1', prefix='10.10.10.0/24', expect=False),
+            check('192.168.50.10 → web1 Ping', 'traffic', src='192.168.50.10', dst='web1', proto='icmp', expect=True)],
+    solution='`' + json.dumps(SOL18) + '`\\n\\nTypische Fehler: TTL 1 (Session bleibt Idle), fehlende Static Route zur Partner-Loopback '
+             '(Active), falsches Passwort (Active, TCP-MD5 schlägt fehl).')
+
+
+# ----------------------------------------------------------------------------
+# Lab 19 - EIGRP und Static Route mit IP SLA Track
+# ----------------------------------------------------------------------------
+ACC19 = [access('VLAN-Pool-WAN', 300, 399, 'L3Dom-WAN', 'AAEP-WAN', 'IPG-WAN', 'IntProf-Leaf103', 'wan', 48, 48,
+                'SwProf-Leaf103', 103, 103, l3=True),
+         access('VLAN-Pool-ISP', 300, 310, 'L3Dom-ISP', 'AAEP-ISP', 'IPG-ISP', 'IntProf-Leaf104', 'isp', 47, 47,
+                'SwProf-Leaf104', 104, 104, l3=True)]
+BRANCH19 = dict(router('branch1', L103, 'eth1/48', '172.16.0.2/30', 'eigrp', rid='10.50.255.1',
+                       networks=('10.50.0.0/16',), advertise=('10.50.0.0/16',)), eigrp={'asn': '100', 'hello': 5, 'hold': 15})
+INET19 = router('inet1', L104, 'eth1/47', '172.16.1.2/30', 'static', networks=('8.8.8.0/24', '1.1.1.0/24'), advertise=(),
+                static_back=('10.10.0.0/16',))
+TEN19 = mo('fvTenant', {'name': 'Shop'},
+           contract('web-to-internet', ['icmp']), contract('web-to-branch', ['icmp']),
+           bd('BD-Web', 'Prod', '10.10.10.1/24', 'public', 'Branch'),
+           mo('fvAp', {'name': 'Webshop'}, mo('fvAEPg', {'name': 'Web'}, mo('fvRsCons', {'tnVzBrCPName': 'web-to-internet'}),
+                                               mo('fvRsCons', {'tnVzBrCPName': 'web-to-branch'}))),
+           mo('l3extOut', {'name': 'Internet'}, mo('l3extRsEctx', {'tnFvCtxName': 'Prod'}), mo('l3extRsL3DomAtt', {'tDn': 'uni/l3dom-L3Dom-ISP'}),
+              mo('l3extLNodeP', {'name': 'border'},
+                 mo('l3extRsNodeL3OutAtt', {'tDn': 'topology/pod-1/node-104', 'rtrId': '1.1.1.104'},
+                    mo('ipRouteP', {'ip': '0.0.0.0/0'}, mo('ipNexthopP', {'nhAddr': '172.16.1.2'}))),
+                 mo('l3extLIfP', {'name': 'eth47'}, mo('l3extRsPathL3OutAtt', {'tDn': path(104, 'eth1/47'), 'ifInstT': 'l3-port', 'addr': '172.16.1.1/30'}))),
+              mo('l3extInstP', {'name': 'Internet'}, mo('l3extSubnet', {'ip': '0.0.0.0/0'}), mo('fvRsProv', {'tnVzBrCPName': 'web-to-internet'}))))
+SOL19 = mo('fvTenant', {'name': 'Shop'},
+           mo('eigrpIfPol', {'name': 'EIGRP-Branch', 'helloIntvl': '5', 'holdIntvl': '15'}),
+           mo('l3extOut', {'name': 'Branch'}, mo('l3extRsEctx', {'tnFvCtxName': 'Prod'}), mo('l3extRsL3DomAtt', {'tDn': 'uni/l3dom-L3Dom-WAN'}),
+              mo('eigrpExtP', {'asn': '100'}),
+              mo('l3extLNodeP', {'name': 'border'}, mo('l3extRsNodeL3OutAtt', {'tDn': 'topology/pod-1/node-103', 'rtrId': '1.1.1.103'}),
+                 mo('l3extLIfP', {'name': 'eth48'}, mo('eigrpIfP', {}, mo('eigrpRsIfPol', {'tnEigrpIfPolName': 'EIGRP-Branch'})),
+                    mo('l3extRsPathL3OutAtt', {'tDn': path(103, 'eth1/48'), 'ifInstT': 'l3-port', 'addr': '172.16.0.1/30', 'mtu': '1500'}))),
+              mo('l3extInstP', {'name': 'BranchNet'}, mo('l3extSubnet', {'ip': '10.50.0.0/16'}), mo('fvRsProv', {'tnVzBrCPName': 'web-to-branch'}))),
+           mo('fvIPSLAMonitoringPol', {'name': 'icmp-5s', 'slaType': 'icmp', 'slaFrequency': '5'}),
+           mo('fvTrackMember', {'name': 'inet1-gw', 'dstIpAddr': '172.16.1.2', 'scopeDn': 'uni/tn-Shop/out-Internet'},
+              mo('fvRsIpslaMonPol', {'tDn': 'uni/tn-Shop/ipslaMonitoringPol-icmp-5s'})),
+           mo('fvTrackList', {'name': 'inet-track', 'percentageUp': '1'}, mo('fvRsOtmListMember', {'tDn': 'uni/tn-Shop/trackmember-inet1-gw'})),
+           mo('l3extOut', {'name': 'Internet'}, mo('l3extLNodeP', {'name': 'border'},
+              mo('l3extRsNodeL3OutAtt', {'tDn': 'topology/pod-1/node-104', 'rtrId': '1.1.1.104'},
+                 mo('ipRouteP', {'ip': '0.0.0.0/0'}, mo('ipRsRouteTrack', {'tDn': 'uni/tn-Shop/tracklist-inet-track'}))))))
+RT19 = 'uni/tn-Shop/out-Internet/lnodep-border/rsnodeL3OutAtt-[topology/pod-1/node-104]/rt-[0.0.0.0/0]'
+lab(id='19-eigrp-static-track', title='19 EIGRP und Static Route mit IP SLA Track', topic='L3Out / Routing', level='Fortgeschritten',
+    duration='40 min', fabric='discovered',
+    goals=['Ein L3Out mit EIGRP aufbauen', 'Eine Static Route über IP SLA und Track List an die Erreichbarkeit des Next Hops koppeln',
+           'Mit show track und show ip route verifizieren'],
+    intro='Zwei externe Anbindungen im VRF Prod:\n- Die Filiale **branch1** spricht **EIGRP AS 100** über **leaf103 eth1/48** '
+          '(Routed, 172.16.0.1/30 ↔ 172.16.0.2/30, MTU 1500) und hat das Netz **10.50.0.0/16**.\n'
+          '- Der Internet-Router **inet1** an **leaf104 eth1/47** ist per **Static Route** angebunden (L3Out **Internet**, Default Route '
+          'über 172.16.1.2 ist schon konfiguriert).\n\nFällt inet1 aus, soll die Default Route verschwinden, damit die Fabric nicht in ein '
+          'schwarzes Loch routet. Access Policies und Contracts sind vorbereitet.',
+    config=[SERVER_ACCESS] + ACC19 + [BGP_TREE, shop_tenant(), TEN19], hosts=[WEB1, APP1], routers=[BRANCH19, INET19],
+    tasks=[
+        task('EIGRP Interface Policy', 'Im Tenant Shop: EIGRP Interface Policy **EIGRP-Branch** (Hello 5, Hold 15).'),
+        task('L3Out Branch', 'L3Out **Branch**, VRF Prod, Domain **L3Dom-WAN**, Protokoll **EIGRP** mit AS **100**. Node 103 (1.1.1.103), '
+             'Routed Interface eth1/48 mit 172.16.0.1/30 und MTU 1500, EIGRP Interface Profile mit EIGRP-Branch. External EPG **BranchNet** '
+             '10.50.0.0/16, Contract **web-to-branch** provided.', 'BD-Web ist schon mit dem L3Out Branch verknüpft.'),
+        task('IP SLA und Track', 'Unter **Policies > Protocol > IP SLA**: Monitoring Policy **icmp-5s** (ICMP, 5 s), Track Member **inet1-gw** '
+             '(Ziel 172.16.1.2, Scope L3Out Internet, Policy icmp-5s), Track List **inet-track** mit diesem Member.'),
+        task('Track an die Route', 'An der Static Route 0.0.0.0/0 (L3Out Internet, Node 104) die **Track Policy** inet-track eintragen.'),
+        task('Verifizieren und Ausfall testen', 'leaf103: `show ip eigrp neighbors vrf Shop:Prod`. leaf104: `show track`, `show ip route vrf Shop:Prod`. '
+             'Dann unter Simulation > Externe Router inet1 auf **ausgeschaltet** stellen: Track geht DOWN, die Default Route verschwindet.'),
+    ],
+    checks=[check('EIGRP-Nachbarschaft zu branch1', 'router', name='branch1', adj='UP'),
+            check('web1 → 10.50.1.10 Ping', 'traffic', src='web1', dst='10.50.1.10', proto='icmp', expect=True),
+            check('Static Route mit Track Policy', 'exists', dn=RT19 + '/rsRouteTrack'),
+            check('Default Route auf leaf104 aktiv', 'route', node=104, vrf='Shop:Prod', prefix='0.0.0.0/0', proto='static'),
+            check('web1 → 8.8.8.8 Ping', 'traffic', src='web1', dst='8.8.8.8', proto='icmp', expect=True)],
+    solution='`' + json.dumps(SOL19) + '`\\n\\nIP SLA (fvIPSLAMonitoringPol) → Track Member (Ziel-IP, Scope) → Track List (Schwellwert) → '
+             '`ipRsRouteTrack` an der Static Route. Ohne Antwort vom Ziel nimmt die ACI die Route aus der Routing-Tabelle.')
+
+# ----------------------------------------------------------------------------
+# Lab 20 - Floating SVI fuer einen virtuellen Router
+# ----------------------------------------------------------------------------
+VR20 = router('vrtr1', L101, 'eth1/9', '172.16.10.30/24', 'ospf', vlan=150, area='0.0.0.2', rid='10.77.255.1',
+              networks=('10.77.0.0/16',), advertise=('10.77.0.0/16',))
+TEN20 = mo('fvTenant', {'name': 'Shop'},
+           contract('web-to-vnf', ['icmp']),
+           bd('BD-Web', 'Prod', '10.10.10.1/24', 'public', 'VNF'),
+           mo('fvAp', {'name': 'Webshop'}, mo('fvAEPg', {'name': 'Web'}, mo('fvRsCons', {'tnVzBrCPName': 'web-to-vnf'}))))
+SOL20 = mo('fvTenant', {'name': 'Shop'},
+           mo('l3extOut', {'name': 'VNF'}, mo('l3extRsEctx', {'tnFvCtxName': 'Prod'}), mo('l3extRsL3DomAtt', {'tDn': 'uni/l3dom-L3Dom-WAN'}),
+              mo('ospfExtP', {'areaId': '0.0.0.2'}),
+              mo('l3extLNodeP', {'name': 'anchor'}, mo('l3extRsNodeL3OutAtt', {'tDn': 'topology/pod-1/node-103', 'rtrId': '1.1.1.103'}),
+                 mo('l3extLIfP', {'name': 'floating'}, mo('ospfIfP', {}),
+                    mo('l3extVirtualLIfP', {'nodeDn': 'topology/pod-1/node-103', 'encap': 'vlan-150', 'addr': '172.16.10.11/24', 'mtu': '1500'},
+                       mo('l3extRsDynPathAtt', {'tDn': 'uni/phys-PhysDom-Server', 'floatingAddr': '172.16.10.100/24'})))),
+              mo('l3extInstP', {'name': 'VNF-Net'}, mo('l3extSubnet', {'ip': '10.77.0.0/16'}), mo('fvRsProv', {'tnVzBrCPName': 'web-to-vnf'}))))
+lab(id='20-floating-svi', title='20 Floating SVI für einen virtuellen Router', topic='L3Out / Routing', level='Fortgeschritten',
+    duration='30 min', fabric='discovered',
+    goals=['Verstehen, wofür Floating SVI gedacht ist (virtuelle Router/Firewalls, die zwischen Leafs wandern)',
+           'Anchor Node, Primary IP und Floating IP richtig vergeben'],
+    intro='Der virtuelle Router **vrtr1** (eine VM) läuft gerade auf einem Host an **leaf101 eth1/9** und kann jederzeit auf einen anderen '
+          'Server wandern. Er spricht **OSPF Area 0.0.0.2** in **vlan-150** (172.16.10.30/24, MTU 1500) und hat das Netz **10.77.0.0/16**.\n\n'
+          'Statt auf jedem möglichen Leaf ein SVI zu bauen, nutzt du eine **Floating SVI**: Anchor Node ist **leaf103** (172.16.10.11/24, '
+          'hier läuft das Routing), auf allen anderen Leafs mit der Domain **PhysDom-Server** nimmt die ACI die Floating IP **172.16.10.100/24**.',
+    config=[SERVER_ACCESS, ACC19[0], BGP_TREE, shop_tenant(), TEN20], hosts=[WEB1], routers=[VR20],
+    tasks=[
+        task('L3Out VNF', 'L3Out **VNF**, VRF Prod, Domain L3Dom-WAN, OSPF Area **0.0.0.2**. Node Profile mit Node 103 (1.1.1.103), Logical '
+             'Interface Profile mit OSPF Interface Profile.'),
+        task('Floating SVI', 'Im Interface Profile **Create Floating SVI**: Anchor Node 103, vlan-150, 172.16.10.11/24, MTU 1500. Path '
+             'Attribute: Domain **PhysDom-Server** mit Floating IP **172.16.10.100/24**.',
+             'Ohne Floating IP erreicht ein Router an einem Nicht-Anchor-Leaf die ACI nicht.'),
+        task('External EPG', 'External EPG **VNF-Net** 10.77.0.0/16, Contract **web-to-vnf** provided.'),
+        task('Verifizieren', 'leaf103: `show ip ospf neighbors vrf Shop:Prod`. Ping von web1 zu 10.77.1.1. Wandert die VM (Router-Anschluss '
+             'auf einen anderen Leaf-Port mit derselben Domain), bleibt die Nachbarschaft bestehen.'),
+    ],
+    checks=[check('OSPF FULL zwischen vrtr1 und dem Anchor leaf103', 'router', name='vrtr1', adj='FULL', nodes=[103]),
+            check('vrtr1 lernt 10.10.10.0/24', 'learned', router='vrtr1', prefix='10.10.10.0/24'),
+            check('web1 → 10.77.1.1 Ping', 'traffic', src='web1', dst='10.77.1.1', proto='icmp', expect=True)],
+    solution='`' + json.dumps(SOL20) + '`')
+
+
+# ----------------------------------------------------------------------------
 # Maschinenlesbare Musterloesungen (fuer die Tests: [URL-DN, Body])
 # ----------------------------------------------------------------------------
 BGP_RR = ['uni/fabric/bgpInstP-default', mo('bgpInstPol', {}, mo('bgpAsP', {'asn': '65001'}),
@@ -974,6 +1207,10 @@ SOLUTIONS = {
                                               mo('fvAp', {'name': 'Webshop'}, mo('fvAEPg', {'name': 'Web'}, mo('fvRsConsIf', {'tnVzCPIfName': 'dns'}))))]],
     '15-transit-route-control': [['uni', SOL15]],
     '16-service-graph-pbr': SOL16,
+    '17-l3out-vpc-svi-bfd': [['uni', SOL17]],
+    '18-ebgp-loopback-md5-summary': [['uni', SOL18]],
+    '19-eigrp-static-track': [['uni', SOL19]],
+    '20-floating-svi': [['uni', SOL20]],
     '14-l2out-migration': [['uni', L2ACC14], ['uni', L2OUT14], ['uni/tn-Shop/BD-BD-Migration', mo('fvBD', {'arpFlood': 'yes'})]],
 }
 

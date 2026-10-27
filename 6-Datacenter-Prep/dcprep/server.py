@@ -310,7 +310,8 @@ class Sim:
                     info = '%s kennt von der ACI: %s' % (c['router'], ', '.join(rs.get('learned', [])) or 'nichts')
                 elif t == 'route':
                     v = 'uni/tn-%s/ctx-%s' % tuple(c['vrf'].split(':'))
-                    has = any(r['prefix'] == c['prefix'] for r in e.routes.get((v, c['node']), []))
+                    has = any(r['prefix'] == c['prefix'] and (not c.get('proto') or r['proto'] == c['proto'])
+                              for r in e.routes.get((v, c['node']), []))
                     ok = has == c.get('expect', True)
                     info = 'Route %s auf Node %s: %s' % (c['prefix'], c['node'], 'vorhanden' if has else 'nicht vorhanden')
                 elif t == 'setup':
@@ -323,8 +324,23 @@ class Sim:
                     info = 'Zustand: %s%s' % (v.get('state', 'nicht vorhanden'), ' - ' + '; '.join(v['reasons']) if v.get('reasons') else '')
                 elif t == 'router':
                     rs = e.routers.get(c['name'], {})
-                    ok = rs.get('adj') == c.get('adj', 'FULL')
-                    info = 'Zustand: %s' % rs.get('adj')
+                    if c.get('nodes'):
+                        st_ = {a['nid']: a['state'] for a in rs.get('adjs', [])}
+                        ok = all(st_.get(n) == c.get('adj', 'FULL') for n in c['nodes'])
+                        info = 'Nachbarschaften: %s' % (', '.join('%s %s' % (e.nodes[n]['name'], s_) for n, s_ in st_.items()) or 'keine')
+                    else:
+                        ok = rs.get('adj') == c.get('adj', 'FULL')
+                        info = 'Zustand: %s' % rs.get('adj')
+                elif t == 'bfd':
+                    rs = e.routers.get(c['router'], {})
+                    st_ = {b['nid']: b['state'] for b in rs.get('bfd', [])}
+                    ok = bool(st_) and all(st_.get(n) == 'Up' for n in c.get('nodes', st_.keys()))
+                    info = 'BFD: %s' % (', '.join('%s %s' % (e.nodes[n]['name'], s_) for n, s_ in st_.items()) or 'keine Session')
+                elif t == 'bgptimer':
+                    rs = e.routers.get(c['router'], {})
+                    tm = next(iter((rs.get('timers') or {}).values()), {})
+                    ok = tm.get('hold') == c['hold']
+                    info = 'Hold Time: %s' % tm.get('hold')
             except (KeyError, ValueError) as ex:
                 info = 'Pruefung fehlerhaft: %s' % ex
             res.append({'desc': c['desc'], 'ok': bool(ok), 'info': info})
@@ -454,7 +470,8 @@ class Sim:
                     used[(s, p)] = 'Host ' + h['name']
         for r in self.sim['routers']:
             if r['name'] != skip:
-                used[(r['serial'], r['port'])] = 'Router ' + r['name']
+                for s_, p_ in (r.get('links') or [[r['serial'], r['port']]]):
+                    used[(s_, p_)] = 'Router ' + r['name']
         for d in self.sim.get('devices', []):
             if d['name'] != skip:
                 for s_, p_ in d.get('links', []):
@@ -526,10 +543,23 @@ class Sim:
         except (ValueError, KeyError, AssertionError):
             raise AciError(400, 'IP/Netze ungueltig (Format 172.16.1.2/30, 8.8.8.0/24)')
         used = self.used_ports(skip=old or r['name'])
-        self._check_port(r.get('serial'), r.get('port'), used)
-        if r.get('protocol') not in ('static', 'ospf', 'bgp'):
-            raise AciError(400, 'Protokoll static, ospf oder bgp')
+        links = [l for l in (r.get('links') or []) if l and l[0]]
+        if not links:
+            links = [[r.get('serial'), r.get('port')]]
+        if len(links) > 2:
+            raise AciError(400, 'Ein Router hat 1 oder 2 Links')
+        for s_, p_ in links:
+            self._check_port(s_, p_, used)
+        r['serial'], r['port'] = links[0]
+        if r.get('protocol') not in ('static', 'ospf', 'bgp', 'eigrp'):
+            raise AciError(400, 'Protokoll static, ospf, bgp oder eigrp')
         clean = {k: r.get(k) for k in ('name', 'serial', 'port', 'ip', 'protocol', 'routerId', 'descr')}
+        clean['links'] = [[s_, p_] for s_, p_ in links]
+        clean['bond'] = r.get('bond') if r.get('bond') in ('none', 'lacp-active', 'lacp-passive', 'static') else 'none'
+        clean['bfd'] = bool(r.get('bfd'))
+        clean['down'] = bool(r.get('down'))
+        e_ = r.get('eigrp') or {}
+        clean['eigrp'] = {'asn': str(e_.get('asn', '1')), 'hello': int(e_.get('hello', 5)), 'hold': int(e_.get('hold', 15))}
         clean['vlan'] = int(r.get('vlan') or 0)
         clean['mtu'] = int(r.get('mtu') or 1500)
         for k in ('networks', 'advertise', 'staticBack'):
@@ -539,7 +569,16 @@ class Sim:
                          'hello': int(o.get('hello', 10)), 'dead': int(o.get('dead', 40)),
                          'nwT': o.get('nwT', 'bcast'), 'mtuIgnore': bool(o.get('mtuIgnore'))}
         b = r.get('bgp') or {}
-        clean['bgp'] = {'asn': str(b.get('asn', '65100')), 'peerAs': str(b.get('peerAs', '65001'))}
+        clean['bgp'] = {'asn': str(b.get('asn', '65100')), 'peerAs': str(b.get('peerAs', '65001')),
+                        'password': str(b.get('password') or ''), 'hold': int(b.get('hold') or 180),
+                        'keepalive': int(b.get('keepalive') or 60), 'updateSource': str(b.get('updateSource') or ''),
+                        'peerAddr': str(b.get('peerAddr') or '')}
+        for k in ('updateSource', 'peerAddr'):
+            if clean['bgp'][k]:
+                try:
+                    ipaddress.ip_address(clean['bgp'][k])
+                except ValueError:
+                    raise AciError(400, 'BGP %s: ungueltige IP' % k)
         self.sim['routers'] = [x for x in self.sim['routers'] if x['name'] != (old or r['name'])] + [clean]
 
     def device_op(self, b):
@@ -657,6 +696,8 @@ class Sim:
         for r in self.sim['routers']:
             rs = e.routers.get(r['name'], {})
             routers.append(dict(r, status={'link': rs.get('link'), 'adj': rs.get('adj'),
+                                           'adjs': [{'node': e.nodes[a['nid']]['name'], 'state': a['state']} for a in rs.get('adjs', [])],
+                                           'bfd': [{'node': e.nodes[b['nid']]['name'], 'state': b['state']} for b in rs.get('bfd', [])],
                                            'reasons': rs.get('reasons', []), 'learned': rs.get('learned', []),
                                            'iface': rs.get('iface', {}).get('dn') if rs.get('iface') else None}))
         vmm = [{'dn': d, 'name': v['name'], 'state': v['state'], 'reasons': v['reasons'], 'vc': v['vc'],
@@ -677,6 +718,8 @@ class Sim:
                 'devices': [dict(d, status={i['name']: {k: e.hosts.get('%s:%s' % (d['name'], i['name']), {}).get(k)
                                                         for k in ('learned', 'epg', 'reasons')} for i in d.get('ifs', [])})
                             for d in self.sim.get('devices', [])],
+                'tracks': {d: e._alive(e.A(d)['dstIpAddr']) if e.A(d)['dstIpAddr'] else False
+                           for d in self.store.by_class('fvTrackMember')},
                 'graphs': [{k: g[k] for k in ('dn', 'brc', 'graph', 'state', 'reasons', 'node', 'dev')}
                            for g in getattr(e, 'graphs', {}).values()],
                 'lab': {k: lab.get(k) for k in ('id', 'title', 'intro', 'tasks', 'goals', 'solution')} if lab else None,

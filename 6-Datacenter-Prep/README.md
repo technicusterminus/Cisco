@@ -46,6 +46,7 @@ Der Zustand bleibt beim Beenden erhalten. Beim ersten Start ist die Fabric ferti
 | VMM (vCenter) | Simuliertes vCenter mit ESXi-Hosts und VMs (Menü *Simulation > vCenter*). Die VMM Domain verbindet sich nur mit richtiger IP, Datacenter und Credentials. Der APIC legt je EPG eine Port Group `Tenant|AP|EPG` mit einem VLAN aus dem dynamischen Pool an. LLDP oder CDP zwischen ESXi und Leaf, Resolution Immediacy (Pre-provision, Immediate, On Demand). VMs werden als Endpoint mit Learning Source *learned,vmm* gelernt. |
 | Shared Services | Route Leaking zwischen VRFs und Tenants: Contract mit Scope Tenant oder Global, exportierter Contract (Imported Contract, *Consumed Contract Interface*), Provider-Subnetz an der EPG und Consumer-Subnetz mit *Shared between VRFs*. Shared L3Out über External-EPG-Subnetze mit *Shared Route Control* und *Shared Security Import*. |
 | L2Out und stille Hosts | External Bridged Domain, L2Out mit Encap, Paths und External EPG an einer Bridge Domain. Stille Hosts (*Stiller Host* im Host-Dialog) lernt die ACI erst, wenn sie per ARP Flooding oder ARP Glean (Unicast Routing mit BD-Subnetz) gefragt werden. |
+| L3Out in der Praxis | SVI auf vPC (Side A/B, Secondary IP, Nachbarschaft zu beiden Border Leafs, LACP zum Router), Floating SVI mit Anchor Node und Floating IP, EIGRP, BFD (OSPF, EIGRP, BGP, Static), eBGP über Loopbacks mit Multihop-TTL, MD5-Passwort, BGP Timers Policy am VRF, Route Summarization (BGP/OSPF), Static Routes mit Preference und IP SLA Track. |
 | Route Control und Transit Routing | Export und Import Route Control Subnets am External EPG (exakt oder *Aggregate*), Route Control Enforcement *Import* am L3Out, Route-Profile `default-export` und `default-import` mit Contexts und Match Rules. Routen eines L3Outs gehen nur mit Export Route Control an ein anderes L3Out (Transit Routing). |
 | Service Graph mit PBR | L4-L7 Device (Concrete Device, Cluster Interfaces mit Encap), Service Graph Template mit Function Node (Routing Mode Redirect), Device Selection Policy und PBR Policies. Die ACI legt Shadow-EPGs auf den Firewall-Ports an, lernt die Firewall-Interfaces und leitet den Verkehr um. Die simulierte Firewall (*Simulation > L4-L7 Geräte*) hat ein eigenes Regelwerk. Falsche MAC, fehlendes VLAN oder fehlende Device Selection Policy führen zu nachvollziehbaren Fehlern. Bei gleicher Priorität gewinnt Redirect vor Permit. |
 | Disabled Interfaces | Deaktivierte Ports gehen admin-down, Endpoints und Nachbarschaften dahinter fallen weg. |
@@ -106,6 +107,10 @@ Unter *Simulation > Labs* laden. Jedes Lab setzt die Konfiguration auf einen Sta
 | 14 | L2Out und Migration: stille Hosts und ARP Flooding | 40 min |
 | 15 | Transit Routing und Route Control | 40 min |
 | 16 | Service Graph mit Policy-Based Redirect (Firewall) | 45 min |
+| 17 | L3Out: SVI auf vPC mit Secondary IP und BFD | 40 min |
+| 18 | eBGP über Loopbacks: Multihop, MD5, Timer und Summarization | 40 min |
+| 19 | EIGRP und Static Route mit IP SLA Track | 40 min |
+| 20 | Floating SVI für einen virtuellen Router | 30 min |
 
 Die Lab-Dateien entstehen aus `Labs-Quelle/build_labs.py` (`python3 Labs-Quelle/build_labs.py`). Die Tests prüfen für jedes Lab, dass es ohne Lösung nicht bestanden und mit Musterlösung vollständig bestanden ist.
 
@@ -142,7 +147,8 @@ Für Ansible: `use_ssl: false` und `port: 8080` setzen, siehe `beispiele/ansible
 | `show controller`, `show switch`, `show fabric membership`, `show version` | `show vlan extended`, `show mac address-table`, `show endpoint [vrf T:V] [ip x]`, `show system internal epm endpoint ip x` |
 | `moquery -c fvBD`, `moquery -c fvAEPg -f 'fv.AEPg.name=="Web"'`, `moquery -d uni/tn-common` | `show vrf`, `show ip interface brief vrf T:V`, `show ip arp vrf T:V`, `show ip route vrf T:V` (inklusive geleakter Routen) |
 | `show tenant`, `show bridge-domain`, `show epg`, `show endpoints [ip x]`, `show faults [detail]` | `show zoning-rule`, `show zoning-filter`, `contract_parser.py`, `show service redir info` |
-| `show vmware domain name <Domain>` | `show ip ospf neighbors vrf T:V`, `show ip ospf interface brief vrf T:V`, `show bgp ipv4 unicast [summary] vrf T:V` |
+| `show vmware domain name <Domain>` | `show ip ospf neighbors vrf T:V`, `show ip ospf interface brief vrf T:V`, `show bgp ipv4 unicast [summary\|neighbors] vrf T:V` |
+| | `show ip eigrp neighbors vrf T:V`, `show bfd neighbors vrf T:V`, `show track` |
 | `acidiag touch clean`, `acidiag reboot` (Werkszustand) | `iping -V T:V <ip>` (Ping vom Leaf, weckt stille Hosts per Glean), `show vpc brief`, `show port-channel summary`, `show ntp peer-status` |
 | | Underlay: `show ip route vrf overlay-1`, `show isis adjacency vrf overlay-1`, `show bgp vpnv4 unicast summary vrf overlay-1`, auf Spines `show coop internal info ip-db` |
 
@@ -195,3 +201,7 @@ Nicht simuliert: VMM für Kubernetes, Microsoft und OpenStack, Multi-Pod und Mul
 | `tests/` | `python3 -m unittest discover -s tests` |
 
 > Kein offizielles Cisco-Material. Cisco, ACI, APIC und Nexus sind Marken von Cisco Systems, Inc.
+
+## Hinweis zu Marken und Herkunft
+
+Datacenter Prep ist ein unabhängiges Trainingswerkzeug und kein Produkt von Cisco Systems. Es enthält keine Cisco-Software, keine Firmware und keine Grafiken von Cisco; Code, Oberfläche, Texte und Labs sind eigenständig erstellt. Begriffe und Klassennamen werden verwendet, um zu beschreiben, wofür geübt wird, und um Werkzeuge wie Ansible und Terraform anbinden zu können. Cisco, Cisco ACI, APIC und NX-OS sind Marken von Cisco Systems, Inc.; ihre Nennung dient nur der Beschreibung. Die Simulation bildet das Verhalten vereinfacht nach und ist kein Ersatz für die offizielle Dokumentation.

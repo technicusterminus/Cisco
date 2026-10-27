@@ -65,6 +65,9 @@ def base_config(store, admin_pwd):
     create_obj(store, c + '/brc-default/subj-default/rssubjFiltAtt-default', 'vzRsSubjFiltAtt',
                {'tnVzFilterName': 'default'}, ts)
     create_obj(store, c + '/ospfIfPol-default', 'ospfIfPol', {'name': 'default'}, ts)
+    create_obj(store, c + '/eigrpIfPol-default', 'eigrpIfPol', {'name': 'default'}, ts)
+    create_obj(store, c + '/bfdIfPol-default', 'bfdIfPol', {'name': 'default'}, ts)
+    create_obj(store, c + '/bgpCtxP-default', 'bgpCtxPol', {'name': 'default'}, ts)
     create_obj(store, 'uni/tn-mgmt/ctx-oob', 'fvCtx', {'name': 'oob'}, ts)
     create_obj(store, 'uni/tn-mgmt/ctx-inb', 'fvCtx', {'name': 'inb'}, ts)
     create_obj(store, 'uni/tn-infra/ctx-overlay-1', 'fvCtx', {'name': 'overlay-1'}, ts)
@@ -93,6 +96,9 @@ def ensure_base(store):
     ts = now_ts()
     for dn, cls, attrs in [
             ('uni/vmmp-VMware', 'vmmProvP', {'vendor': 'VMware'}),
+            ('uni/tn-common/eigrpIfPol-default', 'eigrpIfPol', {'name': 'default'}),
+            ('uni/tn-common/bfdIfPol-default', 'bfdIfPol', {'name': 'default'}),
+            ('uni/tn-common/bgpCtxP-default', 'bgpCtxPol', {'name': 'default'}),
             ('uni/fabric/outofsvc', 'fabricOOServicePol', {}),
             ('uni/fabric/funcprof', 'fabricFuncP', {}),
             ('uni/fabric/time-default', 'datetimePol', {'name': 'default'}),

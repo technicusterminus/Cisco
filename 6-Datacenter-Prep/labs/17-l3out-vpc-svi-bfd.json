@@ -1,0 +1,1046 @@
+{
+ "id": "17-l3out-vpc-svi-bfd",
+ "title": "17 L3Out: SVI auf vPC mit Secondary IP und BFD",
+ "topic": "L3Out / Routing",
+ "level": "Fortgeschritten",
+ "duration": "40 min",
+ "fabric": "discovered",
+ "goals": [
+  "Ein L3Out-SVI auf einem vPC mit Side A, Side B und Secondary IP bauen",
+  "OSPF zu beiden Border Leafs aufbauen",
+  "BFD für schnelle Ausfallerkennung aktivieren und verifizieren"
+ ],
+ "intro": "Der Campus-Core **core1** hängt mit einem **LACP-Port-Channel** an **leaf103 eth1/30** und **leaf104 eth1/30** (vPC-Domäne 34, Policy Group **IPG-vPC-core** und L3 Domain **L3Dom-Core** mit vlan-350 bis 359 sind schon da). core1 spricht **OSPF Area 0.0.0.1** mit **BFD** in **vlan-350**, hat die Adresse **172.16.50.6/29** und MTU 1500. Hinter ihm liegt das Campusnetz **10.200.0.0/16**.\n\nAdressplan: leaf103 = Side A **172.16.50.1**, leaf104 = Side B **172.16.50.2**, gemeinsame Secondary IP **172.16.50.3** (Next Hop für Static Routes des Cores).",
+ "config": [
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "infraInfra": {
+       "attributes": {},
+       "children": [
+        {
+         "fvnsVlanInstP": {
+          "attributes": {
+           "name": "VLAN-Pool-Server",
+           "allocMode": "static"
+          },
+          "children": [
+           {
+            "fvnsEncapBlk": {
+             "attributes": {
+              "from": "vlan-100",
+              "to": "vlan-199"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAttEntityP": {
+          "attributes": {
+           "name": "AAEP-Server"
+          },
+          "children": [
+           {
+            "infraRsDomP": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraFuncP": {
+          "attributes": {},
+          "children": [
+           {
+            "infraAccPortGrp": {
+             "attributes": {
+              "name": "IPG-Server-Access"
+             },
+             "children": [
+              {
+               "infraRsAttEntP": {
+                "attributes": {
+                 "tDn": "uni/infra/attentp-AAEP-Server"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAccPortP": {
+          "attributes": {
+           "name": "IntProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraHPortS": {
+             "attributes": {
+              "name": "Server-Ports",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraPortBlk": {
+                "attributes": {
+                 "name": "block2",
+                 "fromPort": "1",
+                 "toPort": "10"
+                }
+               }
+              },
+              {
+               "infraRsAccBaseGrp": {
+                "attributes": {
+                 "tDn": "uni/infra/funcprof/accportgrp-IPG-Server-Access"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraNodeP": {
+          "attributes": {
+           "name": "SwProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraLeafS": {
+             "attributes": {
+              "name": "101-102",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraNodeBlk": {
+                "attributes": {
+                 "name": "blk",
+                 "from_": "101",
+                 "to_": "102"
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "infraRsAccPortP": {
+             "attributes": {
+              "tDn": "uni/infra/accportprof-IntProf-Leaf101-102"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "physDomP": {
+       "attributes": {
+        "name": "PhysDom-Server"
+       },
+       "children": [
+        {
+         "infraRsVlanNs": {
+          "attributes": {
+           "tDn": "uni/infra/vlanns-[VLAN-Pool-Server]-static"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "fabricInst": {
+       "attributes": {},
+       "children": [
+        {
+         "fabricProtPol": {
+          "attributes": {},
+          "children": [
+           {
+            "fabricExplicitGEp": {
+             "attributes": {
+              "name": "vpc-103-104",
+              "id": "34"
+             },
+             "children": [
+              {
+               "fabricNodePEp": {
+                "attributes": {
+                 "id": "103"
+                }
+               }
+              },
+              {
+               "fabricNodePEp": {
+                "attributes": {
+                 "id": "104"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "infraInfra": {
+       "attributes": {},
+       "children": [
+        {
+         "fvnsVlanInstP": {
+          "attributes": {
+           "name": "VLAN-Pool-Core",
+           "allocMode": "static"
+          },
+          "children": [
+           {
+            "fvnsEncapBlk": {
+             "attributes": {
+              "from": "vlan-350",
+              "to": "vlan-359"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAttEntityP": {
+          "attributes": {
+           "name": "AAEP-Core"
+          },
+          "children": [
+           {
+            "infraRsDomP": {
+             "attributes": {
+              "tDn": "uni/l3dom-L3Dom-Core"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "lacpLagPol": {
+          "attributes": {
+           "name": "LACP-Active",
+           "mode": "active"
+          }
+         }
+        },
+        {
+         "infraFuncP": {
+          "attributes": {},
+          "children": [
+           {
+            "infraAccBndlGrp": {
+             "attributes": {
+              "name": "IPG-vPC-core",
+              "lagT": "node"
+             },
+             "children": [
+              {
+               "infraRsAttEntP": {
+                "attributes": {
+                 "tDn": "uni/infra/attentp-AAEP-Core"
+                }
+               }
+              },
+              {
+               "infraRsLacpPol": {
+                "attributes": {
+                 "tnLacpLagPolName": "LACP-Active"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAccPortP": {
+          "attributes": {
+           "name": "IntProf-Leaf103-104"
+          },
+          "children": [
+           {
+            "infraHPortS": {
+             "attributes": {
+              "name": "core",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraPortBlk": {
+                "attributes": {
+                 "name": "block2",
+                 "fromPort": "30",
+                 "toPort": "30"
+                }
+               }
+              },
+              {
+               "infraRsAccBaseGrp": {
+                "attributes": {
+                 "tDn": "uni/infra/funcprof/accbundle-IPG-vPC-core"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraNodeP": {
+          "attributes": {
+           "name": "SwProf-Leaf103-104"
+          },
+          "children": [
+           {
+            "infraLeafS": {
+             "attributes": {
+              "name": "103-104",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraNodeBlk": {
+                "attributes": {
+                 "name": "blk",
+                 "from_": "103",
+                 "to_": "104"
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "infraRsAccPortP": {
+             "attributes": {
+              "tDn": "uni/infra/accportprof-IntProf-Leaf103-104"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "l3extDomP": {
+       "attributes": {
+        "name": "L3Dom-Core"
+       },
+       "children": [
+        {
+         "infraRsVlanNs": {
+          "attributes": {
+           "tDn": "uni/infra/vlanns-[VLAN-Pool-Core]-static"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "fabricInst": {
+       "attributes": {},
+       "children": [
+        {
+         "bgpInstPol": {
+          "attributes": {
+           "name": "default"
+          },
+          "children": [
+           {
+            "bgpAsP": {
+             "attributes": {
+              "asn": "65001"
+             }
+            }
+           },
+           {
+            "bgpRRP": {
+             "attributes": {},
+             "children": [
+              {
+               "bgpRRNodePEp": {
+                "attributes": {
+                 "id": "201"
+                }
+               }
+              },
+              {
+               "bgpRRNodePEp": {
+                "attributes": {
+                 "id": "202"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Shop"
+    },
+    "children": [
+     {
+      "fvCtx": {
+       "attributes": {
+        "name": "Prod"
+       }
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Web"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.10.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-App"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.20.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Webshop"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Web"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Web"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/1]",
+              "encap": "vlan-110",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsCons": {
+             "attributes": {
+              "tnVzBrCPName": "web-to-app"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "App"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-App"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/2]",
+              "encap": "vlan-120",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsProv": {
+             "attributes": {
+              "tnVzBrCPName": "web-to-app"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzFilter": {
+       "attributes": {
+        "name": "tcp-8080"
+       },
+       "children": [
+        {
+         "vzEntry": {
+          "attributes": {
+           "name": "tcp-8080",
+           "etherT": "ip",
+           "prot": "tcp",
+           "dFromPort": "8080",
+           "dToPort": "8080"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzBrCP": {
+       "attributes": {
+        "name": "web-to-app",
+        "scope": "context"
+       },
+       "children": [
+        {
+         "vzSubj": {
+          "attributes": {
+           "name": "subj",
+           "revFltPorts": "yes"
+          },
+          "children": [
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "tcp-8080"
+             }
+            }
+           },
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "icmp"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "hosts": [
+  {
+   "name": "web1",
+   "mac": "00:50:56:10:10:11",
+   "ip": "10.10.10.11/24",
+   "gw": "10.10.10.1",
+   "vlan": 110,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/1"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Webserver"
+  },
+  {
+   "name": "app1",
+   "mac": "00:50:56:10:20:11",
+   "ip": "10.10.20.11/24",
+   "gw": "10.10.20.1",
+   "vlan": 120,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/2"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Applikationsserver"
+  }
+ ],
+ "routers": [
+  {
+   "name": "core1",
+   "serial": "SAL1931LA03",
+   "port": "eth1/30",
+   "vlan": 350,
+   "ip": "172.16.50.6/29",
+   "mtu": 1500,
+   "protocol": "ospf",
+   "routerId": "10.200.255.1",
+   "ospf": {
+    "area": "0.0.0.1",
+    "areaType": "regular",
+    "hello": 10,
+    "dead": 40,
+    "nwT": "bcast",
+    "mtuIgnore": false
+   },
+   "bgp": {
+    "asn": "65100",
+    "peerAs": "65001"
+   },
+   "networks": [
+    "10.200.0.0/16"
+   ],
+   "advertise": [
+    "10.200.0.0/16"
+   ],
+   "staticBack": [],
+   "links": [
+    [
+     "SAL1931LA03",
+     "eth1/30"
+    ],
+    [
+     "SAL1931LA04",
+     "eth1/30"
+    ]
+   ],
+   "bond": "lacp-active",
+   "bfd": true
+  }
+ ],
+ "tasks": [
+  {
+   "title": "OSPF Interface Policy",
+   "text": "Im Tenant Shop: OSPF Interface Policy **OSPF-BFD**, Network Type Broadcast, Interface Control **BFD**."
+  },
+  {
+   "title": "L3Out Core",
+   "text": "L3Out **Core**, VRF Prod, Domain L3Dom-Core, OSPF Area **0.0.0.1**. Node Profile mit **103** (1.1.1.103) und **104** (1.1.1.104)."
+  },
+  {
+   "title": "vPC-SVI",
+   "text": "Logical Interface Profile mit OSPF Interface Profile (Policy OSPF-BFD) und BFD Interface Profile. Interface: **SVI**, Pfadtyp **Virtual Port Channel** IPG-vPC-core, **vlan-350**, MTU **1500**, Side A 172.16.50.1/29, Side B 172.16.50.2/29, Secondary 172.16.50.3/29.",
+   "hint": "MTU inherit wäre 9000 – core1 bliebe dann in EXSTART hängen."
+  },
+  {
+   "title": "External EPG und Contract",
+   "text": "External EPG **Campus** mit 10.200.0.0/16, Contract **web-to-campus** (icmp): Campus provided, Web consumed. BD-Web *Advertised Externally* und mit L3Out Core verknüpft."
+  },
+  {
+   "title": "Verifizieren",
+   "text": "Auf leaf103 und leaf104: `show ip ospf neighbors vrf Shop:Prod`, `show bfd neighbors vrf Shop:Prod`, `show ip interface brief vrf Shop:Prod` (Primary und Secondary auf vlan…). Ping von web1 zu 10.200.1.10."
+  }
+ ],
+ "checks": [
+  {
+   "desc": "OSPF FULL auf leaf103 und leaf104",
+   "type": "router",
+   "name": "core1",
+   "adj": "FULL",
+   "nodes": [
+    103,
+    104
+   ]
+  },
+  {
+   "desc": "BFD Up zu beiden Border Leafs",
+   "type": "bfd",
+   "router": "core1",
+   "nodes": [
+    103,
+    104
+   ]
+  },
+  {
+   "desc": "Secondary IP 172.16.50.3 auf Side A",
+   "type": "exists",
+   "dn": "uni/tn-Shop/out-Core/lnodep-border/lifp-vpc-svi/rspathL3OutAtt-[topology/pod-1/protpaths-103-104/pathep-[IPG-vPC-core]]/mem-A/addr-[172.16.50.3/29]"
+  },
+  {
+   "desc": "core1 lernt 10.10.10.0/24",
+   "type": "learned",
+   "router": "core1",
+   "prefix": "10.10.10.0/24"
+  },
+  {
+   "desc": "web1 → 10.200.1.10 Ping",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "10.200.1.10",
+   "proto": "icmp",
+   "expect": true
+  }
+ ],
+ "solution": "`{\"fvTenant\": {\"attributes\": {\"name\": \"Shop\"}, \"children\": [{\"ospfIfPol\": {\"attributes\": {\"name\": \"OSPF-BFD\", \"nwT\": \"bcast\", \"ctrl\": \"bfd\"}}}, {\"vzBrCP\": {\"attributes\": {\"name\": \"web-to-campus\", \"scope\": \"context\"}, \"children\": [{\"vzSubj\": {\"attributes\": {\"name\": \"subj\", \"revFltPorts\": \"yes\"}, \"children\": [{\"vzRsSubjFiltAtt\": {\"attributes\": {\"tnVzFilterName\": \"icmp\"}}}]}}]}}, {\"fvBD\": {\"attributes\": {\"name\": \"BD-Web\"}, \"children\": [{\"fvRsCtx\": {\"attributes\": {\"tnFvCtxName\": \"Prod\"}}}, {\"fvSubnet\": {\"attributes\": {\"ip\": \"10.10.10.1/24\", \"scope\": \"public\"}}}, {\"fvRsBDToOut\": {\"attributes\": {\"tnL3extOutName\": \"Core\"}}}]}}, {\"fvAp\": {\"attributes\": {\"name\": \"Webshop\"}, \"children\": [{\"fvAEPg\": {\"attributes\": {\"name\": \"Web\"}, \"children\": [{\"fvRsCons\": {\"attributes\": {\"tnVzBrCPName\": \"web-to-campus\"}}}]}}]}}, {\"l3extOut\": {\"attributes\": {\"name\": \"Core\"}, \"children\": [{\"l3extRsEctx\": {\"attributes\": {\"tnFvCtxName\": \"Prod\"}}}, {\"l3extRsL3DomAtt\": {\"attributes\": {\"tDn\": \"uni/l3dom-L3Dom-Core\"}}}, {\"ospfExtP\": {\"attributes\": {\"areaId\": \"0.0.0.1\"}}}, {\"l3extLNodeP\": {\"attributes\": {\"name\": \"border\"}, \"children\": [{\"l3extRsNodeL3OutAtt\": {\"attributes\": {\"tDn\": \"topology/pod-1/node-103\", \"rtrId\": \"1.1.1.103\"}}}, {\"l3extRsNodeL3OutAtt\": {\"attributes\": {\"tDn\": \"topology/pod-1/node-104\", \"rtrId\": \"1.1.1.104\"}}}, {\"l3extLIfP\": {\"attributes\": {\"name\": \"vpc-svi\"}, \"children\": [{\"ospfIfP\": {\"attributes\": {}, \"children\": [{\"ospfRsIfPol\": {\"attributes\": {\"tnOspfIfPolName\": \"OSPF-BFD\"}}}]}}, {\"bfdIfP\": {\"attributes\": {}}}, {\"l3extRsPathL3OutAtt\": {\"attributes\": {\"tDn\": \"topology/pod-1/protpaths-103-104/pathep-[IPG-vPC-core]\", \"ifInstT\": \"ext-svi\", \"encap\": \"vlan-350\", \"mtu\": \"1500\"}, \"children\": [{\"l3extMember\": {\"attributes\": {\"side\": \"A\", \"addr\": \"172.16.50.1/29\"}, \"children\": [{\"l3extIp\": {\"attributes\": {\"addr\": \"172.16.50.3/29\"}}}]}}, {\"l3extMember\": {\"attributes\": {\"side\": \"B\", \"addr\": \"172.16.50.2/29\"}, \"children\": [{\"l3extIp\": {\"attributes\": {\"addr\": \"172.16.50.3/29\"}}}]}}]}}]}}]}}, {\"l3extInstP\": {\"attributes\": {\"name\": \"Campus\"}, \"children\": [{\"l3extSubnet\": {\"attributes\": {\"ip\": \"10.200.0.0/16\"}}}, {\"fvRsProv\": {\"attributes\": {\"tnVzBrCPName\": \"web-to-campus\"}}}]}}]}}]}}`\\n\\nBei einem SVI auf einem vPC bekommt jeder Leaf seine Primary IP (Side A/B), die Secondary IP ist auf beiden aktiv. BFD läuft nur, wenn es im Protokoll (OSPF Interface Policy *BFD*) und auf dem Router aktiviert ist.",
+ "vcenters": [],
+ "devices": [],
+ "solutionConfig": [
+  [
+   "uni",
+   {
+    "fvTenant": {
+     "attributes": {
+      "name": "Shop"
+     },
+     "children": [
+      {
+       "ospfIfPol": {
+        "attributes": {
+         "name": "OSPF-BFD",
+         "nwT": "bcast",
+         "ctrl": "bfd"
+        }
+       }
+      },
+      {
+       "vzBrCP": {
+        "attributes": {
+         "name": "web-to-campus",
+         "scope": "context"
+        },
+        "children": [
+         {
+          "vzSubj": {
+           "attributes": {
+            "name": "subj",
+            "revFltPorts": "yes"
+           },
+           "children": [
+            {
+             "vzRsSubjFiltAtt": {
+              "attributes": {
+               "tnVzFilterName": "icmp"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      },
+      {
+       "fvBD": {
+        "attributes": {
+         "name": "BD-Web"
+        },
+        "children": [
+         {
+          "fvRsCtx": {
+           "attributes": {
+            "tnFvCtxName": "Prod"
+           }
+          }
+         },
+         {
+          "fvSubnet": {
+           "attributes": {
+            "ip": "10.10.10.1/24",
+            "scope": "public"
+           }
+          }
+         },
+         {
+          "fvRsBDToOut": {
+           "attributes": {
+            "tnL3extOutName": "Core"
+           }
+          }
+         }
+        ]
+       }
+      },
+      {
+       "fvAp": {
+        "attributes": {
+         "name": "Webshop"
+        },
+        "children": [
+         {
+          "fvAEPg": {
+           "attributes": {
+            "name": "Web"
+           },
+           "children": [
+            {
+             "fvRsCons": {
+              "attributes": {
+               "tnVzBrCPName": "web-to-campus"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      },
+      {
+       "l3extOut": {
+        "attributes": {
+         "name": "Core"
+        },
+        "children": [
+         {
+          "l3extRsEctx": {
+           "attributes": {
+            "tnFvCtxName": "Prod"
+           }
+          }
+         },
+         {
+          "l3extRsL3DomAtt": {
+           "attributes": {
+            "tDn": "uni/l3dom-L3Dom-Core"
+           }
+          }
+         },
+         {
+          "ospfExtP": {
+           "attributes": {
+            "areaId": "0.0.0.1"
+           }
+          }
+         },
+         {
+          "l3extLNodeP": {
+           "attributes": {
+            "name": "border"
+           },
+           "children": [
+            {
+             "l3extRsNodeL3OutAtt": {
+              "attributes": {
+               "tDn": "topology/pod-1/node-103",
+               "rtrId": "1.1.1.103"
+              }
+             }
+            },
+            {
+             "l3extRsNodeL3OutAtt": {
+              "attributes": {
+               "tDn": "topology/pod-1/node-104",
+               "rtrId": "1.1.1.104"
+              }
+             }
+            },
+            {
+             "l3extLIfP": {
+              "attributes": {
+               "name": "vpc-svi"
+              },
+              "children": [
+               {
+                "ospfIfP": {
+                 "attributes": {},
+                 "children": [
+                  {
+                   "ospfRsIfPol": {
+                    "attributes": {
+                     "tnOspfIfPolName": "OSPF-BFD"
+                    }
+                   }
+                  }
+                 ]
+                }
+               },
+               {
+                "bfdIfP": {
+                 "attributes": {}
+                }
+               },
+               {
+                "l3extRsPathL3OutAtt": {
+                 "attributes": {
+                  "tDn": "topology/pod-1/protpaths-103-104/pathep-[IPG-vPC-core]",
+                  "ifInstT": "ext-svi",
+                  "encap": "vlan-350",
+                  "mtu": "1500"
+                 },
+                 "children": [
+                  {
+                   "l3extMember": {
+                    "attributes": {
+                     "side": "A",
+                     "addr": "172.16.50.1/29"
+                    },
+                    "children": [
+                     {
+                      "l3extIp": {
+                       "attributes": {
+                        "addr": "172.16.50.3/29"
+                       }
+                      }
+                     }
+                    ]
+                   }
+                  },
+                  {
+                   "l3extMember": {
+                    "attributes": {
+                     "side": "B",
+                     "addr": "172.16.50.2/29"
+                    },
+                    "children": [
+                     {
+                      "l3extIp": {
+                       "attributes": {
+                        "addr": "172.16.50.3/29"
+                       }
+                      }
+                     }
+                    ]
+                   }
+                  }
+                 ]
+                }
+               }
+              ]
+             }
+            }
+           ]
+          }
+         },
+         {
+          "l3extInstP": {
+           "attributes": {
+            "name": "Campus"
+           },
+           "children": [
+            {
+             "l3extSubnet": {
+              "attributes": {
+               "ip": "10.200.0.0/16"
+              }
+             }
+            },
+            {
+             "fvRsProv": {
+              "attributes": {
+               "tnVzBrCPName": "web-to-campus"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  ]
+ ]
+}

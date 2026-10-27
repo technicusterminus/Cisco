@@ -298,7 +298,8 @@ mo('l3extRsNodeL3OutAtt', 'rsnodeL3OutAtt-[{tDn}]', ('l3extLNodeP',),
    {'rtrId': '', 'rtrIdLoopBack': 'yes', 'configIssues': ''},
    enums={'rtrIdLoopBack': YN}, checks={'rtrId': _rtrid},
    rel=('dn', 'tDn', ('fabricNode',)), label='Configured Node')
-mo('ipRouteP', 'rt-[{ip}]', ('l3extRsNodeL3OutAtt',), {'pref': '1', 'aggregate': 'no'},
+mo('ipRouteP', 'rt-[{ip}]', ('l3extRsNodeL3OutAtt',), {'pref': '1', 'aggregate': 'no', 'rtCtrl': ''},
+   sets={'rtCtrl': ('', 'bfd')},
    checks={'ip': _ipmask}, label='Static Route')
 mo('ipNexthopP', 'nh-[{nhAddr}]', ('ipRouteP',), {'pref': 'unspecified', 'type': 'prefix'},
    checks={'nhAddr': _ip}, label='Next Hop')
@@ -323,8 +324,9 @@ mo('ospfIfPol', 'ospfIfPol-{name}', ('fvTenant',),
    sets={'ctrl': ('', 'advert-subnet', 'bfd', 'mtu-ignore', 'passive')},
    checks={'helloIntvl': _num, 'deadIntvl': _num}, label='OSPF Interface Policy')
 mo('bgpPeerP', 'peerP-[{addr}]', ('l3extRsPathL3OutAtt', 'l3extLNodeP'),
-   {'ctrl': '', 'ttl': '1', 'peerCtrl': '', 'weight': '0', 'allowedSelfAsCnt': '3'},
-   checks={'addr': _ip}, label='BGP Peer')
+   {'ctrl': '', 'ttl': '1', 'peerCtrl': '', 'weight': '0', 'allowedSelfAsCnt': '3', 'password': '', 'addrTCtrl': 'af-ucast'},
+   sets={'peerCtrl': ('', 'bfd', 'dis-conn-check')},
+   checks={'addr': _ip, 'ttl': lambda v: v.isdigit() and 1 <= int(v) <= 255}, label='BGP Peer')
 mo('bgpAsP', 'as', ('bgpPeerP', 'bgpInstPol'), {'asn': ''},
    checks={'asn': lambda v: v.isdigit() and 1 <= int(v) <= 4294967295}, label='Autonomous System')
 mo('bgpLocalAsnP', 'localasn', ('bgpPeerP',), {'localAsn': '', 'asnPropagate': 'none'},
@@ -610,6 +612,44 @@ mo('rtctrlRsCtxPToSubjP', 'rsctxPToSubjP-{tnRtctrlSubjPName}', ('rtctrlCtxP',), 
 mo('rtctrlSubjP', 'subj-{name}', ('fvTenant',), {}, label='Match Rule')
 mo('rtctrlMatchRtDest', 'dest-[{ip}]', ('rtctrlSubjP',), {'aggregate': 'no', 'fromPfxLen': '0', 'toPfxLen': '0'},
    enums={'aggregate': ('yes', 'no')}, label='Match Prefix')
+
+# ---------------------------- L3Out-Varianten ------------------------------
+mo('l3extMember', 'mem-{side}', ('l3extRsPathL3OutAtt',), {'addr': '0.0.0.0', 'ipv6Dad': 'enabled', 'llAddr': '::'},
+   enums={'side': ('A', 'B')}, checks={'addr': lambda v: v == '0.0.0.0' or _ipmask(v)}, label='vPC Member (Side A/B)')
+mo('l3extIp', 'addr-[{addr}]', ('l3extRsPathL3OutAtt', 'l3extMember', 'l3extVirtualLIfP'), {'ipv6Dad': 'enabled'},
+   checks={'addr': _ipmask}, label='Secondary IP')
+mo('l3extVirtualLIfP', 'vlifp-[{nodeDn}]-[{encap}]', ('l3extLIfP',),
+   {'addr': '0.0.0.0', 'ifInstT': 'ext-svi', 'mtu': 'inherit', 'encapScope': 'local', 'mode': 'regular', 'mac': '00:22:BD:F8:19:FF'},
+   checks={'encap': _vlan, 'addr': lambda v: v == '0.0.0.0' or _ipmask(v)}, label='Floating SVI')
+mo('l3extRsDynPathAtt', 'rsdynPathAtt-[{tDn}]', ('l3extVirtualLIfP',), {'floatingAddr': '0.0.0.0', 'encap': 'unknown'},
+   rel=('dn', 'tDn', ('physDomP', 'vmmDomP')), label='Floating Path (Domain)')
+mo('bfdIfP', 'bfdIfP', ('l3extLIfP',), {'type': 'none', 'keyId': '1'}, enums={'type': ('none', 'sha1')}, label='BFD Interface Profile')
+mo('bfdRsIfPol', 'rsIfPol', ('bfdIfP',), {'tnBfdIfPolName': ''}, rel=('name', 'tnBfdIfPolName', 'bfdIfPol', 'tenant'), label='BFD Policy')
+mo('bfdIfPol', 'bfdIfPol-{name}', ('fvTenant',), {'adminSt': 'enabled', 'minTxIntvl': '50', 'minRxIntvl': '50', 'detectMult': '3', 'ctrl': ''},
+   enums={'adminSt': ('enabled', 'disabled')}, label='BFD Interface Policy')
+mo('eigrpExtP', 'eigrpExtP', ('l3extOut',), {'asn': '1'}, checks={'asn': lambda v: v.isdigit() and 1 <= int(v) <= 65535}, label='EIGRP')
+mo('eigrpIfP', 'eigrpIfP', ('l3extLIfP',), {}, label='EIGRP Interface Profile')
+mo('eigrpRsIfPol', 'rsIfPol', ('eigrpIfP',), {'tnEigrpIfPolName': ''}, rel=('name', 'tnEigrpIfPolName', 'eigrpIfPol', 'tenant'), label='EIGRP Policy')
+mo('eigrpIfPol', 'eigrpIfPol-{name}', ('fvTenant',), {'helloIntvl': '5', 'holdIntvl': '15', 'bw': '0', 'delay': '0', 'ctrl': 'nh-self,split-horizon'},
+   checks={'helloIntvl': _num, 'holdIntvl': _num}, label='EIGRP Interface Policy')
+mo('ospfRtSummPol', 'ospfrtsumm-{name}', ('fvTenant',), {'cost': 'unspecified', 'interAreaEnabled': 'no', 'tag': '0'}, label='OSPF Route Summarization Policy')
+mo('bgpRtSummPol', 'bgprtsum-{name}', ('fvTenant',), {'ctrl': '', 'attrmap': ''}, sets={'ctrl': ('', 'as-set', 'summary-only')},
+   label='BGP Route Summarization Policy')
+mo('eigrpRtSummPol', 'eigrprtsum-{name}', ('fvTenant',), {}, label='EIGRP Route Summarization Policy')
+mo('l3extRsSubnetToRtSumm', 'rsSubnetToRtSumm', ('l3extSubnet',), {'tDn': ''},
+   rel=('dn', 'tDn', ('ospfRtSummPol', 'bgpRtSummPol', 'eigrpRtSummPol')), label='Route Summarization Policy')
+mo('fvIPSLAMonitoringPol', 'ipslaMonitoringPol-{name}', ('fvTenant',), {'slaType': 'icmp', 'slaFrequency': '60', 'slaPort': '0'},
+   enums={'slaType': ('icmp', 'tcp', 'l2ping', 'http')}, label='IP SLA Monitoring Policy')
+mo('fvTrackMember', 'trackmember-{name}', ('fvTenant',), {'dstIpAddr': '', 'scopeDn': ''}, checks={'dstIpAddr': _ip}, label='Track Member')
+mo('fvRsIpslaMonPol', 'rsIpslaMonPol', ('fvTrackMember',), {'tDn': ''}, rel=('dn', 'tDn', ('fvIPSLAMonitoringPol',)), label='IP SLA Policy')
+mo('fvTrackList', 'tracklist-{name}', ('fvTenant',), {'type': 'percentage', 'percentageUp': '1', 'percentageDown': '0', 'weightUp': '1', 'weightDown': '0'},
+   enums={'type': ('percentage', 'weight')}, label='Track List')
+mo('fvRsOtmListMember', 'rsotmListMember-[{tDn}]', ('fvTrackList',), {'weight': '10'}, rel=('dn', 'tDn', ('fvTrackMember',)), label='Track Member')
+mo('ipRsRouteTrack', 'rsRouteTrack', ('ipRouteP',), {'tDn': ''}, rel=('dn', 'tDn', ('fvTrackList',)), label='Track Policy')
+mo('ipRsNexthopRouteTrack', 'rsNexthopRouteTrack', ('ipNexthopP',), {'tDn': ''}, rel=('dn', 'tDn', ('fvTrackList',)), label='Track Policy')
+mo('bgpCtxPol', 'bgpCtxP-{name}', ('fvTenant',), {'holdIntvl': '180', 'kaIntvl': '60', 'staleIntvl': '300', 'grCtrl': 'helper', 'maxAsLimit': '0'},
+   checks={'holdIntvl': _num, 'kaIntvl': _num}, label='BGP Timers Policy')
+mo('fvRsBgpCtxPol', 'rsbgpCtxPol', ('fvCtx',), {'tnBgpCtxPolName': ''}, rel=('name', 'tnBgpCtxPolName', 'bgpCtxPol', 'tenant'), label='BGP Timers')
 
 # ---------------------------- L4-L7 Service Graph / PBR ----------------------
 mo('vnsLDevVip', 'lDevVip-{name}', ('fvTenant',), {'devtype': 'PHYSICAL', 'funcType': 'GoTo', 'managed': 'no', 'svcType': 'FW',

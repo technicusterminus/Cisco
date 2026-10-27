@@ -416,7 +416,7 @@ class TestLabs(Base):
     def test_all_labs_solvable(self):
         self.S.sim['settings']['discoverySeconds'] = 0
         labs = self.S.labs()
-        self.assertGreaterEqual(len(labs), 17)
+        self.assertGreaterEqual(len(labs), 21)
         for lab in labs:
             with self.subTest(lab=lab['id']):
                 self.S.load_lab(lab['id'])
