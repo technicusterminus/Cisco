@@ -8,6 +8,8 @@ des Traffic-Tests.
 """
 import ipaddress
 import re
+
+from . import setup as apic_setup
 import time
 
 from .model import CLASSES, split_dn, parent_dn, rn_of, tenant_of, now_ts
@@ -160,6 +162,14 @@ class Engine:
     def _fabric(self, now):
         st, topo = self.store, self.sim['topology']
         pod = topo.get('pod', 1)
+        self.setup = self.sim.get('setup', 0)
+        if self.setup == 0:
+            self.setup = {k: v for k, v in apic_setup.DEFAULTS.items() if k != 'pwd'}
+        self.apic_up = self.setup is not None
+        su = self.setup or apic_setup.DEFAULTS
+        self.tep_pool = su['tepPool']
+        self.infra_vlan = int(su['infraVlan'])
+        self.fabric_name = su['fabricName']
         self.pod = pod
         self.poddn = 'topology/pod-%d' % pod
         st.add('topology', 'fabricTopology', {}, True)
@@ -194,7 +204,7 @@ class Engine:
             adj.setdefault(l[2], set()).add(l[0])
         speed = float(self.sim.get('settings', {}).get('discoverySeconds', 20))
         inf = float('inf')
-        act = {apic['serial']: 0.0}
+        act = {apic['serial']: 0.0} if self.apic_up else {}
         changed = True
         while changed:
             changed = False
@@ -225,7 +235,7 @@ class Engine:
                 state = 'inactive'
             info = {'id': nid, 'serial': s, 'name': a['name'] or 'node-%d' % nid, 'role': n['role'],
                     'model': n['model'], 'state': state, 'ports': n['ports'],
-                    'tep': '10.0.%d.%d' % (pod * 16 + nid // 250, nid % 250 + 32),
+                    'tep': apic_setup.tep_of(self.tep_pool, pod, nid),
                     'since': act.get(s), 'regdn': dn}
             self.nodes[nid] = info
             self.serial_node[s] = nid
@@ -247,18 +257,25 @@ class Engine:
                 self.oob[int(m.group(1))] = self.A(r)['addr']
         # APIC
         version = '6.0(5h)-sim'
+        atep = apic_setup.apic_tep(self.tep_pool)
+        self.apic_tep = atep
         adn = self.poddn + '/node-1'
         st.add(adn, 'fabricNode', {'id': '1', 'name': apic['name'], 'role': 'controller',
                                    'serial': apic['serial'], 'model': apic['model'], 'fabricSt': 'unknown',
-                                   'address': '10.0.0.1', 'version': '6.0(5h)', 'adSt': 'on',
+                                   'address': atep, 'version': '6.0(5h)', 'adSt': 'on',
                                    'nodeType': 'unspecified', 'vendor': 'Cisco Systems, Inc',
                                    'lastStateModTs': now_ts()}, True)
-        st.add(adn + '/sys', 'topSystem', {'address': '10.0.0.1', 'id': '1', 'name': apic['name'],
-                                           'role': 'controller', 'serial': apic['serial'], 'state': 'in-service',
+        st.add(adn + '/sys', 'topSystem', {'address': atep, 'id': '1', 'name': apic['name'], 'fabricDomain': self.fabric_name,
+                                           'role': 'controller', 'serial': apic['serial'],
                                            'podId': str(pod), 'oobMgmtAddr': str(ip_of(self.oob[1])) if self.oob.get(1) else '0.0.0.0',
                                            'inbMgmtAddr': '0.0.0.0', 'version': '6.0(5h)',
                                            'systemUpTime': '01:00:00:00.000',
-                                           'fabricMAC': '00:00:00:00:00:00', 'tepPool': '10.0.0.0/16'}, True)
+                                           'fabricMAC': '00:00:00:00:00:00', 'tepPool': self.tep_pool,
+                                           'state': 'in-service' if self.apic_up else 'out-of-service'}, True)
+        if self.apic_up and int(su['ctrlCount']) > 1:
+            self.fault(adn + '/sys', 'S0101', 'major', 'Controller cluster is configured for %s controllers, but only 1 '
+                       'controller is available - the cluster is not fully fit' % su['ctrlCount'], 'cluster-not-fully-fit',
+                       domain='infra')
         for p in self.pending:
             st.add(adn + '/sys/client-[%s]' % p['serial'], 'dhcpClient',
                    {'id': p['serial'], 'model': p['model'], 'nodeRole': p['role'], 'podId': str(pod),
@@ -281,7 +298,7 @@ class Engine:
                 'address': n['tep'], 'id': str(nid), 'name': n['name'], 'role': n['role'],
                 'serial': n['serial'], 'state': 'in-service', 'podId': str(pod),
                 'oobMgmtAddr': str(ip_of(self.oob[nid])) if self.oob.get(nid) else '0.0.0.0', 'inbMgmtAddr': '0.0.0.0',
-                'version': 'n9000-16.0(5h)', 'fabricMAC': '00:22:BD:F8:19:FF', 'tepPool': '10.0.0.0/16',
+                'version': 'n9000-16.0(5h)', 'fabricMAC': '00:22:BD:F8:19:FF', 'tepPool': self.tep_pool, 'fabricDomain': self.fabric_name,
                 'systemUpTime': '%02d:%02d:%02d:%02d.000' % (up // 86400, up % 86400 // 3600, up % 3600 // 60, up % 60)}, True)
 
         # Ports

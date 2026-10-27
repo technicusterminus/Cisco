@@ -1,0 +1,130 @@
+{
+ "id": "00-day0-apic-setup",
+ "title": "00 Day 0: APIC-Ersteinrichtung",
+ "topic": "Fabric-Inbetriebnahme",
+ "level": "Einstieg",
+ "duration": "20 min",
+ "fabric": "factory",
+ "goals": [
+  "Den Setup-Dialog des APIC an der Konsole durchlaufen",
+  "Wissen, welche Werte sich später nicht mehr ändern lassen (TEP-Pool, Infra-VLAN, Fabric-Name, Pod-ID)",
+  "Die Werte am APIC per CLI verifizieren"
+ ],
+ "intro": "Der APIC steht frisch ausgepackt im Rack, die Konsole (CIMC-KVM) ist offen. Nach dem Laden des Labs startet der **Setup-Dialog** – die GUI ist erst danach erreichbar.\n\n**Vorgaben aus dem Low-Level-Design:**\n- Fabric Name **DC-FRA**, Fabric ID 1, **ein** Controller, Pod 1, Controller-Name apic1\n- TEP-Pool **10.0.0.0/16**, Infra-VLAN **3967**, GIPo 225.0.0.0/15\n- OOB **192.168.10.1/24**, Gateway **192.168.10.254**\n- Admin-Passwort **Fabric!2026** (Strong Passwords an)",
+ "tasks": [
+  {
+   "title": "Setup-Dialog",
+   "text": "Beantworte die Fragen an der Konsole mit den Werten aus dem Design. Mit Enter übernimmst du den Vorschlag in eckigen Klammern.",
+   "hint": "Achtung bei „number of active controllers“: Der Vorschlag ist 3. Mit nur einem APIC wäre der Cluster dann nie Fully Fit."
+  },
+  {
+   "title": "Prüfen und anwenden",
+   "text": "Lies die Zusammenfassung genau. Einmal angewendet, lassen sich TEP-Pool, Infra-VLAN und Fabric-Name nur durch Neuaufsetzen ändern (`acidiag touch clean` und `acidiag reboot`)."
+  },
+  {
+   "title": "Anmelden und verifizieren",
+   "text": "In der GUI mit admin und dem neuen Passwort anmelden. In der APIC-CLI: `cat /data/data_admin/sam_exported.config`, `acidiag avread` und `show controller`. Unter **System > Controllers** stehen dieselben Werte."
+  },
+  {
+   "title": "Erster Leaf",
+   "text": "Unter **Fabric > Inventory > Fabric Membership** leaf101 (SAL1931LA01, Node 101, leaf101) und leaf102 (SAL1931LA02, Node 102, leaf102) registrieren. Auf leaf101 zeigt `show vlan extended` das Infra-VLAN zum APIC auf eth1/48."
+  }
+ ],
+ "checks": [
+  {
+   "desc": "Fabric Name DC-FRA",
+   "type": "setup",
+   "attrs": {
+    "fabricName": "DC-FRA"
+   }
+  },
+  {
+   "desc": "Ein Controller im Cluster",
+   "type": "setup",
+   "attrs": {
+    "ctrlCount": "1"
+   }
+  },
+  {
+   "desc": "TEP-Pool 10.0.0.0/16 und Infra-VLAN 3967",
+   "type": "setup",
+   "attrs": {
+    "tepPool": "10.0.0.0/16",
+    "infraVlan": "3967"
+   }
+  },
+  {
+   "desc": "OOB 192.168.10.1/24 mit Gateway 192.168.10.254",
+   "type": "setup",
+   "attrs": {
+    "oobIp": "192.168.10.1/24",
+    "oobGw": "192.168.10.254"
+   }
+  },
+  {
+   "desc": "leaf101 aktiv (101)",
+   "type": "node",
+   "serial": "SAL1931LA01",
+   "id": 101,
+   "name": "leaf101"
+  },
+  {
+   "desc": "leaf102 aktiv (102)",
+   "type": "node",
+   "serial": "SAL1931LA02",
+   "id": 102,
+   "name": "leaf102"
+  }
+ ],
+ "solution": "Setup-Antworten: Fabric name **DC-FRA**, fabric ID 1, number of active controllers **1**, POD ID 1, controller ID 1, name apic1, TEP pool 10.0.0.0/16, infra VLAN 3967, GIPo 225.0.0.0/15, OOB 192.168.10.1/24, Gateway 192.168.10.254, Strong Passwords Y, Passwort Fabric!2026. Danach im Fabric Membership die beiden Leafs registrieren.",
+ "config": [],
+ "hosts": [],
+ "routers": [],
+ "vcenters": [],
+ "solutionConfig": [
+  [
+   "#setup",
+   {
+    "fabricName": "DC-FRA",
+    "fabricId": "1",
+    "ctrlCount": "1",
+    "podId": "1",
+    "standby": "NO",
+    "ctrlId": "1",
+    "ctrlName": "apic1",
+    "tepPool": "10.0.0.0/16",
+    "infraVlan": "3967",
+    "gipo": "225.0.0.0/15",
+    "oobIp": "192.168.10.1/24",
+    "oobGw": "192.168.10.254",
+    "speed": "auto",
+    "strong": "Y",
+    "pwd": "Fabric!2026"
+   }
+  ],
+  [
+   "uni/controller/nodeidentpol",
+   {
+    "fabricNodeIdentP": {
+     "attributes": {
+      "serial": "SAL1931LA01",
+      "nodeId": "101",
+      "name": "leaf101"
+     }
+    }
+   }
+  ],
+  [
+   "uni/controller/nodeidentpol",
+   {
+    "fabricNodeIdentP": {
+     "attributes": {
+      "serial": "SAL1931LA02",
+      "nodeId": "102",
+      "name": "leaf102"
+     }
+    }
+   }
+  ]
+ ]
+}

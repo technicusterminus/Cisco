@@ -98,8 +98,16 @@ Object.assign(Views, {
 
   async 'system/controllers'(w) {
     const n = (await API.cls('topSystem', 'query-target-filter=' + encodeURIComponent('eq(topSystem.role,"controller")'))).map(r => r.topSystem.attributes);
-    w.appendChild(paneHead('Controllers', 'APIC-Cluster'));
-    w.appendChild(h('div', { class: 'cards4' }, h('div', { class: 'kpi' }, h('span', null, 'Cluster Size'), h('b', null, '1')), h('div', { class: 'kpi' }, h('span', null, 'Health'), h('b', null, 'Fully Fit'))));
+    const su = App.state.setup || {};
+    const fit = (su.ctrlCount || '1') === '1';
+    w.appendChild(paneHead('Controllers', 'APIC-Cluster – ' + (su.fabricName || '')));
+    w.appendChild(h('div', { class: 'cards4' }, h('div', { class: 'kpi' }, h('span', null, 'Target Cluster Size'), h('b', null, su.ctrlCount || '1')),
+      h('div', { class: 'kpi' }, h('span', null, 'Operational Cluster Size'), h('b', null, '1')),
+      h('div', { class: 'kpi' }, h('span', null, 'Health'), h('b', null, fit ? 'Fully Fit' : 'Not Fully Fit'))));
+    if (!fit) w.appendChild(h('div', { class: 'card note warn' }, 'Im Setup wurden ' + su.ctrlCount + ' Controller angegeben, es gibt aber nur einen APIC. Der Cluster ist deshalb nicht Fully Fit (Fault S0101). Korrigieren lässt sich das nur mit einem Neuaufsetzen (acidiag touch clean, acidiag reboot).'));
+    w.appendChild(h('div', { class: 'card' }, h('div', { class: 'card-h' }, 'Fabric-Parameter aus dem Setup'),
+      table([{ l: 'Parameter', f: r => r[0] }, { l: 'Wert', f: r => r[1] }], [['Fabric Name', su.fabricName], ['Fabric ID', su.fabricId], ['Pod ID', su.podId],
+        ['TEP Pool', su.tepPool], ['Infra VLAN', su.infraVlan], ['BD Multicast (GIPo)', su.gipo], ['OOB Management', su.oobIp + ' gw ' + su.oobGw]])));
     w.appendChild(table([{ l: 'ID', f: r => r.id }, { l: 'Name', f: r => r.name }, { l: 'IP (TEP)', f: r => r.address }, { l: 'OOB Address', f: r => r.oobMgmtAddr },
       { l: 'Admin State', f: () => 'In Service' }, { l: 'Operational State', f: () => stateBadge('active') }, { l: 'Health State', f: () => 'Fully Fit' }, { l: 'Serial', f: r => r.serial }, { l: 'Version', f: r => r.version }], n));
   },
@@ -192,10 +200,10 @@ Object.assign(Views, {
     const info = await API.sim('nodeinfo?id=' + id);
     const name = info.node.name;
     if (kind === 'phys') {
-      const rows = await API.cls('topology/pod-1/node-' + id + '/l1PhysIf', 'rsp-subtree=children');
+      const rows = await API.cls('topology/pod-' + POD() + '/node-' + id + '/l1PhysIf', 'rsp-subtree=children');
       const data = rows.map(r => { const a = r.l1PhysIf.attributes; const c = (r.l1PhysIf.children || [])[0]; return Object.assign({}, a, { oper: c ? c.ethpmPhysIf.attributes : {} }); })
         .sort((a, b) => portNum(a.id) - portNum(b.id));
-      w.appendChild(paneHead('Physical Interfaces – ' + name, 'topology/pod-1/node-' + id + '/sys'));
+      w.appendChild(paneHead('Physical Interfaces – ' + name, 'topology/pod-' + POD() + '/node-' + id + '/sys'));
       w.appendChild(table([{ l: 'Interface', f: r => r.id }, { l: 'Admin State', f: r => r.adminSt }, { l: 'Oper State', f: r => stateBadge(r.oper.operSt) }, { l: 'Oper State Reason', f: r => r.oper.operStQual },
         { l: 'Usage', f: r => r.usage }, { l: 'Layer', f: r => r.layer }, { l: 'Oper Speed', f: r => r.oper.operSpeed }, { l: 'VLANs', f: r => r.oper.operVlans }], data, {
         actions: r => r.portT === 'fab' ? [] : [h('button', { class: 'btn small', onclick: () => Views.toggleIf(id, r.id, r.adminSt === 'up', () => { clear(w); Views.nodeIfs(w, id, kind); }) }, r.adminSt === 'up' ? 'Disable' : 'Enable')],
@@ -210,7 +218,7 @@ Object.assign(Views, {
   },
 
   toggleIf(id, port, disable, after) {
-    const tdn = 'topology/pod-1/paths-' + id + '/pathep-[' + port + ']';
+    const tdn = 'topology/pod-' + POD() + '/paths-' + id + '/pathep-[' + port + ']';
     confirmBox((disable ? 'Interface ' + port + ' auf Node ' + id + ' deaktivieren?' : 'Interface ' + port + ' wieder aktivieren?'), async () => {
       await API.postMo('uni/fabric/outofsvc', { fabricOOServicePol: { attributes: {}, children: [{ fabricRsOosPath: { attributes: disable ? { tDn: tdn, lc: 'blacklist' } : { tDn: tdn, status: 'deleted' } } }] } });
       toast(disable ? 'Interface deaktiviert' : 'Interface aktiviert');
@@ -242,7 +250,7 @@ Object.assign(Views, {
   async nodeView(w, id) {
     const n = App.state.nodes.find(x => x.id === id);
     if (!n) return;
-    const dn = 'topology/pod-1/node-' + id;
+    const dn = 'topology/pod-' + POD() + '/node-' + id;
     w.appendChild(paneHead('Node - ' + n.name, dn, [h('button', { class: 'btn small', onclick: () => Term.open(n.name) }, '⌨ CLI'),
       actionsButton([{ l: 'Open CLI', fn: () => Term.open(n.name) }, { l: 'Remove From Controller', danger: true, fn: () => App.go('fabric', 'inventory', 'membership') },
         { l: 'Open In Object Store Browser', fn: () => window.open('/visore.html#' + encodeURIComponent(dn), '_blank') }])]));

@@ -425,7 +425,7 @@ mo('fabricNode', 'node-{id}', ('fabricPod',),
 mo('topSystem', 'sys', ('fabricNode',),
    {'address': '', 'id': '', 'name': '', 'role': '', 'serial': '', 'state': '', 'podId': '1',
     'oobMgmtAddr': '', 'inbMgmtAddr': '0.0.0.0', 'version': '', 'systemUpTime': '',
-    'fabricMAC': '', 'tepPool': '10.0.0.0/16'}, config=False)
+    'fabricMAC': '', 'tepPool': '10.0.0.0/16', 'fabricDomain': ''}, config=False)
 mo('l1PhysIf', 'phys-[{id}]', ('topSystem',),
    {'adminSt': 'up', 'usage': 'discovery', 'mtu': '9000', 'speed': 'inherit', 'layer': 'Layer2',
     'portT': 'leaf', 'mode': 'trunk', 'descr': '', 'autoNeg': 'on'}, config=False,

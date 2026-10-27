@@ -139,6 +139,43 @@ def lab(**kw):
 
 
 # ----------------------------------------------------------------------------
+# Lab 00 - Day 0: APIC-Ersteinrichtung
+# ----------------------------------------------------------------------------
+SETUP00 = {'fabricName': 'DC-FRA', 'fabricId': '1', 'ctrlCount': '1', 'podId': '1', 'standby': 'NO', 'ctrlId': '1',
+           'ctrlName': 'apic1', 'tepPool': '10.0.0.0/16', 'infraVlan': '3967', 'gipo': '225.0.0.0/15',
+           'oobIp': '192.168.10.1/24', 'oobGw': '192.168.10.254', 'speed': 'auto', 'strong': 'Y', 'pwd': 'Fabric!2026'}
+lab(id='00-day0-apic-setup', title='00 Day 0: APIC-Ersteinrichtung', topic='Fabric-Inbetriebnahme', level='Einstieg',
+    duration='20 min', fabric='factory',
+    goals=['Den Setup-Dialog des APIC an der Konsole durchlaufen', 'Wissen, welche Werte sich später nicht mehr ändern lassen '
+           '(TEP-Pool, Infra-VLAN, Fabric-Name, Pod-ID)', 'Die Werte am APIC per CLI verifizieren'],
+    intro='Der APIC steht frisch ausgepackt im Rack, die Konsole (CIMC-KVM) ist offen. Nach dem Laden des Labs startet der '
+          '**Setup-Dialog** – die GUI ist erst danach erreichbar.\n\n**Vorgaben aus dem Low-Level-Design:**\n'
+          '- Fabric Name **DC-FRA**, Fabric ID 1, **ein** Controller, Pod 1, Controller-Name apic1\n'
+          '- TEP-Pool **10.0.0.0/16**, Infra-VLAN **3967**, GIPo 225.0.0.0/15\n'
+          '- OOB **192.168.10.1/24**, Gateway **192.168.10.254**\n'
+          '- Admin-Passwort **Fabric!2026** (Strong Passwords an)',
+    tasks=[
+        task('Setup-Dialog', 'Beantworte die Fragen an der Konsole mit den Werten aus dem Design. Mit Enter übernimmst du den '
+             'Vorschlag in eckigen Klammern.',
+             'Achtung bei „number of active controllers“: Der Vorschlag ist 3. Mit nur einem APIC wäre der Cluster dann nie Fully Fit.'),
+        task('Prüfen und anwenden', 'Lies die Zusammenfassung genau. Einmal angewendet, lassen sich TEP-Pool, Infra-VLAN und '
+             'Fabric-Name nur durch Neuaufsetzen ändern (`acidiag touch clean` und `acidiag reboot`).'),
+        task('Anmelden und verifizieren', 'In der GUI mit admin und dem neuen Passwort anmelden. In der APIC-CLI: '
+             '`cat /data/data_admin/sam_exported.config`, `acidiag avread` und `show controller`. Unter **System > Controllers** stehen dieselben Werte.'),
+        task('Erster Leaf', 'Unter **Fabric > Inventory > Fabric Membership** leaf101 (SAL1931LA01, Node 101, leaf101) und '
+             'leaf102 (SAL1931LA02, Node 102, leaf102) registrieren. Auf leaf101 zeigt `show vlan extended` das Infra-VLAN zum APIC auf eth1/48.'),
+    ],
+    checks=[check('Fabric Name DC-FRA', 'setup', attrs={'fabricName': 'DC-FRA'}),
+            check('Ein Controller im Cluster', 'setup', attrs={'ctrlCount': '1'}),
+            check('TEP-Pool 10.0.0.0/16 und Infra-VLAN 3967', 'setup', attrs={'tepPool': '10.0.0.0/16', 'infraVlan': '3967'}),
+            check('OOB 192.168.10.1/24 mit Gateway 192.168.10.254', 'setup', attrs={'oobIp': '192.168.10.1/24', 'oobGw': '192.168.10.254'}),
+            check('leaf101 aktiv (101)', 'node', serial=L101, id=101, name='leaf101'),
+            check('leaf102 aktiv (102)', 'node', serial=L102, id=102, name='leaf102')],
+    solution='Setup-Antworten: Fabric name **DC-FRA**, fabric ID 1, number of active controllers **1**, POD ID 1, controller ID 1, '
+             'name apic1, TEP pool 10.0.0.0/16, infra VLAN 3967, GIPo 225.0.0.0/15, OOB 192.168.10.1/24, Gateway 192.168.10.254, '
+             'Strong Passwords Y, Passwort Fabric!2026. Danach im Fabric Membership die beiden Leafs registrieren.')
+
+# ----------------------------------------------------------------------------
 # Lab 01 - Fabric Discovery
 # ----------------------------------------------------------------------------
 lab(id='01-fabric-discovery', title='01 Fabric Discovery und BGP Route Reflector', topic='Fabric-Inbetriebnahme',
@@ -708,6 +745,8 @@ lab(id='14-l2out-migration', title='14 L2Out und Migration: stille Hosts und ARP
 BGP_RR = ['uni/fabric/bgpInstP-default', mo('bgpInstPol', {}, mo('bgpAsP', {'asn': '65001'}),
                                             mo('bgpRRP', {}, mo('bgpRRNodePEp', {'id': '201'}), mo('bgpRRNodePEp', {'id': '202'})))]
 SOLUTIONS = {
+    '00-day0-apic-setup': [['#setup', SETUP00]] + [['uni/controller/nodeidentpol', mo('fabricNodeIdentP', {'serial': s_, 'nodeId': str(i), 'name': n})]
+                                                   for s_, i, n in [(L101, 101, 'leaf101'), (L102, 102, 'leaf102')]],
     '01-fabric-discovery': [['uni/controller/nodeidentpol', mo('fabricNodeIdentP', {'serial': s_, 'nodeId': str(i), 'name': n})]
                             for s_, i, n in [(L101, 101, 'leaf101'), (L102, 102, 'leaf102'), ('FDO2219SP01', 201, 'spine201'),
                                              ('FDO2219SP02', 202, 'spine202'), (L103, 103, 'leaf103'), (L104, 104, 'leaf104')]] + [BGP_RR],

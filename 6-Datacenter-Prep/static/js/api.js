@@ -134,3 +134,4 @@ function makeRn(cls, attrs) {
   const m = MIT.meta[cls];
   return m.rn.replace(/\{(\w+)\}/g, (_, k) => attrs[k]);
 }
+function POD() { return (App.state && App.state.pod) || 1; }

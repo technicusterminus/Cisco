@@ -39,6 +39,7 @@ const Term = {
         try {
           const r = await API.post('/sim/cli', { node: cur, cmd }, true);
           out.textContent += r.output + '\n';
+          if (r.reboot) { inp.disabled = true; setTimeout(() => location.reload(), 2500); }
         } catch (e) { out.textContent += 'Fehler: ' + (e.text || e.message) + '\n'; }
       }
       out.scrollTop = out.scrollHeight;

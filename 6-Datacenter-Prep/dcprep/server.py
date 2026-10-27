@@ -16,6 +16,7 @@ from . import model
 from .model import AciError, CLASSES, rn_of, Store, post as mit_post, delete as mit_delete, now_ts
 from .query import run_query
 from .engine import Engine, ip_of
+from . import setup as apic_setup
 from .topology import default_topology, discovered_members, base_config, ensure_base
 from .cli import Cli
 from . import trace
@@ -47,7 +48,8 @@ class Sim:
     # -------------------------------------------------------------- Persistenz
     def _new_sim(self):
         return {'topology': default_topology(), 'registered': {}, 'hosts': [], 'routers': [],
-                'settings': {'discoverySeconds': self.default_discovery}, 'lab': None}
+                'settings': {'discoverySeconds': self.default_discovery}, 'lab': None,
+                'setup': {k: v for k, v in apic_setup.DEFAULTS.items() if k != 'pwd'}}
 
     def _load(self):
         if not os.path.exists(self.state_file):
@@ -78,6 +80,14 @@ class Sim:
         for k in ('settings', 'audit', 'events', 'seq'):
             if k in old:
                 self.sim[k] = old[k]
+        if keep_sim:
+            for k in ('hosts', 'routers', 'vcenters'):
+                if k in old:
+                    self.sim[k] = old[k]
+        if mode == 'factory':
+            self.sim['setup'] = None
+            self.sim['audit'], self.sim['events'] = [], []
+            self.tokens.clear()
         self.engine = Engine(self.store, self.sim)
         if mode == 'discovered':
             for m in discovered_members():
@@ -128,7 +138,7 @@ class Sim:
         n0 = len(self.sim.get('events', []))
         for nid, (name, state) in after['nodes'].items():
             if before['nodes'].get(nid, (None, None))[1] != state:
-                self._event('topology/pod-1/node-%d' % nid, 'Node %s (%d) changed state to %s' % (name, nid, state),
+                self._event('topology/pod-%d/node-%d' % (self.engine.pod, nid), 'Node %s (%d) changed state to %s' % (name, nid, state),
                             code='E4204979')
         for name, (learned, epg, path) in after['hosts'].items():
             ob = before['hosts'].get(name, (False, None, None))
@@ -167,7 +177,28 @@ class Sim:
         del log[:-3000]
 
     # -------------------------------------------------------------- Auth
+    def setup_apply(self, answers):
+        if self.sim.get('setup') is not None:
+            raise AciError(400, 'Der APIC ist bereits eingerichtet. Zuruecksetzen mit "acidiag touch clean" und "acidiag reboot".')
+        key, err = apic_setup.validate_all(answers)
+        if err:
+            raise AciError(400, '%s: %s' % (key, err))
+        a = apic_setup.normalize(answers)
+        ts = now_ts()
+        mit_post(self.store, 'uni/userext/user-admin', {'aaaUser': {'attributes': {'pwd': a['pwd']}}})
+        self.sim['setup'] = {k: v for k, v in a.items() if k != 'pwd'}
+        self.sim['topology']['pod'] = int(a['podId'])
+        self.sim['topology']['apic']['name'] = a['ctrlName']
+        pod = int(a['podId'])
+        mit_post(self.store, 'uni/tn-mgmt/mgmtp-default/oob-default', {'mgmtOoB': {'attributes': {}, 'children': [
+            {'mgmtRsOoBStNode': {'attributes': {'tDn': 'topology/pod-%d/node-1' % pod, 'addr': a['oobIp'],
+                                                'gw': a['oobGw']}}}]}})
+        self.changed()
+        return ts
+
     def login(self, name, pwd):
+        if self.sim.get('setup', 0) is None:
+            raise AciError(503, 'Der APIC ist noch nicht eingerichtet - zuerst den Setup-Dialog an der Konsole abschliessen.', 503)
         u = self.store.attrs('uni/userext/user-%s' % name)
         if not u or u.get('pwd') != pwd or u.get('accountStatus') == 'inactive':
             return None
@@ -263,6 +294,10 @@ class Sim:
                     bad = {e.nodes[n]['name']: why for n, why in e.ntp['nodes'].items() if why}
                     ok = not bad and len(e.ntp['nodes']) >= c.get('min', 1)
                     info = '; '.join('%s: %s' % kv for kv in sorted(bad.items())) or '%d Switches synchron' % len(e.ntp['nodes'])
+                elif t == 'setup':
+                    su = self.sim.get('setup') or {}
+                    ok = bool(su) and all(su.get(k) == v for k, v in c.get('attrs', {}).items())
+                    info = 'nicht eingerichtet' if not su else ', '.join('%s=%s' % (k, su.get(k)) for k in c.get('attrs', {}))
                 elif t == 'vmm':
                     v = e.vmm.get(c['dn'], {})
                     ok = v.get('state') == 'online'
@@ -503,7 +538,7 @@ class Sim:
             s = self.store.attrs(d)['severity']
             sev[s] = sev.get(s, 0) + 1
         lab = self.lab(self.sim.get('lab')) if self.sim.get('lab') else None
-        return {'now': time.time(), 'apic': topo['apic'], 'nodes': nodes, 'links': topo['links'],
+        return {'now': time.time(), 'apic': topo['apic'], 'pod': topo.get('pod', 1), 'setup': self.sim.get('setup'), 'nodes': nodes, 'links': topo['links'],
                 'pending': e.pending, 'hosts': hosts, 'routers': routers, 'settings': self.sim['settings'],
                 'faults': sev, 'vpc': e.vpc_groups, 'mpbgp': e.mpbgp_ok,
                 'vcenters': [dict(v, pwd='***') for v in self.sim.get('vcenters', [])], 'vmm': vmm, 'vms': vms,
@@ -699,6 +734,23 @@ def make_handler(S):
         def simapi(self, method, rest, q):
             if rest == 'meta':
                 return self.send(200, meta_json())
+            if rest == 'setup':
+                with S.lock:
+                    if method == 'GET':
+                        return self.send(200, {'done': S.sim.get('setup', 0) is not None,
+                                               'questions': apic_setup.QUESTIONS, 'notes': apic_setup.NOTES,
+                                               'serial': S.sim['topology']['apic']['serial'],
+                                               'lab': {k: (S.lab(S.sim['lab']) or {}).get(k) for k in ('title', 'intro')}
+                                               if S.sim.get('lab') else None})
+                    b = self.body()
+                    if b.get('check'):
+                        a = apic_setup.normalize(b.get('answers') or {})
+                        v = b.get('value') or ''
+                        return self.send(200, {'error': apic_setup.validate(b['check'], v, a)})
+                    if b.get('summary'):
+                        return self.send(200, {'text': apic_setup.summary(apic_setup.normalize(b.get('answers') or {}))})
+                    S.setup_apply(b.get('answers') or {})
+                    return self.send(200, {'ok': True})
             self.auth()
             with S.lock:
                 S.tick()
@@ -728,7 +780,15 @@ def make_handler(S):
                         S.changed()
                     return self.send(200, r)
                 if rest == 'cli':
-                    return self.send(200, {'output': Cli(e, S.sim).run(b.get('node', 'apic1'), b.get('cmd', ''))})
+                    cli = Cli(e, S.sim)
+                    out = cli.run(b.get('node', 'apic1'), b.get('cmd', ''))
+                    if cli.request == 'factory':
+                        S.reset('factory', keep_sim=True)
+                        S.save()
+                        return self.send(200, {'output': out, 'reboot': True})
+                    if S.sim.get('touch_clean'):
+                        S.save()
+                    return self.send(200, {'output': out})
                 if rest == 'hosts':
                     if b.get('op') == 'delete':
                         S.sim['hosts'] = [h for h in S.sim['hosts'] if h['name'] != b.get('name')]
@@ -754,7 +814,7 @@ def make_handler(S):
                     return self.send(200, {'ok': True})
                 if rest == 'labs':
                     return self.send(200, [{k: l.get(k) for k in ('id', 'title', 'level', 'duration', 'goals',
-                                                                  'topic')} for l in S.labs()])
+                                                                  'topic', 'fabric')} for l in S.labs()])
                 if rest == 'labs/load':
                     lab = S.load_lab(b.get('id'))
                     return self.send(200, {'ok': True, 'title': lab['title']})

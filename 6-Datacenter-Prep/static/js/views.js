@@ -179,7 +179,7 @@ const Views = {
   async nodeView(w, id) {
     const n = App.state.nodes.find(x => x.id === id);
     if (!n) return;
-    w.appendChild(paneHead((n.role === 'spine' ? 'Spine' : 'Leaf') + ' – ' + n.name, 'topology/pod-1/node-' + id, [h('button', { class: 'btn small', onclick: () => Term.open(n.name) }, '⌨ CLI öffnen')]));
+    w.appendChild(paneHead((n.role === 'spine' ? 'Spine' : 'Leaf') + ' – ' + n.name, 'topology/pod-' + POD() + '/node-' + id, [h('button', { class: 'btn small', onclick: () => Term.open(n.name) }, '⌨ CLI öffnen')]));
     const body = h('div', { class: 'wbody' });
     const show = async tab => {
       clear(body);
@@ -189,7 +189,7 @@ const Views = {
         if (n.state !== 'active') body.appendChild(h('div', { class: 'card note warn' }, 'Dieser Switch ist noch nicht aktiv (Discovery läuft oder kein Nachbar aktiv).'));
       }
       if (tab === 'if') {
-        const rows = await API.cls('topology/pod-1/node-' + id + '/l1PhysIf', 'rsp-subtree=children');
+        const rows = await API.cls('topology/pod-' + POD() + '/node-' + id + '/l1PhysIf', 'rsp-subtree=children');
         const data = rows.map(r => { const a = r.l1PhysIf.attributes; const c = (r.l1PhysIf.children || [])[0]; return Object.assign({}, a, { oper: c ? c.ethpmPhysIf.attributes : {} }); })
           .sort((a, b) => portNum(a.id) - portNum(b.id));
         const upOnly = h('input', { type: 'checkbox', checked: true });
@@ -601,6 +601,7 @@ const Views = {
           actions: l => [h('button', {
             class: 'btn primary small', onclick: () => confirmBox('Lab „' + l.title + '" laden? Die aktuelle Konfiguration wird dabei zurückgesetzt (vorher ggf. einen Snapshot unter Admin > Config Rollbacks anlegen).', async () => {
               await API.sim('labs/load', { id: l.id });
+              if (l.fabric === 'factory') return location.reload();
               toast('Lab geladen');
               await App.refreshState();
               draw();
@@ -622,6 +623,7 @@ const Views = {
       h('p', null, 'Setzt die gesamte Konfiguration zurück. Hosts und Router werden entfernt.'),
       h('div', { class: 'formbtns' },
         h('button', { class: 'btn', onclick: () => confirmBox('Alles löschen und mit einer FERTIG registrierten Fabric starten?', async () => { await API.sim('reset', { mode: 'discovered' }); toast('Zurückgesetzt'); await App.refreshState(); App.go('system', 'dash'); }) }, 'Reset: Fabric registriert'),
+        h('button', { class: 'btn danger', onclick: () => confirmBox('APIC in den Werkszustand setzen? Alles wird gelöscht, danach startet der Setup-Dialog an der Konsole (Day 0).', async () => { await API.sim('reset', { mode: 'factory' }); location.reload(); }) }, 'Reset: Werkszustand (Day 0)'),
         h('button', { class: 'btn danger', onclick: () => confirmBox('Alles löschen und mit einer LEEREN Fabric starten (Switches müssen registriert werden)?', async () => { await API.sim('reset', { mode: 'empty' }); toast('Zurückgesetzt'); await App.refreshState(); App.go('fabric', 'inventory', 'membership'); }) }, 'Reset: Fabric leer'))));
     w.appendChild(h('div', { class: 'card' }, h('div', { class: 'card-h' }, 'Verkabelung'), md('Die physische Topologie ist fest: **spine201/202** an Port 1–4 zu den Leafs (Leaf eth1/49 → spine201, eth1/50 → spine202), der **APIC** an leaf101 und leaf102 jeweils eth1/48. Hosts und Router kannst du an alle freien Leaf-Ports anschließen.'),
       table([{ l: 'A', f: l => nodeName(l[0]) }, { l: 'Port', f: l => l[1] }, { l: 'B', f: l => nodeName(l[2]) }, { l: 'Port', f: l => l[3] }], st.links.map(l => l.map(x => x === st.apic.serial ? 'apic1' : x)))));

@@ -20,6 +20,8 @@ const App = {
 
   async init() {
     MIT.meta = await (await fetch('/sim/meta')).json();
+    const su = await (await fetch('/sim/setup')).json();
+    if (!su.done) return SetupConsole.show(su);
     API.onAuthLost = () => this.showLogin('Sitzung abgelaufen – bitte erneut anmelden.');
     Inspector.init();
     document.addEventListener('click', () => Ctx.close());
@@ -313,7 +315,7 @@ const App = {
     if (/^uni\/fabric\/(funcprof|podprof|time-)/.test(dn)) return this.go('fabric', 'fabricpol', 'mo:' + bestMoDn(dn));
     if (/^uni\/fabric\/outofsvc/.test(dn)) return this.go('fabric', 'inventory', 'disabled');
     if (/^uni\/controller/.test(dn)) return this.go('fabric', 'inventory', 'membership');
-    const m = /^topology\/pod-1\/node-(\d+)/.exec(dn);
+    const m = /^topology\/pod-\d+\/node-(\d+)/.exec(dn);
     if (m) return this.go('fabric', 'inventory', 'node:' + m[1]);
     window.open('/visore.html#' + encodeURIComponent(dn), '_blank');
   },

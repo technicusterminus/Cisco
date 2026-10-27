@@ -340,11 +340,18 @@ class TestRest(unittest.TestCase):
         self.assertEqual(j['totalCount'], '54')
         s, j, _ = self.req('GET', '/sim/labs', cookie=cookie)
         self.assertTrue(len(j) >= 1)
-        for lab in j:
+        for lab in sorted(j, key=lambda l: l.get('fabric') == 'factory'):
             s, r, _ = self.req('POST', '/sim/labs/load', {'id': lab['id']}, cookie)
             self.assertEqual(s, 200, (lab['id'], r))
+            if lab.get('fabric') == 'factory':
+                # Werkszustand: Sitzungen ungueltig, Login gesperrt bis zum Setup
+                s, r, _ = self.req('GET', '/sim/setup')
+                self.assertFalse(r['done'])
+                s, r, _ = self.req('POST', '/api/aaaLogin.json', {"aaaUser": {"attributes": {"name": "admin", "pwd": "secret"}}})
+                self.assertEqual(s, 503)
+                continue
             s, r, _ = self.req('GET', '/sim/labs/check', cookie=cookie)
-            self.assertEqual(s, 200)
+            self.assertEqual(s, 200, lab['id'])
 
 
 class TestDiscovery(Base):
@@ -369,13 +376,16 @@ class TestLabs(Base):
     def test_all_labs_solvable(self):
         self.S.sim['settings']['discoverySeconds'] = 0
         labs = self.S.labs()
-        self.assertGreaterEqual(len(labs), 14)
+        self.assertGreaterEqual(len(labs), 15)
         for lab in labs:
             with self.subTest(lab=lab['id']):
                 self.S.load_lab(lab['id'])
                 before = self.S.check_lab()
                 self.assertLess(before['passed'], before['total'], '%s ist schon ohne Loesung bestanden' % lab['id'])
                 for url, body in lab['solutionConfig']:
+                    if url == '#setup':
+                        self.S.setup_apply(body)
+                        continue
                     post(self.S.store, url, body)
                     self.S.changed()
                 after = self.S.check_lab()

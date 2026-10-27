@@ -14,6 +14,10 @@ APIC_HELP = """Verfuegbare Befehle auf dem APIC:
   show switch | show controller       Knotenuebersicht
   show tenant                         Tenants
   show version
+  show fabric membership              registrierte Switches
+  acidiag avread                      Zustand des APIC-Clusters
+  cat /data/data_admin/sam_exported.config   Werte aus dem Setup-Dialog
+  acidiag touch clean | acidiag reboot       Konfiguration loeschen und neu starten (Werkszustand)
   ssh <leaf>                          zur Leaf-/Spine-CLI wechseln (z. B. ssh leaf101)
   Filter-Beispiel: moquery -c fvAEPg -f 'fv.AEPg.name=="Web"'"""
 
@@ -65,6 +69,7 @@ class Cli:
     def __init__(self, eng, sim):
         self.e = eng
         self.sim = sim
+        self.request = None
 
     def run(self, node, cmd):
         cmd = cmd.strip()
@@ -100,21 +105,68 @@ class Cli:
                     '\n\nTotal %d nodes' % len(rows))
         if cmd.startswith('moquery'):
             return self.moquery(cmd)
-        if cmd in ('show switch', 'show controller'):
-            if cmd == 'show controller':
-                return ' ID   Pod  Address    In-Band IPv4  OOB IPv4      Version  Flags  Serial Number  Health\n' \
-                       ' ---- ---- ---------- ------------- ------------- -------- ------ -------------- -------\n' \
-                       ' 1*   1    10.0.0.1   0.0.0.0       192.168.10.1  6.0(5h)  crva   APIC1          fully-fit'
-            out = [' ID    Pod  Address        In-Band IPv4  OOB IPv4        Version          Flags  Serial Number  Name',
-                   ' ----- ---- -------------- ------------- --------------- ---------------- ------ -------------- ----------']
+        su = e.setup or {}
+        oob = str(ip_of(e.oob[1])) if e.oob.get(1) else '0.0.0.0'
+        if cmd == 'show controller':
+            return ('Fabric Name            : %s\n'
+                    'Operational Size       : 1\n'
+                    'Cluster Size           : %s\n'
+                    'Time Difference        : 0\n'
+                    'Fabric Security Mode   : PERMISSIVE\n\n'
+                    ' ID   Pod  Address          In-Band IPv4  OOB IPv4         Version  Flags  Serial Number  Health\n'
+                    ' ---- ---- ---------------- ------------- ---------------- -------- ------ -------------- ----------\n'
+                    ' 1*   %-4s %-16s 0.0.0.0       %-16s 6.0(5h)  crva   %-14s %s'
+                    % (e.fabric_name, su.get('ctrlCount', '1'), e.pod, e.apic_tep, oob, self.sim['topology']['apic']['serial'],
+                       'fully-fit' if su.get('ctrlCount', '1') == '1' else 'not-fully-fit'))
+        if cmd in ('show switch', 'show fabric membership'):
+            out = [' ID    Pod  Address          In-Band IPv4  OOB IPv4         Version          Flags  Serial Number  Name',
+                   ' ----- ---- ---------------- ------------- ---------------- ---------------- ------ -------------- ----------']
             for nid in sorted(e.nodes):
                 n = e.nodes[nid]
-                if n['state'] != 'active':
+                if cmd == 'show switch' and n['state'] != 'active':
                     continue
-                out.append(' %-5d %-4d %-14s %-13s %-15s %-16s %-6s %-14s %s' % (
-                    nid, e.pod, n['tep'], '0.0.0.0', '192.168.10.%d' % (nid % 250), 'n9000-16.0(5h)',
-                    'aliv', n['serial'], n['name']))
+                out.append(' %-5d %-4d %-16s %-13s %-16s %-16s %-6s %-14s %s' % (
+                    nid, e.pod, n['tep'] if n['state'] == 'active' else '0.0.0.0', '0.0.0.0',
+                    str(ip_of(e.oob[nid])) if e.oob.get(nid) else '0.0.0.0',
+                    'n9000-16.0(5h)' if n['state'] == 'active' else '', 'aliv' if n['state'] == 'active' else '-',
+                    n['serial'], n['name']))
+            if cmd == 'show fabric membership':
+                out.append('')
+                out.append(' Nodes pending registration: %d' % len(e.pending))
+                for p_ in e.pending:
+                    out.append('   %s  %s  %s' % (p_['serial'], p_['role'], p_['model']))
             return '\n'.join(out)
+        if cmd == 'acidiag avread':
+            return ('Local appliance ID=1 ADDRESS=%s TEP ADDRESS=%s CHASSIS_ID=%s\n'
+                    'Cluster of %s lm(t):1(zeroTime) appliance vector(s):\n'
+                    '  appliance id=1 address=%s lm(t):1 tep address=%s oob address=%s/%s version=6.0(5h) '
+                    'chassisId=%s capabilities=0X7EEFFFFFFFFF--0X2020--0X7F cntrlSbst=(APPROVED, %s) commissioned=YES '
+                    'registered=YES standby=NO DRR=NO apicX=NO virtual=NO active=YES(zeroTime) health=(applnc:255 '
+                    'svc\'s)\n  ---------------------------------------------\n  clusterTime=<diff=0 common=zeroTime local=zeroTime '
+                    'pF=<displForm=0 offsSt=0 offsVlu=0 lm(t):1(zeroTime)>>\n  ---------------------------------------------'
+                    % (e.apic_tep, self.e.tep_pool, self.sim['topology']['apic']['serial'], su.get('ctrlCount', '1'),
+                       e.apic_tep, self.e.tep_pool, oob, (su.get('oobIp') or '/24').split('/')[-1],
+                       self.sim['topology']['apic']['serial'], self.sim['topology']['apic']['serial']))
+        if cmd in ('cat /data/data_admin/sam_exported.config', 'cat /data/data_admin/sam_exported.config | grep -v pwd'):
+            return '\n'.join([
+                'Setup for Active and Standby APIC', 'fabricDomain = %s' % e.fabric_name, 'fabricID = %s' % su.get('fabricId'),
+                'systemName =%s' % self.sim['topology']['apic']['name'], 'controllerID = %s' % su.get('ctrlId'),
+                'tepPool = %s' % su.get('tepPool'), 'infraVlan = %s' % su.get('infraVlan'),
+                'GIPo = %s' % su.get('gipo'), 'clusterSize = %s' % su.get('ctrlCount'), 'standbyApic = %s' % su.get('standby'),
+                'enableIPv4 = Y', 'enableIPv6 = N', 'firmwareVersion = 6.0(5h)', 'ifcIpAddr = %s' % e.apic_tep,
+                'apicX = NO', 'podId = %s' % su.get('podId'),
+                'oobIpAddr = %s' % su.get('oobIp'), 'oobGateway = %s' % su.get('oobGw'), 'oobSpeed = %s' % su.get('speed')])
+        if cmd == 'acidiag touch clean':
+            self.sim['touch_clean'] = True
+            return ('This command will wipe out this device. Proceed? [y/N] y\n'
+                    'Done. Die Konfiguration wird beim naechsten "acidiag reboot" geloescht.')
+        if cmd in ('acidiag reboot', 'reboot'):
+            if self.sim.get('touch_clean'):
+                self.request = 'factory'
+                return ('This command will restart this device, Proceed? [y/N] y\n'
+                        'Rebooting ... Die Konfiguration ist geloescht. Der APIC startet mit dem Setup-Dialog.')
+            return ('This command will restart this device, Proceed? [y/N] y\n'
+                    'Rebooting ... Der APIC ist wieder da (Konfiguration unveraendert).')
         if cmd == 'show tenant':
             rows = [e.A(d)['name'] for d in e.store.by_class('fvTenant')]
             return ' Tenant\n ' + '-' * 30 + '\n' + '\n'.join(' ' + r for r in sorted(rows))
@@ -257,6 +309,11 @@ class Cli:
         if c == 'show vlan extended':
             out = [' VLAN Name                             Encap            Ports',
                    ' ---- -------------------------------- ---------------- ------------------------']
+            ctl = sorted([p_ for (k, p_), pi in e.ports.items() if k == nid and (pi.get('peer') or ('',))[0] == 'controller'],
+                         key=pnum)
+            if ctl:
+                out.append(' %-4d %-32s %-16s %s' % (8, 'infra:default', 'vxlan-16777209, vlan-%d' % e.infra_vlan,
+                                                     ', '.join(p_.capitalize() for p_ in ctl)))
             for vid, name, encap, ports, _, _ in self._pivlans(nid):
                 out.append(' %-4d %-32s %-16s %s' % (vid, name[:32], encap, ', '.join(p.capitalize() for p in ports)))
             return '\n'.join(out)

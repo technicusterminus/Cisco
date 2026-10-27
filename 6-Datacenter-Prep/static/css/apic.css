@@ -243,3 +243,9 @@ table.grid.inner input:not([type=checkbox]):not([type=radio]), table.grid.inner 
 .frow.wide { grid-template-columns: 1fr; }
 .frow.wide .flab { padding-top: 0; font-weight: 600; color: var(--t); }
 .kpi .health { font-size: 18px; padding: 2px 10px; color: #fff; }
+.setupwrap { display: flex; flex-direction: column; height: 100vh; background: #0b1115; padding: 14px; box-sizing: border-box; }
+.setuphead { display: flex; align-items: center; gap: 8px; color: #cfe0ea; padding: 4px 4px 10px; }
+.setupterm { flex: 1; height: auto; }
+.setupbody { flex: 1; display: flex; gap: 14px; min-height: 0; }
+.setuplab { width: 360px; background: #f6f8fa; border-radius: 5px; padding: 14px; overflow: auto; font-size: 13px; }
+.setuplab h3 { margin-top: 0; }
