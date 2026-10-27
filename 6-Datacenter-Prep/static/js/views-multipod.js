@@ -221,3 +221,169 @@ Object.assign(Views, {
     } }], { wide: true });
   },
 });
+
+/* ================================================================ Topologie-Editor */
+Object.assign(Views, {
+  async topologyDialog(after) {
+    const d = await API.sim('topology');
+    const L = d.limits;
+    const f = buildForm([
+      { k: 'pods', l: 'Pods', t: 'rows', start: true, cols: [{ k: 'spines', l: 'Spines (1–' + L.spines + ')', ph: '2' }, { k: 'leafs', l: 'Leafs (1–' + L.leafs + ')', ph: '4' }] },
+      { k: 'remote', l: 'Remote Leafs (0–' + L.remote + ')' },
+      { k: 'register', l: 'Switches registrieren', t: 'yesno', cl: 'Alle Switches mit Node-ID und Name registrieren (sonst über Fabric Membership)' },
+      { k: 'infra', l: 'Multi-Pod-Grundkonfiguration', t: 'yesno', cl: 'Bei mehreren Pods oder Remote Leafs: TEP Pools, Infra-L3Out, Data Plane TEPs und DHCP Relay im IPN gleich mit anlegen' }],
+    { pods: d.spec.pods.map(p => ({ spines: String(p.spines), leafs: String(p.leafs) })), remote: String(d.spec.remote || 0), register: 'yes', infra: 'yes' }, {}, 'create');
+    modal('Topologie bearbeiten', h('div', null, md('Node-IDs: Pod 1 **leaf101…**, **spine201…**; Pod 2 **leaf1101…**, **spine1201…** (Pod 3: 2101/2201, Pod 4: 3101/3201); Remote Leafs **leaf3901…**. Leafs nutzen eth1/49–54 als Uplinks, die Spines eth1/1… zu den Leafs und den letzten Port zum IPN. Ab 32 Leafs pro Pod werden die Spines zu N9K-C9364C. Die Konfiguration bleibt erhalten; Hosts an Switches, die es nicht mehr gibt, werden inaktiv.'), f.el),
+      [{ l: 'Abbrechen' }, { l: 'Aufbauen', primary: true, fn: async () => {
+        const v = f.get();
+        const r = await API.sim('topology', { spec: { pods: (v.pods || []).filter(p => p.spines || p.leafs).map(p => ({ spines: Number(p.spines), leafs: Number(p.leafs) })), remote: Number(v.remote || 0) },
+          register: v.register === 'yes', infra: v.infra === 'yes' });
+        toast('Topologie mit ' + r.result.nodes + ' Switches aufgebaut' + (r.result.hostsWithoutSwitch.length ? ' – ohne Switch: ' + r.result.hostsWithoutSwitch.join(', ') : ''));
+        await App.refreshState();
+        if (after) after();
+      } }], { wide: true });
+  },
+});
+
+/* ================================================================ Hosts in Masse */
+Object.assign(Views, {
+  bulkHostsDialog(after) {
+    const area = h('textarea', { rows: 12, style: { width: '100%', fontFamily: 'monospace', fontSize: '12px' },
+      placeholder: 'name,mac,ip,gw,vlan,leaf,port[,leaf2,port2,bond]\nweb1,,10.10.10.11/24,10.10.10.1,110,leaf101,1\ndb1,,10.10.30.11/24,10.10.30.1,130,leaf103,10,leaf104,10,lacp-active' });
+    const g = buildForm([{ k: 'prefix', l: 'Name-Präfix', ph: 'web' }, { k: 'count', l: 'Anzahl', ph: '10' }, { k: 'leafs', l: 'Leafs (Node-IDs)', ph: '101-104 oder 101,102' },
+      { k: 'port', l: 'Erster Port', ph: '1' }, { k: 'vlan', l: 'VLAN', ph: '110' }, { k: 'net', l: 'Netz und erste IP', ph: '10.10.10.11/24' }, { k: 'gw', l: 'Gateway', ph: '10.10.10.1' },
+      { k: 'dual', l: 'Dual-homed (vPC)', t: 'yesno', cl: 'Je zwei Leafs (101+102, 103+104 …) auf demselben Port, LACP active' }],
+    { prefix: 'srv', count: '8', leafs: '101-102', port: '1', vlan: '110', net: '10.10.10.11/24', gw: '10.10.10.1', dual: 'no' }, {}, 'create');
+    const repl = h('input', { type: 'checkbox' });
+    const gen = () => {
+      const v = g.get();
+      const rng = String(v.leafs).split(',').flatMap(x => { const m = /^(\d+)\s*-\s*(\d+)$/.exec(x.trim()); if (!m) return x.trim() ? [Number(x)] : []; const a = []; for (let i = +m[1]; i <= +m[2]; i++) a.push(i); return a; });
+      const m = /^(\d+)\.(\d+)\.(\d+)\.(\d+)\/(\d+)$/.exec(v.net || '');
+      if (!rng.length || !m) throw new ApiError('Eingabe', 'Leafs und Netz (z. B. 10.10.10.11/24) angeben');
+      const lines = [];
+      const n = Number(v.count || 1);
+      const groups = v.dual === 'yes' ? rng.reduce((a, x, i) => (i % 2 ? a[a.length - 1].push(x) : a.push([x]), a), []) : rng.map(x => [x]);
+      for (let i = 0; i < n; i++) {
+        const grp = groups[i % groups.length];
+        const port = Number(v.port || 1) + Math.floor(i / groups.length);
+        const ip = [m[1], m[2], m[3], Number(m[4]) + i].join('.') + '/' + m[5];
+        const row = [v.prefix + (i + 1), '', ip, v.gw, v.vlan, 'leaf' + grp[0], port];
+        if (grp[1]) row.push('leaf' + grp[1], port, 'lacp-active');
+        lines.push(row.join(','));
+      }
+      area.value = (area.value.trim() ? area.value.trim() + '\n' : '') + lines.join('\n');
+    };
+    modal('Hosts in Masse anlegen', h('div', null,
+      h('div', { class: 'card' }, h('div', { class: 'card-h' }, 'Vorlage'), g.el, h('div', { class: 'formbtns' }, h('button', { class: 'btn', onclick: () => { try { gen(); } catch (e) { errToast(e); } } }, 'Zeilen erzeugen ↓'))),
+      h('p', { class: 'muted' }, 'CSV, eine Zeile pro Host. Leaf als Node-Name, Node-ID oder Serial; leere MAC wird automatisch vergeben. Bei einem Fehler wird nichts übernommen. Die Access Policies und Static Ports für die Ports legst du wie gewohnt im APIC an.'),
+      area, h('label', { class: 'check' }, repl, h('span', null, 'bestehende Hosts vorher entfernen'))),
+    [{ l: 'Abbrechen' }, { l: 'Übernehmen', primary: true, fn: async () => {
+      const r = await API.sim('hosts', { op: 'bulk', csv: area.value, replace: repl.checked });
+      toast(r.added + ' Hosts angelegt');
+      await App.refreshState();
+      if (after) after();
+    } }], { wide: true });
+  },
+});
+
+/* ================================================================ Testmatrix und Erwartungen */
+Object.assign(Views, {
+  async 'sim/tests'(w) {
+    let mx = null;
+    const st = App.state;
+    const hosts = (st.hosts || []).map(x => x.name).concat((st.routers || []).map(r => r.name));
+    const epgs = [...new Set((st.hosts || []).map(x => x.status.epg).filter(Boolean))].map(d => 'EPG:' + d.replace(/^uni\/tn-/, '').replace('/ap-', '/').replace('/epg-', '/'));
+    const opts = [['', '— alle Hosts —']].concat(epgs.map(e => [e, e]), hosts.map(x => [x, x]));
+    const f = buildForm([{ k: 'src', l: 'Quellen', t: 'select', o: opts }, { k: 'dst', l: 'Ziele', t: 'select', o: opts },
+      { k: 'proto', l: 'Protokoll', t: 'radio', o: [['icmp', 'ICMP'], ['tcp', 'TCP'], ['udp', 'UDP']] }, { k: 'port', l: 'Port', ph: '8080' }], { proto: 'icmp', src: '', dst: '' }, {}, 'create');
+    const grid = h('div');
+    const exp = h('div');
+    const runMx = async () => {
+      const v = f.get();
+      mx = await API.post('/sim/flows', { op: 'matrix', src: v.src ? [v.src] : null, dst: v.dst ? [v.dst] : null, proto: v.proto, port: Number(v.port || 0) });
+      clear(grid);
+      const ok = mx.rows.reduce((a, r) => a + r.cells.filter(c => c && c.ok).length, 0), all = mx.rows.reduce((a, r) => a + r.cells.filter(Boolean).length, 0);
+      grid.appendChild(h('p', null, h('b', null, ok + ' von ' + all), ' Flüssen erreichbar (' + mx.proto + (mx.port ? '/' + mx.port : '') + ', ' + mx.ms + ' ms). Zeilen = Quelle, Spalten = Ziel. Klick auf eine Zelle zeigt den Traffic-Test.'));
+      const tbl = h('table', { class: 'grid mx' }, h('thead', null, h('tr', null, h('th', null, ''), mx.dsts.map(d => h('th', { class: 'vert' }, d)))),
+        h('tbody', null, mx.rows.map(r => h('tr', null, h('th', null, r.src), r.cells.map((c, i) => h('td', {
+          class: 'mxc ' + (c ? (c.ok ? 'ok' : 'bad') : 'self'), title: c ? (c.ok ? 'erreichbar' : c.why) : '',
+          onclick: () => c && Views.flowDetail(r.src, mx.dsts[i], mx.proto, mx.port) }, c ? (c.ok ? '✓' : '✗') : '·'))))));
+      grid.appendChild(h('div', { class: 'mxwrap' }, tbl));
+      grid.appendChild(h('div', { class: 'formbtns' }, h('button', { class: 'btn', onclick: async () => { await API.post('/sim/flows', { op: 'baseline', matrix: mx }); toast('Ergebnis als Erwartungen gespeichert'); drawExp(); } }, 'Ergebnis als Erwartungen übernehmen (Baseline)')));
+    };
+    const drawExp = async (runNow) => {
+      const d = runNow ? await API.post('/sim/flows', { op: 'run' }) : await API.sim('flows');
+      const res = {};
+      (d.results || []).forEach(r => { res[r.id] = r; });
+      clear(exp);
+      exp.appendChild(h('div', { class: 'card-h' }, 'Erwartungen' + (d.total ? ' – ' + d.passed + ' von ' + d.total + ' erfüllt (' + fmtTs(d.ts) + ')' : ''), h('span', { class: 'grow' }),
+        h('button', { class: 'btn small primary', onclick: () => drawExp(true) }, '▶ Alle prüfen'),
+        h('button', { class: 'btn small', onclick: () => Views.expectDialog(null, () => drawExp(true)) }, '+ Erwartung'),
+        h('button', { class: 'btn small', onclick: () => Views.expectCsv(d.expect, () => drawExp(true)) }, 'CSV'),
+        h('button', { class: 'btn small danger', onclick: () => confirmBox('Alle Erwartungen löschen?', async () => { await API.post('/sim/flows', { op: 'clear' }); drawExp(); }) }, 'Alle löschen')));
+      exp.appendChild(table([{ l: '', w: '28px', f: x => res[x.id] ? (res[x.id].pass ? h('span', { class: 'pill ok' }, '✓') : h('span', { class: 'pill bad' }, '✗')) : '' },
+        { l: 'Quelle', f: x => x.src }, { l: 'Ziel', f: x => x.dst }, { l: 'Dienst', f: x => x.proto + (x.port ? '/' + x.port : '') },
+        { l: 'Soll', f: x => x.expect ? 'erlaubt' : 'blockiert' }, { l: 'Paare', f: x => res[x.id] ? res[x.id].pairs : '' },
+        { l: 'Abweichung', f: x => res[x.id] ? res[x.id].why : '' }, { l: 'Notiz', f: x => x.note }], d.expect || [], {
+        onRow: x => Views.expectDialog(x, () => drawExp(true)),
+        actions: x => [iconBtn('🗑', 'Löschen', async () => { await API.post('/sim/flows', { op: 'delete', id: x.id }); drawExp(); }, 'danger')],
+        empty: 'Noch keine Erwartungen. Lege sie an, importiere eine CSV oder übernimm eine Matrix als Baseline – dann prüfst du nach jeder Änderung mit einem Klick, ob dein Design noch stimmt.',
+      }));
+    };
+    w.appendChild(paneHead('Simulation – Testmatrix', 'Viele Flüsse auf einmal prüfen und als Erwartung (Regressionstest) speichern'));
+    w.appendChild(h('div', { class: 'card' }, h('div', { class: 'card-h' }, 'Matrix'), f.el, h('div', { class: 'formbtns' }, h('button', { class: 'btn primary', onclick: () => runMx().catch(errToast) }, 'Matrix berechnen')), grid));
+    w.appendChild(h('div', { class: 'card' }, exp));
+    await drawExp();
+  },
+
+  async flowDetail(src, dst, proto, port) {
+    const r = await API.post('/sim/traffic', { src, dst, proto, port });
+    modal(src + ' → ' + dst + ' (' + proto + (port ? '/' + port : '') + ')', h('div', null, h('p', null, h('b', null, r.summary)),
+      table([{ l: '', w: '24px', f: s => s.ok === false ? '✗' : s.ok ? '✓' : 'ℹ' }, { l: 'Schritt', f: s => s.title }, { l: 'Detail', f: s => s.detail }], r.steps)), null, { wide: true });
+  },
+
+  expectDialog(x, after) {
+    const f = buildForm([{ k: 'src', l: 'Quelle', req: true, ph: 'web1, 10.10.10.11 oder EPG:Shop/Webshop/Web' }, { k: 'dst', l: 'Ziel', req: true, ph: 'app1 oder EPG:Shop/Webshop/App' },
+      { k: 'proto', l: 'Protokoll', t: 'radio', o: [['icmp', 'ICMP'], ['tcp', 'TCP'], ['udp', 'UDP']] }, { k: 'port', l: 'Port' },
+      { k: 'expect', l: 'Soll', t: 'radio', o: [['allow', 'erlaubt'], ['deny', 'blockiert']] }, { k: 'note', l: 'Notiz', ph: 'z. B. Anforderung SEC-12' }],
+    x ? { src: x.src, dst: x.dst, proto: x.proto, port: x.port ? String(x.port) : '', expect: x.expect ? 'allow' : 'deny', note: x.note } : { proto: 'tcp', expect: 'allow' }, {}, 'create');
+    modal(x ? 'Erwartung bearbeiten' : 'Erwartung hinzufügen', f.el, [{ l: 'Abbrechen' }, { l: 'Speichern', primary: true, fn: async () => {
+      await API.post('/sim/flows', { op: x ? 'update' : 'add', id: x ? x.id : null, item: f.get() });
+      after();
+    } }]);
+  },
+
+  expectCsv(list, after) {
+    const area = h('textarea', { rows: 14, style: { width: '100%', fontFamily: 'monospace', fontSize: '12px' } });
+    area.value = 'src,dst,proto,port,expect,note\n' + (list || []).map(x => [x.src, x.dst, x.proto, x.port || '', x.expect ? 'allow' : 'deny', x.note].join(',')).join('\n');
+    const repl = h('input', { type: 'checkbox', checked: true });
+    modal('Erwartungen als CSV', h('div', null, h('p', { class: 'muted' }, 'Eine Zeile pro Erwartung: Quelle, Ziel, Protokoll, Port, allow/deny, Notiz. Quellen und Ziele: Hostname, IP oder EPG:Tenant/AP/EPG.'),
+      area, h('label', { class: 'check' }, repl, h('span', null, 'bestehende Erwartungen ersetzen'))),
+    [{ l: 'Abbrechen' }, { l: 'Herunterladen', fn: () => { download('erwartungen.csv', area.value); return false; } },
+      { l: 'Übernehmen', primary: true, fn: async () => { await API.post('/sim/flows', { op: 'csv', csv: area.value, replace: repl.checked }); toast('Übernommen'); after(); } }], { wide: true });
+  },
+});
+
+/* ================================================================ Abdeckungsbericht */
+Object.assign(Views, {
+  async coverageView(w) {
+    const inp = h('input', { placeholder: 'leer = gesamte Konfiguration, z. B. uni/tn-Shop', style: { width: '340px' } });
+    const out = h('div');
+    const draw = async () => {
+      const r = await API.sim('coverage' + (inp.value ? '?dn=' + encodeURIComponent(inp.value.trim()) : ''));
+      clear(out);
+      const b = r.byLevel;
+      out.appendChild(h('div', { class: 'cards4' }, [['Objekte', r.objects], ['ausgewertet', b.ausgewertet], ['nur Attribute geprüft', b.modelliert], ['nur gespeichert', b.gespeichert]]
+        .map(([k, v]) => h('div', { class: 'kpi' }, h('span', null, k), h('b', null, String(v))))));
+      out.appendChild(table([{ l: 'Stufe', f: c => h('span', { class: 'pill ' + ({ ausgewertet: 'ok', modelliert: 'warn', gespeichert: 'bad' }[c.level]) }, { ausgewertet: 'ausgewertet', modelliert: 'nur Attribute', gespeichert: 'nur gespeichert' }[c.level]) },
+        { l: 'Klasse', f: c => c.cls }, { l: 'Bezeichnung', f: c => c.label }, { l: 'Anzahl', f: c => c.count },
+        { l: 'Unbekannte Attribute (nur gespeichert)', f: c => c.unknown.join(', ') }, { l: 'Beispiel', f: c => c.example }], r.classes));
+    };
+    w.appendChild(paneHead('Abdeckung der Konfiguration', 'Was die Simulation von deiner (importierten) Konfiguration wirklich auswertet'));
+    w.appendChild(h('div', { class: 'card note' }, md('**ausgewertet:** Die Simulation rechnet mit diesen Objekten (Deployment, Routing, Policy, Faults). **nur Attribute geprüft:** Klasse und Werte werden wie beim APIC validiert, haben aber keine Wirkung im Simulator. **nur gespeichert:** Der Simulator nimmt die Klasse an, damit Ansible, Terraform und Exporte durchlaufen, wertet sie aber nicht aus. Ein Test-Ergebnis ist nur so belastbar wie der Anteil der ausgewerteten Objekte. Echte APIC-Konfigurationen spielst du unter *JSON Save as / Upload* ein.')));
+    w.appendChild(h('div', { class: 'card' }, h('div', { class: 'traffic' }, h('label', null, 'Teilbaum'), inp, h('button', { class: 'btn primary', onclick: () => draw().catch(errToast) }, 'Auswerten'))));
+    w.appendChild(out);
+    await draw();
+  },
+});
+IMPEXP_TREE.push({ l: 'Abdeckung (Coverage)', view: w => Views.coverageView(w) });

@@ -171,6 +171,7 @@ pre.json { background: #f7f9fa; border: 1px solid var(--line2); padding: 10px; f
 details summary { cursor: pointer; color: var(--acc-d); }
 
 /* Topologie */
+.topowrap { overflow-x: auto; }
 .topowrap svg { width: 100%; height: auto; max-height: 520px; }
 svg.topo .lnk { stroke-width: 2; }
 svg.topo .lnk.up { stroke: var(--ok); } svg.topo .lnk.down { stroke: #b9c2c9; stroke-dasharray: 5 4; } svg.topo .lnk.warn { stroke: var(--warn); stroke-dasharray: 4 3; }
@@ -252,3 +253,7 @@ table.grid.inner input:not([type=checkbox]):not([type=radio]), table.grid.inner 
 a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 .login-box select { padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; font-size: 14px; background: #fff; }
 pre.termbox { max-height: 300px; white-space: pre-wrap; margin: 8px 0 0; }
+.mxwrap { overflow: auto; max-height: 70vh; }
+table.mx th.vert { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 11px; padding: 4px 2px; }
+table.mx td.mxc { text-align: center; cursor: pointer; width: 22px; font-weight: 700; }
+table.mx td.mxc.ok { background: #e6f5ec; color: #1b7a3d; } table.mx td.mxc.bad { background: #fde8e8; color: #b42318; } table.mx td.mxc.self { color: #c0c7cd; cursor: default; }
