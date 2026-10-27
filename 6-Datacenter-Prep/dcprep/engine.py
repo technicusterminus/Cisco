@@ -13,6 +13,7 @@ from . import setup as apic_setup
 import time
 
 from .model import CLASSES, split_dn, parent_dn, rn_of, tenant_of, now_ts
+from .ops import OpsMixin, plain
 
 SEV_PEN = {'critical': 40, 'major': 15, 'minor': 5, 'warning': 1}
 EPHEMERAL = 49152
@@ -67,7 +68,7 @@ def port_val(v):
     return int(v) if str(v).isdigit() else None
 
 
-class Engine:
+class Engine(OpsMixin):
     def __init__(self, store, sim):
         self.store = store
         self.sim = sim
@@ -105,14 +106,26 @@ class Engine:
         self._access()
         self._oos()
         self._resolve()
+        self._fw_groups()
         self._classes()
         self._epgs()
         self._vmm()
         self._services()
+        self._loops()
         self._endpoints()
+        changed, leases = self._dhcp()
+        if changed:
+            self.sim['leases'] = leases
+            for d in self.store.by_class('fvCEp'):
+                if d in self.store.objs:
+                    self.store.delete(d)
+            self._endpoints()
+            self._dhcp()
         self._l3outs()
         self._inband()
         self._ntp()
+        self._monitoring()
+        self._fw_emit()
         self._emit_ports()
         self._emit_faults()
         self._health()
@@ -232,6 +245,7 @@ class Engine:
         self.fabric_name = su['fabricName']
         self.pod = pod
         self.poddn = 'topology/pod-%d' % pod
+        fw_next = self._fw_state(now)
         st.add('topology', 'fabricTopology', {}, True)
         st.add(self.poddn, 'fabricPod', {'id': str(pod), 'podType': 'physical'}, True)
         nodes = {n['serial']: n for n in topo['nodes']}
@@ -276,7 +290,7 @@ class Engine:
                 if t < act.get(s, inf) - 1e-9:
                     act[s] = t
                     changed = True
-        self.next_event = min([t for t in act.values() if t > now], default=None)
+        self.next_event = min([t for t in act.values() if t > now] + ([fw_next] if fw_next else []), default=None)
 
         self.nodes = {}            # nid -> info
         self.serial_node = {}      # serial -> nid (registriert)
@@ -293,10 +307,12 @@ class Engine:
                 state = 'discovering'
             else:
                 state = 'inactive'
+            if s in self.fw_reload:
+                state = 'inactive'
             info = {'id': nid, 'serial': s, 'name': a['name'] or 'node-%d' % nid, 'role': n['role'],
                     'model': n['model'], 'state': state, 'ports': n['ports'],
                     'tep': apic_setup.tep_of(self.tep_pool, pod, nid),
-                    'since': act.get(s), 'regdn': dn}
+                    'since': act.get(s), 'regdn': dn, 'upgrading': self.fw_reload.get(s)}
             self.nodes[nid] = info
             self.serial_node[s] = nid
             if state == 'active':
@@ -322,13 +338,13 @@ class Engine:
         adn = self.poddn + '/node-1'
         st.add(adn, 'fabricNode', {'id': '1', 'name': apic['name'], 'role': 'controller',
                                    'serial': apic['serial'], 'model': apic['model'], 'fabricSt': 'unknown',
-                                   'address': atep, 'version': '6.0(5h)', 'adSt': 'on',
+                                   'address': atep, 'version': self.apic_version, 'adSt': 'on',
                                    'nodeType': 'unspecified', 'vendor': 'Cisco Systems, Inc',
                                    'lastStateModTs': now_ts()}, True)
         st.add(adn + '/sys', 'topSystem', {'address': atep, 'id': '1', 'name': apic['name'], 'fabricDomain': self.fabric_name,
                                            'role': 'controller', 'serial': apic['serial'],
                                            'podId': str(pod), 'oobMgmtAddr': str(ip_of(self.oob[1])) if self.oob.get(1) else '0.0.0.0',
-                                           'inbMgmtAddr': '0.0.0.0', 'version': '6.0(5h)',
+                                           'inbMgmtAddr': '0.0.0.0', 'version': self.apic_version,
                                            'systemUpTime': '01:00:00:00.000',
                                            'fabricMAC': '00:00:00:00:00:00', 'tepPool': self.tep_pool,
                                            'state': 'in-service' if self.apic_up else 'out-of-service'}, True)
@@ -347,7 +363,7 @@ class Engine:
             st.add(ndn, 'fabricNode', {'id': str(nid), 'name': n['name'], 'role': n['role'],
                                        'serial': n['serial'], 'model': n['model'],
                                        'fabricSt': n['state'], 'address': n['tep'] if n['state'] == 'active' else '0.0.0.0',
-                                       'version': 'n9000-16.0(5h)' if n['state'] == 'active' else '',
+                                       'version': self.node_version(n['serial']) if n['state'] == 'active' else '',
                                        'adSt': 'on', 'nodeType': 'unspecified',
                                        'vendor': 'Cisco Systems, Inc', 'lastStateModTs': now_ts(n['since'])
                                        if n['since'] and n['since'] != inf else 'never'}, True)
@@ -358,7 +374,7 @@ class Engine:
                 'address': n['tep'], 'id': str(nid), 'name': n['name'], 'role': n['role'],
                 'serial': n['serial'], 'state': 'in-service', 'podId': str(pod),
                 'oobMgmtAddr': str(ip_of(self.oob[nid])) if self.oob.get(nid) else '0.0.0.0', 'inbMgmtAddr': '0.0.0.0',
-                'version': 'n9000-16.0(5h)', 'fabricMAC': '00:22:BD:F8:19:FF', 'tepPool': self.tep_pool, 'fabricDomain': self.fabric_name,
+                'version': self.node_version(n['serial']), 'fabricMAC': '00:22:BD:F8:19:FF', 'tepPool': self.tep_pool, 'fabricDomain': self.fabric_name,
                 'systemUpTime': '%02d:%02d:%02d:%02d.000' % (up // 86400, up % 86400 // 3600, up % 3600 // 60, up % 60)}, True)
 
         # Ports
@@ -942,7 +958,7 @@ class Engine:
                                               'vmreason': 'Port Group %s gibt es im vCenter %s nicht' % (vm.get('network') or '(keine)', vc['name'])})
 
     def all_hosts(self):
-        return list(self.sim.get('hosts', [])) + list(getattr(self, 'vm_hosts', [])) + list(getattr(self, 'fw_hosts', []))
+        return self._dhcp_hosts(self.sim.get('hosts', [])) + list(getattr(self, 'vm_hosts', [])) + list(getattr(self, 'fw_hosts', []))
 
     # ------------------------------------------------------------------
     # L4-L7: Service Graph mit Policy-Based Redirect
@@ -1233,8 +1249,13 @@ class Engine:
             for s, p in h.get('links', []):
                 nid = self.serial_active.get(s)
                 if nid is None:
-                    hs['reasons'].append('Switch %s ist nicht aktiv (nicht registriert oder noch in Discovery)'
-                                         % self.node_label(s))
+                    up = getattr(self, 'fw_reload', {}).get(s)
+                    hs['reasons'].append('Switch %s laedt gerade neu (Firmware-Upgrade auf %s, Upgrade Group %s)'
+                                         % (self.node_label(s), plain(up['version']), up.get('grp')) if up else
+                                         'Switch %s ist nicht aktiv (nicht registriert oder noch in Discovery)' % self.node_label(s))
+                    continue
+                if self.ports.get((nid, p), {}).get('qual') == 'error-disabled':
+                    hs['reasons'].append('%s %s ist error-disabled (%s)' % (self.nodes[nid]['name'], p, self.ports[(nid, p)].get('errdis')))
                     continue
                 if self.ports.get((nid, p), {}).get('qual') == 'admin-down':
                     hs['reasons'].append('%s %s ist deaktiviert (Disabled Interface)' % (self.nodes[nid]['name'], p))
@@ -1316,6 +1337,13 @@ class Engine:
             hs.update({'learned': True, 'ipLearned': ip_learn, 'epg': match['epg'], 'bd': bd,
                        'vrf': match['vrf'], 'nodes': match['nodes'], 'encap': 'vlan-%d' % match['vlan'],
                        'dep': match})
+            if bd in self.learn_off:
+                hs.update({'learned': False, 'ipLearned': False})
+                hs['reasons'].append(self.learn_off[bd])
+                continue
+            if bd in self.storm_bds:
+                hs['storm'] = self.storm_bds[bd]
+                hs['reasons'].append(self.storm_bds[bd])
             useg = self._useg(h, match)
             if useg:
                 hs['base'], hs['epg'] = match['epg'], useg

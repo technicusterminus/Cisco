@@ -254,6 +254,7 @@
  "routers": [],
  "vcenters": [],
  "devices": [],
+ "switches": [],
  "solutionConfig": [
   [
    "uni",

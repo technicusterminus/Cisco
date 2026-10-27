@@ -1059,6 +1059,7 @@
  "vcenters": [],
  "devices": [],
  "aaa": [],
+ "switches": [],
  "solutionConfig": [
   [
    "uni",

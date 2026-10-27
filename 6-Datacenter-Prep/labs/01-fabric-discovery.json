@@ -105,6 +105,7 @@
  "vcenters": [],
  "devices": [],
  "aaa": [],
+ "switches": [],
  "solutionConfig": [
   [
    "uni/controller/nodeidentpol",

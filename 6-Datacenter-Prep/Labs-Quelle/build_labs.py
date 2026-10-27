@@ -1257,6 +1257,238 @@ lab(id='23-esg-useg', title='23 Endpoint Security Groups und uSeg EPGs', topic='
 
 
 # ----------------------------------------------------------------------------
+# Lab 24 - Firmware-Upgrade mit Upgrade Groups
+# ----------------------------------------------------------------------------
+VPC24 = mo('fabricProtPol', {'pairT': 'explicit'}, mo('fabricExplicitGEp', {'name': 'vpc-101-102', 'id': '12'},
+                                                      mo('fabricNodePEp', {'id': '101'}), mo('fabricNodePEp', {'id': '102'})),
+           mo('fabricExplicitGEp', {'name': 'vpc-103-104', 'id': '34'}, mo('fabricNodePEp', {'id': '103'}), mo('fabricNodePEp', {'id': '104'})))
+FW24_DL = mo('firmwareRepoP', {}, mo('firmwareOSource', {'name': 'apic-6.0.6c', 'proto': 'scp', 'url': '192.168.10.50:/images/aci-apic-dk9.6.0.6c.iso',
+                                                          'user': 'backup', 'password': 'Backup123!'}),
+              mo('firmwareOSource', {'name': 'n9000-16.0.6c', 'proto': 'http', 'url': 'http://192.168.10.50/images/aci-n9000-dk9.16.0.6c.bin'}))
+
+
+def upg_group(name, nodes, now):
+    return mo('fabricInst', {}, mo('maintMaintP', {'name': name, 'version': 'n9000-16.0(6c)', 'adminSt': 'triggered' if now else 'untriggered'}),
+              mo('maintMaintGrp', {'name': name}, mo('maintRsMgrpp', {'tnMaintMaintPName': name}),
+                 *[mo('fabricNodeBlk', {'name': 'blk%d' % n, 'from_': str(n), 'to_': str(n)}) for n in nodes]))
+
+
+lab(id='24-firmware-upgrade', title='24 Firmware-Upgrade mit Upgrade Groups', topic='Fabric-Betrieb', level='Fortgeschritten', duration='35 min',
+    fabric='discovered', settings={'upgradeSeconds': 30},
+    goals=['Firmware-Images ins Repository des APIC laden', 'Das Upgrade in der richtigen Reihenfolge fahren: erst der APIC, dann die Switches',
+           'Upgrade Groups so bilden, dass nie beide vPC-Peers oder beide Spines gleichzeitig neu laden'],
+    intro='Die Fabric läuft mit **6.0(5h)** (APIC) bzw. **16.0(5h)** (Switches). Ziel ist **6.0(6c) / 16.0(6c)**. Die Images liegen auf dem '
+          'Fileserver **192.168.10.50** (SCP, Benutzer backup / Backup123!, oder HTTP) unter `/images`.\n\n'
+          'leaf101/102 und leaf103/104 sind **vPC-Paare**. Ein Reload dauert im Simulator 30 Sekunden '
+          '(einstellbar unter Simulation > Einstellungen).',
+    config=[SERVER_ACCESS, mo('polUni', {}, mo('fabricInst', {}, VPC24)), shop_tenant(with_contracts=True)], hosts=[WEB1, APP1],
+    tasks=[
+        task('Images laden', '**Admin > Firmware > Download Tasks** (bzw. *Images > Add Firmware to APIC*): beide Images vom Fileserver laden, '
+             'z. B. SCP `192.168.10.50:/images/aci-apic-dk9.6.0.6c.iso` und HTTP `http://192.168.10.50/images/aci-n9000-dk9.16.0.6c.bin`.'),
+        task('Erst der APIC', '**Infrastructure > Controllers**: Zielversion apic-6.0(6c) wählen, dann *Actions > Upgrade Controller Now*. '
+             'Während des Upgrades nimmt der APIC keine Konfiguration an.',
+             'Versuchst du zuerst die Switches, bricht die Kompatibilitätsprüfung ab: Switches dürfen nicht neuer sein als der APIC.'),
+        task('Upgrade Groups', '**Infrastructure > Nodes**: Zwei Gruppen **Odd** (101, 103, 201) und **Even** (102, 104, 202), Zielversion '
+             'n9000-16.0(6c).', 'Eine Gruppe mit 101 und 102 erzeugt Fault S1801, eine mit beiden Spines S1802.'),
+        task('Gruppe für Gruppe', 'Zuerst **Odd** starten (*Actions > Upgrade Now*) und während des Reloads den Traffic-Test web1 → app1 '
+             'ausführen: web1 hängt **single-homed** an leaf101 und ist kurz offline – dual-homed Server (vPC) hätten keinen Ausfall, der '
+             'vPC-Peer leaf102 lädt ja nicht gleichzeitig. Wenn Odd fertig ist, **Even** starten.'),
+        task('Verifizieren', '`show firmware upgrade status` und `show version` auf dem APIC, Upgrade-Übersicht unter Admin > Firmware.'),
+    ],
+    checks=[check('APIC auf 6.0(6c), alle Switches auf 16.0(6c)', 'firmware', apic='6.0(6c)', switch='16.0(6c)'),
+            check('Jeder Switch in genau einer Upgrade Group, kein vPC-Paar und nicht alle Spines zusammen', 'fwgroups', min=2),
+            check('web1 → app1 tcp/8080 funktioniert', 'traffic', src='web1', dst='app1', proto='tcp', port=8080, expect=True)],
+    solution='1. Download Tasks: `' + json.dumps(FW24_DL) + '`\n2. `uni/controller/ctrlrfwpol` version=apic-6.0(6c), dann '
+             '`uni/controller/ctrlrmaintpol` adminSt=triggered\n3. Upgrade Groups: `' + json.dumps(upg_group('Odd', [101, 103, 201], True)) +
+             '` und danach die Gruppe Even mit 102, 104, 202.')
+
+# ----------------------------------------------------------------------------
+# Lab 25 - Config Export und Import
+# ----------------------------------------------------------------------------
+def _backup25():
+    import sys
+    sys.path.insert(0, os.path.dirname(OUT))
+    from dcprep.model import Store, post as mpost
+    from dcprep.topology import base_config
+    st = Store()
+    base_config(st, 'admin')
+    mpost(st, 'uni', shop_tenant(with_contracts=True))
+    rows = [r for r in st.dump_config() if r[0] == 'uni/tn-Shop' or r[0].startswith('uni/tn-Shop/')]
+    return {'size': '18 KB', 'export': {'kind': 'aci-config-export', 'created': '2026-10-26T23:00:04.000+00:00', 'target': 'uni/tn-Shop',
+                                        'secure': False, 'key': '', 'policy': 'Shop-Nightly', 'rows': rows, 'version': '6.0(5h)',
+                                        'counters': dict(st.counters)}}
+
+
+RL25 = mo('fileRemotePath', {'name': 'SCP-Backup', 'host': '192.168.10.50', 'protocol': 'scp', 'remotePath': '/backup', 'remotePort': '22',
+                             'userName': 'backup', 'userPasswd': 'Backup123!'},
+          mo('fileRsARemoteHostToEpg', {'tDn': 'uni/tn-mgmt/mgmtp-default/oob-default'}))
+IMP25 = mo('configImportP', {'name': 'Restore-Shop', 'fileName': 'ce2_Shop-Nightly-2026-10-26T23-00-00.tar.gz', 'importType': 'merge',
+                             'importMode': 'atomic', 'adminSt': 'triggered'}, mo('configRsRemotePath', {'tnFileRemotePathName': 'SCP-Backup'}))
+EXP25 = mo('configExportP', {'name': 'Fabric-Nightly', 'adminSt': 'triggered', 'includeSecureFields': 'yes'},
+           mo('configRsRemotePath', {'tnFileRemotePathName': 'SCP-Backup'}))
+lab(id='25-config-export-import', title='25 Config Export und Import', topic='Fabric-Betrieb', level='Fortgeschritten', duration='30 min',
+    fabric='discovered',
+    goals=['Eine Remote Location für SCP anlegen', 'Einen gelöschten Tenant per Import (Merge) aus dem Backup wiederherstellen',
+           'Exporte mit AES-Verschlüsselung erstellen, damit Passwörter und Keys enthalten sind'],
+    intro='Gestern Abend hat ein Kollege versehentlich den Tenant **Shop** gelöscht. Auf dem SCP-Server **192.168.10.50** (backup / Backup123!) '
+          'liegt das nächtliche Backup **ce2_Shop-Nightly-2026-10-26T23-00-00.tar.gz** in `/backup`. Die Server web1 und app1 sind seitdem offline.\n\n'
+          'Danach soll ein nächtlicher **Export der ganzen Fabric** eingerichtet werden – diesmal mit Passwörtern, also mit **Global AES Encryption** '
+          '(Passphrase mindestens 16 Zeichen).',
+    config=[SERVER_ACCESS], hosts=[WEB1, APP1],
+    fileserver={'files': {'/backup/ce2_Shop-Nightly-2026-10-26T23-00-00.tar.gz': _backup25()}},
+    tasks=[
+        task('Remote Location', '**Admin > Import/Export > Remote Locations**: **SCP-Backup**, Host 192.168.10.50, SCP, Port 22, Pfad /backup, '
+             'Benutzer backup, Management EPG **default (Out-of-Band)**.'),
+        task('Import', '**Import Policies > Configuration**: **Restore-Shop**, Datei aus dem Backup, Import Type **Merge**, Mode **Atomic**, '
+             'Remote Location SCP-Backup, *Start Now: Triggered*. Ergebnis unter **Jobs**.',
+             'Replace würde alles, was nicht im Backup steht, im Zielbereich ersetzen – für einen einzelnen Tenant ist Merge der sichere Weg.'),
+        task('Prüfen', 'web1 und app1 sind wieder gelernt, web1 → app1 tcp/8080 klappt.'),
+        task('AES-Verschlüsselung', '**System Settings > Global AES Passphrase Encryption Settings** (oder Import/Export > Global AES Encryption): '
+             'Encryption einschalten, Passphrase z. B. `Nightly-Backup#2026`.'),
+        task('Export', '**Export Policies > Configuration**: **Fabric-Nightly**, Remote Location SCP-Backup, Include Secure Fields yes, sofort '
+             'starten. Unter Simulation > Fileserver & Monitoring siehst du die Datei – jetzt *mit* Secure Properties.'),
+    ],
+    checks=[check('Import erfolgreich', 'job', kind='import'),
+            check('Tenant Shop mit EPG Web ist zurück', 'exists', dn='uni/tn-Shop/ap-Webshop/epg-Web'),
+            check('web1 → app1 tcp/8080', 'traffic', src='web1', dst='app1', proto='tcp', port=8080, expect=True),
+            check('Global AES Encryption aktiv', 'exists', dn='uni/exportcryptkey', attrs={'strongEncryptionEnabled': 'yes'}),
+            check('Export mit Secure Properties erfolgreich', 'job', kind='export', secure=True)],
+    solution='`' + json.dumps(RL25) + '` unter uni/fabric, dann `' + json.dumps(IMP25) + '`; danach `uni/exportcryptkey` mit '
+             'strongEncryptionEnabled=yes und Passphrase, zuletzt `' + json.dumps(EXP25) + '`.')
+
+# ----------------------------------------------------------------------------
+# Lab 26 - Monitoring: SNMP, Syslog, Callhome
+# ----------------------------------------------------------------------------
+OOB26 = mo('mgmtOoB', {'name': 'default'}, *[mo('mgmtRsOoBStNode', {'tDn': 'topology/pod-1/node-%d' % i, 'addr': '192.168.10.%d/24' % i,
+                                                                    'gw': '192.168.10.254'}) for i in (101, 102, 103, 104, 201, 202)])
+SNMP26 = mo('fabricInst', {},
+            mo('snmpPol', {'name': 'default', 'adminSt': 'enabled', 'contact': 'noc@firma.de', 'loc': 'RZ Frankfurt'},
+               mo('snmpCommunityP', {'name': 'NMS-Read'}),
+               mo('snmpClientGrpP', {'name': 'NMS'}, mo('snmpRsEpg', {'tDn': 'uni/tn-mgmt/mgmtp-default/oob-default'}),
+                  mo('snmpClientP', {'addr': '192.168.10.61'}))),
+            mo('fabricFuncP', {}, mo('fabricPodPGrp', {'name': 'PodPol'}, mo('fabricRsSnmpPol', {'tnSnmpPolName': 'default'}))),
+            mo('snmpGroup', {'name': 'NMS-Traps'}, mo('snmpTrapDest', {'host': '192.168.10.61', 'port': '162', 'ver': 'v2c', 'secName': 'NMS-Read'},
+                                                     mo('snmpRsARemoteHostToEpg', {'tDn': 'uni/tn-mgmt/mgmtp-default/oob-default'}))),
+            mo('syslogGroup', {'name': 'Syslog'}, mo('syslogRemoteDest', {'host': '192.168.10.60', 'severity': 'information'},
+                                                     mo('fileRsARemoteHostToEpg', {'tDn': 'uni/tn-mgmt/mgmtp-default/oob-default'}))),
+            mo('callhomeGroup', {'name': 'NOC-Mail'}, mo('callhomeProf', {'from': 'apic1@firma.de', 'contact': 'NOC'},
+                                                         mo('callhomeSmtpServer', {'host': '192.168.10.62'},
+                                                            mo('fileRsARemoteHostToEpg', {'tDn': 'uni/tn-mgmt/mgmtp-default/oob-default'}))),
+               mo('callhomeDest', {'name': 'noc', 'email': 'noc@firma.de'})),
+            mo('monCommonPol', {}, mo('syslogSrc', {'name': 'all', 'minSev': 'warning', 'incl': 'faults,audit'},
+                                      mo('syslogRsDestGroup', {'tDn': 'uni/fabric/slgroup-Syslog'})),
+               mo('snmpSrc', {'name': 'traps', 'minSev': 'minor', 'incl': 'faults'}, mo('snmpRsDestGroup', {'tDn': 'uni/fabric/snmpgroup-NMS-Traps'})),
+               mo('callhomeSrc', {'minSev': 'major', 'incl': 'faults'}, mo('callhomeRsDestGroup', {'tDn': 'uni/fabric/chgroup-NOC-Mail'}))))
+lab(id='26-monitoring-snmp-syslog', title='26 Monitoring: SNMP, Syslog und Callhome', topic='Fabric-Betrieb', level='Fortgeschritten',
+    duration='40 min', fabric='discovered',
+    goals=['SNMP-Polling mit Community und Client Group über die Pod Policy Group freigeben', 'Faults und Audit Logs per Syslog und SNMP-Trap senden',
+           'Callhome-Mails für schwere Faults einrichten', 'Verstehen, warum Switches eine Management-Adresse brauchen'],
+    intro='Das NOC will die Fabric überwachen. Im OOB-Netz 192.168.10.0/24 stehen: **Syslog** 192.168.10.60 (UDP 514), **SNMP-Manager** '
+          '192.168.10.61 (Community **NMS-Read**, Traps auf 162) und der **Mailserver** 192.168.10.62. Die Switches haben noch keine '
+          'Management-Adressen: leaf101 = 192.168.10.101 usw., Gateway 192.168.10.254.',
+    config=[SERVER_ACCESS, shop_tenant(with_contracts=True)], hosts=[WEB1, APP1],
+    tasks=[
+        task('Management-Adressen', '**Tenant mgmt > Node Management Addresses**: Static Node Management Addresses für 101–104, 201, 202 '
+             '(192.168.10.<Node-ID>/24, Gateway 192.168.10.254).'),
+        task('SNMP-Polling', '**Fabric > Fabric Policies > Policies > Pod > SNMP**: Policy **default** aktivieren, Contact und Location, Community '
+             '**NMS-Read**, Client Group mit Management EPG default (Out-of-Band) und Client **192.168.10.61**. Dann eine Pod Policy Group '
+             '**PodPol** mit dieser SNMP Policy und im Pod Profile default zuweisen.',
+             'Ohne Client Group beantwortet die ACI keine SNMP-Anfrage – auch mit richtiger Community nicht.'),
+        task('Destination Groups', '**Admin > External Data Collectors > Monitoring Destinations**: Syslog-Gruppe **Syslog** (Ziel 192.168.10.60, '
+             'Severity information), SNMP-Gruppe **NMS-Traps** (192.168.10.61:162, v2c, NMS-Read), Callhome-Gruppe **NOC-Mail** (From apic1@firma.de, '
+             'SMTP 192.168.10.62, Ziel noc@firma.de). Jeweils Management EPG default (Out-of-Band).'),
+        task('Sources', '**Fabric Policies > Policies > Monitoring > Common Policy**: Syslog Source (Faults und Audit, ab warning), '
+             'SNMP Source (Faults ab minor), Callhome Source (Faults ab major) – jeweils mit ihrer Destination Group.',
+             'Ohne Source sendet der APIC nichts, auch wenn die Destination Group fertig ist.'),
+        task('Testen', 'Simulation > Fileserver & Monitoring: *snmpwalk* gegen apic1 und leaf101, dann einen Test-Fault **major** auslösen. '
+             'Er muss beim Syslog-Server, beim SNMP-Manager und als Mail ankommen.'),
+    ],
+    checks=[check('SNMP-Walk auf apic1 mit NMS-Read', 'snmp', manager='snmp-nms', node='apic1', community='NMS-Read'),
+            check('SNMP-Walk auf leaf101', 'snmp', manager='snmp-nms', node='leaf101', community='NMS-Read'),
+            check('Syslog-Ziel erreichbar', 'mon', kind='syslog'),
+            check('SNMP-Trap-Ziel erreichbar', 'mon', kind='snmp'),
+            check('Callhome-Ziel erreichbar', 'mon', kind='smtp'),
+            check('Syslog-Server hat einen Fault empfangen', 'received', collector='syslog-srv', contains='][raised]['),
+            check('NOC-Mail angekommen', 'received', collector='mail-srv', contains='Mail an noc@firma.de')],
+    solution='Management-Adressen: `' + json.dumps(OOB26) + '`\n\nFabric (uni): `' + json.dumps(SNMP26) + '`\n\nPod Profile: '
+             '`uni/fabric/podprof-default/pods-default-typ-ALL/rspodPGrp` tDn=uni/fabric/funcprof/podpgrp-PodPol. Danach Test-Fault auslösen.')
+
+# ----------------------------------------------------------------------------
+# Lab 27 - DHCP Relay
+# ----------------------------------------------------------------------------
+DHCP27_ACC = access('VLAN-Pool-Office', 150, 169, 'PhysDom-Office', 'AAEP-Office', 'IPG-Office', 'IntProf-Office', 'Office-Ports', 11, 20,
+                    'SwProf-Office', 101, 102)
+OFFICE27 = mo('fvTenant', {'name': 'Office'}, mo('fvCtx', {'name': 'Corp'}),
+              bd('BD-Clients', 'Corp', '10.50.0.1/24'), bd('BD-Services', 'Corp', '10.60.0.1/24'),
+              contract('clients-to-services', ['icmp', 'default']),
+              mo('fvAp', {'name': 'Office'},
+                 epg('Clients', 'BD-Clients', dom='uni/phys-PhysDom-Office', ports=[(path(101, 'eth1/11'), 150), (path(102, 'eth1/11'), 150)],
+                     cons=['clients-to-services']),
+                 epg('Services', 'BD-Services', dom='uni/phys-PhysDom-Office', ports=[(path(102, 'eth1/12'), 160)], prov=['clients-to-services'])))
+DHCP1 = dict(host('dhcp1', '00:50:56:60:00:10', '10.60.0.10/24', '10.60.0.1', 160, [[L102, 'eth1/12']], descr='DHCP-Server (Windows)'),
+             dhcpd=[{'net': '10.50.0.0/24', 'from': '10.50.0.100', 'to': '10.50.0.199', 'gw': '10.50.0.1'}])
+PC1 = dict(host('pc1', '00:50:56:50:00:21', '0.0.0.0/32', '', 150, [[L101, 'eth1/11']], descr='Büro-PC (DHCP)'), dhcp=True)
+PC2 = dict(host('pc2', '00:50:56:50:00:22', '0.0.0.0/32', '', 150, [[L102, 'eth1/11']], descr='Büro-PC (DHCP)'), dhcp=True)
+RELAY27 = mo('fvTenant', {'name': 'Office'},
+             mo('dhcpRelayP', {'name': 'DHCP-Corp', 'owner': 'tenant'}, mo('dhcpRsProv', {'tDn': 'uni/tn-Office/ap-Office/epg-Services', 'addr': '10.60.0.10'})),
+             mo('fvBD', {'name': 'BD-Clients'}, mo('dhcpLbl', {'name': 'DHCP-Corp', 'owner': 'tenant'})))
+lab(id='27-dhcp-relay', title='27 DHCP Relay', topic='Tenant / Services', level='Mittel', duration='25 min', fabric='discovered',
+    goals=['Eine DHCP Relay Policy mit Provider-EPG und Server-Adresse anlegen', 'Die Policy per DHCP Relay Label an die Client-BD hängen',
+           'Mit show ip dhcp relay und dem Host-Status verifizieren'],
+    intro='Im Tenant **Office** holen sich die Büro-PCs **pc1** und **pc2** (EPG Clients, BD-Clients 10.50.0.0/24) ihre Adresse per DHCP. '
+          'Der DHCP-Server **dhcp1** (10.60.0.10) steht in der EPG **Services** (BD-Services) und hat einen Scope für 10.50.0.0/24. '
+          'Noch bekommen die PCs keine Adresse – der DHCP Discover ist ein Broadcast und bleibt im BD.',
+    config=[DHCP27_ACC, OFFICE27], hosts=[DHCP1, PC1, PC2],
+    tasks=[
+        task('Relay Policy', '**Tenant Office > Policies > Protocol > DHCP > Relay Policies**: **DHCP-Corp** mit Provider EPG **Services** und '
+             'Server-Adresse **10.60.0.10**.'),
+        task('Relay Label', 'Am **BD-Clients** unter *DHCP Relay Labels* das Label **DHCP-Corp** (Scope tenant) anlegen.',
+             'Der Name des Labels muss genau dem Namen der Relay Policy entsprechen. Der Relay Agent nutzt das BD-Gateway 10.50.0.1 als giaddr.'),
+        task('Verifizieren', 'Simulation > Topologie & Hosts: pc1 und pc2 haben eine Adresse aus 10.50.0.100–199. Auf leaf101 '
+             '`show ip dhcp relay`. Traffic-Test pc1 → dhcp1.'),
+    ],
+    checks=[check('pc1 hat ein DHCP-Lease', 'dhcp', host='pc1'), check('pc2 hat ein DHCP-Lease', 'dhcp', host='pc2'),
+            check('pc1 erreicht dhcp1', 'traffic', src='pc1', dst='dhcp1', expect=True)],
+    solution='`' + json.dumps(RELAY27) + '`')
+
+# ----------------------------------------------------------------------------
+# Lab 28 - Loop Protection mit MCP und QoS
+# ----------------------------------------------------------------------------
+SHOP28 = shop_tenant(with_contracts=True)
+SHOP28['fvTenant']['children'][-3]['fvAp']['children'][0]['fvAEPg']['children'] += [
+    mo('fvRsPathAtt', {'tDn': path(101, 'eth1/9'), 'encap': 'vlan-110'}), mo('fvRsPathAtt', {'tDn': path(102, 'eth1/9'), 'encap': 'vlan-110'})]
+CAT28 = {'name': 'cat-lager', 'links': [[L101, 'eth1/9'], [L102, 'eth1/9']], 'bond': 'none', 'vlans': '', 'descr': 'alter Catalyst im Lager'}
+MCP28 = mo('mcpInstPol', {'adminSt': 'enabled', 'key': 'Mcp#Fabric2026', 'ctrl': 'pdu-per-vlan', 'loopProtectAct': 'port-disable'})
+lab(id='28-mcp-loop-qos', title='28 Loop Protection mit MCP und QoS-Klassen', topic='Fabric-Betrieb', level='Fortgeschritten', duration='30 min',
+    fabric='discovered',
+    goals=['Eine Layer-2-Schleife über einen Legacy-Switch erkennen', 'MCP global mit Key und PDU per VLAN aktivieren', 'Endpoint Loop Protection '
+           'als zweite Verteidigungslinie kennen', 'EPGs einer QoS-Klasse zuordnen'],
+    intro='Die Lager-IT hat einen alten Catalyst **cat-lager** mit zwei Kabeln an **leaf101 eth1/9** und **leaf102 eth1/9** gesteckt – ohne '
+          'Port-Channel. Beide Ports liegen in der EPG **Web** (vlan-110). Seitdem ist der Webshop gestört: Broadcast-Storm im BD-Web, '
+          'die MACs springen zwischen den Ports.\n\nMCP ist global noch aus. Danach soll die EPG **App** die QoS-Klasse **Level2** bekommen.',
+    config=[SERVER_ACCESS, SHOP28], hosts=[WEB1, APP1], switches=[CAT28],
+    tasks=[
+        task('Analyse', 'Faults ansehen (S2534 am BD), Traffic-Test web1 → app1, auf leaf101 `show mcp internal info interface all`. '
+             'Simulation > Legacy-Switches zeigt die Schleife.'),
+        task('MCP aktivieren', '**Fabric > Access Policies > Policies > Global > MCP Instance Policy default**: Admin State enabled, Key '
+             '`Mcp#Fabric2026`, Loop Protection Action Port Disable.',
+             'Ohne *Enable MCP PDU per VLAN* sendet MCP nur untagged – die Schleife in vlan-110 bleibt unentdeckt.'),
+        task('PDU per VLAN', 'In derselben Policy **Enable MCP PDU per VLAN** aktivieren. Jetzt error-disabled MCP einen der Ports '
+             '(`show interface status err-disabled`).'),
+        task('Endpoint Loop Protection', '**System Settings > Endpoint Controls**: Ep Loop Protection aktivieren (Action Port Disable) – '
+             'als Absicherung, falls MCP auf einem Port fehlt.'),
+        task('QoS', 'EPG **App**: QoS Class **Level2**. Auf einem Leaf `show qos classes`.'),
+    ],
+    checks=[check('Schleife durch MCP gebrochen', 'loop', switch='cat-lager', action='mcp'),
+            check('MCP mit PDU per VLAN aktiv', 'exists', dn='uni/infra/mcpInstP-default', attrs={'adminSt': 'enabled', 'ctrl': 'pdu-per-vlan'}),
+            check('Endpoint Loop Protection aktiv', 'exists', dn='uni/infra/epLoopProtectP-default', attrs={'adminSt': 'enabled'}),
+            check('web1 → app1 tcp/8080 wieder erreichbar', 'traffic', src='web1', dst='app1', proto='tcp', port=8080, expect=True),
+            check('EPG App in QoS-Klasse Level2', 'exists', dn='uni/tn-Shop/ap-Webshop/epg-App', attrs={'prio': 'level2'})],
+    solution='`uni/infra/mcpInstP-default`: `' + json.dumps(MCP28) + '`, `uni/infra/epLoopProtectP-default` adminSt=enabled, '
+             'EPG App prio=level2.')
+
+
+# ----------------------------------------------------------------------------
 # Maschinenlesbare Musterloesungen (fuer die Tests: [URL-DN, Body])
 # ----------------------------------------------------------------------------
 BGP_RR = ['uni/fabric/bgpInstP-default', mo('bgpInstPol', {}, mo('bgpAsP', {'asn': '65001'}),
@@ -1357,6 +1589,19 @@ SOLUTIONS = {
                                  mo('aaaRadiusProviderGroup', {'name': 'RAD'}, mo('aaaProviderRef', {'name': '192.168.20.41'}))),
                                  mo('aaaLoginDomain', {'name': 'RAD'}, mo('aaaDomainAuth', {'realm': 'radius', 'providerGroup': 'RAD'})))]],
     '23-esg-useg': [['uni', SOL23]],
+    '24-firmware-upgrade': [['uni/fabric', FW24_DL], ['uni/controller/ctrlrfwpol', mo('firmwareCtrlrFwP', {'version': 'apic-6.0(6c)'})],
+                            ['uni/controller/ctrlrmaintpol', mo('maintCtrlrMaintP', {'adminSt': 'triggered'})],
+                            ['uni', mo('polUni', {}, upg_group('Odd', [101, 103, 201], True))],
+                            ['uni', mo('polUni', {}, upg_group('Even', [102, 104, 202], True))]],
+    '25-config-export-import': [['uni/fabric', RL25], ['uni/fabric', IMP25],
+                                ['uni/exportcryptkey', mo('pkiExportEncryptionKey', {'strongEncryptionEnabled': 'yes', 'passphrase': 'Nightly-Backup#2026'})],
+                                ['uni/fabric', EXP25]],
+    '26-monitoring-snmp-syslog': [['uni/tn-mgmt/mgmtp-default', mo('mgmtMgmtP', {}, OOB26)], ['uni', mo('polUni', {}, SNMP26)],
+                                  ['uni/fabric/podprof-default/pods-default-typ-ALL/rspodPGrp', mo('fabricRsPodPGrp', {'tDn': 'uni/fabric/funcprof/podpgrp-PodPol'})],
+                                  ['#monitor-test', {'severity': 'major'}]],
+    '27-dhcp-relay': [['uni', RELAY27]],
+    '28-mcp-loop-qos': [['uni/infra/mcpInstP-default', MCP28], ['uni/infra/epLoopProtectP-default', mo('epLoopProtectP', {'adminSt': 'enabled'})],
+                        ['uni/tn-Shop/ap-Webshop/epg-App', mo('fvAEPg', {'prio': 'level2'})]],
     '14-l2out-migration': [['uni', L2ACC14], ['uni', L2OUT14], ['uni/tn-Shop/BD-BD-Migration', mo('fvBD', {'arpFlood': 'yes'})]],
 }
 
@@ -1373,6 +1618,7 @@ def main():
         l.setdefault('vcenters', [])
         l.setdefault('devices', [])
         l.setdefault('aaa', [])
+        l.setdefault('switches', [])
         l['solutionConfig'] = SOLUTIONS[l['id']]
         with open(os.path.join(OUT, l['id'] + '.json'), 'w', encoding='utf-8') as f:
             json.dump(l, f, ensure_ascii=False, indent=1)

@@ -21,6 +21,7 @@ from . import aaa
 from .topology import default_topology, discovered_members, base_config, ensure_base
 from .cli import Cli
 from . import trace
+from . import ops
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATIC = os.path.join(BASE, 'static')
@@ -50,7 +51,8 @@ class Sim:
     # -------------------------------------------------------------- Persistenz
     def _new_sim(self):
         return {'topology': default_topology(), 'registered': {}, 'hosts': [], 'routers': [],
-                'settings': {'discoverySeconds': self.default_discovery}, 'lab': None,
+                'settings': {'discoverySeconds': self.default_discovery, 'upgradeSeconds': 60}, 'lab': None,
+                'fileserver': ops.default_fileserver(), 'monitors': ops.default_monitors(), 'switches': [],
                 'setup': {k: v for k, v in apic_setup.DEFAULTS.items() if k != 'pwd'}}
 
     def _load(self):
@@ -79,11 +81,11 @@ class Sim:
         base_config(self.store, self.admin_pwd)
         old = self.sim or {}
         self.sim = self._new_sim()
-        for k in ('settings', 'audit', 'events', 'seq'):
+        for k in ('settings', 'audit', 'events', 'seq', 'fileserver', 'monitors', 'monlog'):
             if k in old:
                 self.sim[k] = old[k]
         if keep_sim:
-            for k in ('hosts', 'routers', 'vcenters', 'devices', 'aaa'):
+            for k in ('hosts', 'routers', 'vcenters', 'devices', 'aaa', 'switches'):
                 if k in old:
                     self.sim[k] = old[k]
         if mode == 'factory':
@@ -129,7 +131,8 @@ class Sim:
                 'faults': {d: (st.attrs(d)['code'], st.attrs(d)['severity'], st.attrs(d)['descr'])
                            for d in st.by_class('faultInst')}}
 
-    def _event(self, affected, descr, sev='info', cause='transition', code='E4205125'):
+    def _event(self, affected, descr, sev='info', cause='transition', code='E4205125', rec=None):
+        self.outbox.append(rec or {'kind': 'event', 'severity': sev, 'code': code, 'dn': affected, 'descr': descr, 'cause': cause})
         ev = self.sim.setdefault('events', [])
         ev.append({'id': self._next_id(), 'affected': affected, 'descr': descr, 'severity': sev, 'cause': cause,
                    'code': code, 'created': now_ts(), 'ind': 'state-transition', 'trig': 'oper', 'user': 'internal',
@@ -137,6 +140,8 @@ class Sim:
         del ev[:-2000]
 
     def rebuild(self):
+        if not hasattr(self, 'outbox'):
+            self.outbox = []
         before = self._snap()
         self.engine.rebuild()
         after = self._snap()
@@ -160,17 +165,25 @@ class Sim:
                             sev='info' if adj in ('FULL', 'Established') else 'warning', code='E4212468')
         for d, (code, sev, descr) in after['faults'].items():
             if d not in before['faults']:
-                self._event(d.rsplit('/fault-', 1)[0], 'Fault %s raised: %s' % (code, descr), sev=sev, cause='fault-raised',
-                            code='E4204886')
+                aff = d.rsplit('/fault-', 1)[0]
+                self._event(aff, 'Fault %s raised: %s' % (code, descr), sev=sev, cause='fault-raised', code='E4204886',
+                            rec={'kind': 'fault', 'severity': sev, 'orig': sev, 'code': code, 'dn': aff, 'descr': descr,
+                                 'lc': 'raised', 'cause': self.store.attrs(d).get('cause', '')})
         for d, (code, sev, descr) in before['faults'].items():
             if d not in after['faults']:
-                self._event(d.rsplit('/fault-', 1)[0], 'Fault %s cleared: %s' % (code, descr), cause='fault-cleared',
-                            code='E4204887')
+                aff = d.rsplit('/fault-', 1)[0]
+                self._event(aff, 'Fault %s cleared: %s' % (code, descr), cause='fault-cleared', code='E4204887',
+                            rec={'kind': 'fault', 'severity': 'cleared', 'orig': sev, 'code': code, 'dn': aff, 'descr': descr,
+                                 'lc': 'cleared', 'cause': 'cleared'})
         if len(self.sim.get('events', [])) != n0:
             self.engine._history()
+        box, self.outbox = self.outbox, []
+        ops.deliver(self, box)
 
     def audit(self, user, changes):
         log = self.sim.setdefault('audit', [])
+        if not hasattr(self, 'outbox'):
+            self.outbox = []
         tx = self._next_id()
         for c in changes:
             name = rn_of(c['dn'])
@@ -181,6 +194,8 @@ class Sim:
                         'descr': '%s %s %s' % (CLASSES[c['cls']].label, name, verb), 'changeSet': cs,
                         'code': {'creation': 'E4206326', 'modification': 'E4206327', 'deletion': 'E4206328'}[c['ind']],
                         'cause': 'transition', 'severity': 'info', 'trig': 'config', 'txId': str(tx)})
+            self.outbox.append({'kind': 'audit', 'severity': 'info', 'code': log[-1]['code'], 'dn': c['dn'],
+                                'descr': '%s by %s: %s' % (log[-1]['descr'], user, cs), 'lc': c['ind'], 'cause': 'transition'})
         del log[:-3000]
 
     # -------------------------------------------------------------- Auth
@@ -262,6 +277,14 @@ class Sim:
         self.sim['vcenters'] = json.loads(json.dumps(lab.get('vcenters', [])))
         self.sim['devices'] = json.loads(json.dumps(lab.get('devices', [])))
         self.sim['aaa'] = json.loads(json.dumps(lab.get('aaa', [])))
+        self.sim['switches'] = json.loads(json.dumps(lab.get('switches', [])))
+        self.sim['monitors'] = json.loads(json.dumps(lab.get('monitors') or ops.default_monitors()))
+        self.sim['fileserver'] = ops.default_fileserver()
+        self.sim['fileserver'].update(json.loads(json.dumps(lab.get('fileserver', {}))))
+        self.sim['monlog'] = {}
+        for k, v in lab.get('sim', {}).items():
+            self.sim[k] = json.loads(json.dumps(v))
+        self.sim['settings'].update(lab.get('settings', {}))
         self.sim['lab'] = lid
         self.changed()
         return lab
@@ -328,6 +351,48 @@ class Sim:
                         can = logged and aaa.can_write(self.store, roles_, c['dn'])
                         ok = can == c.get('expect', True)
                         info = '%s darf %s %s schreiben' % (c['user'], '' if can else 'NICHT', c['dn'])
+                elif t == 'firmware':
+                    sw = {n['name']: ops.plain(e.node_version(n['serial'])) for n in e.nodes.values()}
+                    bad = {k: v for k, v in sw.items() if v != ops.plain(c['switch'])}
+                    ok = not bad and (not c.get('apic') or e.apic_version == ops.plain(c['apic'])) and not any(
+                        not u.get('done') for u in self.sim.get('upgrades', []))
+                    info = 'APIC %s; %s' % (e.apic_version, ', '.join('%s %s' % kv for kv in sorted(bad.items())) or 'alle Switches auf ' + ops.plain(c['switch']))
+                elif t == 'fwgroups':
+                    member = [n for g in e.fw_groups for n in g['nodes']]
+                    miss = sorted(set(e.nodes) - set(member))
+                    warn = [w for g in e.fw_groups for w in g['warn']]
+                    multi = sorted({n for n in member if member.count(n) > 1})
+                    ok = not miss and not warn and not multi and len(e.fw_groups) >= c.get('min', 2)
+                    info = '; '.join(filter(None, ['ohne Gruppe: %s' % miss if miss else '', '; '.join(warn), 'mehrfach: %s' % multi if multi else ''])) \
+                        or '%d Upgrade Groups' % len(e.fw_groups)
+                elif t == 'job':
+                    js = [j for j in self.sim.get('jobs', []) if j['kind'] == c['kind'] and j['ok']]
+                    if c.get('secure'):
+                        js = [j for j in js if 'ohne Secure' not in j['details']]
+                    ok = bool(js)
+                    last = (self.sim.get('jobs') or [{}])[-1]
+                    info = js[-1]['details'] if js else ('letzter Job: %s' % last.get('details', 'keiner'))
+                elif t == 'mon':
+                    ds = [d for d in getattr(e, 'mon', []) if d['kind'] == c['kind']]
+                    ok = any(d['ok'] for d in ds)
+                    info = '; '.join('%s: %s' % (d['host'] or '-', 'ok' if d['ok'] else d['why']) for d in ds) or 'kein Ziel konfiguriert'
+                elif t == 'received':
+                    log = [x for x in self.sim.get('monlog', {}).get(c['collector'], []) if not x.get('dropped')]
+                    hit = [x for x in log if c.get('contains', '') in x['text']]
+                    ok = bool(hit)
+                    info = '%d Meldungen empfangen' % len(log)
+                elif t == 'snmp':
+                    r = ops.snmp_walk(self, c['manager'], c['node'], c['community'])
+                    ok = r['ok']
+                    info = 'Antwort von %s' % c['node'] if ok else r['why']
+                elif t == 'dhcp':
+                    d = getattr(e, 'dhcp_info', {}).get(c['host']) or {}
+                    ok = bool(d.get('ok'))
+                    info = ('%s von %s' % (d['ip'], d['server'])) if ok else (d.get('why') or 'kein DHCP-Client')
+                elif t == 'loop':
+                    l = next((x for x in getattr(e, 'loops', []) if x['name'] == c['switch']), {})
+                    ok = bool(l) and (not l.get('loop') or l.get('action') == c.get('action', 'mcp'))
+                    info = l.get('text', 'Switch nicht vorhanden')
                 elif t == 'inb':
                     ok = all(n in getattr(e, 'inb', {}) for n in c['nodes'])
                     info = 'In-Band aktiv auf: %s' % (', '.join(str(n) for n in sorted(getattr(e, 'inb', {}))) or 'keinem Node')
@@ -504,6 +569,10 @@ class Sim:
             if d['name'] != skip:
                 for s_, p_ in d.get('links', []):
                     used[(s_, p_)] = 'L4-L7 ' + d['name']
+        for sw in self.sim.get('switches', []):
+            if sw['name'] != skip:
+                for s_, p_ in sw.get('links', []):
+                    used[(s_, p_)] = 'Switch ' + sw['name']
         for vc in self.sim.get('vcenters', []):
             for esx in vc.get('hosts', []):
                 if esx['name'] != skip:
@@ -529,6 +598,27 @@ class Sim:
             raise AciError(400, 'Name %s ist bereits vergeben' % h['name'])
         if not MAC_RE.match(h.get('mac', '')):
             raise AciError(400, 'MAC-Adresse ungueltig (Format 00:50:56:00:00:01)')
+        if h.get('dhcp'):
+            h['ip'], h['gw'] = '0.0.0.0/32', ''
+        scopes = []
+        raw = h.get('dhcpd') or []
+        if isinstance(raw, str):
+            raw = raw.replace(';', '\n').splitlines()
+        for line in raw:
+            if isinstance(line, dict):
+                scopes.append(line)
+                continue
+            m = re.match(r'^\s*(\S+)\s+(\S+)\s*-\s*(\S+)(?:\s+gw\s+(\S+))?\s*$', line)
+            if not line.strip():
+                continue
+            try:
+                assert m
+                ipaddress.ip_network(m.group(1), strict=False)
+                ipaddress.ip_address(m.group(2))
+                ipaddress.ip_address(m.group(3))
+            except (AssertionError, ValueError):
+                raise AciError(400, 'DHCP-Scope ungueltig: "%s" (Format: 10.1.1.0/24 10.1.1.100-10.1.1.199 gw 10.1.1.1)' % line.strip())
+            scopes.append({'net': m.group(1), 'from': m.group(2), 'to': m.group(3), 'gw': m.group(4) or ''})
         try:
             ipaddress.ip_interface(h['ip'])
             assert '/' in h['ip']
@@ -554,6 +644,10 @@ class Sim:
         clean = {'name': h['name'], 'mac': h['mac'].upper().replace('-', ':'), 'ip': h['ip'], 'gw': h.get('gw', ''),
                  'vlan': v, 'links': [[s, p] for s, p in links], 'bond': h.get('bond', 'none'),
                  'descr': h.get('descr', ''), 'silent': bool(h.get('silent'))}
+        if h.get('dhcp'):
+            clean['dhcp'] = True
+        if scopes:
+            clean['dhcpd'] = scopes
         self.sim['woken'] = [n for n in self.sim.get('woken', []) if n != clean['name']]
         self.sim['hosts'] = [x for x in self.sim['hosts'] if x['name'] != (old or h['name'])] + [clean]
 
@@ -666,6 +760,91 @@ class Sim:
         clean = {'name': o['name'], 'links': [[s_, p_] for s_, p_ in links], 'ifs': ifs, 'allow': allow or ['any']}
         self.sim['devices'] = [d for d in devs if d['name'] != old] + [clean]
 
+    def switch_op(self, b):
+        """Legacy-Switches (z. B. ein alter Access-Switch), die an Leaf-Ports haengen."""
+        sws = self.sim.setdefault('switches', [])
+        if b.get('op') == 'delete':
+            self.sim['switches'] = [x for x in sws if x['name'] != b.get('name')]
+            return
+        o = b.get('switch') or {}
+        old = b.get('old')
+        if not NAME_RE.match(o.get('name', '')):
+            raise AciError(400, 'Name: 1-32 Zeichen, Buchstaben/Ziffern/._-')
+        names = {x['name'] for x in self.sim['hosts'] + self.sim['routers'] + sws if x['name'] != (old or o['name'])}
+        if o['name'] in names:
+            raise AciError(400, 'Name %s ist bereits vergeben' % o['name'])
+        links = o.get('links') or []
+        if not 1 <= len(links) <= 4:
+            raise AciError(400, 'Ein Legacy-Switch braucht 1 bis 4 Links')
+        used = self.used_ports(skip=old or o['name'])
+        for s_, p_ in links:
+            self._check_port(s_, p_, used)
+        if o.get('bond', 'none') not in ('none', 'lacp'):
+            raise AciError(400, 'Bonding: none oder lacp')
+        vl = str(o.get('vlans') or '').strip()
+        if vl and not re.match(r'^\d+(\s*,\s*\d+)*$', vl):
+            raise AciError(400, 'VLANs als Liste, z. B. 10,20 (leer = alle)')
+        clean = {'name': o['name'], 'links': [[a, c] for a, c in links], 'bond': o.get('bond', 'none'), 'vlans': vl,
+                 'descr': o.get('descr', '')}
+        self.sim['switches'] = [x for x in sws if x['name'] != (old or o['name'])] + [clean]
+
+    def monitor_op(self, b):
+        mons = self.sim.setdefault('monitors', [])
+        op = b.get('op')
+        if op == 'delete':
+            self.sim['monitors'] = [m for m in mons if m['name'] != b.get('name')]
+            self.sim.get('monlog', {}).pop(b.get('name'), None)
+            return None
+        if op == 'clear':
+            self.sim.setdefault('monlog', {})[b.get('name')] = []
+            return None
+        if op == 'walk':
+            return ops.snmp_walk(self, b.get('name'), b.get('node', ''), b.get('community', ''))
+        if op == 'test':
+            self._event('uni/fabric/moncommon', 'Test notification from %s' % self.sim['topology']['apic']['name'], sev='info',
+                        rec={'kind': 'fault', 'severity': b.get('severity', 'major'), 'orig': b.get('severity', 'major'), 'code': 'F9999',
+                             'dn': 'topology/pod-1/node-1/sys', 'descr': 'Test fault raised by the simulator (Testmeldung)',
+                             'lc': 'raised', 'cause': 'test'})
+            return None
+        o = b.get('monitor') or {}
+        old = b.get('old')
+        if not NAME_RE.match(o.get('name', '')):
+            raise AciError(400, 'Name ungueltig')
+        if o.get('type') not in ('syslog', 'snmp', 'smtp'):
+            raise AciError(400, 'Typ: syslog, snmp oder smtp')
+        try:
+            ipaddress.ip_address(o.get('ip', ''))
+            port = int(o.get('port') or {'syslog': 514, 'snmp': 162, 'smtp': 25}[o['type']])
+        except ValueError:
+            raise AciError(400, 'IP-Adresse oder Port ungueltig')
+        clean = {'name': o['name'], 'type': o['type'], 'ip': o['ip'], 'port': port, 'down': bool(o.get('down'))}
+        if o['type'] == 'snmp':
+            clean['community'] = o.get('community', '')
+        self.sim['monitors'] = [m for m in mons if m['name'] != (old or o['name'])] + [clean]
+        return None
+
+    def fileserver_op(self, b):
+        fs = ops.fileserver(self)
+        op = b.get('op')
+        if op == 'delete':
+            fs['files'].pop(b.get('path'), None)
+        elif op == 'set':
+            o = b.get('server') or {}
+            try:
+                ipaddress.ip_address(o.get('ip', fs['ip']))
+            except ValueError:
+                raise AciError(400, 'IP-Adresse ungueltig')
+            for k in ('ip', 'user', 'pwd'):
+                if o.get(k):
+                    fs[k] = o[k]
+            fs['down'] = bool(o.get('down'))
+            if o.get('dirs'):
+                fs['dirs'] = sorted({'/' + d.strip().strip('/') for d in str(o['dirs']).split(',') if d.strip()})
+        elif op == 'reset':
+            keep = {k: v for k, v in fs['files'].items() if v.get('export')}
+            self.sim['fileserver'] = ops.default_fileserver()
+            self.sim['fileserver']['files'].update(keep)
+
     def vcenter_op(self, b):
         """Verwaltung des simulierten vCenters: vCenter, ESXi-Hosts, VMs."""
         vcs = self.sim.setdefault('vcenters', [])
@@ -738,11 +917,14 @@ class Sim:
                           'id': nid, 'name': info.get('name'), 'tep': info.get('tep'),
                           'state': info.get('state') or ('pending' if any(p['serial'] == n['serial']
                                                                          for p in e.pending) else 'undiscovered'),
-                          'since': info.get('since')})
+                          'since': info.get('since'), 'upgrading': bool(info.get('upgrading')),
+                          'version': ops.plain(e.node_version(n['serial']))})
         hosts = []
         for h in self.sim['hosts']:
             hs = e.hosts.get(h['name'], {})
-            hosts.append(dict(h, status={'learned': hs.get('learned', False), 'ipLearned': hs.get('ipLearned'), 'quiet': hs.get('quiet', False),
+            lease = self.sim.get('leases', {}).get(h['name']) if h.get('dhcp') else None
+            hosts.append(dict(h, ip=lease['ip'] if lease else h['ip'], status={'learned': hs.get('learned', False), 'ipLearned': hs.get('ipLearned'), 'quiet': hs.get('quiet', False),
+                                         'dhcp': getattr(e, 'dhcp_info', {}).get(h['name']), 'storm': hs.get('storm'),
                                          'epg': hs.get('epg'), 'reasons': hs.get('reasons', []),
                                          'path': hs.get('path'), 'encap': hs.get('encap')}))
         routers = []
@@ -773,6 +955,14 @@ class Sim:
                             for d in self.sim.get('devices', [])],
                 'tracks': {d: e._alive(e.A(d)['dstIpAddr']) if e.A(d)['dstIpAddr'] else False
                            for d in self.store.by_class('fvTrackMember')},
+                'switches': [dict(sw, status=next(({'loop': l['loop'], 'text': l['text'], 'action': l['action'], 'bds': l['bds'],
+                                                     'tags': [str(t) for t in l['tags']],
+                                                     'victim': '%s %s' % (e.nodes[l['victim'][0]]['name'], l['victim'][1]) if l.get('victim') else None}
+                                                    for l in getattr(e, 'loops', []) if l['name'] == sw['name']), {}))
+                             for sw in self.sim.get('switches', [])],
+                'apicUpgrade': bool(getattr(e, 'apic_upgrade', None)), 'apicVersion': getattr(e, 'apic_version', ''),
+                'downloads': self.sim.get('downloads', {}), 'jobs': self.sim.get('jobs', [])[-30:],
+                'upgrading': any(not u.get('done') for u in self.sim.get('upgrades', [])),
                 'graphs': [{k: g[k] for k in ('dn', 'brc', 'graph', 'state', 'reasons', 'node', 'dev')}
                            for g in getattr(e, 'graphs', {}).values()],
                 'lab': {k: lab.get(k) for k in ('id', 'title', 'intro', 'tasks', 'goals', 'solution')} if lab else None,
@@ -944,6 +1134,11 @@ def make_handler(S):
                     return self.send(200, {'totalCount': str(total), 'imdata': res})
                 if kind != 'mo':
                     raise AciError(400, 'POST/DELETE only on /api/mo')
+                up = getattr(S.engine, 'apic_upgrade', None)
+                if up:
+                    pct = int((time.time() - up['start']) * 100 / max(up['dur'], 1))
+                    raise AciError(503, 'APIC-Upgrade auf %s laeuft (%d%%) - der Controller nimmt bis zum Abschluss keine '
+                                   'Konfiguration an' % (ops.plain(up['version']), min(pct, 99)), 503)
                 if method == 'POST':
                     b = self.body()
                     backup = S.store.backup()
@@ -954,6 +1149,8 @@ def make_handler(S):
                         raise AciError(403, 'Access denied (RBAC): Benutzer %s hat kein Schreibrecht auf %s (Rollen: %s)'
                                        % (user, bad[0], aaa.describe(roles) or 'keine'), 403)
                     S.audit(user, ch)
+                    S.rebuild()
+                    ops.run_triggers(S, user)
                     S.changed()
                     return self.send(200, {'totalCount': '0', 'imdata': []})
                 if method == 'DELETE':
@@ -1066,6 +1263,46 @@ def make_handler(S):
                     S.device_op(b)
                     S.changed()
                     return self.send(200, {'ok': True})
+                if rest == 'switches':
+                    S.switch_op(b)
+                    S.changed()
+                    return self.send(200, {'ok': True})
+                if rest == 'monitors':
+                    out = None
+                    if method == 'POST':
+                        out = S.monitor_op(b)
+                        if b.get('op') == 'walk':
+                            return self.send(200, out)
+                        S.changed()
+                    return self.send(200, {'monitors': S.sim.get('monitors', []), 'log': S.sim.get('monlog', {}),
+                                           'dests': [{k: v for k, v in d.items() if k not in ('mgmt', 'incl')} for d in getattr(e, 'mon', [])],
+                                           'snmpPol': e.snmp_pol})
+                if rest == 'fileserver':
+                    if method == 'POST':
+                        S.fileserver_op(b)
+                        S.changed()
+                    fs = ops.fileserver(S)
+                    return self.send(200, dict({k: v for k, v in fs.items() if k != 'files'}, pwd=fs['pwd'],
+                                               files=[{'path': k, 'size': v.get('size'), 'image': bool(v.get('image')),
+                                                       'export': bool(v.get('export')), 'created': (v.get('export') or {}).get('created'),
+                                                       'secure': (v.get('export') or {}).get('secure'),
+                                                       'target': (v.get('export') or {}).get('target'),
+                                                       'objects': len((v.get('export') or {}).get('rows', []))}
+                                                      for k, v in sorted(fs['files'].items())]))
+                if rest == 'firmware':
+                    now = time.time()
+                    ups = [dict(u, pct=100 if u.get('done') else int(min(99, (now - u['start']) * 100 / max(u['dur'], 1))),
+                                left=max(0, int(u['start'] + u['dur'] - now))) for u in S.sim.get('upgrades', [])[-20:]]
+                    vers = [{'id': 1, 'name': S.sim['topology']['apic']['name'], 'role': 'controller', 'version': e.apic_version,
+                             'state': 'upgrading' if e.apic_upgrade else 'active'}]
+                    for nid, n in sorted(e.nodes.items()):
+                        vers.append({'id': nid, 'name': n['name'], 'role': n['role'], 'version': ops.plain(e.node_version(n['serial'])),
+                                     'state': 'upgrading' if n.get('upgrading') else n['state']})
+                    return self.send(200, {'repo': S.sim.get('fwrepo', []), 'downloads': S.sim.get('downloads', {}),
+                                           'log': list(reversed(S.sim.get('fwlog', [])))[:50], 'upgrades': list(reversed(ups)),
+                                           'groups': getattr(e, 'fw_groups', []), 'nodes': vers})
+                if rest == 'jobs':
+                    return self.send(200, list(reversed(S.sim.get('jobs', []))))
                 if rest == 'vcenters':
                     S.vcenter_op(b)
                     S.changed()
@@ -1078,8 +1315,10 @@ def make_handler(S):
                     S.changed()
                     return self.send(200, {'ok': True})
                 if rest == 'settings':
-                    v = float(b.get('discoverySeconds', 20))
+                    v = float(b.get('discoverySeconds', S.sim['settings'].get('discoverySeconds', 20)))
                     S.sim['settings']['discoverySeconds'] = max(0.0, min(v, 600.0))
+                    u = float(b.get('upgradeSeconds', S.sim['settings'].get('upgradeSeconds', 60)))
+                    S.sim['settings']['upgradeSeconds'] = max(5.0, min(u, 1800.0))
                     S.changed()
                     return self.send(200, {'ok': True})
                 if rest == 'labs':

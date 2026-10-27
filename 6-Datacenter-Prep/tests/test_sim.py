@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from dcprep.server import Sim, serve  # noqa: E402
 from dcprep.model import post, AciError  # noqa: E402
 from dcprep import trace  # noqa: E402
+from dcprep import ops  # noqa: E402
 from dcprep.cli import Cli  # noqa: E402
 
 ACCESS = {"polUni": {"attributes": {}, "children": [
@@ -416,17 +417,24 @@ class TestLabs(Base):
     def test_all_labs_solvable(self):
         self.S.sim['settings']['discoverySeconds'] = 0
         labs = self.S.labs()
-        self.assertGreaterEqual(len(labs), 24)
+        self.assertGreaterEqual(len(labs), 29)
         for lab in labs:
             with self.subTest(lab=lab['id']):
                 self.S.load_lab(lab['id'])
+                self.S.sim['settings']['upgradeSeconds'] = 0
                 before = self.S.check_lab()
                 self.assertLess(before['passed'], before['total'], '%s ist schon ohne Loesung bestanden' % lab['id'])
                 for url, body in lab['solutionConfig']:
                     if url == '#setup':
                         self.S.setup_apply(body)
                         continue
+                    if url == '#monitor-test':
+                        self.S.monitor_op(dict(body, op='test'))
+                        self.S.changed()
+                        continue
                     post(self.S.store, url, body)
+                    self.S.rebuild()
+                    ops.run_triggers(self.S, 'admin')
                     self.S.changed()
                 after = self.S.check_lab()
                 failed = [(c['desc'], c['info']) for c in after['checks'] if not c['ok']]
@@ -697,3 +705,118 @@ class TestSecurity(unittest.TestCase):
         self.assertIn('Fallback', w['how'])
         s, ck4 = self.login('apic#fallback\\admin', 'secret')
         self.assertEqual(s, 200)
+
+
+class TestOps(Base):
+    def run_post(self, url, body):
+        ch = post(self.st, url, body)
+        self.S.audit('admin', ch)
+        self.S.rebuild()
+        ops.run_triggers(self.S, 'admin')
+        self.S.changed()
+
+    def setUp(self):
+        super().setUp()
+        self.S.sim['settings'].update({'discoverySeconds': 0, 'upgradeSeconds': 0})
+        self.apply(ACCESS, tenant(), hosts=HOSTS)
+
+    def test_firmware_order_and_groups(self):
+        self.run_post('uni/fabric/fwrepop', {'firmwareOSource': {'attributes': {'name': 'sw', 'proto': 'http', 'url': 'http://192.168.10.50/images/aci-n9000-dk9.16.0.6c.bin'}}})
+        self.run_post('uni/fabric/fwrepop', {'firmwareOSource': {'attributes': {'name': 'bad', 'proto': 'scp', 'url': '192.168.10.50:/images/x.bin', 'user': 'backup', 'password': 'x'}}})
+        self.assertEqual([i['version'] for i in self.S.sim['fwrepo']], ['n9000-16.0(6c)'])
+        self.assertIn('Permission denied', [d for k, d in self.S.sim['downloads'].items() if 'osrc-bad' in k][0]['status'])
+        self.run_post('uni/fabric/protpol', {'fabricExplicitGEp': {'attributes': {'name': 'v', 'id': '12'}, 'children': [
+            {'fabricNodePEp': {'attributes': {'id': '101'}}}, {'fabricNodePEp': {'attributes': {'id': '102'}}}]}})
+        self.run_post('uni/fabric', {'maintMaintP': {'attributes': {'name': 'g', 'version': 'n9000-16.0(6c)'}}})
+        self.run_post('uni/fabric', {'maintMaintGrp': {'attributes': {'name': 'g'}, 'children': [
+            {'maintRsMgrpp': {'attributes': {'tnMaintMaintPName': 'g'}}},
+            {'fabricNodeBlk': {'attributes': {'name': 'b', 'from_': '101', 'to_': '102'}}}]}})
+        self.assertIn('S1801', [c for _, c, _ in self.faults('uni/fabric/maintgrp-g')])
+        self.run_post('uni/fabric/maintpol-g', {'maintMaintP': {'attributes': {'adminSt': 'triggered'}}})
+        self.assertIn('Controller first', self.S.sim['fwlog'][-1]['text'])
+        self.assertEqual(self.st.attrs('uni/fabric/maintpol-g')['adminSt'], 'untriggered')
+        # Reload: Knoten inaktiv, Host an leaf101 nicht gelernt
+        self.S.sim['settings']['upgradeSeconds'] = 3600
+        self.run_post('uni/fabric/maintpol-g', {'maintMaintP': {'attributes': {'ignoreCompat': 'true', 'adminSt': 'triggered'}}})
+        self.assertEqual(self.e.nodes[101]['state'], 'inactive')
+        self.assertIn('Firmware-Upgrade', ' '.join(self.e.hosts['web1']['reasons']))
+        self.S.sim['upgrades'][-1]['dur'] = 0
+        self.S.changed()
+        self.assertEqual(self.e.node_version('SAL1931LA01'), 'n9000-16.0(6c)')
+        self.assertTrue(self.traffic('web1', 'cli1')['ok'])
+
+    def test_export_import(self):
+        self.run_post('uni/fabric', {'fileRemotePath': {'attributes': {'name': 'scp', 'host': '192.168.10.50', 'remotePath': '/backup',
+                                                                        'userName': 'backup', 'userPasswd': 'Backup123!'}, 'children': [
+            {'fileRsARemoteHostToEpg': {'attributes': {'tDn': 'uni/tn-mgmt/mgmtp-default/oob-default'}}}]}})
+        self.run_post('uni/exportcryptkey', {'pkiExportEncryptionKey': {'attributes': {'strongEncryptionEnabled': 'yes', 'passphrase': 'A-very-long-phrase-1'}}})
+        self.run_post('uni/fabric', {'configExportP': {'attributes': {'name': 'x', 'targetDn': 'uni/tn-T', 'adminSt': 'triggered'}, 'children': [
+            {'configRsRemotePath': {'attributes': {'tnFileRemotePathName': 'scp'}}}]}})
+        job = self.S.sim['jobs'][-1]
+        self.assertTrue(job['ok'], job)
+        self.assertNotIn('ohne Secure', job['details'])
+        self.st.delete('uni/tn-T')
+        self.S.changed()
+        self.assertFalse(self.traffic('web1', 'cli1')['ok'])
+        # andere Passphrase -> atomic Import scheitert
+        self.run_post('uni/exportcryptkey', {'pkiExportEncryptionKey': {'attributes': {'passphrase': 'Another-long-phrase2'}}})
+        self.run_post('uni/fabric', {'configImportP': {'attributes': {'name': 'i', 'fileName': job['file'], 'adminSt': 'triggered'}, 'children': [
+            {'configRsRemotePath': {'attributes': {'tnFileRemotePathName': 'scp'}}}]}})
+        self.assertFalse(self.S.sim['jobs'][-1]['ok'])
+        self.assertNotIn('uni/tn-T', self.st.objs)
+        self.run_post('uni/fabric/configimp-i', {'configImportP': {'attributes': {'importMode': 'best-effort', 'adminSt': 'triggered'}}})
+        self.assertTrue(self.S.sim['jobs'][-1]['ok'], self.S.sim['jobs'][-1])
+        self.assertTrue(self.traffic('web1', 'cli1')['ok'])
+
+    def test_monitoring_and_snmp(self):
+        self.run_post('uni/fabric', {'syslogGroup': {'attributes': {'name': 'SL'}, 'children': [{'syslogRemoteDest': {'attributes': {'host': '192.168.10.60', 'port': '515'}, 'children': [
+            {'fileRsARemoteHostToEpg': {'attributes': {'tDn': 'uni/tn-mgmt/mgmtp-default/oob-default'}}}]}}]}})
+        self.run_post('uni/fabric/moncommon', {'syslogSrc': {'attributes': {'name': 'a', 'incl': 'faults'}, 'children': [
+            {'syslogRsDestGroup': {'attributes': {'tDn': 'uni/fabric/slgroup-SL'}}}]}})
+        self.assertIn('Port 515', self.e.mon[0]['why'])
+        self.run_post('uni/fabric/slgroup-SL/rdst-192.168.10.60', {'syslogRemoteDest': {'attributes': {'port': '514'}}})
+        self.assertTrue(self.e.mon[0]['ok'])
+        self.S.monitor_op({'op': 'test', 'severity': 'major'})
+        self.S.changed()
+        log = self.S.sim['monlog']['syslog-srv']
+        self.assertIn('[F9999][raised]', log[-1]['text'])
+        r = ops.snmp_walk(self.S, 'snmp-nms', 'apic1', 'NMS-Read')
+        self.assertFalse(r['ok'])
+        self.run_post('uni/fabric', {'snmpPol': {'attributes': {'name': 'default', 'adminSt': 'enabled'}, 'children': [
+            {'snmpCommunityP': {'attributes': {'name': 'NMS-Read'}}},
+            {'snmpClientGrpP': {'attributes': {'name': 'g'}, 'children': [{'snmpRsEpg': {'attributes': {'tDn': 'uni/tn-mgmt/mgmtp-default/oob-default'}}},
+                                                                         {'snmpClientP': {'attributes': {'addr': '192.168.10.61'}}}]}}]}})
+        self.run_post('uni/fabric/funcprof', {'fabricPodPGrp': {'attributes': {'name': 'P'}, 'children': [{'fabricRsSnmpPol': {'attributes': {'tnSnmpPolName': 'default'}}}]}})
+        self.run_post('uni/fabric/podprof-default/pods-default-typ-ALL/rspodPGrp', {'fabricRsPodPGrp': {'attributes': {'tDn': 'uni/fabric/funcprof/podpgrp-P'}}})
+        self.assertTrue(ops.snmp_walk(self.S, 'snmp-nms', 'apic1', 'NMS-Read')['ok'])
+        self.assertIn('Community', ops.snmp_walk(self.S, 'snmp-nms', 'apic1', 'public')['why'])
+
+    def test_dhcp_relay(self):
+        hosts = json.loads(json.dumps(HOSTS))
+        hosts[1]['dhcpd'] = [{'net': '10.1.1.0/24', 'from': '10.1.1.100', 'to': '10.1.1.110', 'gw': '10.1.1.1'}]
+        hosts.append({'name': 'pc1', 'mac': '00:50:56:00:00:09', 'ip': '0.0.0.0/32', 'gw': '', 'vlan': 10,
+                      'links': [['SAL1931LA01', 'eth1/4']], 'bond': 'none', 'dhcp': True})
+        self.apply({'fvAEPg': {'attributes': {'dn': 'uni/tn-T/ap-A/epg-Web'}, 'children': [
+            {'fvRsPathAtt': {'attributes': {'tDn': 'topology/pod-1/paths-101/pathep-[eth1/4]', 'encap': 'vlan-10'}}}]}}, hosts=hosts)
+        self.assertFalse(self.e.dhcp_info['pc1']['ok'])
+        self.run_post('uni/tn-T', {'dhcpRelayP': {'attributes': {'name': 'R'}, 'children': [
+            {'dhcpRsProv': {'attributes': {'tDn': 'uni/tn-T/ap-A/epg-Cli', 'addr': '10.1.2.10'}}}]}})
+        self.run_post('uni/tn-T/BD-BD1', {'dhcpLbl': {'attributes': {'name': 'R'}}})
+        self.assertEqual(self.e.dhcp_info['pc1']['ip'], '10.1.1.100/24')
+        self.assertTrue(self.traffic('pc1', 'web1')['ok'])
+
+    def test_mcp_loop(self):
+        self.apply({'fvAEPg': {'attributes': {'dn': 'uni/tn-T/ap-A/epg-Web'}, 'children': [
+            {'fvRsPathAtt': {'attributes': {'tDn': 'topology/pod-1/paths-101/pathep-[eth1/3]', 'encap': 'vlan-10'}}},
+            {'fvRsPathAtt': {'attributes': {'tDn': 'topology/pod-1/paths-102/pathep-[eth1/3]', 'encap': 'vlan-10'}}}]}})
+        self.S.sim['switches'] = [{'name': 'sw', 'links': [['SAL1931LA01', 'eth1/3'], ['SAL1931LA02', 'eth1/3']], 'bond': 'none', 'vlans': ''}]
+        self.S.changed()
+        self.assertIn('S2534', [c for _, c, _ in self.faults('uni/tn-T/BD-BD1')])
+        self.assertFalse(self.traffic('web1', 'cli1')['ok'])
+        self.run_post('uni/infra/mcpInstP-default', {'mcpInstPol': {'attributes': {'adminSt': 'enabled', 'key': 'k'}}})
+        self.assertFalse(self.traffic('web1', 'cli1')['ok'])
+        self.run_post('uni/infra/mcpInstP-default', {'mcpInstPol': {'attributes': {'ctrl': 'pdu-per-vlan'}}})
+        self.assertEqual(self.e.ports[(102, 'eth1/3')]['qual'], 'error-disabled')
+        self.assertTrue(self.traffic('web1', 'cli1')['ok'])
+        out = Cli(self.e, self.S.sim).run('leaf102', 'show interface status err-disabled')
+        self.assertIn('mcp-loop', out)

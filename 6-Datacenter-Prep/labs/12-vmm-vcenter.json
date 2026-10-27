@@ -605,6 +605,7 @@
  "routers": [],
  "devices": [],
  "aaa": [],
+ "switches": [],
  "solutionConfig": [
   [
    "uni",

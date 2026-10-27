@@ -142,9 +142,10 @@ Object.assign(Views, {
       { key: 'ph:apicconn', label: 'APIC Connectivity Preferences', kind: 'folder', ph: 'Die Verbindung des APIC (inband/ooband) ist in Datacenter Prep fest auf Out-of-Band eingestellt.' },
       { key: 'ph:coop', label: 'COOP Group', kind: 'folder', ph: 'Die COOP-Datenbank (Endpoint-Mapping auf den Spines) wird automatisch simuliert.' },
       { key: 'ph:mtu', label: 'Control Plane MTU', kind: 'folder', ph: 'Control Plane MTU: 9000 (fest).' },
-      { key: 'ph:epctl', label: 'Endpoint Controls', kind: 'folder', ph: 'Endpoint Loop Protection und Rogue EP Control sind nicht nachgebildet.' },
+      folderNode('', { l: 'Endpoint Controls – Ep Loop Protection', mo: 'uni/infra/epLoopProtectP-default' }),
+      folderNode('', { l: 'Global AES Passphrase Encryption Settings', mo: 'uni/exportcryptkey' }),
       { key: 'ph:fws', label: 'Fabric-Wide Settings', kind: 'folder', ph: 'Enforce Subnet Check, Domain Validation usw. sind nicht nachgebildet.' },
-      { key: 'ph:qos', label: 'QOS', kind: 'folder', ph: 'QoS ist nicht nachgebildet.' },
+      folderNode('', { l: 'QOS', mo: 'uni/infra/qosinst-default' }),
       { key: 'sysinfo', label: 'Über Datacenter Prep', icon: 'i', kind: 'view', view: w => Views.about(w) }];
   },
 
@@ -400,12 +401,6 @@ Object.assign(Views, {
   },
 
   /* ================================================================ Admin */
-  async 'admin/firmware'(w) {
-    const n = (await API.cls('fabricNode')).map(r => r.fabricNode.attributes).sort((a, b) => a.id - b.id);
-    w.appendChild(paneHead('Firmware', 'Installierte Versionen'));
-    w.appendChild(h('div', { class: 'card note' }, 'Firmware-Upgrades (Upgrade Groups, Repository) sind in Datacenter Prep nicht nachgebildet.'));
-    w.appendChild(table([{ l: 'Node', f: r => r.name }, { l: 'ID', f: r => r.id }, { l: 'Role', f: r => r.role }, { l: 'Model', f: r => r.model }, { l: 'Current Firmware', f: r => r.version || '—' }], n));
-  },
 
   /* ================================================================ Virtual Networking */
   async vmmQuickStart(w) {

@@ -52,6 +52,12 @@ Der Zustand bleibt beim Beenden erhalten. Beim ersten Start ist die Fabric ferti
 | ESG und uSeg | Endpoint Security Groups mit EPG- und IP-Selektoren (danach zählen nur noch die ESG-Contracts, ESG↔EPG ist nicht möglich), uSeg EPGs mit IP- und MAC-Attributen in derselben BD und Domain. |
 | Route Control und Transit Routing | Export und Import Route Control Subnets am External EPG (exakt oder *Aggregate*), Route Control Enforcement *Import* am L3Out, Route-Profile `default-export` und `default-import` mit Contexts und Match Rules. Routen eines L3Outs gehen nur mit Export Route Control an ein anderes L3Out (Transit Routing). |
 | Service Graph mit PBR | L4-L7 Device (Concrete Device, Cluster Interfaces mit Encap), Service Graph Template mit Function Node (Routing Mode Redirect), Device Selection Policy und PBR Policies. Die ACI legt Shadow-EPGs auf den Firewall-Ports an, lernt die Firewall-Interfaces und leitet den Verkehr um. Die simulierte Firewall (*Simulation > L4-L7 Geräte*) hat ein eigenes Regelwerk. Falsche MAC, fehlendes VLAN oder fehlende Device Selection Policy führen zu nachvollziehbaren Fehlern. Bei gleicher Priorität gewinnt Redirect vor Permit. |
+| Firmware-Upgrade | Images per SCP/HTTP vom simulierten Fileserver ins Firmware Repository laden, APIC-Upgrade (Controller first, der APIC nimmt währenddessen keine Konfiguration an), Upgrade Groups mit Node Blocks und Upgrade Policy. Die Switches einer Gruppe laden gleichzeitig neu: Endpoints dahinter fallen weg, ohne aktiven Spine gibt es keinen Pfad zwischen den Leafs. Warnung und Fault, wenn beide vPC-Peers oder alle Spines in einer Gruppe sind. |
+| Config Export und Import | Remote Location (SCP/SFTP/FTP mit Management EPG), Export Policy für die ganze Fabric oder einen Target DN, als Datei oder Snapshot (erscheint unter *Config Rollbacks*). Global AES Encryption entscheidet, ob Passwörter und Keys im Export stehen. Import mit Merge oder Replace und Atomic oder Best Effort, Jobs mit Ergebnis. |
+| Monitoring | SNMP Policy mit Community und Client Group über die Pod Policy Group (snmpwalk vom simulierten Manager), Destination Groups für Syslog, SNMP-Traps und Callhome, Sources in der Common Policy mit Min Severity und Include. Neue Faults, Events und Audit-Einträge kommen beim simulierten Syslog-Server, SNMP-Manager oder Mailserver an (*Simulation > Fileserver & Monitoring*, dort auch Test-Faults und snmpwalk). Faults eines Switches brauchen dessen Management-Adresse. |
+| DHCP Relay | DHCP Relay Policy (Tenant oder infra) mit Provider-EPG und Server-Adresse, DHCP Relay Label am BD. Hosts mit *IP per DHCP* bekommen eine Adresse aus dem Scope des simulierten DHCP-Servers, mit dem BD-Gateway als giaddr. |
+| MCP und Loop Protection | Legacy-Switches mit mehreren Links (*Simulation > Legacy-Switches*) bilden Schleifen: Broadcast-Storm und Endpoint-Flapping im BD. MCP (global mit Key, *PDU per VLAN*, MCP Interface Policy) error-disabled einen Port, Endpoint Loop Protection schaltet Port oder BD-Learning ab. |
+| QoS-Klassen | QOS Class Policies level1–level6 mit MTU und Scheduling, Zuordnung über die QoS Class der EPG (`show qos classes`). Die Klassen beeinflussen den Traffic-Test nicht. |
 | Disabled Interfaces | Deaktivierte Ports gehen admin-down, Endpoints und Nachbarschaften dahinter fallen weg. |
 | Faults, Events, Audit Log | Faults mit Code, Severity und Beschreibung am Objekt, Health Scores. Events bei Zustandswechseln (Switch aktiv, Endpoint gelernt, Nachbarschaft, Fault ausgelöst oder behoben). Jede Änderung im Audit Log mit Benutzer, altem und neuem Wert. |
 
@@ -117,6 +123,11 @@ Unter *Simulation > Labs* laden. Jedes Lab setzt die Konfiguration auf einen Sta
 | 21 | AAA: TACACS+, Login-Domain und RBAC | 35 min |
 | 22 | In-Band-Management | 35 min |
 | 23 | Endpoint Security Groups und uSeg EPGs | 35 min |
+| 24 | Firmware-Upgrade mit Upgrade Groups | 35 min |
+| 25 | Config Export und Import | 30 min |
+| 26 | Monitoring: SNMP, Syslog und Callhome | 40 min |
+| 27 | DHCP Relay | 25 min |
+| 28 | Loop Protection mit MCP und QoS-Klassen | 30 min |
 
 Die Lab-Dateien entstehen aus `Labs-Quelle/build_labs.py` (`python3 Labs-Quelle/build_labs.py`). Die Tests prüfen für jedes Lab, dass es ohne Lösung nicht bestanden und mit Musterlösung vollständig bestanden ist.
 
@@ -156,6 +167,8 @@ Für Ansible: `use_ssl: false` und `port: 8080` setzen, siehe `beispiele/ansible
 | `show vmware domain name <Domain>` | `show ip ospf neighbors vrf T:V`, `show ip ospf interface brief vrf T:V`, `show bgp ipv4 unicast [summary\|neighbors] vrf T:V` |
 | | `show ip eigrp neighbors vrf T:V`, `show bfd neighbors vrf T:V`, `show track` |
 | `acidiag touch clean`, `acidiag reboot` (Werkszustand) | `iping -V T:V <ip>` (Ping vom Leaf, weckt stille Hosts per Glean), `show vpc brief`, `show port-channel summary`, `show ntp peer-status` |
+| `show firmware upgrade status`, `show firmware repository` | `show mcp internal info interface all`, `show interface status err-disabled` |
+| `show snmp`, `show logging server`, `show snapshot` (Export-/Import-Jobs) | `show ip dhcp relay`, `show qos classes` |
 | | Underlay: `show ip route vrf overlay-1`, `show isis adjacency vrf overlay-1`, `show bgp vpnv4 unicast summary vrf overlay-1`, auf Spines `show coop internal info ip-db` |
 
 ## Faults
@@ -176,6 +189,13 @@ Für Ansible: `use_ssl: false` und `port: 8080` setzen, siehe `beispiele/ansible
 | S0841 | Port in mehreren Interface Selectors mit verschiedenen Policy Groups |
 | S0956 | BD oder L3Out ohne gültiges VRF |
 | S1123 | Relation lässt sich nicht auflösen (Ziel fehlt) |
+| S0721 | DHCP Relay Label ohne passende DHCP Relay Policy |
+| S1801 | Beide vPC-Peers in derselben Upgrade Group |
+| S1802 | Alle Spines in derselben Upgrade Group |
+| S1803 | Node in mehreren Upgrade Groups |
+| S2533 | Schleife von MCP erkannt (Port error-disabled) |
+| S2534 | Layer-2-Schleife im BD (Broadcast-Storm, Endpoint-Flapping) |
+| S2535 | Endpoint Loop Protection hat einen Port abgeschaltet |
 | S1690 | Service Graph nicht gerendert (Device Selection Policy, Connector, PBR Policy oder Cluster Interface fehlerhaft) |
 | S3089 | Router ID am L3Out-Node fehlt |
 
@@ -190,7 +210,7 @@ Die externen Router, Hosts und Pakete sind simuliert. Ein echter Router aus CML 
 
 ## Grenzen
 
-Nicht simuliert: VMM für Kubernetes, Microsoft und OpenStack, Multi-Pod und Multi-Site, Service Graphs ohne PBR (Firewall als Gateway), Managed Devices (Device Packages), Set Rules und Route-Profile mit Community/Tag, uSeg-EPGs, Multicast, QoS, SNMP und Syslog, Monitoring-Policies, Firmware-Upgrades. Die Pakete fließen nicht wirklich: Der Traffic-Test berechnet anhand von Konfiguration und Zustand, ob ein Paket und seine Antwort ankommen würden, und begründet jeden Schritt.
+Nicht simuliert: VMM für Kubernetes, Microsoft und OpenStack, Multi-Pod und Multi-Site, Service Graphs ohne PBR (Firewall als Gateway), Managed Devices (Device Packages), Set Rules und Route-Profile mit Community/Tag, Multicast, Custom QoS Policies und die Wirkung von QoS auf den Datenverkehr, SNMPv3, Scheduler für Exporte und Upgrades, DHCP über L3Out. Die Pakete fließen nicht wirklich: Der Traffic-Test berechnet anhand von Konfiguration und Zustand, ob ein Paket und seine Antwort ankommen würden, und begründet jeden Schritt.
 
 ## Aufbau des Ordners
 
@@ -198,6 +218,7 @@ Nicht simuliert: VMM für Kubernetes, Microsoft und OpenStack, Multi-Pod und Mul
 |---|---|
 | `dcprep/model.py` | Klassenmodell (Management Information Tree), DN-Logik, Validierung, atomarer POST |
 | `dcprep/query.py` | Abfragen und Filter im APIC-Format |
+| `dcprep/ops.py` | Betriebsthemen: Firmware-Upgrade, MCP und Schleifen, DHCP Relay, Monitoring, Config Export/Import |
 | `dcprep/engine.py` | Policy-Engine: Discovery, Access Policies, Deployment, Endpoints, L3Out, Contracts, Faults |
 | `dcprep/trace.py` | Traffic-Test |
 | `dcprep/cli.py` | CLI-Emulation |

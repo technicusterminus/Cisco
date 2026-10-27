@@ -93,6 +93,9 @@ def _host_checks(eng, t, ep, role):
         reasons = (hs or {}).get('reasons') or ['Host ist mit keinem aktiven Leaf verbunden']
         t.step(False, '%s %s: Endpoint nicht gelernt' % (role, h['name']), '; '.join(reasons))
         return None
+    if hs.get('storm'):
+        t.step(False, '%s %s: Layer-2-Schleife im BD %s' % (role, h['name'], eng.short(hs['bd'])), hs['storm'])
+        return None
     c = eng.cls[hs.get('esg') or hs['epg']]
     if hs.get('esg') or hs.get('base'):
         t.step(None, '%s %s: Klassifizierung' % (role, h['name']), ('uSeg EPG %s (Basis-EPG %s)' % (eng.short(hs['epg']), eng.short(hs['base']))
@@ -293,6 +296,19 @@ def _service(eng, t, g, direction, proto, port):
     return True
 
 
+def _spines(eng, t, a, b):
+    """Zwischen zwei Leafs braucht es mindestens einen aktiven Spine."""
+    if set(a) & set(b):
+        return True
+    if any(n['role'] == 'spine' and n['state'] == 'active' for n in eng.nodes.values()):
+        return True
+    ups = [n['name'] for n in eng.nodes.values() if n['role'] == 'spine' and n.get('upgrading')]
+    t.step(False, 'Fabric', 'Kein Spine ist aktiv%s - zwischen %s und %s gibt es keinen VXLAN-Pfad' % (
+        ' (%s laden nach dem Firmware-Upgrade neu)' % ', '.join(ups) if ups else '',
+        '/'.join(eng.nodes[n]['name'] for n in a), '/'.join(eng.nodes[n]['name'] for n in b)))
+    return False
+
+
 def run(eng, sim, src, dst, proto='icmp', port=0):
     t = Trace()
     proto = proto if proto in ('icmp', 'tcp', 'udp') else 'icmp'
@@ -350,6 +366,8 @@ def run(eng, sim, src, dst, proto='icmp', port=0):
                 return t.result()
             t.step(True, 'ARP aufgeloest', 'ARP Flooding' if bd['arpFlood'] == 'yes' else
                    'ARP gezielt an den bekannten Endpoint (kein Flooding)')
+            if not _spines(eng, t, shs['nodes'], dhs['nodes']):
+                return t.result()
             fwd = 'lokal auf %s' % '/'.join(eng.nodes[n]['name'] for n in shs['nodes']) \
                 if set(shs['nodes']) & set(dhs['nodes']) else \
                 'VXLAN von %s nach %s' % ('/'.join(eng.nodes[n]['name'] for n in shs['nodes']),
@@ -363,6 +381,8 @@ def run(eng, sim, src, dst, proto='icmp', port=0):
                     return t.result()
             if not any(D['ip'] in s['net'] for s in eng.bd_subnets(dhs['bd']) + eng.bd_subnets(dhs['epg'])):
                 t.step(False, 'Routing', 'Ziel-IP %s liegt in keinem Subnetz des BD %s' % (D['ip'], eng.short(dhs['bd'])))
+                return t.result()
+            if not _spines(eng, t, shs['nodes'], dhs['nodes']):
                 return t.result()
             if dhs.get('silent_dst'):
                 t.step(True, 'ARP Glean', 'Die ACI fragt den stillen Host per ARP vom Pervasive Gateway aus an')
@@ -433,6 +453,8 @@ def run(eng, sim, src, dst, proto='icmp', port=0):
         brt = _lpm([x for x in eng.routes.get((vrf, bl), []) if not x.get('border')], D['ip'])
     else:
         bl, brt = leaf, rt
+    if not _spines(eng, t, shs['nodes'], [bl]):
+        return t.result()
     if not brt:
         t.step(False, 'Route auf Border Leaf', 'Border Leaf hat keine Route mehr')
         return t.result()

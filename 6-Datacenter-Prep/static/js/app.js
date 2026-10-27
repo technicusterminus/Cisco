@@ -12,7 +12,7 @@ const TABS = [
   { id: 'ops', l: 'Operations', subs: [['vis', 'Visibility & Troubleshooting'], ['capacity', 'Capacity Dashboard'], ['ep', 'EP Tracker'], ['viz', 'Visualization']] },
   { id: 'apps', l: 'Apps', subs: [['apps', 'Installed Apps'], ['appfaults', 'Faults']] },
   { id: 'integrations', l: 'Integrations', subs: [['integrations', 'Integrations']] },
-  { id: 'sim', l: 'Simulation', subs: [['topo', 'Topologie & Hosts'], ['routers', 'Externe Router'], ['vcenter', 'vCenter'], ['devices', 'L4-L7 Geräte'], ['aaasrv', 'AAA-Server'], ['labs', 'Labs'], ['saves', 'Speichern & Laden'], ['simset', 'Einstellungen']], special: true },
+  { id: 'sim', l: 'Simulation', subs: [['topo', 'Topologie & Hosts'], ['routers', 'Externe Router'], ['vcenter', 'vCenter'], ['devices', 'L4-L7 Geräte'], ['aaasrv', 'AAA-Server'], ['servers', 'Fileserver & Monitoring'], ['legacy', 'Legacy-Switches'], ['labs', 'Labs'], ['saves', 'Speichern & Laden'], ['simset', 'Einstellungen']], special: true },
 ];
 
 const App = {
@@ -105,7 +105,7 @@ const App = {
 
   async poll() {
     if (document.hidden) return;
-    const sig = () => this.state && JSON.stringify([this.state.nodes, this.state.pending, this.state.faults, this.state.hosts.map(x => x.status), this.state.routers.map(x => x.status)]);
+    const sig = () => this.state && JSON.stringify([this.state.nodes, this.state.pending, this.state.faults, this.state.hosts.map(x => x.status), this.state.routers.map(x => x.status), (this.state.switches || []).map(x => x.status), this.state.jobs, this.state.downloads]);
     const before = sig();
     await this.refreshState();
     if (before !== sig() && this.view && this.view.auto && !document.querySelector('.modal-back')) this.view.auto();
@@ -158,7 +158,7 @@ const App = {
 
   isTreeView() {
     const k = this.tab + '/' + this.sub;
-    return (this.tab === 'tenants' && !['all', 'search'].includes(this.sub)) || ['fabric/access', 'fabric/inventory', 'fabric/fabricpol', 'system/settings', 'vnet/vmm', 'admin/aaa'].includes(k);
+    return (this.tab === 'tenants' && !['all', 'search'].includes(this.sub)) || ['fabric/access', 'fabric/inventory', 'fabric/fabricpol', 'system/settings', 'vnet/vmm', 'admin/aaa', 'admin/firmware', 'admin/impexp', 'admin/collectors'].includes(k);
   },
 
   async rootsFor() {
@@ -168,8 +168,11 @@ const App = {
     if (k === 'fabric/fabricpol') return this.fabricPolRoots();
     if (k === 'vnet/vmm') return this.vmmRoots();
     if (k === 'admin/aaa') { await MIT.load('uni/userext'); return [{ key: 'aaa-qs', label: 'Quick Start', icon: '?', kind: 'view', view: w => Views.aaaQuickStart(w) }].concat(AAA_TREE.map(s => folderNode('', s))); }
+    if (k === 'admin/firmware') { await MIT.load('uni/fabric'); await MIT.load('uni/controller'); return FIRMWARE_TREE.map(s => folderNode('', s)); }
+    if (k === 'admin/impexp') { await MIT.load('uni/fabric'); await MIT.load('uni/exportcryptkey'); return IMPEXP_TREE.map(s => folderNode('', s)); }
+    if (k === 'admin/collectors') { await MIT.load('uni/fabric'); return COLLECTORS_TREE.map(s => folderNode('', s)); }
     if (k === 'fabric/inventory') return Views.inventoryRoots();
-    if (k === 'system/settings') { await MIT.load('uni/fabric/bgpInstP-default'); return Views.settingsRoots(); }
+    if (k === 'system/settings') { for (const d of ['uni/fabric/bgpInstP-default', 'uni/infra/epLoopProtectP-default', 'uni/exportcryptkey', 'uni/infra/qosinst-default']) await MIT.load(d); return Views.settingsRoots(); }
     return [];
   },
 

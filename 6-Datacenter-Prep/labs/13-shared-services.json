@@ -566,6 +566,7 @@
  "vcenters": [],
  "devices": [],
  "aaa": [],
+ "switches": [],
  "solutionConfig": [
   [
    "uni/tn-Shared",

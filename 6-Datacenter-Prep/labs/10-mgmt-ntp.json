@@ -69,6 +69,7 @@
  "vcenters": [],
  "devices": [],
  "aaa": [],
+ "switches": [],
  "solutionConfig": [
   [
    "uni/tn-mgmt/mgmtp-default/oob-default",

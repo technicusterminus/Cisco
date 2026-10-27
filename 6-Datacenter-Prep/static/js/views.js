@@ -444,7 +444,7 @@ const Views = {
           table([{ l: 'Name', f: r => r.name }, { l: 'MAC', f: r => r.mac }, { l: 'IP', f: r => r.ip }, { l: 'Gateway', f: r => r.gw }, { l: 'VLAN', f: r => r.vlan ? 'vlan-' + r.vlan : 'untagged' },
             { l: 'Anschluss', f: r => r.links.map(l => nodeName(l[0]) + ' ' + l[1]).join(' + ') + (r.bond !== 'none' ? ' [' + r.bond + ']' : '') },
             { l: 'Status', f: r => r.status.learned ? h('span', null, stateBadge('learned'), ' ', parentDn(r.status.epg + '/x').replace(/^uni\//, '')) : r.status.quiet ? h('span', { title: 'Stiller Host: wird erst gelernt, wenn er antwortet oder selbst sendet' }, stateBadge('silent')) : stateBadge('down') },
-            { l: 'Hinweis', f: r => (r.status.reasons || []).join('; ') }], st.hosts, {
+            { l: 'Hinweis', f: r => (r.status.dhcp && r.status.dhcp.ok ? 'DHCP: ' + r.status.dhcp.ip + ' von ' + r.status.dhcp.server + ' (' + r.status.dhcp.how + '); ' : '') + (r.status.reasons || []).join('; ') }], st.hosts, {
             onRow: r => Views.hostDialog(r),
             actions: r => [iconBtn('🗑', 'Löschen', () => confirmBox('Host ' + r.name + ' entfernen?', async () => { await API.sim('hosts', { op: 'delete', name: r.name }); await App.refreshState(); draw(); }), 'danger')],
             empty: 'Noch keine Hosts. Ein Host simuliert einen Server an einem Leaf-Port – mit VLAN, MAC und IP.',
@@ -463,6 +463,8 @@ const Views = {
     st.links.forEach(l => { used.add(l[0] + '|' + l[1]); used.add(l[2] + '|' + l[3]); });
     st.hosts.filter(o => !x || o.name !== x.name).forEach(o => o.links.forEach(l => used.add(l[0] + '|' + l[1])));
     st.routers.forEach(o => used.add(o.serial + '|' + o.port));
+    (st.switches || []).forEach(o => o.links.forEach(l => used.add(l[0] + '|' + l[1])));
+    (st.devices || []).forEach(o => (o.links || []).forEach(l => used.add(l[0] + '|' + l[1])));
     (st.vcenters || []).forEach(vc => vc.hosts.forEach(o => o.links.forEach(l => used.add(l[0] + '|' + l[1]))));
     const leafOpts = leafNodes().map(n => [n.serial, (n.name || '(nicht registriert)') + (n.id ? ' – Node ' + n.id : '') + ' – ' + n.serial]);
     const linkRow = (i, val) => {
@@ -492,14 +494,18 @@ const Views = {
       { k: 'gw', l: 'Default Gateway', ph: '10.1.1.1' }, { k: 'vlan', l: 'VLAN-Tag', ph: '0 = untagged', help: '0 = Host sendet untagged (Access-Port), sonst 802.1Q-Tag' },
       { k: 'bond', l: 'NIC-Bonding', t: 'select', o: [['none', 'keins (ein Link aktiv)'], ['lacp-active', 'LACP active (802.3ad)'], ['lacp-passive', 'LACP passive'], ['static', 'statisch (mode on)']] },
       { k: 'silent', l: 'Stiller Host', t: 'yesno', cl: 'sendet nichts von sich aus (kein GARP, kein Traffic) – wird erst durch ARP Flooding oder ARP Glean entdeckt' },
+      { k: 'dhcp', l: 'IP per DHCP', t: 'yesno', cl: 'Host holt sich IP und Gateway per DHCP (IP-Feld wird dann ignoriert)' },
+      { k: 'dhcpd', l: 'DHCP-Server (Scopes)', t: 'textarea', ph: '10.1.1.0/24 10.1.1.100-10.1.1.199 gw 10.1.1.1', help: 'Nur wenn dieser Host ein DHCP-Server ist: ein Scope pro Zeile' },
       { k: 'descr', l: 'Beschreibung' }],
-    x ? { name: x.name, mac: x.mac, ip: x.ip, gw: x.gw, vlan: String(x.vlan || 0), bond: x.bond, descr: x.descr, silent: x.silent ? 'yes' : 'no' } : { mac: randMac(), vlan: '0', bond: 'none', silent: 'no' }, {}, 'create');
+    x ? { name: x.name, mac: x.mac, ip: x.ip, gw: x.gw, vlan: String(x.vlan || 0), bond: x.bond, descr: x.descr, silent: x.silent ? 'yes' : 'no', dhcp: x.dhcp ? 'yes' : 'no',
+      dhcpd: (x.dhcpd || []).map(d => d.net + ' ' + d.from + '-' + d.to + (d.gw ? ' gw ' + d.gw : '')).join('\n') } : { mac: randMac(), vlan: '0', bond: 'none', silent: 'no', dhcp: 'no' }, {}, 'create');
     const body = h('div', null, f.el, h('div', { class: 'form' }, h('div', { class: 'frow' }, h('label', { class: 'flab' }, 'Link 1'), h('div', { class: 'fctl' }, links[0].el)),
       h('div', { class: 'frow' }, h('label', { class: 'flab' }, 'Link 2 (für PC/vPC)'), h('div', { class: 'fctl' }, links[1].el))));
     modal(x ? 'Host ' + x.name + ' bearbeiten' : 'Host hinzufügen', body, [{ l: 'Abbrechen' }, {
       l: 'Speichern', primary: true, fn: async () => {
         const v = f.get();
-        const host = Object.assign(v, { vlan: Number(v.vlan || 0), links: links.map(l => l.get()).filter(Boolean), silent: v.silent === 'yes' });
+        const host = Object.assign(v, { vlan: Number(v.vlan || 0), links: links.map(l => l.get()).filter(Boolean), silent: v.silent === 'yes', dhcp: v.dhcp === 'yes' });
+        if (host.dhcp) { host.ip = '0.0.0.0/32'; host.gw = ''; }
         await API.sim('hosts', { host, old: x ? x.name : null });
         toast('Host ' + v.name + ' gespeichert');
         await App.refreshState();
@@ -646,10 +652,12 @@ const Views = {
   async 'sim/simset'(w) {
     const st = App.state;
     const inp = h('input', { value: st.settings.discoverySeconds, style: { width: '80px' } });
+    const up = h('input', { value: st.settings.upgradeSeconds || 60, style: { width: '80px' } });
     w.appendChild(paneHead('Simulation – Einstellungen', ''));
     w.appendChild(h('div', { class: 'card' }, h('div', { class: 'card-h' }, 'Fabric Discovery'),
       h('div', { class: 'form' }, h('div', { class: 'frow' }, h('label', { class: 'flab' }, 'Sekunden pro Discovery-Schritt'), h('div', { class: 'fctl' }, inp, h('div', { class: 'help' }, 'Ein echter Switch braucht mehrere Minuten, bis er nach der Registrierung aktiv ist. 0 = sofort.')))),
-      h('div', { class: 'formbtns' }, h('button', { class: 'btn primary', onclick: async () => { await API.sim('settings', { discoverySeconds: Number(inp.value) }); toast('Gespeichert'); App.refreshState(); } }, 'Speichern'))));
+      h('div', { class: 'form' }, h('div', { class: 'frow' }, h('label', { class: 'flab' }, 'Sekunden pro Firmware-Upgrade'), h('div', { class: 'fctl' }, up, h('div', { class: 'help' }, 'Dauer von Installation und Reload je Upgrade Group bzw. APIC (echt: 15–40 Minuten).')))),
+      h('div', { class: 'formbtns' }, h('button', { class: 'btn primary', onclick: async () => { await API.sim('settings', { discoverySeconds: Number(inp.value), upgradeSeconds: Number(up.value) }); toast('Gespeichert'); App.refreshState(); } }, 'Speichern'))));
     w.appendChild(h('div', { class: 'card' }, h('div', { class: 'card-h' }, 'Zurücksetzen'),
       h('p', null, 'Setzt die gesamte Konfiguration zurück. Hosts und Router werden entfernt.'),
       h('div', { class: 'formbtns' },

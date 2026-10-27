@@ -1,0 +1,726 @@
+{
+ "id": "24-firmware-upgrade",
+ "title": "24 Firmware-Upgrade mit Upgrade Groups",
+ "topic": "Fabric-Betrieb",
+ "level": "Fortgeschritten",
+ "duration": "35 min",
+ "fabric": "discovered",
+ "settings": {
+  "upgradeSeconds": 30
+ },
+ "goals": [
+  "Firmware-Images ins Repository des APIC laden",
+  "Das Upgrade in der richtigen Reihenfolge fahren: erst der APIC, dann die Switches",
+  "Upgrade Groups so bilden, dass nie beide vPC-Peers oder beide Spines gleichzeitig neu laden"
+ ],
+ "intro": "Die Fabric läuft mit **6.0(5h)** (APIC) bzw. **16.0(5h)** (Switches). Ziel ist **6.0(6c) / 16.0(6c)**. Die Images liegen auf dem Fileserver **192.168.10.50** (SCP, Benutzer backup / Backup123!, oder HTTP) unter `/images`.\n\nleaf101/102 und leaf103/104 sind **vPC-Paare**. Ein Reload dauert im Simulator 30 Sekunden (einstellbar unter Simulation > Einstellungen).",
+ "config": [
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "infraInfra": {
+       "attributes": {},
+       "children": [
+        {
+         "fvnsVlanInstP": {
+          "attributes": {
+           "name": "VLAN-Pool-Server",
+           "allocMode": "static"
+          },
+          "children": [
+           {
+            "fvnsEncapBlk": {
+             "attributes": {
+              "from": "vlan-100",
+              "to": "vlan-199"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAttEntityP": {
+          "attributes": {
+           "name": "AAEP-Server"
+          },
+          "children": [
+           {
+            "infraRsDomP": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraFuncP": {
+          "attributes": {},
+          "children": [
+           {
+            "infraAccPortGrp": {
+             "attributes": {
+              "name": "IPG-Server-Access"
+             },
+             "children": [
+              {
+               "infraRsAttEntP": {
+                "attributes": {
+                 "tDn": "uni/infra/attentp-AAEP-Server"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAccPortP": {
+          "attributes": {
+           "name": "IntProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraHPortS": {
+             "attributes": {
+              "name": "Server-Ports",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraPortBlk": {
+                "attributes": {
+                 "name": "block2",
+                 "fromPort": "1",
+                 "toPort": "10"
+                }
+               }
+              },
+              {
+               "infraRsAccBaseGrp": {
+                "attributes": {
+                 "tDn": "uni/infra/funcprof/accportgrp-IPG-Server-Access"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraNodeP": {
+          "attributes": {
+           "name": "SwProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraLeafS": {
+             "attributes": {
+              "name": "101-102",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraNodeBlk": {
+                "attributes": {
+                 "name": "blk",
+                 "from_": "101",
+                 "to_": "102"
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "infraRsAccPortP": {
+             "attributes": {
+              "tDn": "uni/infra/accportprof-IntProf-Leaf101-102"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "physDomP": {
+       "attributes": {
+        "name": "PhysDom-Server"
+       },
+       "children": [
+        {
+         "infraRsVlanNs": {
+          "attributes": {
+           "tDn": "uni/infra/vlanns-[VLAN-Pool-Server]-static"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "fabricInst": {
+       "attributes": {},
+       "children": [
+        {
+         "fabricProtPol": {
+          "attributes": {
+           "pairT": "explicit"
+          },
+          "children": [
+           {
+            "fabricExplicitGEp": {
+             "attributes": {
+              "name": "vpc-101-102",
+              "id": "12"
+             },
+             "children": [
+              {
+               "fabricNodePEp": {
+                "attributes": {
+                 "id": "101"
+                }
+               }
+              },
+              {
+               "fabricNodePEp": {
+                "attributes": {
+                 "id": "102"
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "fabricExplicitGEp": {
+             "attributes": {
+              "name": "vpc-103-104",
+              "id": "34"
+             },
+             "children": [
+              {
+               "fabricNodePEp": {
+                "attributes": {
+                 "id": "103"
+                }
+               }
+              },
+              {
+               "fabricNodePEp": {
+                "attributes": {
+                 "id": "104"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Shop"
+    },
+    "children": [
+     {
+      "fvCtx": {
+       "attributes": {
+        "name": "Prod"
+       }
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Web"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.10.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-App"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.20.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Webshop"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Web"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Web"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/1]",
+              "encap": "vlan-110",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsCons": {
+             "attributes": {
+              "tnVzBrCPName": "web-to-app"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "App"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-App"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/2]",
+              "encap": "vlan-120",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsProv": {
+             "attributes": {
+              "tnVzBrCPName": "web-to-app"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzFilter": {
+       "attributes": {
+        "name": "tcp-8080"
+       },
+       "children": [
+        {
+         "vzEntry": {
+          "attributes": {
+           "name": "tcp-8080",
+           "etherT": "ip",
+           "prot": "tcp",
+           "dFromPort": "8080",
+           "dToPort": "8080"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzBrCP": {
+       "attributes": {
+        "name": "web-to-app",
+        "scope": "context"
+       },
+       "children": [
+        {
+         "vzSubj": {
+          "attributes": {
+           "name": "subj",
+           "revFltPorts": "yes"
+          },
+          "children": [
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "tcp-8080"
+             }
+            }
+           },
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "icmp"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "hosts": [
+  {
+   "name": "web1",
+   "mac": "00:50:56:10:10:11",
+   "ip": "10.10.10.11/24",
+   "gw": "10.10.10.1",
+   "vlan": 110,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/1"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Webserver"
+  },
+  {
+   "name": "app1",
+   "mac": "00:50:56:10:20:11",
+   "ip": "10.10.20.11/24",
+   "gw": "10.10.20.1",
+   "vlan": 120,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/2"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Applikationsserver"
+  }
+ ],
+ "tasks": [
+  {
+   "title": "Images laden",
+   "text": "**Admin > Firmware > Download Tasks** (bzw. *Images > Add Firmware to APIC*): beide Images vom Fileserver laden, z. B. SCP `192.168.10.50:/images/aci-apic-dk9.6.0.6c.iso` und HTTP `http://192.168.10.50/images/aci-n9000-dk9.16.0.6c.bin`."
+  },
+  {
+   "title": "Erst der APIC",
+   "text": "**Infrastructure > Controllers**: Zielversion apic-6.0(6c) wählen, dann *Actions > Upgrade Controller Now*. Während des Upgrades nimmt der APIC keine Konfiguration an.",
+   "hint": "Versuchst du zuerst die Switches, bricht die Kompatibilitätsprüfung ab: Switches dürfen nicht neuer sein als der APIC."
+  },
+  {
+   "title": "Upgrade Groups",
+   "text": "**Infrastructure > Nodes**: Zwei Gruppen **Odd** (101, 103, 201) und **Even** (102, 104, 202), Zielversion n9000-16.0(6c).",
+   "hint": "Eine Gruppe mit 101 und 102 erzeugt Fault S1801, eine mit beiden Spines S1802."
+  },
+  {
+   "title": "Gruppe für Gruppe",
+   "text": "Zuerst **Odd** starten (*Actions > Upgrade Now*) und während des Reloads den Traffic-Test web1 → app1 ausführen: web1 hängt **single-homed** an leaf101 und ist kurz offline – dual-homed Server (vPC) hätten keinen Ausfall, der vPC-Peer leaf102 lädt ja nicht gleichzeitig. Wenn Odd fertig ist, **Even** starten."
+  },
+  {
+   "title": "Verifizieren",
+   "text": "`show firmware upgrade status` und `show version` auf dem APIC, Upgrade-Übersicht unter Admin > Firmware."
+  }
+ ],
+ "checks": [
+  {
+   "desc": "APIC auf 6.0(6c), alle Switches auf 16.0(6c)",
+   "type": "firmware",
+   "apic": "6.0(6c)",
+   "switch": "16.0(6c)"
+  },
+  {
+   "desc": "Jeder Switch in genau einer Upgrade Group, kein vPC-Paar und nicht alle Spines zusammen",
+   "type": "fwgroups",
+   "min": 2
+  },
+  {
+   "desc": "web1 → app1 tcp/8080 funktioniert",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "app1",
+   "proto": "tcp",
+   "port": 8080,
+   "expect": true
+  }
+ ],
+ "solution": "1. Download Tasks: `{\"firmwareRepoP\": {\"attributes\": {}, \"children\": [{\"firmwareOSource\": {\"attributes\": {\"name\": \"apic-6.0.6c\", \"proto\": \"scp\", \"url\": \"192.168.10.50:/images/aci-apic-dk9.6.0.6c.iso\", \"user\": \"backup\", \"password\": \"Backup123!\"}}}, {\"firmwareOSource\": {\"attributes\": {\"name\": \"n9000-16.0.6c\", \"proto\": \"http\", \"url\": \"http://192.168.10.50/images/aci-n9000-dk9.16.0.6c.bin\"}}}]}}`\n2. `uni/controller/ctrlrfwpol` version=apic-6.0(6c), dann `uni/controller/ctrlrmaintpol` adminSt=triggered\n3. Upgrade Groups: `{\"fabricInst\": {\"attributes\": {}, \"children\": [{\"maintMaintP\": {\"attributes\": {\"name\": \"Odd\", \"version\": \"n9000-16.0(6c)\", \"adminSt\": \"triggered\"}}}, {\"maintMaintGrp\": {\"attributes\": {\"name\": \"Odd\"}, \"children\": [{\"maintRsMgrpp\": {\"attributes\": {\"tnMaintMaintPName\": \"Odd\"}}}, {\"fabricNodeBlk\": {\"attributes\": {\"name\": \"blk101\", \"from_\": \"101\", \"to_\": \"101\"}}}, {\"fabricNodeBlk\": {\"attributes\": {\"name\": \"blk103\", \"from_\": \"103\", \"to_\": \"103\"}}}, {\"fabricNodeBlk\": {\"attributes\": {\"name\": \"blk201\", \"from_\": \"201\", \"to_\": \"201\"}}}]}}]}}` und danach die Gruppe Even mit 102, 104, 202.",
+ "routers": [],
+ "vcenters": [],
+ "devices": [],
+ "aaa": [],
+ "switches": [],
+ "solutionConfig": [
+  [
+   "uni/fabric",
+   {
+    "firmwareRepoP": {
+     "attributes": {},
+     "children": [
+      {
+       "firmwareOSource": {
+        "attributes": {
+         "name": "apic-6.0.6c",
+         "proto": "scp",
+         "url": "192.168.10.50:/images/aci-apic-dk9.6.0.6c.iso",
+         "user": "backup",
+         "password": "Backup123!"
+        }
+       }
+      },
+      {
+       "firmwareOSource": {
+        "attributes": {
+         "name": "n9000-16.0.6c",
+         "proto": "http",
+         "url": "http://192.168.10.50/images/aci-n9000-dk9.16.0.6c.bin"
+        }
+       }
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "uni/controller/ctrlrfwpol",
+   {
+    "firmwareCtrlrFwP": {
+     "attributes": {
+      "version": "apic-6.0(6c)"
+     }
+    }
+   }
+  ],
+  [
+   "uni/controller/ctrlrmaintpol",
+   {
+    "maintCtrlrMaintP": {
+     "attributes": {
+      "adminSt": "triggered"
+     }
+    }
+   }
+  ],
+  [
+   "uni",
+   {
+    "polUni": {
+     "attributes": {},
+     "children": [
+      {
+       "fabricInst": {
+        "attributes": {},
+        "children": [
+         {
+          "maintMaintP": {
+           "attributes": {
+            "name": "Odd",
+            "version": "n9000-16.0(6c)",
+            "adminSt": "triggered"
+           }
+          }
+         },
+         {
+          "maintMaintGrp": {
+           "attributes": {
+            "name": "Odd"
+           },
+           "children": [
+            {
+             "maintRsMgrpp": {
+              "attributes": {
+               "tnMaintMaintPName": "Odd"
+              }
+             }
+            },
+            {
+             "fabricNodeBlk": {
+              "attributes": {
+               "name": "blk101",
+               "from_": "101",
+               "to_": "101"
+              }
+             }
+            },
+            {
+             "fabricNodeBlk": {
+              "attributes": {
+               "name": "blk103",
+               "from_": "103",
+               "to_": "103"
+              }
+             }
+            },
+            {
+             "fabricNodeBlk": {
+              "attributes": {
+               "name": "blk201",
+               "from_": "201",
+               "to_": "201"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "uni",
+   {
+    "polUni": {
+     "attributes": {},
+     "children": [
+      {
+       "fabricInst": {
+        "attributes": {},
+        "children": [
+         {
+          "maintMaintP": {
+           "attributes": {
+            "name": "Even",
+            "version": "n9000-16.0(6c)",
+            "adminSt": "triggered"
+           }
+          }
+         },
+         {
+          "maintMaintGrp": {
+           "attributes": {
+            "name": "Even"
+           },
+           "children": [
+            {
+             "maintRsMgrpp": {
+              "attributes": {
+               "tnMaintMaintPName": "Even"
+              }
+             }
+            },
+            {
+             "fabricNodeBlk": {
+              "attributes": {
+               "name": "blk102",
+               "from_": "102",
+               "to_": "102"
+              }
+             }
+            },
+            {
+             "fabricNodeBlk": {
+              "attributes": {
+               "name": "blk104",
+               "from_": "104",
+               "to_": "104"
+              }
+             }
+            },
+            {
+             "fabricNodeBlk": {
+              "attributes": {
+               "name": "blk202",
+               "from_": "202",
+               "to_": "202"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  ]
+ ]
+}

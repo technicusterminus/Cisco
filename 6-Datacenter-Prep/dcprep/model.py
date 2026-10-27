@@ -760,6 +760,128 @@ mo('l2extRsPathL2OutAtt', 'rspathL2OutAtt-[{tDn}]', ('l2extLIfP',), {'targetDscp
 mo('l2extInstP', 'instP-{name}', ('l2extOut',), {'prefGrMemb': 'exclude', 'pcTag': '', 'scope': ''},
    enums={'prefGrMemb': ('include', 'exclude')}, ro=('pcTag', 'scope'), label='External Network (L2)')
 
+
+# ---------------------------- Firmware und Upgrade Groups ------------------
+TF = ('true', 'false')
+TRIG = ('untriggered', 'triggered')
+mo('firmwareRepoP', 'fwrepop', ('fabricInst',), {}, fixed=True, label='Firmware Repository')
+mo('firmwareOSource', 'osrc-{name}', ('firmwareRepoP',), {'proto': 'scp', 'url': '', 'user': '', 'password': '', 'authType': 'usePassword'},
+   enums={'proto': ('scp', 'http', 'sftp', 'local')}, label='Firmware Download Task')
+mo('firmwareRepo', 'fwrepo', ('topRoot',), {}, config=False, label='Firmware Repository')
+mo('firmwareFirmware', 'fw-{name}', ('firmwareRepo',), {'fullVersion': '', 'type': 'switch', 'size': '', 'isoname': '',
+                                                        'checksum': '', 'downloadDate': ''}, config=False, label='Firmware Image')
+mo('firmwareCtrlrFwP', 'ctrlrfwpol', ('ctrlrInst',), {'version': '', 'ignoreCompat': 'false'}, enums={'ignoreCompat': TF},
+   fixed=True, label='Controller Firmware Policy')
+mo('maintCtrlrMaintP', 'ctrlrmaintpol', ('ctrlrInst',), {'adminSt': 'untriggered', 'runMode': 'pauseOnlyOnFailures'},
+   enums={'adminSt': TRIG, 'runMode': ('pauseOnlyOnFailures', 'pauseNever')}, fixed=True, label='Controller Upgrade Policy')
+mo('maintMaintP', 'maintpol-{name}', ('fabricInst',), {'version': '', 'adminSt': 'untriggered', 'graceful': 'no',
+                                                      'runMode': 'pauseOnlyOnFailures', 'ignoreCompat': 'false', 'notifCond': 'notifyOnlyOnFailures'},
+   enums={'adminSt': TRIG, 'graceful': YN, 'runMode': ('pauseOnlyOnFailures', 'pauseNever'), 'ignoreCompat': TF},
+   label='Upgrade Policy')
+mo('maintMaintGrp', 'maintgrp-{name}', ('fabricInst',), {'type': 'range'}, label='Upgrade Group')
+mo('maintRsMgrpp', 'rsmgrpp', ('maintMaintGrp',), {'tnMaintMaintPName': ''},
+   rel=('name', 'tnMaintMaintPName', 'maintMaintP', 'fabric'), label='Upgrade Policy')
+mo('fabricNodeBlk', 'nodeblk-{name}', ('maintMaintGrp',), {'from_': '', 'to_': ''}, checks={'from_': _num, 'to_': _num},
+   label='Node Block')
+mo('firmwareFwStatusCont', 'fwstatuscont', ('topSystem',), {}, config=False)
+mo('firmwareRunning', 'running', ('firmwareFwStatusCont',), {'version': '', 'peVer': '', 'type': 'switch'}, config=False,
+   label='Running Firmware')
+mo('maintUpgJob', 'upgjob', ('firmwareFwStatusCont',), {'upgradeStatus': 'notscheduled', 'instlProgPct': '0', 'desiredVersion': '',
+                                                         'fwGrp': '', 'maintGrp': '', 'upgradeStatusStr': ''}, config=False,
+   label='Upgrade Job')
+
+# ---------------------------- Config Export / Import -----------------------
+mo('pkiExportEncryptionKey', 'exportcryptkey', ('polUni',), {'passphrase': '', 'strongEncryptionEnabled': 'no', 'keyConfigured': 'no'},
+   enums={'strongEncryptionEnabled': YN}, ro=('keyConfigured',), fixed=True, label='Global AES Passphrase Encryption Settings')
+mo('fileRemotePath', 'path-{name}', ('fabricInst',), {'host': '', 'protocol': 'scp', 'remotePath': '', 'remotePort': '22',
+                                                     'userName': '', 'userPasswd': '', 'authType': 'usePassword'},
+   enums={'protocol': ('scp', 'sftp', 'ftp')}, checks={'remotePort': _num}, label='Remote Location')
+mo('fileRsARemoteHostToEpg', 'rsARemoteHostToEpg', ('fileRemotePath',), {'tDn': ''},
+   rel=('dn', 'tDn', ('mgmtOoB', 'mgmtInB')), label='Management EPG')
+mo('configExportP', 'configexp-{name}', ('fabricInst',), {'format': 'json', 'snapshot': 'false', 'adminSt': 'untriggered',
+                                                         'targetDn': '', 'includeSecureFields': 'yes', 'maxSnapshotCount': 'global-limit'},
+   enums={'format': ('json', 'xml'), 'snapshot': TF, 'adminSt': TRIG, 'includeSecureFields': YN}, label='Configuration Export Policy')
+mo('configImportP', 'configimp-{name}', ('fabricInst',), {'fileName': '', 'importType': 'merge', 'importMode': 'atomic',
+                                                         'adminSt': 'untriggered', 'snapshot': 'false'},
+   enums={'importType': ('merge', 'replace'), 'importMode': ('atomic', 'best-effort'), 'adminSt': TRIG, 'snapshot': TF},
+   label='Configuration Import Policy')
+mo('configRsRemotePath', 'rsRemotePath', ('configExportP', 'configImportP'), {'tnFileRemotePathName': ''},
+   rel=('name', 'tnFileRemotePathName', 'fileRemotePath', 'fabric'), label='Remote Location')
+mo('configBackupStatusCont', 'backupst', ('topRoot',), {}, config=False)
+mo('configJobCont', 'jobs-[{name}]', ('configBackupStatusCont',), {}, config=False)
+mo('configJob', 'run-{name}', ('configJobCont',), {'details': '', 'executeTime': '', 'fileName': '', 'operSt': '', 'lastStepDescr': '',
+                                                  'type': ''}, config=False, label='Job')
+
+# ---------------------------- Monitoring: SNMP, Syslog, Callhome -----------
+SYSLOG_SEV = ('emergencies', 'alerts', 'critical', 'errors', 'warnings', 'notifications', 'information', 'debugging')
+MON_SEV = ('critical', 'major', 'minor', 'warning', 'info', 'cleared')
+mo('snmpPol', 'snmppol-{name}', ('fabricInst',), {'adminSt': 'disabled', 'contact': '', 'loc': ''}, enums={'adminSt': ED},
+   label='SNMP Policy')
+mo('snmpCommunityP', 'community-{name}', ('snmpPol',), {}, label='Community Policy')
+mo('snmpClientGrpP', 'clgrp-{name}', ('snmpPol',), {}, label='Client Group Policy')
+mo('snmpRsEpg', 'rsepg', ('snmpClientGrpP',), {'tDn': ''}, rel=('dn', 'tDn', ('mgmtOoB', 'mgmtInB')), label='Management EPG')
+mo('snmpClientP', 'client-{addr}', ('snmpClientGrpP',), {}, checks={'addr': _ip}, label='Client Entry')
+mo('fabricRsSnmpPol', 'rssnmpPol', ('fabricPodPGrp',), {'tnSnmpPolName': ''}, rel=('name', 'tnSnmpPolName', 'snmpPol', 'fabric'),
+   label='SNMP Policy')
+mo('snmpGroup', 'snmpgroup-{name}', ('fabricInst',), {}, label='SNMP Monitoring Destination Group')
+mo('snmpTrapDest', 'trapdest-{host}-port-{port}', ('snmpGroup',), {'ver': 'v2c', 'secName': '', 'v3SecLvl': 'noauth', 'notifT': 'traps'},
+   enums={'ver': ('v1', 'v2c', 'v3'), 'notifT': ('traps', 'informs')}, checks={'host': _ip, 'port': _num}, label='SNMP Trap Destination')
+mo('snmpRsARemoteHostToEpg', 'rsARemoteHostToEpg', ('snmpTrapDest',), {'tDn': ''}, rel=('dn', 'tDn', ('mgmtOoB', 'mgmtInB')),
+   label='Management EPG')
+mo('syslogGroup', 'slgroup-{name}', ('fabricInst',), {'format': 'aci', 'includeMilliSeconds': 'no'},
+   enums={'format': ('aci', 'nxos', 'rfc5424-ietf'), 'includeMilliSeconds': YN}, label='Syslog Monitoring Destination Group')
+mo('syslogRemoteDest', 'rdst-{host}', ('syslogGroup',), {'name': '', 'port': '514', 'severity': 'warnings', 'forwardingFacility': 'local7',
+                                                       'adminState': 'enabled', 'protocol': 'udp'},
+   enums={'severity': SYSLOG_SEV, 'adminState': ED, 'protocol': ('udp', 'tcp', 'ssl'),
+          'forwardingFacility': tuple('local%d' % i for i in range(8))}, checks={'host': _ip, 'port': _num}, label='Syslog Remote Destination')
+CLASSES['fileRsARemoteHostToEpg'].parents += ('syslogRemoteDest',)
+mo('callhomeGroup', 'chgroup-{name}', ('fabricInst',), {}, label='Callhome Destination Group')
+mo('callhomeProf', 'prof', ('callhomeGroup',), {'email': '', 'from': '', 'replyTo': '', 'phone': '', 'contact': '', 'customer': '',
+                                               'site': '', 'port': '25'}, label='Callhome Profile')
+mo('callhomeSmtpServer', 'smtp', ('callhomeProf',), {'host': ''}, checks={'host': _ip}, label='SMTP Server')
+CLASSES['fileRsARemoteHostToEpg'].parents += ('callhomeSmtpServer',)
+mo('callhomeDest', 'dest-{name}', ('callhomeGroup',), {'email': '', 'format': 'aml', 'adminState': 'enabled', 'rfcCompliant': 'true'},
+   enums={'format': ('aml', 'short-txt', 'xml'), 'adminState': ED}, label='Callhome Destination')
+mo('monCommonPol', 'moncommon', ('fabricInst',), {}, fixed=True, label='Common Monitoring Policy')
+mo('syslogSrc', 'slsrc-{name}', ('monCommonPol',), {'minSev': 'warning', 'incl': 'faults'},
+   enums={'minSev': MON_SEV}, sets={'incl': ('faults', 'events', 'audit', 'session', 'all')}, label='Syslog Source')
+mo('syslogRsDestGroup', 'rsdestGroup', ('syslogSrc',), {'tDn': ''}, rel=('dn', 'tDn', ('syslogGroup',)), label='Destination Group')
+mo('snmpSrc', 'snmpsrc-{name}', ('monCommonPol',), {'minSev': 'warning', 'incl': 'faults'},
+   enums={'minSev': MON_SEV}, sets={'incl': ('faults', 'events', 'audit', 'session', 'all')}, label='SNMP Source')
+mo('snmpRsDestGroup', 'rsdestGroup', ('snmpSrc',), {'tDn': ''}, rel=('dn', 'tDn', ('snmpGroup',)), label='Destination Group')
+mo('callhomeSrc', 'chsrc', ('monCommonPol',), {'minSev': 'major', 'incl': 'faults'},
+   enums={'minSev': MON_SEV}, sets={'incl': ('faults', 'events', 'audit', 'session', 'all')}, label='Callhome Source')
+mo('callhomeRsDestGroup', 'rsdestGroup', ('callhomeSrc',), {'tDn': ''}, rel=('dn', 'tDn', ('callhomeGroup',)), label='Destination Group')
+
+# ---------------------------- DHCP Relay -----------------------------------
+mo('dhcpRelayP', 'relayp-{name}', ('fvTenant', 'infraInfra'), {'owner': 'tenant', 'mode': 'visible'},
+   enums={'owner': ('tenant', 'infra'), 'mode': ('visible', 'not-visible')}, label='DHCP Relay Policy')
+mo('dhcpRsProv', 'rsprov-[{tDn}]', ('dhcpRelayP',), {'addr': ''}, checks={'addr': _ip},
+   rel=('dn', 'tDn', ('fvAEPg', 'l3extInstP')), label='DHCP Provider')
+mo('dhcpLbl', 'dhcplbl-{name}', ('fvBD',), {'owner': 'tenant', 'tag': 'yellow-green'}, enums={'owner': ('tenant', 'infra')},
+   label='DHCP Relay Label')
+
+# ---------------------------- QoS ------------------------------------------
+QOS_LEVELS = ('level1', 'level2', 'level3', 'level4', 'level5', 'level6')
+mo('qosInstPol', 'qosinst-{name}', ('infraInfra',), {'ctrl': ''}, sets={'ctrl': ('', 'dot1p-preserve')}, label='QOS Class Policies')
+mo('qosClass', 'class-{prio}', ('qosInstPol',), {'admin': 'enabled', 'mtu': '9216', 'mcastOptimize': ''},
+   enums={'prio': QOS_LEVELS, 'admin': ED}, checks={'mtu': _num}, label='QoS Class')
+mo('qosSched', 'sched', ('qosClass',), {'meth': 'wrr', 'bw': '20'}, enums={'meth': ('wrr', 'sp')}, checks={'bw': _num},
+   label='Scheduling')
+
+# ---------------------------- MCP und Loop Protection ----------------------
+mo('mcpInstPol', 'mcpInstP-{name}', ('infraInfra',), {'adminSt': 'disabled', 'key': '', 'ctrl': '', 'loopDetectMult': '3',
+                                                     'loopProtectAct': 'port-disable', 'initDelayTime': '180', 'txFreq': '2'},
+   enums={'adminSt': ED, 'loopProtectAct': ('port-disable', 'none')}, sets={'ctrl': ('', 'pdu-per-vlan')},
+   checks={'loopDetectMult': _num, 'txFreq': _num}, label='MCP Instance Policy')
+mo('mcpIfPol', 'mcpIfP-{name}', ('infraInfra',), {'adminSt': 'enabled'}, enums={'adminSt': ED}, label='MCP Interface Policy')
+mo('infraRsMcpIfPol', 'rsmcpIfPol', ('infraAccPortGrp', 'infraAccBndlGrp'), {'tnMcpIfPolName': ''},
+   rel=('name', 'tnMcpIfPolName', 'mcpIfPol', 'infra'), label='MCP Policy')
+mo('epLoopProtectP', 'epLoopProtectP-{name}', ('infraInfra',), {'adminSt': 'disabled', 'loopDetectIntvl': '60', 'loopDetectMult': '4',
+                                                               'action': 'port-disable'},
+   enums={'adminSt': ED}, sets={'action': ('', 'port-disable', 'bd-learn-disable')}, label='EP Loop Protection Policy')
+
+
 def check_attr(meta, k, v, dn):
     if not isinstance(v, str):
         raise AciError(801, "property %s of %s failed validation for value '%s'" % (k, dn, v))

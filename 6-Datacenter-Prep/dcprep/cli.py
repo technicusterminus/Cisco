@@ -22,6 +22,10 @@ APIC_HELP = """Verfuegbare Befehle auf dem APIC:
   show endpoints [ip <a.b.c.d>]       Endpoints der ganzen Fabric
   show bridge-domain | show epg       BDs und EPGs mit Zustand
   show vmware domain name <Domain>    VMM Domain mit vCenter, Port Groups, Hosts
+  show firmware upgrade status        Versionen und laufende Upgrades je Node
+  show firmware repository            Images im Firmware Repository
+  show snapshot | show export-config  Config Snapshots und Export-/Import-Jobs
+  show snmp | show logging server     SNMP Policy und Syslog-/Trap-Ziele mit Zustand
   ssh <leaf>                          zur Leaf-/Spine-CLI wechseln (z. B. ssh leaf101)
   Filter-Beispiel: moquery -c fvAEPg -f 'fv.AEPg.name=="Web"'"""
 
@@ -53,6 +57,10 @@ LEAF_HELP = """Verfuegbare Befehle auf Leaf/Spine:
   show bgp ipv4 unicast neighbors vrf <Tenant:VRF> (Timer, Passwort, Multihop) | show track
   show service redir info                  PBR Destination Groups
   iping -V <Tenant:VRF> <a.b.c.d>          Ping vom Leaf (Quelle: BD-Gateway)
+  show mcp internal info interface all     MCP je Port (Loop erkannt, err-disabled)
+  show interface status err-disabled       Ports im Zustand error-disabled
+  show ip dhcp relay                       DHCP Relay je BD und Leases
+  show qos classes                         QoS-Klassen (level1-6) mit MTU und Scheduling
   Underlay: show ip route vrf overlay-1 | show isis adjacency vrf overlay-1
             show bgp vpnv4 unicast summary vrf overlay-1 | show coop internal info ip-db (Spine)
   exit                                zurueck zum APIC"""
@@ -188,14 +196,20 @@ class Cli:
             return ('This command will restart this device, Proceed? [y/N] y\n'
                     'Rebooting ... Der APIC ist wieder da (Konfiguration unveraendert).')
         r = self.apic_extra(cmd)
+        if r is None:
+            r = self.ops_apic(re.sub(r'\s+', ' ', cmd.strip()))
         if r is not None:
             return r
         if cmd == 'show tenant':
             rows = [e.A(d)['name'] for d in e.store.by_class('fvTenant')]
             return ' Tenant\n ' + '-' * 30 + '\n' + '\n'.join(' ' + r for r in sorted(rows))
         if cmd == 'show version':
-            return ' Role        Pod  Node  Name      Version\n ----------  ---  ----  --------  --------\n' \
-                   ' controller  1    1     apic1     6.0(5h) (Datacenter Prep)'
+            out = [' Role        Pod  Node  Name      Version', ' ----------  ---  ----  --------  --------------------',
+                   ' controller  %-4d 1     %-9s %s' % (e.pod, self.sim['topology']['apic']['name'], e.apic_version)]
+            for nid, n in sorted(e.nodes.items()):
+                if n['state'] == 'active':
+                    out.append(' %-11s %-4d %-5d %-9s %s' % (n['role'], e.pod, nid, n['name'], e.node_version(n['serial'])))
+            return '\n'.join(out)
         return '%% Unbekannter Befehl. "help" zeigt die verfuegbaren Befehle.'
 
     def moquery(self, cmd):
@@ -297,8 +311,8 @@ class Cli:
             return LEAF_HELP
         if c == 'show version':
             return ('Cisco Nexus Operating System (NX-OS) Software (Datacenter Prep)\n'
-                    ' NXOS: version 16.0(5h)\n hardware: cisco %s\n %s Serial Number: %s\n Device name: %s\n'
-                    % (n['model'], n['role'], n['serial'], n['name']))
+                    ' NXOS: version %s\n hardware: cisco %s\n %s Serial Number: %s\n Device name: %s\n'
+                    % (e.node_version(n['serial']).replace('n9000-', ''), n['model'], n['role'], n['serial'], n['name']))
         if c in ('show lldp neighbors', 'show lldp neighbor'):
             out = ['Capability codes:', '  (R) Router, (B) Bridge, (T) Telephone, (C) DOCSIS Cable Device',
                    '  (W) WLAN Access Point, (P) Repeater, (S) Station, (O) Other',
@@ -383,6 +397,8 @@ class Cli:
         if c in ('show port-channel summary', 'show port-channel sum'):
             return self.pc(nid)
         extra = dispatch_extra(self, nid, c)
+        if extra is None:
+            extra = self.ops_leaf(nid, c)
         if extra is not None:
             return extra
         if c.startswith('show ip route') or c.startswith('show ip ospf') or c.startswith('show bgp'):
@@ -1398,3 +1414,117 @@ def apic_extra(self, cmd):
 
 
 Cli.apic_extra = apic_extra
+
+
+# ---------------------------------------------------------------------- Betrieb
+def ops_leaf(self, nid, c):
+    e = self.e
+    if c in ('show mcp internal info interface all', 'show mcp internal info'):
+        mcp = e.A('uni/infra/mcpInstP-default') or {}
+        on = mcp.get('adminSt') == 'enabled' and bool(mcp.get('key'))
+        out = ['MCP global: %s, Key %s, PDU per VLAN: %s, Action: %s' % (
+            'enabled' if on else 'disabled', 'gesetzt' if mcp.get('key') else 'fehlt',
+            'yes' if 'pdu-per-vlan' in (mcp.get('ctrl') or '') else 'no', mcp.get('loopProtectAct')),
+            '', '%-10s %-8s %-12s %-24s %s' % ('Interface', 'MCP', 'Status', 'Grund', 'VLANs'), '-' * 72]
+        for (n, p), pi in sorted(e.ports.items(), key=lambda x: pnum(x[0][1]) or 0):
+            if n != nid or pi['fabric'] or pi['oper'] == 'down' and pi['qual'] != 'error-disabled':
+                continue
+            out.append('%-10s %-8s %-12s %-24s %s' % (p.capitalize(), 'enabled' if on and e._mcp_if((n, p)) else 'disabled',
+                                                        'err-disabled' if pi['qual'] == 'error-disabled' else pi['oper'],
+                                                        pi.get('errdis', '-'), ','.join(map(str, sorted(pi['vlans']))) or '-'))
+        for l in getattr(e, 'loops', []):
+            if any(x[0] == nid for x in l['legs']) and l['loop']:
+                out += ['', 'Schleife ueber %s: %s' % (l['name'], l['text'])]
+        return '\n'.join(out)
+    if c in ('show interface status err-disabled', 'show int status err-disabled'):
+        rows = [(p, pi.get('errdis', '')) for (n, p), pi in e.ports.items() if n == nid and pi['qual'] == 'error-disabled']
+        out = ['-' * 60, '%-12s %-18s %-12s %s' % ('Port', 'Name', 'Status', 'Reason'), '-' * 60]
+        for p, why in sorted(rows, key=lambda r: pnum(r[0]) or 0):
+            out.append('%-12s %-18s %-12s %s' % (p.capitalize(), '--', 'err-disabled', why))
+        return '\n'.join(out)
+    if c == 'show ip dhcp relay':
+        out = ['DHCP relay service is enabled', '', '%-24s %-14s %-24s %s' % ('BD', 'Relay Label', 'Helper (Provider)', 'Owner'), '-' * 78]
+        bds = set(e.dep_bd.get(nid, set()))
+        for lbl in sorted(e.store.by_class('dhcpLbl')):
+            bd = lbl.rsplit('/dhcplbl-', 1)[0]
+            if bd not in bds:
+                continue
+            rel, want = e._relay_of(bd, lbl)
+            provs = ['%s (%s)' % (e.A(p)['addr'], e.short(e.A(p)['tDn'])) for p in e.kids(rel, 'dhcpRsProv')] if rel else ['Policy fehlt: ' + want]
+            out.append('%-24s %-14s %-24s %s' % (e.short(bd), e.A(lbl)['name'], ', '.join(provs), e.A(lbl)['owner']))
+        out += ['', 'Leases (vom Relay gesehen):']
+        for name, info in sorted(getattr(e, 'dhcp_info', {}).items()):
+            hs = e.hosts.get(name, {})
+            if nid in (hs.get('nodes') or []):
+                out.append('  %-12s %s' % (name, ('%s von %s (%s)' % (info['ip'], info['server'], info['how'])) if info['ok']
+                                            else 'kein Lease: ' + (info['why'] or '?')))
+        return '\n'.join(out)
+    if c == 'show qos classes':
+        pol = 'uni/infra/qosinst-default'
+        out = ['QoS Class Policies (dot1p preserve: %s)' % ('yes' if 'dot1p-preserve' in ((e.A(pol) or {}).get('ctrl') or '') else 'no'),
+               '%-8s %-9s %-6s %-6s %s' % ('Class', 'Admin', 'MTU', 'Sched', 'BW%'), '-' * 40]
+        for cl in sorted(e.kids(pol, 'qosClass')):
+            a, sch = e.A(cl), e.A(cl + '/sched') or {}
+            out.append('%-8s %-9s %-6s %-6s %s' % (a['prio'], a['admin'], a['mtu'], sch.get('meth', 'wrr'), sch.get('bw', '')))
+        return '\n'.join(out)
+    return None
+
+
+def ops_apic(self, c):
+    e = self.e
+    from . import ops as _ops
+    if c == 'show firmware upgrade status':
+        out = [' Pod  Node  Role        Current Firmware    Target Firmware     Status', ' ---  ----  ----------  ------------------  ------------------  ------------']
+        ups = {}
+        for u in self.sim.get('upgrades', []):
+            for s_ in u['serials']:
+                ups[s_] = u
+        a = ups.get('apic')
+        out.append(' %-4d 1     controller  %-19s %-19s %s' % (e.pod, 'apic-' + e.apic_version, a['version'] if a else '-',
+                                                             ('upgrading' if not a.get('done') else 'completeok') if a else 'notscheduled'))
+        for nid, n in sorted(e.nodes.items()):
+            u = ups.get(n['serial'])
+            out.append(' %-4d %-5d %-11s %-19s %-19s %s' % (e.pod, nid, n['role'], e.node_version(n['serial']), u['version'] if u else '-',
+                                                            ('upgrading (reload)' if not u.get('done') else 'completeok') if u else 'notscheduled'))
+        for g in getattr(e, 'fw_groups', []):
+            out.append('\nUpgrade Group %s: Nodes %s, Policy %s%s' % (g['name'], ','.join(map(str, g['nodes'])) or '-',
+                                                                     e.short(g['pol']) if g['pol'] else '(keine)',
+                                                                     ''.join('\n  Warnung: ' + w for w in g['warn'])))
+        return '\n'.join(out)
+    if c == 'show firmware repository':
+        rows = self.sim.get('fwrepo', [])
+        out = [' Name                          Type        Version            Size', ' ----------------------------  ----------  -----------------  -------']
+        for r in rows:
+            out.append(' %-29s %-11s %-18s %s' % (r['name'], r['type'], r['version'], r['size']))
+        return '\n'.join(out) if rows else ' Firmware Repository ist leer (Admin > Firmware > Images > Add Firmware)'
+    if c in ('show snapshot', 'show export-config', 'show import-config'):
+        out = [' Zeit                           Typ     Policy                       Ergebnis']
+        for j in reversed(self.sim.get('jobs', [])[-20:]):
+            out.append(' %-30s %-7s %-28s %s' % (j['ts'][:19], j['kind'], e.short(j['policy']), ('OK: ' if j['ok'] else 'FEHLER: ') + j['details']))
+        return '\n'.join(out)
+    if c == 'show snmp':
+        pol = getattr(e, 'snmp_pol', None)
+        out = ['SNMP Policy (aktiv ueber Pod Policy Group): %s' % (e.short(pol) if pol else '(keine)')]
+        if pol:
+            a = e.A(pol)
+            out += ['  Admin State: %s, Contact: %s, Location: %s' % (a['adminSt'], a['contact'], a['loc']),
+                    '  Communities: %s' % ', '.join(e.A(x)['name'] for x in e.kids(pol, 'snmpCommunityP')) or '-']
+            for g in e.kids(pol, 'snmpClientGrpP'):
+                out.append('  Client Group %s (EPG %s): %s' % (e.A(g)['name'], e.short((e.A(g + '/rsepg') or {}).get('tDn', '')) or '-',
+                                                              ', '.join(e.A(x)['addr'] for x in e.kids(g, 'snmpClientP')) or '-'))
+        out.append('\nTrap-Ziele:')
+        for d in [x for x in getattr(e, 'mon', []) if x['kind'] == 'snmp']:
+            out.append('  %-16s %s' % (d['host'] or '-', 'ok' if d['ok'] else d['why']))
+        return '\n'.join(out)
+    if c == 'show logging server':
+        out = []
+        for d in getattr(e, 'mon', []):
+            if d['kind'] in ('syslog', 'smtp'):
+                out.append('  %-7s %-16s Source %-14s minSev %-8s %s' % (d['kind'], d['host'] or '-', e.short(d['src']), d['minSev'],
+                                                                         'ok' if d['ok'] else d['why']))
+        return '\n'.join(['Remote Logging (Monitoring > Common Policy):'] + (out or ['  (keine Ziele)']))
+    return None
+
+
+Cli.ops_leaf = ops_leaf
+Cli.ops_apic = ops_apic

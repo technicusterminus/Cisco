@@ -111,8 +111,24 @@ AAA_BASE = [
 ]
 
 
+OPS_BASE = [
+    ('uni/fabric/fwrepop', 'firmwareRepoP', {}),
+    ('uni/controller/ctrlrfwpol', 'firmwareCtrlrFwP', {}),
+    ('uni/controller/ctrlrmaintpol', 'maintCtrlrMaintP', {}),
+    ('uni/exportcryptkey', 'pkiExportEncryptionKey', {}),
+    ('uni/fabric/moncommon', 'monCommonPol', {}),
+    ('uni/infra/qosinst-default', 'qosInstPol', {'name': 'default'}),
+] + [x for i in range(1, 7) for x in (
+    ('uni/infra/qosinst-default/class-level%d' % i, 'qosClass', {'prio': 'level%d' % i}),
+    ('uni/infra/qosinst-default/class-level%d/sched' % i, 'qosSched', {'bw': '20' if i <= 3 else '0'}))] + [
+    ('uni/infra/mcpInstP-default', 'mcpInstPol', {'name': 'default'}),
+    ('uni/infra/mcpIfP-default', 'mcpIfPol', {'name': 'default'}),
+    ('uni/infra/epLoopProtectP-default', 'epLoopProtectP', {'name': 'default'}),
+]
+
+
 def _aaa_base(store, ts):
-    for dn, cls, attrs in AAA_BASE:
+    for dn, cls, attrs in AAA_BASE + OPS_BASE:
         if dn not in store.objs and parent_ok(store, dn):
             create_obj(store, dn, cls, attrs, ts)
 

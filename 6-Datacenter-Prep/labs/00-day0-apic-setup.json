@@ -83,6 +83,7 @@
  "vcenters": [],
  "devices": [],
  "aaa": [],
+ "switches": [],
  "solutionConfig": [
   [
    "#setup",

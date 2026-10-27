@@ -1,0 +1,814 @@
+{
+ "id": "26-monitoring-snmp-syslog",
+ "title": "26 Monitoring: SNMP, Syslog und Callhome",
+ "topic": "Fabric-Betrieb",
+ "level": "Fortgeschritten",
+ "duration": "40 min",
+ "fabric": "discovered",
+ "goals": [
+  "SNMP-Polling mit Community und Client Group über die Pod Policy Group freigeben",
+  "Faults und Audit Logs per Syslog und SNMP-Trap senden",
+  "Callhome-Mails für schwere Faults einrichten",
+  "Verstehen, warum Switches eine Management-Adresse brauchen"
+ ],
+ "intro": "Das NOC will die Fabric überwachen. Im OOB-Netz 192.168.10.0/24 stehen: **Syslog** 192.168.10.60 (UDP 514), **SNMP-Manager** 192.168.10.61 (Community **NMS-Read**, Traps auf 162) und der **Mailserver** 192.168.10.62. Die Switches haben noch keine Management-Adressen: leaf101 = 192.168.10.101 usw., Gateway 192.168.10.254.",
+ "config": [
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "infraInfra": {
+       "attributes": {},
+       "children": [
+        {
+         "fvnsVlanInstP": {
+          "attributes": {
+           "name": "VLAN-Pool-Server",
+           "allocMode": "static"
+          },
+          "children": [
+           {
+            "fvnsEncapBlk": {
+             "attributes": {
+              "from": "vlan-100",
+              "to": "vlan-199"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAttEntityP": {
+          "attributes": {
+           "name": "AAEP-Server"
+          },
+          "children": [
+           {
+            "infraRsDomP": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraFuncP": {
+          "attributes": {},
+          "children": [
+           {
+            "infraAccPortGrp": {
+             "attributes": {
+              "name": "IPG-Server-Access"
+             },
+             "children": [
+              {
+               "infraRsAttEntP": {
+                "attributes": {
+                 "tDn": "uni/infra/attentp-AAEP-Server"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAccPortP": {
+          "attributes": {
+           "name": "IntProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraHPortS": {
+             "attributes": {
+              "name": "Server-Ports",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraPortBlk": {
+                "attributes": {
+                 "name": "block2",
+                 "fromPort": "1",
+                 "toPort": "10"
+                }
+               }
+              },
+              {
+               "infraRsAccBaseGrp": {
+                "attributes": {
+                 "tDn": "uni/infra/funcprof/accportgrp-IPG-Server-Access"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraNodeP": {
+          "attributes": {
+           "name": "SwProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraLeafS": {
+             "attributes": {
+              "name": "101-102",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraNodeBlk": {
+                "attributes": {
+                 "name": "blk",
+                 "from_": "101",
+                 "to_": "102"
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "infraRsAccPortP": {
+             "attributes": {
+              "tDn": "uni/infra/accportprof-IntProf-Leaf101-102"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "physDomP": {
+       "attributes": {
+        "name": "PhysDom-Server"
+       },
+       "children": [
+        {
+         "infraRsVlanNs": {
+          "attributes": {
+           "tDn": "uni/infra/vlanns-[VLAN-Pool-Server]-static"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Shop"
+    },
+    "children": [
+     {
+      "fvCtx": {
+       "attributes": {
+        "name": "Prod"
+       }
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Web"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.10.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-App"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.20.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Webshop"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Web"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Web"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/1]",
+              "encap": "vlan-110",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsCons": {
+             "attributes": {
+              "tnVzBrCPName": "web-to-app"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "App"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-App"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/2]",
+              "encap": "vlan-120",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsProv": {
+             "attributes": {
+              "tnVzBrCPName": "web-to-app"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzFilter": {
+       "attributes": {
+        "name": "tcp-8080"
+       },
+       "children": [
+        {
+         "vzEntry": {
+          "attributes": {
+           "name": "tcp-8080",
+           "etherT": "ip",
+           "prot": "tcp",
+           "dFromPort": "8080",
+           "dToPort": "8080"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzBrCP": {
+       "attributes": {
+        "name": "web-to-app",
+        "scope": "context"
+       },
+       "children": [
+        {
+         "vzSubj": {
+          "attributes": {
+           "name": "subj",
+           "revFltPorts": "yes"
+          },
+          "children": [
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "tcp-8080"
+             }
+            }
+           },
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "icmp"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "hosts": [
+  {
+   "name": "web1",
+   "mac": "00:50:56:10:10:11",
+   "ip": "10.10.10.11/24",
+   "gw": "10.10.10.1",
+   "vlan": 110,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/1"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Webserver"
+  },
+  {
+   "name": "app1",
+   "mac": "00:50:56:10:20:11",
+   "ip": "10.10.20.11/24",
+   "gw": "10.10.20.1",
+   "vlan": 120,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/2"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Applikationsserver"
+  }
+ ],
+ "tasks": [
+  {
+   "title": "Management-Adressen",
+   "text": "**Tenant mgmt > Node Management Addresses**: Static Node Management Addresses für 101–104, 201, 202 (192.168.10.<Node-ID>/24, Gateway 192.168.10.254)."
+  },
+  {
+   "title": "SNMP-Polling",
+   "text": "**Fabric > Fabric Policies > Policies > Pod > SNMP**: Policy **default** aktivieren, Contact und Location, Community **NMS-Read**, Client Group mit Management EPG default (Out-of-Band) und Client **192.168.10.61**. Dann eine Pod Policy Group **PodPol** mit dieser SNMP Policy und im Pod Profile default zuweisen.",
+   "hint": "Ohne Client Group beantwortet die ACI keine SNMP-Anfrage – auch mit richtiger Community nicht."
+  },
+  {
+   "title": "Destination Groups",
+   "text": "**Admin > External Data Collectors > Monitoring Destinations**: Syslog-Gruppe **Syslog** (Ziel 192.168.10.60, Severity information), SNMP-Gruppe **NMS-Traps** (192.168.10.61:162, v2c, NMS-Read), Callhome-Gruppe **NOC-Mail** (From apic1@firma.de, SMTP 192.168.10.62, Ziel noc@firma.de). Jeweils Management EPG default (Out-of-Band)."
+  },
+  {
+   "title": "Sources",
+   "text": "**Fabric Policies > Policies > Monitoring > Common Policy**: Syslog Source (Faults und Audit, ab warning), SNMP Source (Faults ab minor), Callhome Source (Faults ab major) – jeweils mit ihrer Destination Group.",
+   "hint": "Ohne Source sendet der APIC nichts, auch wenn die Destination Group fertig ist."
+  },
+  {
+   "title": "Testen",
+   "text": "Simulation > Fileserver & Monitoring: *snmpwalk* gegen apic1 und leaf101, dann einen Test-Fault **major** auslösen. Er muss beim Syslog-Server, beim SNMP-Manager und als Mail ankommen."
+  }
+ ],
+ "checks": [
+  {
+   "desc": "SNMP-Walk auf apic1 mit NMS-Read",
+   "type": "snmp",
+   "manager": "snmp-nms",
+   "node": "apic1",
+   "community": "NMS-Read"
+  },
+  {
+   "desc": "SNMP-Walk auf leaf101",
+   "type": "snmp",
+   "manager": "snmp-nms",
+   "node": "leaf101",
+   "community": "NMS-Read"
+  },
+  {
+   "desc": "Syslog-Ziel erreichbar",
+   "type": "mon",
+   "kind": "syslog"
+  },
+  {
+   "desc": "SNMP-Trap-Ziel erreichbar",
+   "type": "mon",
+   "kind": "snmp"
+  },
+  {
+   "desc": "Callhome-Ziel erreichbar",
+   "type": "mon",
+   "kind": "smtp"
+  },
+  {
+   "desc": "Syslog-Server hat einen Fault empfangen",
+   "type": "received",
+   "collector": "syslog-srv",
+   "contains": "][raised]["
+  },
+  {
+   "desc": "NOC-Mail angekommen",
+   "type": "received",
+   "collector": "mail-srv",
+   "contains": "Mail an noc@firma.de"
+  }
+ ],
+ "solution": "Management-Adressen: `{\"mgmtOoB\": {\"attributes\": {\"name\": \"default\"}, \"children\": [{\"mgmtRsOoBStNode\": {\"attributes\": {\"tDn\": \"topology/pod-1/node-101\", \"addr\": \"192.168.10.101/24\", \"gw\": \"192.168.10.254\"}}}, {\"mgmtRsOoBStNode\": {\"attributes\": {\"tDn\": \"topology/pod-1/node-102\", \"addr\": \"192.168.10.102/24\", \"gw\": \"192.168.10.254\"}}}, {\"mgmtRsOoBStNode\": {\"attributes\": {\"tDn\": \"topology/pod-1/node-103\", \"addr\": \"192.168.10.103/24\", \"gw\": \"192.168.10.254\"}}}, {\"mgmtRsOoBStNode\": {\"attributes\": {\"tDn\": \"topology/pod-1/node-104\", \"addr\": \"192.168.10.104/24\", \"gw\": \"192.168.10.254\"}}}, {\"mgmtRsOoBStNode\": {\"attributes\": {\"tDn\": \"topology/pod-1/node-201\", \"addr\": \"192.168.10.201/24\", \"gw\": \"192.168.10.254\"}}}, {\"mgmtRsOoBStNode\": {\"attributes\": {\"tDn\": \"topology/pod-1/node-202\", \"addr\": \"192.168.10.202/24\", \"gw\": \"192.168.10.254\"}}}]}}`\n\nFabric (uni): `{\"fabricInst\": {\"attributes\": {}, \"children\": [{\"snmpPol\": {\"attributes\": {\"name\": \"default\", \"adminSt\": \"enabled\", \"contact\": \"noc@firma.de\", \"loc\": \"RZ Frankfurt\"}, \"children\": [{\"snmpCommunityP\": {\"attributes\": {\"name\": \"NMS-Read\"}}}, {\"snmpClientGrpP\": {\"attributes\": {\"name\": \"NMS\"}, \"children\": [{\"snmpRsEpg\": {\"attributes\": {\"tDn\": \"uni/tn-mgmt/mgmtp-default/oob-default\"}}}, {\"snmpClientP\": {\"attributes\": {\"addr\": \"192.168.10.61\"}}}]}}]}}, {\"fabricFuncP\": {\"attributes\": {}, \"children\": [{\"fabricPodPGrp\": {\"attributes\": {\"name\": \"PodPol\"}, \"children\": [{\"fabricRsSnmpPol\": {\"attributes\": {\"tnSnmpPolName\": \"default\"}}}]}}]}}, {\"snmpGroup\": {\"attributes\": {\"name\": \"NMS-Traps\"}, \"children\": [{\"snmpTrapDest\": {\"attributes\": {\"host\": \"192.168.10.61\", \"port\": \"162\", \"ver\": \"v2c\", \"secName\": \"NMS-Read\"}, \"children\": [{\"snmpRsARemoteHostToEpg\": {\"attributes\": {\"tDn\": \"uni/tn-mgmt/mgmtp-default/oob-default\"}}}]}}]}}, {\"syslogGroup\": {\"attributes\": {\"name\": \"Syslog\"}, \"children\": [{\"syslogRemoteDest\": {\"attributes\": {\"host\": \"192.168.10.60\", \"severity\": \"information\"}, \"children\": [{\"fileRsARemoteHostToEpg\": {\"attributes\": {\"tDn\": \"uni/tn-mgmt/mgmtp-default/oob-default\"}}}]}}]}}, {\"callhomeGroup\": {\"attributes\": {\"name\": \"NOC-Mail\"}, \"children\": [{\"callhomeProf\": {\"attributes\": {\"from\": \"apic1@firma.de\", \"contact\": \"NOC\"}, \"children\": [{\"callhomeSmtpServer\": {\"attributes\": {\"host\": \"192.168.10.62\"}, \"children\": [{\"fileRsARemoteHostToEpg\": {\"attributes\": {\"tDn\": \"uni/tn-mgmt/mgmtp-default/oob-default\"}}}]}}]}}, {\"callhomeDest\": {\"attributes\": {\"name\": \"noc\", \"email\": \"noc@firma.de\"}}}]}}, {\"monCommonPol\": {\"attributes\": {}, \"children\": [{\"syslogSrc\": {\"attributes\": {\"name\": \"all\", \"minSev\": \"warning\", \"incl\": \"faults,audit\"}, \"children\": [{\"syslogRsDestGroup\": {\"attributes\": {\"tDn\": \"uni/fabric/slgroup-Syslog\"}}}]}}, {\"snmpSrc\": {\"attributes\": {\"name\": \"traps\", \"minSev\": \"minor\", \"incl\": \"faults\"}, \"children\": [{\"snmpRsDestGroup\": {\"attributes\": {\"tDn\": \"uni/fabric/snmpgroup-NMS-Traps\"}}}]}}, {\"callhomeSrc\": {\"attributes\": {\"minSev\": \"major\", \"incl\": \"faults\"}, \"children\": [{\"callhomeRsDestGroup\": {\"attributes\": {\"tDn\": \"uni/fabric/chgroup-NOC-Mail\"}}}]}}]}}]}}`\n\nPod Profile: `uni/fabric/podprof-default/pods-default-typ-ALL/rspodPGrp` tDn=uni/fabric/funcprof/podpgrp-PodPol. Danach Test-Fault auslösen.",
+ "routers": [],
+ "vcenters": [],
+ "devices": [],
+ "aaa": [],
+ "switches": [],
+ "solutionConfig": [
+  [
+   "uni/tn-mgmt/mgmtp-default",
+   {
+    "mgmtMgmtP": {
+     "attributes": {},
+     "children": [
+      {
+       "mgmtOoB": {
+        "attributes": {
+         "name": "default"
+        },
+        "children": [
+         {
+          "mgmtRsOoBStNode": {
+           "attributes": {
+            "tDn": "topology/pod-1/node-101",
+            "addr": "192.168.10.101/24",
+            "gw": "192.168.10.254"
+           }
+          }
+         },
+         {
+          "mgmtRsOoBStNode": {
+           "attributes": {
+            "tDn": "topology/pod-1/node-102",
+            "addr": "192.168.10.102/24",
+            "gw": "192.168.10.254"
+           }
+          }
+         },
+         {
+          "mgmtRsOoBStNode": {
+           "attributes": {
+            "tDn": "topology/pod-1/node-103",
+            "addr": "192.168.10.103/24",
+            "gw": "192.168.10.254"
+           }
+          }
+         },
+         {
+          "mgmtRsOoBStNode": {
+           "attributes": {
+            "tDn": "topology/pod-1/node-104",
+            "addr": "192.168.10.104/24",
+            "gw": "192.168.10.254"
+           }
+          }
+         },
+         {
+          "mgmtRsOoBStNode": {
+           "attributes": {
+            "tDn": "topology/pod-1/node-201",
+            "addr": "192.168.10.201/24",
+            "gw": "192.168.10.254"
+           }
+          }
+         },
+         {
+          "mgmtRsOoBStNode": {
+           "attributes": {
+            "tDn": "topology/pod-1/node-202",
+            "addr": "192.168.10.202/24",
+            "gw": "192.168.10.254"
+           }
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "uni",
+   {
+    "polUni": {
+     "attributes": {},
+     "children": [
+      {
+       "fabricInst": {
+        "attributes": {},
+        "children": [
+         {
+          "snmpPol": {
+           "attributes": {
+            "name": "default",
+            "adminSt": "enabled",
+            "contact": "noc@firma.de",
+            "loc": "RZ Frankfurt"
+           },
+           "children": [
+            {
+             "snmpCommunityP": {
+              "attributes": {
+               "name": "NMS-Read"
+              }
+             }
+            },
+            {
+             "snmpClientGrpP": {
+              "attributes": {
+               "name": "NMS"
+              },
+              "children": [
+               {
+                "snmpRsEpg": {
+                 "attributes": {
+                  "tDn": "uni/tn-mgmt/mgmtp-default/oob-default"
+                 }
+                }
+               },
+               {
+                "snmpClientP": {
+                 "attributes": {
+                  "addr": "192.168.10.61"
+                 }
+                }
+               }
+              ]
+             }
+            }
+           ]
+          }
+         },
+         {
+          "fabricFuncP": {
+           "attributes": {},
+           "children": [
+            {
+             "fabricPodPGrp": {
+              "attributes": {
+               "name": "PodPol"
+              },
+              "children": [
+               {
+                "fabricRsSnmpPol": {
+                 "attributes": {
+                  "tnSnmpPolName": "default"
+                 }
+                }
+               }
+              ]
+             }
+            }
+           ]
+          }
+         },
+         {
+          "snmpGroup": {
+           "attributes": {
+            "name": "NMS-Traps"
+           },
+           "children": [
+            {
+             "snmpTrapDest": {
+              "attributes": {
+               "host": "192.168.10.61",
+               "port": "162",
+               "ver": "v2c",
+               "secName": "NMS-Read"
+              },
+              "children": [
+               {
+                "snmpRsARemoteHostToEpg": {
+                 "attributes": {
+                  "tDn": "uni/tn-mgmt/mgmtp-default/oob-default"
+                 }
+                }
+               }
+              ]
+             }
+            }
+           ]
+          }
+         },
+         {
+          "syslogGroup": {
+           "attributes": {
+            "name": "Syslog"
+           },
+           "children": [
+            {
+             "syslogRemoteDest": {
+              "attributes": {
+               "host": "192.168.10.60",
+               "severity": "information"
+              },
+              "children": [
+               {
+                "fileRsARemoteHostToEpg": {
+                 "attributes": {
+                  "tDn": "uni/tn-mgmt/mgmtp-default/oob-default"
+                 }
+                }
+               }
+              ]
+             }
+            }
+           ]
+          }
+         },
+         {
+          "callhomeGroup": {
+           "attributes": {
+            "name": "NOC-Mail"
+           },
+           "children": [
+            {
+             "callhomeProf": {
+              "attributes": {
+               "from": "apic1@firma.de",
+               "contact": "NOC"
+              },
+              "children": [
+               {
+                "callhomeSmtpServer": {
+                 "attributes": {
+                  "host": "192.168.10.62"
+                 },
+                 "children": [
+                  {
+                   "fileRsARemoteHostToEpg": {
+                    "attributes": {
+                     "tDn": "uni/tn-mgmt/mgmtp-default/oob-default"
+                    }
+                   }
+                  }
+                 ]
+                }
+               }
+              ]
+             }
+            },
+            {
+             "callhomeDest": {
+              "attributes": {
+               "name": "noc",
+               "email": "noc@firma.de"
+              }
+             }
+            }
+           ]
+          }
+         },
+         {
+          "monCommonPol": {
+           "attributes": {},
+           "children": [
+            {
+             "syslogSrc": {
+              "attributes": {
+               "name": "all",
+               "minSev": "warning",
+               "incl": "faults,audit"
+              },
+              "children": [
+               {
+                "syslogRsDestGroup": {
+                 "attributes": {
+                  "tDn": "uni/fabric/slgroup-Syslog"
+                 }
+                }
+               }
+              ]
+             }
+            },
+            {
+             "snmpSrc": {
+              "attributes": {
+               "name": "traps",
+               "minSev": "minor",
+               "incl": "faults"
+              },
+              "children": [
+               {
+                "snmpRsDestGroup": {
+                 "attributes": {
+                  "tDn": "uni/fabric/snmpgroup-NMS-Traps"
+                 }
+                }
+               }
+              ]
+             }
+            },
+            {
+             "callhomeSrc": {
+              "attributes": {
+               "minSev": "major",
+               "incl": "faults"
+              },
+              "children": [
+               {
+                "callhomeRsDestGroup": {
+                 "attributes": {
+                  "tDn": "uni/fabric/chgroup-NOC-Mail"
+                 }
+                }
+               }
+              ]
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "uni/fabric/podprof-default/pods-default-typ-ALL/rspodPGrp",
+   {
+    "fabricRsPodPGrp": {
+     "attributes": {
+      "tDn": "uni/fabric/funcprof/podpgrp-PodPol"
+     }
+    }
+   }
+  ],
+  [
+   "#monitor-test",
+   {
+    "severity": "major"
+   }
+  ]
+ ]
+}

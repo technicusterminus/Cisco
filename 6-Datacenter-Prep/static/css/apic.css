@@ -251,3 +251,4 @@ table.grid.inner input:not([type=checkbox]):not([type=radio]), table.grid.inner 
 .setuplab h3 { margin-top: 0; }
 a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 .login-box select { padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; font-size: 14px; background: #fff; }
+pre.termbox { max-height: 300px; white-space: pre-wrap; margin: 8px 0 0; }
