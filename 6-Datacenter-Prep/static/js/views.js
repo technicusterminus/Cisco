@@ -575,6 +575,8 @@ const Views = {
 
   async 'sim/labs'(w) {
     const labs = await API.sim('labs');
+    let saves = await API.sim('saves');
+    const autoNote = () => App.state.lab ? ' Dein Stand im aktuellen Lab „' + App.state.lab.title + '" wird vorher automatisch gesichert.' : '';
     const draw = async () => {
       clear(w);
       const cur = App.state.lab;
@@ -593,20 +595,30 @@ const Views = {
           cur.goals && cur.goals.length ? h('div', null, h('h4', null, 'Lernziele'), h('ul', null, cur.goals.map(g => h('li', null, g)))) : null,
           h('h4', null, 'Aufgaben'),
           h('ol', { class: 'tasks' }, (cur.tasks || []).map(t => h('li', null, h('b', null, t.title), md(t.text), t.hint ? h('details', null, h('summary', null, 'Tipp'), md(t.hint)) : null))),
-          h('div', { class: 'formbtns' }, h('button', { class: 'btn', onclick: () => { sol.style.display = sol.style.display ? '' : 'none'; } }, 'Lösung zeigen/verbergen'),
+          h('div', { class: 'formbtns' }, h('button', { class: 'btn', onclick: () => Saves.saveDialog() }, '💾 Stand speichern'),
+            h('button', { class: 'btn', onclick: () => { sol.style.display = sol.style.display ? '' : 'none'; } }, 'Lösung zeigen/verbergen'),
             h('button', { class: 'btn primary', onclick: check }, '✔ Lab prüfen')), sol, res));
       }
       w.appendChild(h('div', { class: 'card' }, h('div', { class: 'card-h' }, 'Alle Labs'),
         table([{ l: 'Lab', f: l => h('b', null, l.title) }, { l: 'Thema', f: l => l.topic }, { l: 'Niveau', f: l => l.level }, { l: 'Dauer', f: l => l.duration }], labs, {
-          actions: l => [h('button', {
-            class: 'btn primary small', onclick: () => confirmBox('Lab „' + l.title + '" laden? Die aktuelle Konfiguration wird dabei zurückgesetzt (vorher ggf. einen Snapshot unter Admin > Config Rollbacks anlegen).', async () => {
-              await API.sim('labs/load', { id: l.id });
-              if (l.fabric === 'factory') return location.reload();
-              toast('Lab geladen');
-              await App.refreshState();
-              draw();
-            }),
-          }, 'Laden')],
+          actions: l => [
+            saves.some(x => x.lab === l.id) ? h('button', {
+              class: 'btn small', title: 'Letzten Spielstand dieses Labs laden', onclick: () => {
+                const last = saves.filter(x => x.lab === l.id)[0];
+                confirmBox('Lab „' + l.title + '" fortsetzen? Geladen wird „' + last.name + '" vom ' + fmtTs(last.created) +
+                  (last.progress ? ' (' + last.progress[0] + ' von ' + last.progress[1] + ' Prüfungen)' : '') + '.' + autoNote(), () => Saves.load(last.name));
+              },
+            }, '▶ Fortsetzen') : null,
+            h('button', {
+              class: 'btn primary small', onclick: () => confirmBox('Lab „' + l.title + '" neu starten? Die Fabric wird auf den Startzustand des Labs gesetzt.' + autoNote(), async () => {
+                await API.sim('labs/load', { id: l.id });
+                if (l.fabric === 'factory') return location.reload();
+                toast('Lab geladen');
+                await App.refreshState();
+                saves = await API.sim('saves');
+                draw();
+              }),
+            }, saves.some(x => x.lab === l.id) ? 'Neu starten' : 'Laden')],
         })));
     };
     await draw();

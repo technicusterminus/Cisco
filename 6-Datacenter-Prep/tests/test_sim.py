@@ -354,6 +354,46 @@ class TestRest(unittest.TestCase):
             self.assertEqual(s, 200, lab['id'])
 
 
+    def test_saves(self):
+        with self.S.lock:
+            self.S.reset('discovered')
+            self.S.save()
+        s, j, _ = self.req('POST', '/api/aaaLogin.json', {"aaaUser": {"attributes": {"name": "admin", "pwd": "secret"}}})
+        cookie = 'APIC-cookie=' + j['imdata'][0]['aaaLogin']['attributes']['token']
+        self.req('POST', '/sim/labs/load', {'id': '16-service-graph-pbr'}, cookie)
+        self.req('POST', '/api/mo/uni.json', {"fvTenant": {"attributes": {"name": "Merker"}}}, cookie)
+        s, lst, _ = self.req('POST', '/sim/saves', {'op': 'save', 'name': 'stand1', 'descr': 'Test'}, cookie)
+        self.assertEqual(s, 200)
+        row = next(x for x in lst if x['name'] == 'stand1')
+        self.assertEqual(row['lab'], '16-service-graph-pbr')
+        self.assertIn('Merker', row['tenants'])
+        # Download als Datei
+        r = urllib.request.Request('http://127.0.0.1:%d/sim/saves/download?name=stand1' % self.port)
+        r.add_header('Cookie', cookie)
+        with urllib.request.urlopen(r) as resp:
+            self.assertIn('attachment', resp.headers['Content-Disposition'])
+            blob = json.loads(resp.read())
+        self.assertEqual(blob['kind'], 'datacenter-prep-save')
+        # Labwechsel sichert automatisch, Fortsetzen holt den Stand zurueck
+        s, lst, _ = self.req('POST', '/sim/labs/load', {'id': '03-tenant-epg'}, cookie)
+        s, lst, _ = self.req('GET', '/sim/saves', cookie=cookie)
+        self.assertTrue(any(x['name'] == 'auto-16-service-graph-pbr' for x in lst))
+        s, _, _ = self.req('POST', '/sim/saves', {'op': 'resume', 'lab': '16-service-graph-pbr'}, cookie)
+        self.assertEqual(s, 200)
+        s, st, _ = self.req('GET', '/sim/state', cookie=cookie)
+        self.assertEqual(st['lab']['id'], '16-service-graph-pbr')
+        self.assertEqual(len(st['devices']), 1)
+        s, j, _ = self.req('GET', '/api/mo/uni/tn-Merker.json', cookie=cookie)
+        self.assertEqual(j['totalCount'], '1')
+        # Upload: gueltige und ungueltige Datei
+        s, _, _ = self.req('POST', '/sim/saves', {'op': 'upload', 'name': 'import1', 'data': blob}, cookie)
+        self.assertEqual(s, 200)
+        s, _, _ = self.req('POST', '/sim/saves', {'op': 'upload', 'name': 'kaputt', 'data': {'foo': 1}}, cookie)
+        self.assertEqual(s, 400)
+        s, _, _ = self.req('POST', '/sim/saves', {'op': 'save', 'name': '../boese'}, cookie)
+        self.assertEqual(s, 400)
+
+
 class TestDiscovery(Base):
     def test_discovery_order(self):
         self.S.reset('empty')

@@ -35,6 +35,7 @@ class Sim:
         self.lock = threading.RLock()
         self.data_dir = data_dir
         os.makedirs(os.path.join(data_dir, 'snapshots'), exist_ok=True)
+        os.makedirs(os.path.join(data_dir, 'saves'), exist_ok=True)
         self.state_file = os.path.join(data_dir, 'state.json')
         self.admin_pwd = admin_pwd
         self.store = Store()
@@ -241,6 +242,7 @@ class Sim:
         lab = self.lab(lid)
         if not lab:
             raise AciError(404, 'Lab %s nicht gefunden' % lid)
+        self.autosave_lab()
         self.reset(lab.get('fabric', 'discovered'))
         for tree in lab.get('config', []):
             mit_post(self.store, 'uni', tree)
@@ -362,6 +364,83 @@ class Sim:
         elif op == 'delete':
             if os.path.exists(fn):
                 os.remove(fn)
+
+
+    # -------------------------------------------------------------- Spielstaende
+    SAVE_VERSION = 1
+
+    def _save_file(self, name):
+        if not NAME_RE.match(name or ''):
+            raise AciError(400, 'Name: 1-32 Zeichen, Buchstaben/Ziffern/._-')
+        return os.path.join(self.data_dir, 'saves', name + '.json')
+
+    def save_blob(self, descr=''):
+        """Kompletter Zustand: Konfiguration, simulierte Welt, Setup, Lab und Fortschritt."""
+        lab = self.lab(self.sim.get('lab')) if self.sim.get('lab') else None
+        chk = self.check_lab() if lab else None
+        return {'kind': 'datacenter-prep-save', 'version': self.SAVE_VERSION, 'created': now_ts(), 'descr': descr,
+                'lab': lab['id'] if lab else None, 'labTitle': lab['title'] if lab else None,
+                'progress': [chk['passed'], chk['total']] if chk else None,
+                'fabricName': (self.sim.get('setup') or {}).get('fabricName'),
+                'tenants': sorted(self.store.attrs(d)['name'] for d in self.store.by_class('fvTenant')),
+                'config': self.store.dump_config(), 'counters': self.store.counters,
+                'sim': json.loads(json.dumps(self.sim))}
+
+    def _check_blob(self, b):
+        if not isinstance(b, dict) or b.get('kind') != 'datacenter-prep-save' or 'config' not in b or 'sim' not in b:
+            raise AciError(400, 'Keine gueltige Datacenter-Prep-Sicherung')
+        if int(b.get('version', 0)) > self.SAVE_VERSION:
+            raise AciError(400, 'Die Sicherung stammt aus einer neueren Version von Datacenter Prep')
+        for k in ('topology', 'hosts', 'routers'):
+            if k not in b['sim']:
+                raise AciError(400, 'Sicherung unvollstaendig (%s fehlt)' % k)
+
+    def saves(self):
+        d = os.path.join(self.data_dir, 'saves')
+        out = []
+        for fn in sorted(os.listdir(d)):
+            if fn.endswith('.json'):
+                try:
+                    with open(os.path.join(d, fn), encoding='utf-8') as f:
+                        s = json.load(f)
+                    row = {k: s.get(k) for k in ('created', 'descr', 'lab', 'labTitle', 'progress', 'fabricName', 'tenants')}
+                    row.update(name=fn[:-5], auto=fn.startswith('auto-'))
+                    out.append(row)
+                except (OSError, ValueError):
+                    pass
+        return sorted(out, key=lambda x: x.get('created') or '', reverse=True)
+
+    def save_game(self, name, descr=''):
+        fn = self._save_file(name)
+        tmp = fn + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(self.save_blob(descr), f)
+        os.replace(tmp, fn)
+
+    def read_save(self, name):
+        fn = self._save_file(name)
+        if not os.path.exists(fn):
+            raise AciError(404, 'Spielstand %s nicht gefunden' % name, 404)
+        with open(fn, encoding='utf-8') as f:
+            return json.load(f)
+
+    def load_blob(self, b):
+        self._check_blob(b)
+        self.store.load_config(b['config'], b.get('counters'))
+        ensure_base(self.store)
+        sim = b['sim']
+        sim.setdefault('settings', {'discoverySeconds': self.default_discovery})
+        if 'setup' not in sim:
+            sim['setup'] = {k: v for k, v in apic_setup.DEFAULTS.items() if k != 'pwd'}
+        self.sim = sim
+        self.engine = Engine(self.store, self.sim)
+        self.changed()
+
+    def autosave_lab(self):
+        """Vor dem Wechsel: das laufende Lab als auto-<lab> sichern (zum Fortsetzen)."""
+        lid = self.sim.get('lab')
+        if lid and self.sim.get('setup', 0) is not None:
+            self.save_game(('auto-' + lid)[:32], 'Automatisch gesichert beim Wechsel des Labs')
 
     # -------------------------------------------------------------- Sim-Objekte
     def used_ports(self, skip=None):
@@ -888,6 +967,38 @@ def make_handler(S):
                     S.reset(b.get('mode', 'discovered'))
                     S.save()
                     return self.send(200, {'ok': True})
+                if rest == 'saves':
+                    if method == 'POST':
+                        op = b.get('op')
+                        if op == 'save':
+                            S.save_game(b.get('name'), b.get('descr', ''))
+                        elif op == 'load':
+                            S.load_blob(S.read_save(b.get('name')))
+                        elif op == 'delete':
+                            fn = S._save_file(b.get('name'))
+                            if os.path.exists(fn):
+                                os.remove(fn)
+                        elif op == 'upload':
+                            data = b.get('data')
+                            S._check_blob(data)
+                            fn = S._save_file(b.get('name'))
+                            with open(fn, 'w', encoding='utf-8') as f:
+                                json.dump(data, f)
+                        elif op == 'resume':
+                            lid = b.get('lab')
+                            if S.sim.get('lab') != lid:
+                                S.autosave_lab()
+                            S.load_blob(S.read_save(('auto-' + lid)[:32]))
+                        else:
+                            raise AciError(400, 'Unbekannte Aktion')
+                    return self.send(200, S.saves())
+                if rest == 'saves/download':
+                    name = (q.get('name') or [''])[0]
+                    blob = S.save_blob('Aktueller Zustand') if name in ('', '_current') else S.read_save(name)
+                    fname = 'datacenter-prep-%s.json' % (name if name not in ('', '_current') else
+                                                         (blob.get('lab') or 'zustand') + '-' + time.strftime('%Y%m%d-%H%M'))
+                    return self.send(200, json.dumps(blob).encode(), 'application/json',
+                                     headers={'Content-Disposition': 'attachment; filename="%s"' % fname})
                 if rest == 'snapshots':
                     if method == 'POST':
                         S.snapshot(b.get('op'), b.get('name'), b.get('descr', ''))

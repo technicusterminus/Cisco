@@ -75,6 +75,14 @@ Oben rechts: Fault-Zähler, **CLI** (APIC und alle Switches), **API Inspector** 
 
 Datacenter Prep bildet Aufbau, Begriffe und Arbeitsabläufe der APIC-GUI nach. Layout und Grafik sind eigenständig, Bereiche ohne Funktion (z. B. L4-L7, SNMP, Kubernetes) sind als Menüpunkt vorhanden und so gekennzeichnet.
 
+## Speichern und Laden
+
+Über **💾** oben rechts oder unter *Simulation > Speichern & Laden* sicherst du den kompletten Zustand als **Spielstand**: Konfiguration, simulierte Hosts, Router, vCenter und Firewalls, das Day-0-Setup, das aktive Lab und den Fortschritt der Prüfungen. Spielstände lassen sich laden, löschen, als Datei herunterladen und auf einem anderen Rechner wieder hochladen.
+
+Beim Wechsel zu einem anderen Lab sichert Datacenter Prep das laufende Lab automatisch als `auto-<lab>`. Unter *Simulation > Labs* steht dann bei diesem Lab **Fortsetzen** (letzter Spielstand) neben **Neu starten**.
+
+Davon getrennt gibt es wie beim echten APIC die **Config Rollbacks** (*Admin > Config Rollbacks*): Sie setzen nur die Konfiguration zurück, die simulierte Umgebung bleibt, wie sie ist.
+
 ## Labs
 
 Unter *Simulation > Labs* laden. Jedes Lab setzt die Konfiguration auf einen Startzustand, bringt Hosts und Router mit und prüft das Ergebnis per Knopfdruck. Die Musterlösung lässt sich einblenden.

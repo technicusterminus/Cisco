@@ -249,3 +249,4 @@ table.grid.inner input:not([type=checkbox]):not([type=radio]), table.grid.inner 
 .setupbody { flex: 1; display: flex; gap: 14px; min-height: 0; }
 .setuplab { width: 360px; background: #f6f8fa; border-radius: 5px; padding: 14px; overflow: auto; font-size: 13px; }
 .setuplab h3 { margin-top: 0; }
+a.btn { text-decoration: none; display: inline-flex; align-items: center; }

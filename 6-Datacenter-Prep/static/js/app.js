@@ -12,7 +12,7 @@ const TABS = [
   { id: 'ops', l: 'Operations', subs: [['vis', 'Visibility & Troubleshooting'], ['capacity', 'Capacity Dashboard'], ['ep', 'EP Tracker'], ['viz', 'Visualization']] },
   { id: 'apps', l: 'Apps', subs: [['apps', 'Installed Apps'], ['appfaults', 'Faults']] },
   { id: 'integrations', l: 'Integrations', subs: [['integrations', 'Integrations']] },
-  { id: 'sim', l: 'Simulation', subs: [['topo', 'Topologie & Hosts'], ['routers', 'Externe Router'], ['vcenter', 'vCenter'], ['devices', 'L4-L7 Geräte'], ['labs', 'Labs'], ['simset', 'Einstellungen']], special: true },
+  { id: 'sim', l: 'Simulation', subs: [['topo', 'Topologie & Hosts'], ['routers', 'Externe Router'], ['vcenter', 'vCenter'], ['devices', 'L4-L7 Geräte'], ['labs', 'Labs'], ['saves', 'Speichern & Laden'], ['simset', 'Einstellungen']], special: true },
 ];
 
 const App = {
@@ -64,6 +64,7 @@ const App = {
       h('div', { class: 'brand', onclick: () => this.go('system', 'dash') }, h('span', { class: 'logo-mark small' }, 'DC'), h('span', { class: 'brand-sub' }, 'Datacenter Prep')),
       this.el.tabs,
       h('div', { class: 'tools' }, this.el.badges,
+        h('button', { class: 'tbtn', title: 'Zustand speichern (Konfiguration, simulierte Welt und Lab)', onclick: () => Saves.saveDialog() }, '💾'),
         h('button', { class: 'tbtn', title: 'APIC- und Switch-CLI', onclick: () => Term.open() }, '⌨ CLI'),
         h('button', { class: 'tbtn', title: 'API Inspector', onclick: () => Inspector.toggle() }, '{ } API Inspector'),
         h('a', { class: 'tbtn', href: '/visore.html', target: '_blank', title: 'Object Store Browser' }, 'Visore'),
