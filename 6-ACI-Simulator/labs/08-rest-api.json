@@ -1,0 +1,139 @@
+{
+ "id": "08-rest-api",
+ "title": "08 Automatisierung über die REST-API",
+ "topic": "Automation",
+ "level": "Mittel",
+ "duration": "30 min",
+ "fabric": "discovered",
+ "goals": [
+  "Mit aaaLogin ein Token holen",
+  "Objekte per POST anlegen und per GET mit Filtern abfragen",
+  "Ansible (cisco.aci), Python oder Terraform gegen den Simulator laufen lassen"
+ ],
+ "intro": "Der Simulator spricht die APIC-REST-API. Beispiele liegen im Ordner `beispiele/` (curl, Python, Ansible, Terraform). Schalte vorher den **API Inspector** (oben rechts) ein: Jede Aktion in der GUI zeigt dort den REST-Aufruf, den du nachbauen kannst.",
+ "tasks": [
+  {
+   "title": "Anmelden",
+   "text": "`curl -c cookie.txt -X POST http://localhost:8080/api/aaaLogin.json -d '{\"aaaUser\":{\"attributes\":{\"name\":\"admin\",\"pwd\":\"admin\"}}}'`"
+  },
+  {
+   "title": "Tenant per POST",
+   "text": "Lege mit einem einzigen POST an `/api/mo/uni.json` den Tenant **Automation** mit VRF **v1**, BD **bd1** (Subnetz **192.168.1.1/24**), AP **app** und EPG **epg1** (BD bd1) an.",
+   "hint": "Ein Tenant-Objekt mit `children`. Vorlage: `beispiele/curl-tenant.sh`."
+  },
+  {
+   "title": "Abfragen",
+   "text": "Frage alle Bridge Domains mit Unicast Routing ab: `/api/class/fvBD.json?query-target-filter=eq(fvBD.unicastRoute,\"yes\")`. Und den ganzen Tenant: `/api/mo/uni/tn-Automation.json?rsp-subtree=full`."
+  },
+  {
+   "title": "Fehler provozieren",
+   "text": "Sende einen BD mit `\"arpFlood\":\"vielleicht\"`. Welchen Fehlercode liefert die API?"
+  },
+  {
+   "title": "Ansible (optional)",
+   "text": "Mit `ansible-playbook beispiele/ansible-tenant.yml` (Collection cisco.aci, `use_ssl: false`, Port 8080) denselben Tenant erzeugen."
+  }
+ ],
+ "checks": [
+  {
+   "desc": "Tenant Automation mit VRF v1",
+   "type": "exists",
+   "dn": "uni/tn-Automation/ctx-v1"
+  },
+  {
+   "desc": "BD bd1 mit 192.168.1.1/24",
+   "type": "exists",
+   "dn": "uni/tn-Automation/BD-bd1/subnet-[192.168.1.1/24]"
+  },
+  {
+   "desc": "bd1 im VRF v1",
+   "type": "exists",
+   "dn": "uni/tn-Automation/BD-bd1/rsctx",
+   "attrs": {
+    "tnFvCtxName": "v1"
+   }
+  },
+  {
+   "desc": "EPG epg1 mit BD bd1",
+   "type": "exists",
+   "dn": "uni/tn-Automation/ap-app/epg-epg1/rsbd",
+   "attrs": {
+    "tnFvBDName": "bd1"
+   }
+  }
+ ],
+ "solution": "`{\"fvTenant\": {\"attributes\": {\"name\": \"Automation\"}, \"children\": [{\"fvCtx\": {\"attributes\": {\"name\": \"v1\"}}}, {\"fvBD\": {\"attributes\": {\"name\": \"bd1\"}, \"children\": [{\"fvRsCtx\": {\"attributes\": {\"tnFvCtxName\": \"v1\"}}}, {\"fvSubnet\": {\"attributes\": {\"ip\": \"192.168.1.1/24\", \"scope\": \"private\"}}}]}}, {\"fvAp\": {\"attributes\": {\"name\": \"app\"}, \"children\": [{\"fvAEPg\": {\"attributes\": {\"name\": \"epg1\"}, \"children\": [{\"fvRsBd\": {\"attributes\": {\"tnFvBDName\": \"bd1\"}}}]}}]}}]}}`\n\nDer Fehler bei arpFlood ist Code **801** (property failed validation).",
+ "config": [],
+ "hosts": [],
+ "routers": [],
+ "solutionConfig": [
+  [
+   "uni",
+   {
+    "fvTenant": {
+     "attributes": {
+      "name": "Automation"
+     },
+     "children": [
+      {
+       "fvCtx": {
+        "attributes": {
+         "name": "v1"
+        }
+       }
+      },
+      {
+       "fvBD": {
+        "attributes": {
+         "name": "bd1"
+        },
+        "children": [
+         {
+          "fvRsCtx": {
+           "attributes": {
+            "tnFvCtxName": "v1"
+           }
+          }
+         },
+         {
+          "fvSubnet": {
+           "attributes": {
+            "ip": "192.168.1.1/24",
+            "scope": "private"
+           }
+          }
+         }
+        ]
+       }
+      },
+      {
+       "fvAp": {
+        "attributes": {
+         "name": "app"
+        },
+        "children": [
+         {
+          "fvAEPg": {
+           "attributes": {
+            "name": "epg1"
+           },
+           "children": [
+            {
+             "fvRsBd": {
+              "attributes": {
+               "tnFvBDName": "bd1"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  ]
+ ]
+}

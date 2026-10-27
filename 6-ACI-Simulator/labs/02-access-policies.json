@@ -1,0 +1,380 @@
+{
+ "id": "02-access-policies",
+ "title": "02 Access Policies: vom VLAN-Pool zum Switch-Profil",
+ "topic": "Access Policies",
+ "level": "Einstieg",
+ "duration": "30 min",
+ "fabric": "discovered",
+ "goals": [
+  "Die Kette VLAN Pool → Domain → AAEP → Policy Group → Interface-Profil → Switch-Profil bauen",
+  "Fault F0467 lesen und beheben",
+  "Endpoints in einer EPG lernen lassen"
+ ],
+ "intro": "Der Tenant **Lab02** ist schon fertig: EPG **Server** hängt an der Physical Domain **PhysDom-Server** und hat Static Ports auf leaf101 eth1/1 und leaf102 eth1/1 mit **vlan-100**. Die Hosts **h1** und **h2** sind angeschlossen. Trotzdem lernt die Fabric keine Endpoints, und die EPG zeigt Faults – denn die Access Policies fehlen.\n\nLege alles unter **Fabric > Access Policies** an. Achte genau auf die Namen: Die EPG verweist schon auf `PhysDom-Server`.",
+ "config": [
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Lab02"
+    },
+    "children": [
+     {
+      "fvCtx": {
+       "attributes": {
+        "name": "VRF1"
+       }
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Server"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "VRF1"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.0.100.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "AP1"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Server"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Server"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/1]",
+              "encap": "vlan-100",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/1]",
+              "encap": "vlan-100",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "hosts": [
+  {
+   "name": "h1",
+   "mac": "00:50:56:02:00:01",
+   "ip": "10.0.100.11/24",
+   "gw": "10.0.100.1",
+   "vlan": 100,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/1"
+    ]
+   ],
+   "bond": "none",
+   "descr": ""
+  },
+  {
+   "name": "h2",
+   "mac": "00:50:56:02:00:02",
+   "ip": "10.0.100.12/24",
+   "gw": "10.0.100.1",
+   "vlan": 100,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/1"
+    ]
+   ],
+   "bond": "none",
+   "descr": ""
+  }
+ ],
+ "tasks": [
+  {
+   "title": "Fault ansehen",
+   "text": "Öffne **Tenants > Lab02 > Application Profiles > AP1 > Application EPGs > Server** und dort den Tab **Faults**. Welcher Grund steht im Fault F0467?"
+  },
+  {
+   "title": "VLAN Pool",
+   "text": "**Pools > VLAN**: Pool **VLAN-Pool-Server**, *Static Allocation*, Encap Block vlan-100 bis vlan-199."
+  },
+  {
+   "title": "Physical Domain",
+   "text": "**Physical and External Domains > Physical Domains**: **PhysDom-Server** mit dem VLAN Pool."
+  },
+  {
+   "title": "AAEP",
+   "text": "**Policies > Global > Attachable Access Entity Profiles**: **AAEP-Server** mit der Domain PhysDom-Server."
+  },
+  {
+   "title": "Interface Policy Group",
+   "text": "**Interfaces > Leaf Interfaces > Policy Groups > Leaf Access Port**: **IPG-Server-Access** mit dem AAEP."
+  },
+  {
+   "title": "Interface Profile",
+   "text": "**Interfaces > Leaf Interfaces > Profiles**: **IntProf-Leaf101-102** mit einem Access Port Selector **Server-Ports** für die Ports 1/1-10 und der Policy Group."
+  },
+  {
+   "title": "Switch Profile",
+   "text": "**Switches > Leaf Switches > Profiles**: **SwProf-Leaf101-102** mit Leaf Selector für die Nodes 101-102 und dem Interface Profile.",
+   "hint": "Das Interface Profile hängt am Switch Profile, nicht am Leaf Selector."
+  },
+  {
+   "title": "Ergebnis prüfen",
+   "text": "Die Faults der EPG verschwinden, unter **Operational** stehen h1 und h2. Teste unter **Operations > Visibility & Troubleshooting** einen Ping von h1 nach h2. Auf leaf101: `show vlan extended`, `show endpoint`."
+  }
+ ],
+ "checks": [
+  {
+   "desc": "VLAN Pool VLAN-Pool-Server (static)",
+   "type": "exists",
+   "dn": "uni/infra/vlanns-[VLAN-Pool-Server]-static"
+  },
+  {
+   "desc": "Physical Domain PhysDom-Server",
+   "type": "exists",
+   "dn": "uni/phys-PhysDom-Server"
+  },
+  {
+   "desc": "AAEP-Server enthält PhysDom-Server",
+   "type": "exists",
+   "dn": "uni/infra/attentp-AAEP-Server/rsdomP-[uni/phys-PhysDom-Server]"
+  },
+  {
+   "desc": "Kein F0467 mehr im Tenant Lab02",
+   "type": "nofaults",
+   "under": "uni/tn-Lab02",
+   "code": "F0467"
+  },
+  {
+   "desc": "h1 in EPG Server gelernt",
+   "type": "endpoint",
+   "host": "h1",
+   "epg": "uni/tn-Lab02/ap-AP1/epg-Server"
+  },
+  {
+   "desc": "h2 in EPG Server gelernt",
+   "type": "endpoint",
+   "host": "h2",
+   "epg": "uni/tn-Lab02/ap-AP1/epg-Server"
+  },
+  {
+   "desc": "Ping h1 → h2",
+   "type": "traffic",
+   "src": "h1",
+   "dst": "h2",
+   "proto": "icmp",
+   "expect": true
+  }
+ ],
+ "solution": "Die komplette Kette als JSON (POST an /api/mo/uni.json):\n\n`{\"polUni\": {\"attributes\": {}, \"children\": [{\"infraInfra\": {\"attributes\": {}, \"children\": [{\"fvnsVlanInstP\": {\"attributes\": {\"name\": \"VLAN-Pool-Server\", \"allocMode\": \"static\"}, \"children\": [{\"fvnsEncapBlk\": {\"attributes\": {\"from\": \"vlan-100\", \"to\": \"vlan-199\"}}}]}}, {\"infraAttEntityP\": {\"attributes\": {\"name\": \"AAEP-Server\"}, \"children\": [{\"infraRsDomP\": {\"attributes\": {\"tDn\": \"uni/phys-PhysDom-Server\"}}}]}}, {\"infraFuncP\": {\"attributes\": {}, \"children\": [{\"infraAccPortGrp\": {\"attributes\": {\"name\": \"IPG-Server-Access\"}, \"children\": [{\"infraRsAttEntP\": {\"attributes\": {\"tDn\": \"uni/infra/attentp-AAEP-Server\"}}}]}}]}}, {\"infraAccPortP\": {\"attributes\": {\"name\": \"IntProf-Leaf101-102\"}, \"children\": [{\"infraHPortS\": {\"attributes\": {\"name\": \"Server-Ports\", \"type\": \"range\"}, \"children\": [{\"infraPortBlk\": {\"attributes\": {\"name\": \"block2\", \"fromPort\": \"1\", \"toPort\": \"10\"}}}, {\"infraRsAccBaseGrp\": {\"attributes\": {\"tDn\": \"uni/infra/funcprof/accportgrp-IPG-Server-Access\"}}}]}}]}}, {\"infraNodeP\": {\"attributes\": {\"name\": \"SwProf-Leaf101-102\"}, \"children\": [{\"infraLeafS\": {\"attributes\": {\"name\": \"101-102\", \"type\": \"range\"}, \"children\": [{\"infraNodeBlk\": {\"attributes\": {\"name\": \"blk\", \"from_\": \"101\", \"to_\": \"102\"}}}]}}, {\"infraRsAccPortP\": {\"attributes\": {\"tDn\": \"uni/infra/accportprof-IntProf-Leaf101-102\"}}}]}}]}}, {\"physDomP\": {\"attributes\": {\"name\": \"PhysDom-Server\"}, \"children\": [{\"infraRsVlanNs\": {\"attributes\": {\"tDn\": \"uni/infra/vlanns-[VLAN-Pool-Server]-static\"}}}]}}]}}`",
+ "routers": [],
+ "solutionConfig": [
+  [
+   "uni",
+   {
+    "polUni": {
+     "attributes": {},
+     "children": [
+      {
+       "infraInfra": {
+        "attributes": {},
+        "children": [
+         {
+          "fvnsVlanInstP": {
+           "attributes": {
+            "name": "VLAN-Pool-Server",
+            "allocMode": "static"
+           },
+           "children": [
+            {
+             "fvnsEncapBlk": {
+              "attributes": {
+               "from": "vlan-100",
+               "to": "vlan-199"
+              }
+             }
+            }
+           ]
+          }
+         },
+         {
+          "infraAttEntityP": {
+           "attributes": {
+            "name": "AAEP-Server"
+           },
+           "children": [
+            {
+             "infraRsDomP": {
+              "attributes": {
+               "tDn": "uni/phys-PhysDom-Server"
+              }
+             }
+            }
+           ]
+          }
+         },
+         {
+          "infraFuncP": {
+           "attributes": {},
+           "children": [
+            {
+             "infraAccPortGrp": {
+              "attributes": {
+               "name": "IPG-Server-Access"
+              },
+              "children": [
+               {
+                "infraRsAttEntP": {
+                 "attributes": {
+                  "tDn": "uni/infra/attentp-AAEP-Server"
+                 }
+                }
+               }
+              ]
+             }
+            }
+           ]
+          }
+         },
+         {
+          "infraAccPortP": {
+           "attributes": {
+            "name": "IntProf-Leaf101-102"
+           },
+           "children": [
+            {
+             "infraHPortS": {
+              "attributes": {
+               "name": "Server-Ports",
+               "type": "range"
+              },
+              "children": [
+               {
+                "infraPortBlk": {
+                 "attributes": {
+                  "name": "block2",
+                  "fromPort": "1",
+                  "toPort": "10"
+                 }
+                }
+               },
+               {
+                "infraRsAccBaseGrp": {
+                 "attributes": {
+                  "tDn": "uni/infra/funcprof/accportgrp-IPG-Server-Access"
+                 }
+                }
+               }
+              ]
+             }
+            }
+           ]
+          }
+         },
+         {
+          "infraNodeP": {
+           "attributes": {
+            "name": "SwProf-Leaf101-102"
+           },
+           "children": [
+            {
+             "infraLeafS": {
+              "attributes": {
+               "name": "101-102",
+               "type": "range"
+              },
+              "children": [
+               {
+                "infraNodeBlk": {
+                 "attributes": {
+                  "name": "blk",
+                  "from_": "101",
+                  "to_": "102"
+                 }
+                }
+               }
+              ]
+             }
+            },
+            {
+             "infraRsAccPortP": {
+              "attributes": {
+               "tDn": "uni/infra/accportprof-IntProf-Leaf101-102"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      },
+      {
+       "physDomP": {
+        "attributes": {
+         "name": "PhysDom-Server"
+        },
+        "children": [
+         {
+          "infraRsVlanNs": {
+           "attributes": {
+            "tDn": "uni/infra/vlanns-[VLAN-Pool-Server]-static"
+           }
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  ]
+ ]
+}

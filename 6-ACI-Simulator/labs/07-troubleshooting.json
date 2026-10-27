@@ -1,0 +1,737 @@
+{
+ "id": "07-troubleshooting",
+ "title": "07 Troubleshooting: sechs Tickets",
+ "topic": "Troubleshooting",
+ "level": "Fortgeschritten",
+ "duration": "45 min",
+ "fabric": "discovered",
+ "goals": [
+  "Faults gezielt lesen (F0467, unaufgelöste Relationen)",
+  "Mit Traffic-Test, CLI und EP Tracker eingrenzen",
+  "Typische Fehler in Access Policies, BDs und Contracts finden"
+ ],
+ "intro": "Im Tenant **Ops** laufen sechs Tickets auf. Ändere die Konfiguration so, dass alle Tickets gelöst sind. Die Hosts sind richtig konfiguriert – der Fehler liegt immer in der ACI.\n\n- web1: leaf101 eth1/1, VLAN 110, 10.20.10.11\n- app1: leaf102 eth1/1, VLAN 120, 10.20.20.11\n- pc1: leaf101 eth1/2, VLAN 150, 10.20.10.50\n- files1: leaf102 eth1/12, VLAN 130, 10.20.30.20\n- backup1: leaf101 eth1/3, VLAN 140, 10.20.30.11",
+ "config": [
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "infraInfra": {
+       "attributes": {},
+       "children": [
+        {
+         "fvnsVlanInstP": {
+          "attributes": {
+           "name": "VLAN-Pool-Ops",
+           "allocMode": "static"
+          },
+          "children": [
+           {
+            "fvnsEncapBlk": {
+             "attributes": {
+              "from": "vlan-100",
+              "to": "vlan-149"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAttEntityP": {
+          "attributes": {
+           "name": "AAEP-Ops"
+          },
+          "children": [
+           {
+            "infraRsDomP": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Ops"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraFuncP": {
+          "attributes": {},
+          "children": [
+           {
+            "infraAccPortGrp": {
+             "attributes": {
+              "name": "IPG-Ops"
+             },
+             "children": [
+              {
+               "infraRsAttEntP": {
+                "attributes": {
+                 "tDn": "uni/infra/attentp-AAEP-Ops"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAccPortP": {
+          "attributes": {
+           "name": "IntProf-Ops"
+          },
+          "children": [
+           {
+            "infraHPortS": {
+             "attributes": {
+              "name": "Ops-Ports",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraPortBlk": {
+                "attributes": {
+                 "name": "block2",
+                 "fromPort": "1",
+                 "toPort": "10"
+                }
+               }
+              },
+              {
+               "infraRsAccBaseGrp": {
+                "attributes": {
+                 "tDn": "uni/infra/funcprof/accportgrp-IPG-Ops"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraNodeP": {
+          "attributes": {
+           "name": "SwProf-Ops"
+          },
+          "children": [
+           {
+            "infraLeafS": {
+             "attributes": {
+              "name": "101-102",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraNodeBlk": {
+                "attributes": {
+                 "name": "blk",
+                 "from_": "101",
+                 "to_": "102"
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "infraRsAccPortP": {
+             "attributes": {
+              "tDn": "uni/infra/accportprof-IntProf-Ops"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "physDomP": {
+       "attributes": {
+        "name": "PhysDom-Ops"
+       },
+       "children": [
+        {
+         "infraRsVlanNs": {
+          "attributes": {
+           "tDn": "uni/infra/vlanns-[VLAN-Pool-Ops]-static"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Ops"
+    },
+    "children": [
+     {
+      "fvCtx": {
+       "attributes": {
+        "name": "Ops"
+       }
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Web"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Ops"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.20.10.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-App",
+        "unicastRoute": "no"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Ops"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.20.20.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Backup"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Ops"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.20.30.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzFilter": {
+       "attributes": {
+        "name": "http"
+       },
+       "children": [
+        {
+         "vzEntry": {
+          "attributes": {
+           "name": "http",
+           "etherT": "ip",
+           "prot": "tcp",
+           "dFromPort": "8080",
+           "dToPort": "8080"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzBrCP": {
+       "attributes": {
+        "name": "web-to-app",
+        "scope": "context"
+       },
+       "children": [
+        {
+         "vzSubj": {
+          "attributes": {
+           "name": "subj",
+           "revFltPorts": "no"
+          },
+          "children": [
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "http"
+             }
+            }
+           },
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "icmp"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Ops"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Web"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Web"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Ops"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/1]",
+              "encap": "vlan-110",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsCons": {
+             "attributes": {
+              "tnVzBrCPName": "web-to-app"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "App"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-App"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Ops"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/1]",
+              "encap": "vlan-120",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsProv": {
+             "attributes": {
+              "tnVzBrCPName": "web-to-app"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Clients"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Web"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Ops"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/2]",
+              "encap": "vlan-150",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Files"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Backup"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Ops"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/12]",
+              "encap": "vlan-130",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Backup"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Bakup"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Ops"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/3]",
+              "encap": "vlan-140",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "hosts": [
+  {
+   "name": "web1",
+   "mac": "00:50:56:20:10:11",
+   "ip": "10.20.10.11/24",
+   "gw": "10.20.10.1",
+   "vlan": 110,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/1"
+    ]
+   ],
+   "bond": "none",
+   "descr": ""
+  },
+  {
+   "name": "app1",
+   "mac": "00:50:56:20:20:11",
+   "ip": "10.20.20.11/24",
+   "gw": "10.20.20.1",
+   "vlan": 120,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/1"
+    ]
+   ],
+   "bond": "none",
+   "descr": ""
+  },
+  {
+   "name": "pc1",
+   "mac": "00:50:56:20:10:50",
+   "ip": "10.20.10.50/24",
+   "gw": "10.20.10.1",
+   "vlan": 150,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/2"
+    ]
+   ],
+   "bond": "none",
+   "descr": ""
+  },
+  {
+   "name": "files1",
+   "mac": "00:50:56:20:30:20",
+   "ip": "10.20.30.20/24",
+   "gw": "10.20.30.1",
+   "vlan": 130,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/12"
+    ]
+   ],
+   "bond": "none",
+   "descr": ""
+  },
+  {
+   "name": "backup1",
+   "mac": "00:50:56:20:30:11",
+   "ip": "10.20.30.11/24",
+   "gw": "10.20.30.1",
+   "vlan": 140,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/3"
+    ]
+   ],
+   "bond": "none",
+   "descr": ""
+  }
+ ],
+ "tasks": [
+  {
+   "title": "Ticket 1",
+   "text": "„Mein PC (pc1) bekommt keine Verbindung.\"\n\n**Finden mit:** Tab *Faults* der EPG **Clients** (oder `moquery -c faultInst -f 'fault.Inst.code==\"F0467\"'` auf dem APIC).",
+   "hint": "Lies den Grund im F0467 genau: Welches VLAN, welcher Pool?"
+  },
+  {
+   "title": "Ticket 2",
+   "text": "„Der Fileserver files1 an leaf102 Port 12 ist nicht erreichbar.\"\n\n**Finden mit:** Tab *Faults* der EPG **Files**, danach die Access Port Selectors unter *Fabric > Access Policies*.",
+   "hint": "invalid-path heißt: Für diesen Port gibt es keine Access Policy mit der Domain."
+  },
+  {
+   "title": "Ticket 3",
+   "text": "„web1 erreicht app1 nicht auf TCP 80.\" (Die Anwendung läuft auf Port 80.)\n\n**Finden mit:** *Operations > Visibility & Troubleshooting* (web1 → app1, TCP 80), danach `show zoning-rule` auf leaf101."
+  },
+  {
+   "title": "Ticket 4",
+   "text": "„app1 kann nicht einmal sein Gateway 10.20.20.1 pingen.\"\n\n**Finden mit:** Traffic-Test app1 → 10.20.20.1 und `show ip route vrf Ops:Ops` auf leaf102."
+  },
+  {
+   "title": "Ticket 5",
+   "text": "„backup1 wird in der Fabric nicht gelernt.\"\n\n**Finden mit:** Tab *Faults* der EPG **Backup** und `show endpoint` auf leaf101.",
+   "hint": "Schau dir die Bridge-Domain-Zuordnung der EPG Backup genau an."
+  },
+  {
+   "title": "Ticket 6",
+   "text": "„Seit dem Fix für Ticket 3 kommt die Anfrage an, aber keine Antwort zurück.\"\n\n**Finden mit:** Traffic-Test web1 → app1 TCP 80: Er zeigt Anfrage und Antwort getrennt.",
+   "hint": "Was regelt die Option *Reverse Filter Ports* am Subject?"
+  }
+ ],
+ "checks": [
+  {
+   "desc": "Ticket 1: pc1 gelernt",
+   "type": "endpoint",
+   "host": "pc1",
+   "epg": "uni/tn-Ops/ap-Ops/epg-Clients"
+  },
+  {
+   "desc": "Ticket 2: files1 gelernt",
+   "type": "endpoint",
+   "host": "files1",
+   "epg": "uni/tn-Ops/ap-Ops/epg-Files"
+  },
+  {
+   "desc": "Ticket 4: app1 pingt sein Gateway",
+   "type": "traffic",
+   "src": "app1",
+   "dst": "10.20.20.1",
+   "expect": true
+  },
+  {
+   "desc": "Ticket 5: backup1 gelernt",
+   "type": "endpoint",
+   "host": "backup1",
+   "epg": "uni/tn-Ops/ap-Ops/epg-Backup"
+  },
+  {
+   "desc": "Ticket 3+6: web1 → app1 TCP 80",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "app1",
+   "proto": "tcp",
+   "port": 80,
+   "expect": true
+  },
+  {
+   "desc": "Keine F0467-Faults mehr im Tenant Ops",
+   "type": "nofaults",
+   "under": "uni/tn-Ops",
+   "code": "F0467"
+  }
+ ],
+ "solution": "1. VLAN Pool VLAN-Pool-Ops reicht nur bis 149, pc1 nutzt 150 → Encap Block erweitern (z. B. bis 199).\n2. Interface Selector Ops-Ports deckt nur 1/1-10 ab → Port 12 ergänzen (Port Block 12-12).\n3. Filter http hat Destination Port 8080 → auf 80 (http) ändern.\n4. BD-App hat Unicast Routing aus → einschalten.\n5. EPG Backup zeigt auf BD **BD-Bakup** (Tippfehler) → BD-Backup wählen.\n6. Subject im Contract web-to-app hat Reverse Filter Ports aus → einschalten, sonst passt die Antwort (Quellport 80) nicht auf den Filter.",
+ "routers": [],
+ "solutionConfig": [
+  [
+   "uni/infra/vlanns-[VLAN-Pool-Ops]-static",
+   {
+    "fvnsVlanInstP": {
+     "attributes": {},
+     "children": [
+      {
+       "fvnsEncapBlk": {
+        "attributes": {
+         "from": "vlan-150",
+         "to": "vlan-199"
+        }
+       }
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "uni/infra/accportprof-IntProf-Ops/hports-Ops-Ports-typ-range",
+   {
+    "infraHPortS": {
+     "attributes": {},
+     "children": [
+      {
+       "infraPortBlk": {
+        "attributes": {
+         "name": "block3",
+         "fromPort": "12",
+         "toPort": "12"
+        }
+       }
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "uni/tn-Ops/flt-http/e-http",
+   {
+    "vzEntry": {
+     "attributes": {
+      "dFromPort": "http",
+      "dToPort": "http"
+     }
+    }
+   }
+  ],
+  [
+   "uni/tn-Ops/BD-BD-App",
+   {
+    "fvBD": {
+     "attributes": {
+      "unicastRoute": "yes"
+     }
+    }
+   }
+  ],
+  [
+   "uni/tn-Ops/ap-Ops/epg-Backup",
+   {
+    "fvAEPg": {
+     "attributes": {},
+     "children": [
+      {
+       "fvRsBd": {
+        "attributes": {
+         "tnFvBDName": "BD-Backup"
+        }
+       }
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "uni/tn-Ops/brc-web-to-app/subj-subj",
+   {
+    "vzSubj": {
+     "attributes": {
+      "revFltPorts": "yes"
+     }
+    }
+   }
+  ]
+ ]
+}

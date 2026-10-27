@@ -9,6 +9,7 @@ Deutschsprachige Lernmaterialien für Cisco-Prüfungen, vom Einstieg bis zum CCI
 | [`3-CCNP-ENCOR-350-401`](3-CCNP-ENCOR-350-401/) | CCNP ENCOR 350-401 v1.2 | Anki-Deck deutsch (1.776 Karten, davon 345 Befehle) und englisch (1.981 Karten, davon 429 MC und 136 Show-Karten), Prüfungssimulation (241 Fragen), Rechen- und Ticket-Trainer, Cheatsheet, 10-Wochen-Lernplan und Labs für CML, EVE-NG und Packet Tracer zu allen 47 Zielen |
 | [`4-CCNP-ENARSI-300-410`](4-CCNP-ENARSI-300-410/) | CCNP ENARSI 300-410 | Anki-Deck (709 Karten, davon 231 Befehle), Prüfungssimulation (179 Fragen), 6 eigene Labs für CML und EVE-NG und Zuordnung der passenden ENCOR-Labs |
 | [`5-CCIE-Enterprise-Infrastructure`](5-CCIE-Enterprise-Infrastructure/) | CCIE Enterprise Infrastructure | Anki-Deck (542 Karten, davon 184 Befehle), Prüfungssimulation (175 Fragen), 6 eigene Labs für CML und EVE-NG und Zuordnung der passenden ENCOR- und ENARSI-Labs |
+| [`6-ACI-Simulator`](6-ACI-Simulator/) | Data Center ACI (z. B. DCACI 300-620) | ACI-Simulator mit APIC-Oberfläche, APIC-REST-API (getestet mit Ansible `cisco.aci`), CLI, Faults, Traffic-Test und 9 Labs mit automatischer Prüfung |
 
 Netzwerk-Einstieg, CCNA und ENCOR haben einen Wochenplan (`LERNPLAN.md`), ENARSI und CCIE eine Lernempfehlung im README.
 
@@ -27,4 +28,4 @@ Jeder Prüfungsordner folgt demselben Schema, soweit es den Baustein dort gibt:
 
 **So ist das Material aufgebaut:** Jede Antwort nennt zuerst den Kern und erklärt dann, warum. Jedes Deck hat Befehlskarten (`tag:Fokus::Befehle`): Aufgabe vorne, genaue Syntax mit Modus hinten. Jedes Lab beginnt mit Lernzielen, und jedes Fehler-Ticket sagt, mit welchem Befehl du den Fehler findest. Die Prüfungssimulationen laden auch eigene Fragenpools im JSON-Format.
 
-> Kein offizielles Cisco-Material. Cisco, CCNA, CCNP, CCIE, ENCOR, ENARSI und Packet Tracer sind Marken von Cisco Systems, Inc.
+> Kein offizielles Cisco-Material. Cisco, CCNA, CCNP, CCIE, ENCOR, ENARSI, ACI, APIC und Packet Tracer sind Marken von Cisco Systems, Inc.

@@ -1,0 +1,10 @@
+# Inventory fuer den ACI Simulator (HTTP auf Port 8080)
+all:
+  hosts:
+    apic-sim:
+      ansible_connection: local
+      ansible_python_interpreter: "{{ ansible_playbook_python }}"
+      aci_host: localhost
+      aci_port: 8080
+      aci_user: admin
+      aci_pass: admin
