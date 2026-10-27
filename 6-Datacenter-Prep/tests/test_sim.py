@@ -853,3 +853,38 @@ class TestMultiPod(Base):
         self.assertEqual(adj['state'], 'EXSTART')
         out = Cli(S.engine, S.sim).run('spine203', 'show ip ospf neighbors vrf overlay-1')
         self.assertIn('EXSTART', out)
+
+
+class TestScale(Base):
+    def test_topology_bulk_flows_coverage(self):
+        from dcprep import flows, coverage
+        S = self.S
+        S.sim['settings']['discoverySeconds'] = 0
+        r = S.topology_op({'spec': {'pods': [{'spines': 4, 'leafs': 12}, {'spines': 2, 'leafs': 4}], 'remote': 1}, 'register': True, 'infra': True})
+        S.changed()
+        S.changed()
+        self.assertEqual(r['nodes'], 23)
+        self.assertTrue(all(n['state'] == 'active' for n in self.e.nodes.values()), {n: x['state'] for n, x in self.e.nodes.items()})
+        with self.assertRaises(AciError):
+            S.topology_op({'spec': {'pods': [{'spines': 7, 'leafs': 4}]}})
+        # Hosts in Masse: Web in Pod 1, App in Pod 2
+        post(self.st, 'uni', ACCESS)
+        acc2 = json.loads(json.dumps(ACCESS).replace('"101"', '"1101"').replace('"104"', '"1104"').replace('IFP"', 'IFP2"')
+                          .replace('"ALL"', '"ALL2"'))
+        post(self.st, 'uni', acc2)
+        post(self.st, 'uni', tenant())
+        post(self.st, 'uni/tn-T/ap-A/epg-Cli', {'fvAEPg': {'attributes': {}, 'children': [
+            {'fvRsPathAtt': {'attributes': {'tDn': 'topology/pod-2/paths-1101/pathep-[eth1/2]', 'encap': 'vlan-20'}}}]}})
+        n = S.bulk_hosts('web1,,10.1.1.10/24,10.1.1.1,10,leaf101,1\ncli1,,10.1.2.10/24,10.1.2.1,20,leaf1101,2')
+        S.changed()
+        self.assertEqual(n, 2)
+        with self.assertRaises(AciError):
+            S.bulk_hosts('web1,,10.1.1.20/24,10.1.1.1,10,leaf101,3')
+        self.assertEqual(next(h for h in S.sim['hosts'] if h['name'] == 'web1')['ip'], '10.1.1.10/24')
+        self.assertTrue(self.traffic('web1', 'cli1')['ok'], self.traffic('web1', 'cli1')['steps'][-1])
+        m = flows.matrix(S, None, None, 'tcp', 80)
+        self.assertEqual(m['rows'][0]['cells'][1]['ok'] or m['rows'][1]['cells'][0]['ok'], True)
+        res = flows.expect_op(S, {'op': 'csv', 'csv': 'EPG:T/A/Cli,EPG:T/A/Web,tcp,80,allow\nweb1,cli1,tcp,22,deny'})
+        self.assertEqual((res['passed'], res['total']), (2, 2), res)
+        rep = coverage.report(self.st, 'uni/tn-T')
+        self.assertGreater(rep['byLevel']['ausgewertet'], 10)

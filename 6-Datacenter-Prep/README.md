@@ -64,6 +64,18 @@ Der Zustand bleibt beim Beenden erhalten. Beim ersten Start ist die Fabric ferti
 | Disabled Interfaces | Deaktivierte Ports gehen admin-down, Endpoints und Nachbarschaften dahinter fallen weg. |
 | Faults, Events, Audit Log | Faults mit Code, Severity und Beschreibung am Objekt, Health Scores. Events bei Zustandswechseln (Switch aktiv, Endpoint gelernt, Nachbarschaft, Fault ausgelöst oder behoben). Jede Änderung im Audit Log mit Benutzer, altem und neuem Wert. |
 
+## Eigene, große Strukturen aufbauen und testen
+
+| Werkzeug | Wo | Was es tut |
+|---|---|---|
+| Topologie-Editor | *Simulation > Topologie & Hosts > ⚙ Topologie* | 1–4 Pods mit je 1–6 Spines und 1–40 Leafs, dazu bis zu 8 Remote Leafs. Auf Wunsch werden alle Switches registriert und die Multi-Pod-Grundkonfiguration (TEP Pools, Infra-L3Out, Data Plane TEPs, DHCP Relay im IPN) gleich mit angelegt. Node-IDs: Pod 1 leaf101…/spine201…, Pod 2 leaf1101…/spine1201…, Pod 3 2101…/2201…, Pod 4 3101…/3201…, Remote Leafs 3901…. Die Konfiguration bleibt beim Umbau erhalten. |
+| Hosts in Masse | *Simulation > Topologie & Hosts > + Hosts (CSV/Vorlage)* | CSV `name,mac,ip,gw,vlan,leaf,port[,leaf2,port2,bond]` oder Vorlage (Präfix, Anzahl, Leafs, Ports, Netz, optional dual-homed per vPC). Atomar: Bei einem Fehler (belegter Port, doppelter Name, falsche IP) wird nichts übernommen. |
+| Testmatrix | *Simulation > Testmatrix* | Alle Hosts oder eine EPG gegen alle, mit ICMP/TCP/UDP und Port. Jede Zelle öffnet den Traffic-Test mit Begründung. |
+| Erwartungen | *Simulation > Testmatrix* | Soll-Regeln wie „`EPG:Shop/Webshop/Web` → `EPG:Shop/Webshop/App` tcp/8080 erlaubt“. Anlegen, als CSV importieren oder eine Matrix als Baseline übernehmen, dann nach jeder Änderung mit einem Klick prüfen – ein Regressionstest für das Design. EPG-Angaben werden auf alle dort gelernten Hosts aufgelöst. |
+| Abdeckung | *Admin > Import/Export > Abdeckung (Coverage)* | Zeigt für die aktuelle oder eine importierte Konfiguration je Klasse, ob die Simulation sie **auswertet**, nur die **Attribute prüft** oder sie nur **speichert**, und welche unbekannten Attribute mitgekommen sind. So siehst du, wie belastbar ein Testergebnis für eine echte APIC-Konfiguration ist. |
+
+Die Engine rechnet auch große Konfigurationen schnell neu: 50 Tenants mit je 20 EPGs (rund 11.000 Objekte) in etwa 0,1 Sekunden, ein Fluss im Traffic-Test dauert etwa 1 ms.
+
 ## Die Oberfläche
 
 Menüs und Untermenüs wie beim APIC:
@@ -229,6 +241,8 @@ Nicht simuliert: VMM für Kubernetes, Microsoft und OpenStack, vPC über Pods hi
 | `dcprep/query.py` | Abfragen und Filter im APIC-Format |
 | `dcprep/multipod.py` | Multi-Pod und Remote Leaf: IPN/WAN-Adjacencies, Discovery über DHCP Relay, Datenpfad zwischen Pods |
 | `dcprep/msite.py` | Multi-Site: vereinfachter NDO, zweite Site, Infra- und Template-Deployment |
+| `dcprep/flows.py` | Testmatrix und Erwartungen |
+| `dcprep/coverage.py` | Abdeckungsbericht |
 | `dcprep/ops.py` | Betriebsthemen: Firmware-Upgrade, MCP und Schleifen, DHCP Relay, Monitoring, Config Export/Import |
 | `dcprep/engine.py` | Policy-Engine: Discovery, Access Policies, Deployment, Endpoints, L3Out, Contracts, Faults |
 | `dcprep/trace.py` | Traffic-Test |

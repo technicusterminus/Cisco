@@ -1,4 +1,5 @@
 """HTTP-Server: APIC-REST-API, Simulator-API, Weboberflaeche."""
+import hashlib
 import json
 import mimetypes
 import os
@@ -18,11 +19,13 @@ from .query import run_query
 from .engine import Engine, ip_of
 from . import setup as apic_setup
 from . import aaa
-from .topology import default_topology, multipod_topology, default_ipn, discovered_members, base_config, ensure_base
+from .topology import default_topology, multipod_topology, default_ipn, discovered_members, base_config, ensure_base, build_topology, build_ipn, infra_config, LIMITS
 from .cli import Cli
 from . import trace
 from . import ops
 from . import msite
+from . import flows
+from . import coverage
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATIC = os.path.join(BASE, 'static')
@@ -612,7 +615,7 @@ class Sim:
     def set_host(self, h, old=None):
         if not NAME_RE.match(h.get('name', '')):
             raise AciError(400, 'Name: 1-32 Zeichen, Buchstaben/Ziffern/._-')
-        names = {x['name'] for x in self.sim['hosts'] + self.sim['routers'] if x['name'] != (old or h['name'])}
+        names = {x['name'] for x in self.sim['hosts'] + self.sim['routers'] + self.sim.get('switches', []) if x['name'] != old}
         if h['name'] in names:
             raise AciError(400, 'Name %s ist bereits vergeben' % h['name'])
         if not MAC_RE.match(h.get('mac', '')):
@@ -673,7 +676,7 @@ class Sim:
     def set_router(self, r, old=None):
         if not NAME_RE.match(r.get('name', '')):
             raise AciError(400, 'Name: 1-32 Zeichen, Buchstaben/Ziffern/._-')
-        names = {x['name'] for x in self.sim['hosts'] + self.sim['routers'] if x['name'] != (old or r['name'])}
+        names = {x['name'] for x in self.sim['hosts'] + self.sim['routers'] if x['name'] != old}
         if r['name'] in names:
             raise AciError(400, 'Name %s ist bereits vergeben' % r['name'])
         try:
@@ -806,6 +809,72 @@ class Sim:
         clean = {'name': o['name'], 'links': [[a, c] for a, c in links], 'bond': o.get('bond', 'none'), 'vlans': vl,
                  'descr': o.get('descr', '')}
         self.sim['switches'] = [x for x in sws if x['name'] != (old or o['name'])] + [clean]
+
+    def bulk_hosts(self, text, replace=False):
+        """CSV: name,mac,ip/maske,gateway,vlan,leaf,port[,leaf2,port2,bond]. Leaf als Name, Node-ID oder Serial; MAC leer = automatisch.
+        Atomar: bei einem Fehler wird nichts uebernommen."""
+        nodes = self.sim['topology']['nodes']
+        nid_of = {}
+        for d in self.store.by_class('fabricNodeIdentP'):
+            a = self.store.attrs(d)
+            nid_of[a['nodeId']] = a['serial']
+            nid_of[a['name']] = a['serial']
+        for n in nodes:
+            nid_of[n['serial']] = n['serial']
+            if n.get('hint'):
+                nid_of.setdefault(n['hint'], n['serial'])
+        backup = json.loads(json.dumps(self.sim['hosts']))
+        if replace:
+            self.sim['hosts'] = []
+        errs, added = [], 0
+        for i, line in enumerate(str(text or '').splitlines(), 1):
+            line = line.strip()
+            if not line or line.startswith('#') or line.lower().startswith('name,'):
+                continue
+            c = [x.strip() for x in line.split(',')]
+            try:
+                if len(c) < 7:
+                    raise AciError(400, 'mindestens 7 Spalten: name,mac,ip,gw,vlan,leaf,port')
+                links = [[nid_of.get(c[5], c[5]), c[6] if c[6].startswith('eth') else 'eth1/' + c[6]]]
+                if len(c) >= 9 and c[7]:
+                    links.append([nid_of.get(c[7], c[7]), c[8] if c[8].startswith('eth') else 'eth1/' + c[8]])
+                hx = hashlib.md5(c[0].encode()).hexdigest().upper()
+                mac = c[1] or '00:50:56:%s:%s:%s' % (hx[0:2], hx[2:4], hx[4:6])
+                self.set_host({'name': c[0], 'mac': mac, 'ip': c[2], 'gw': c[3], 'vlan': int(c[4] or 0), 'links': links,
+                               'bond': c[9] if len(c) > 9 and c[9] else ('lacp-active' if len(links) > 1 else 'none')})
+                added += 1
+            except (AciError, ValueError) as ex:
+                errs.append('Zeile %d (%s): %s' % (i, c[0] if c else '', getattr(ex, 'text', str(ex))))
+        if errs:
+            self.sim['hosts'] = backup
+            raise AciError(400, 'Nichts uebernommen - %d Fehler: %s' % (len(errs), ' | '.join(errs[:8]) + (' …' if len(errs) > 8 else '')))
+        return added
+
+    def topology_op(self, b):
+        """Topologie neu aufbauen: Pods, Spines, Leafs, Remote Leafs. Die Konfiguration bleibt erhalten."""
+        try:
+            t = build_topology(b.get('spec') or {})
+        except (ValueError, TypeError) as ex:
+            raise AciError(400, 'Topologie ungueltig: %s' % ex)
+        old = {n['serial'] for n in self.sim['topology']['nodes']}
+        self.sim['topology'] = t
+        if t.get('ipnlinks'):
+            self.sim['ipn'] = build_ipn(t, relay=[self.engine.apic_tep] if b.get('infra') else [])
+        else:
+            self.sim.pop('ipn', None)
+        reg = self.sim.setdefault('registered', {})
+        if b.get('register'):
+            for m in discovered_members(t):
+                ser = m['fabricNodeIdentP']['attributes']['serial']
+                if not any(self.store.attrs(d)['serial'] == ser for d in self.store.by_class('fabricNodeIdentP')):
+                    mit_post(self.store, 'uni/controller/nodeidentpol', m)
+                    reg[ser] = 0.0
+        if b.get('infra'):
+            for url, body in infra_config(t):
+                mit_post(self.store, url, body)
+        serials = {n['serial'] for n in t['nodes']}
+        lost = [h['name'] for h in self.sim['hosts'] if any(l[0] not in serials for l in h['links'])]
+        return {'nodes': len(t['nodes']), 'removed': sorted(old - serials), 'hostsWithoutSwitch': lost}
 
     def ipn_op(self, b):
         """IPN- und WAN-Router der Multi-Pod-Topologie bearbeiten."""
@@ -1287,6 +1356,10 @@ def make_handler(S):
                         S.save()
                     return self.send(200, {'output': out})
                 if rest == 'hosts':
+                    if b.get('op') == 'bulk':
+                        n = S.bulk_hosts(b.get('csv'), b.get('replace'))
+                        S.changed()
+                        return self.send(200, {'ok': True, 'added': n})
                     if b.get('op') == 'delete':
                         S.sim['hosts'] = [h for h in S.sim['hosts'] if h['name'] != b.get('name')]
                     else:
@@ -1309,6 +1382,24 @@ def make_handler(S):
                     S.device_op(b)
                     S.changed()
                     return self.send(200, {'ok': True})
+                if rest == 'coverage':
+                    return self.send(200, coverage.report(S.store, (q.get('dn') or [''])[0]))
+                if rest == 'flows':
+                    if method == 'POST':
+                        if b.get('op') == 'matrix':
+                            return self.send(200, flows.matrix(S, b.get('src'), b.get('dst'), b.get('proto', 'icmp'), b.get('port', 0)))
+                        res = flows.expect_op(S, b)
+                        S.save()
+                        if res:
+                            return self.send(200, dict(res, expect=S.sim.get('expect', [])))
+                    return self.send(200, dict(S.sim.get('expect_last') or {'results': []}, expect=S.sim.get('expect', [])))
+                if rest == 'topology':
+                    out = None
+                    if method == 'POST':
+                        out = S.topology_op(b)
+                        S.changed()
+                    return self.send(200, {'spec': S.sim['topology'].get('spec') or {'pods': [{'spines': 2, 'leafs': 4}], 'remote': 0},
+                                           'kind': S.sim['topology'].get('kind', 'default'), 'limits': LIMITS, 'result': out})
                 if rest == 'ipn':
                     if method == 'POST':
                         S.ipn_op(b)

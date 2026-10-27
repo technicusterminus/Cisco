@@ -409,7 +409,7 @@ const Views = {
     bottom.forEach(b => { b.x += shift; b.y = 400; });
     const H = (bottom.length ? 470 : 380) + Y;
     bottom.forEach(b => { b.y += Y; });
-    const s = ['<svg class="topo" viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg">'];
+    const s = ['<svg class="topo" viewBox="0 0 ' + W + ' ' + H + '"' + (W > 1500 ? ' style="width:' + W + 'px;max-height:none"' : '') + ' xmlns="http://www.w3.org/2000/svg">'];
     const nstate = serial => { if (serial === st.apic.serial) return 'active'; const n = nodes.find(x => x.serial === serial); return n ? n.state : 'undiscovered'; };
     st.links.forEach(([a, , b]) => {
       const pa = pos[a], pb = pos[b];
@@ -466,7 +466,8 @@ const Views = {
       clear(w);
       const st = App.state;
       w.appendChild(paneHead(withHosts ? 'Simulation – Topologie & Hosts' : 'Topology', 'Pod 1 · grün = aktiv, orange = Discovery, grau = nicht registriert',
-        withHosts ? [h('button', { class: 'btn primary small', onclick: () => Views.hostDialog() }, '+ Host'), h('button', { class: 'btn small', onclick: () => Views.routerDialog() }, '+ Externer Router')] : null));
+        withHosts ? [h('button', { class: 'btn small', onclick: () => Views.topologyDialog(draw) }, '⚙ Topologie'), h('button', { class: 'btn small', onclick: () => Views.bulkHostsDialog(draw) }, '+ Hosts (CSV/Vorlage)'),
+          h('button', { class: 'btn primary small', onclick: () => Views.hostDialog() }, '+ Host'), h('button', { class: 'btn small', onclick: () => Views.routerDialog() }, '+ Externer Router')] : null));
       w.appendChild(h('div', { class: 'card' }, Views.topologySvg(st, {
         onClick: k => {
           if (k.startsWith('host:')) Views.hostDialog(st.hosts.find(x => x.name === k.slice(5)));
