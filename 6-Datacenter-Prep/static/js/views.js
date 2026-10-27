@@ -271,11 +271,6 @@ const Views = {
     ].join('\n'))));
   },
 
-  async 'vnet/vmm'(w) {
-    w.appendChild(paneHead('Virtual Networking', ''));
-    w.appendChild(h('div', { class: 'card' }, md('VMM-Integration (vCenter, Kubernetes …) wird im Simulator nicht nachgebildet. Bare-Metal-Hosts mit Physical Domain und Static Ports funktionieren vollständig.')));
-  },
-
   async 'apps/apps'(w) {
     w.appendChild(paneHead('Apps', ''));
     w.appendChild(h('div', { class: 'card' }, md('Keine Apps installiert. Zum Nachsehen von Objekten gibt es **Visore** (Object Store Browser) oben rechts, für REST-Aufrufe den **API Inspector**.')));
@@ -377,6 +372,7 @@ const Views = {
     const bottom = [];
     st.hosts.forEach(x => bottom.push({ kind: 'host', o: x, x: avg(x.links.map(l => (pos[l[0]] || [0])[0])) }));
     st.routers.forEach(x => bottom.push({ kind: 'router', o: x, x: (pos[x.serial] || [0])[0] }));
+    (st.vcenters || []).forEach(vc => vc.hosts.forEach(x => bottom.push({ kind: 'esxi', o: x, vc, x: avg(x.links.map(l => (pos[l[0]] || [0])[0])) })));
     bottom.sort((a, b) => a.x - b.x);
     let lastX = -999;
     bottom.forEach(b => { b.x = Math.max(b.x, lastX + 105); lastX = b.x; });
@@ -392,8 +388,9 @@ const Views = {
       s.push('<line x1="' + pa[0] + '" y1="' + pa[1] + '" x2="' + pb[0] + '" y2="' + pb[1] + '" class="lnk ' + (ok ? 'up' : 'down') + '"/>');
     });
     bottom.forEach(b => {
-      const links = b.kind === 'host' ? b.o.links : [[b.o.serial, b.o.port]];
-      const cls = b.kind === 'host' ? (b.o.status.learned ? 'up' : 'warn') : (b.o.status.link && b.o.status.adj !== 'DOWN' && b.o.status.adj !== 'EXSTART' && b.o.status.adj !== 'Idle' ? 'up' : 'warn');
+      const links = b.kind === 'router' ? [[b.o.serial, b.o.port]] : b.o.links;
+      if (b.kind === 'esxi') b.up = (st.vmm || []).some(v => v.hosts.some(x => x.name === b.o.name && x.ok.length));
+      const cls = b.kind === 'host' ? (b.o.status.learned ? 'up' : 'warn') : b.kind === 'esxi' ? (b.up ? 'up' : 'warn') : (b.o.status.link && b.o.status.adj !== 'DOWN' && b.o.status.adj !== 'EXSTART' && b.o.status.adj !== 'Idle' ? 'up' : 'warn');
       links.forEach(([ser, port]) => {
         const p = pos[ser];
         if (!p) return;
@@ -410,6 +407,7 @@ const Views = {
     box(pos[st.apic.serial][0], pos[st.apic.serial][1], 120, 38, 'apic active', st.apic.name, 'APIC', 'apic');
     bottom.forEach(b => {
       if (b.kind === 'host') box(b.x, b.y, 100, 34, 'host ' + (b.o.status.learned ? 'up' : 'warn'), b.o.name, b.o.ip.split('/')[0], 'host:' + b.o.name);
+      else if (b.kind === 'esxi') box(b.x, b.y, 100, 34, 'host esxi ' + (b.up ? 'up' : 'warn'), b.o.name, 'ESXi · ' + b.o.vms.length + ' VM', 'esxi:' + b.vc.name + '|' + b.o.name);
       else box(b.x, b.y, 100, 34, 'router ' + (b.o.status.link ? 'up' : 'warn'), b.o.name, (b.o.protocol || '') + ' ' + (b.o.status.adj || ''), 'router:' + b.o.name);
     });
     s.push('</svg>');
@@ -432,6 +430,7 @@ const Views = {
       w.appendChild(h('div', { class: 'card' }, Views.topologySvg(st, {
         onClick: k => {
           if (k.startsWith('host:')) Views.hostDialog(st.hosts.find(x => x.name === k.slice(5)));
+          else if (k.startsWith('esxi:')) App.go('sim', 'vcenter');
           else if (k.startsWith('router:')) Views.routerDialog(st.routers.find(x => x.name === k.slice(7)));
           else if (k.startsWith('node:')) {
             const n = st.nodes.find(x => x.serial === k.slice(5));
@@ -444,7 +443,7 @@ const Views = {
         w.appendChild(h('div', { class: 'card' }, h('div', { class: 'card-h' }, 'Simulierte Hosts (Bare-Metal-Server)', h('span', { class: 'grow' }), h('button', { class: 'btn primary small', onclick: () => Views.hostDialog() }, '+ Host')),
           table([{ l: 'Name', f: r => r.name }, { l: 'MAC', f: r => r.mac }, { l: 'IP', f: r => r.ip }, { l: 'Gateway', f: r => r.gw }, { l: 'VLAN', f: r => r.vlan ? 'vlan-' + r.vlan : 'untagged' },
             { l: 'Anschluss', f: r => r.links.map(l => nodeName(l[0]) + ' ' + l[1]).join(' + ') + (r.bond !== 'none' ? ' [' + r.bond + ']' : '') },
-            { l: 'Status', f: r => r.status.learned ? h('span', null, stateBadge('learned'), ' ', parentDn(r.status.epg + '/x').replace(/^uni\//, '')) : stateBadge('down') },
+            { l: 'Status', f: r => r.status.learned ? h('span', null, stateBadge('learned'), ' ', parentDn(r.status.epg + '/x').replace(/^uni\//, '')) : r.status.quiet ? h('span', { title: 'Stiller Host: wird erst gelernt, wenn er antwortet oder selbst sendet' }, stateBadge('silent')) : stateBadge('down') },
             { l: 'Hinweis', f: r => (r.status.reasons || []).join('; ') }], st.hosts, {
             onRow: r => Views.hostDialog(r),
             actions: r => [iconBtn('🗑', 'Löschen', () => confirmBox('Host ' + r.name + ' entfernen?', async () => { await API.sim('hosts', { op: 'delete', name: r.name }); await App.refreshState(); draw(); }), 'danger')],
@@ -464,6 +463,7 @@ const Views = {
     st.links.forEach(l => { used.add(l[0] + '|' + l[1]); used.add(l[2] + '|' + l[3]); });
     st.hosts.filter(o => !x || o.name !== x.name).forEach(o => o.links.forEach(l => used.add(l[0] + '|' + l[1])));
     st.routers.forEach(o => used.add(o.serial + '|' + o.port));
+    (st.vcenters || []).forEach(vc => vc.hosts.forEach(o => o.links.forEach(l => used.add(l[0] + '|' + l[1]))));
     const leafOpts = leafNodes().map(n => [n.serial, (n.name || '(nicht registriert)') + (n.id ? ' – Node ' + n.id : '') + ' – ' + n.serial]);
     const linkRow = (i, val) => {
       const leaf = h('select', null, i > 0 ? h('option', { value: '' }, '— kein weiterer Link —') : null, leafOpts.map(([v, l]) => h('option', { value: v }, l)));
@@ -491,14 +491,15 @@ const Views = {
       { k: 'name', l: 'Hostname', req: true, ph: 'web1' }, { k: 'mac', l: 'MAC-Adresse', req: true }, { k: 'ip', l: 'IP-Adresse/Maske', req: true, ph: '10.1.1.10/24' },
       { k: 'gw', l: 'Default Gateway', ph: '10.1.1.1' }, { k: 'vlan', l: 'VLAN-Tag', ph: '0 = untagged', help: '0 = Host sendet untagged (Access-Port), sonst 802.1Q-Tag' },
       { k: 'bond', l: 'NIC-Bonding', t: 'select', o: [['none', 'keins (ein Link aktiv)'], ['lacp-active', 'LACP active (802.3ad)'], ['lacp-passive', 'LACP passive'], ['static', 'statisch (mode on)']] },
+      { k: 'silent', l: 'Stiller Host', t: 'yesno', cl: 'sendet nichts von sich aus (kein GARP, kein Traffic) – wird erst durch ARP Flooding oder ARP Glean entdeckt' },
       { k: 'descr', l: 'Beschreibung' }],
-    x ? { name: x.name, mac: x.mac, ip: x.ip, gw: x.gw, vlan: String(x.vlan || 0), bond: x.bond, descr: x.descr } : { mac: randMac(), vlan: '0', bond: 'none' }, {}, 'create');
+    x ? { name: x.name, mac: x.mac, ip: x.ip, gw: x.gw, vlan: String(x.vlan || 0), bond: x.bond, descr: x.descr, silent: x.silent ? 'yes' : 'no' } : { mac: randMac(), vlan: '0', bond: 'none', silent: 'no' }, {}, 'create');
     const body = h('div', null, f.el, h('div', { class: 'form' }, h('div', { class: 'frow' }, h('label', { class: 'flab' }, 'Link 1'), h('div', { class: 'fctl' }, links[0].el)),
       h('div', { class: 'frow' }, h('label', { class: 'flab' }, 'Link 2 (für PC/vPC)'), h('div', { class: 'fctl' }, links[1].el))));
     modal(x ? 'Host ' + x.name + ' bearbeiten' : 'Host hinzufügen', body, [{ l: 'Abbrechen' }, {
       l: 'Speichern', primary: true, fn: async () => {
         const v = f.get();
-        const host = Object.assign(v, { vlan: Number(v.vlan || 0), links: links.map(l => l.get()).filter(Boolean) });
+        const host = Object.assign(v, { vlan: Number(v.vlan || 0), links: links.map(l => l.get()).filter(Boolean), silent: v.silent === 'yes' });
         await API.sim('hosts', { host, old: x ? x.name : null });
         toast('Host ' + v.name + ' gespeichert');
         await App.refreshState();

@@ -556,6 +556,153 @@ lab(id='11-static-leaf-taboo', title='11 Static Leaf und Taboo Contracts', topic
 
 
 # ----------------------------------------------------------------------------
+# Lab 12 - VMM-Integration mit vCenter
+# ----------------------------------------------------------------------------
+ESXI_ACCESS = mo('polUni', {}, mo('infraInfra', {},
+    mo('infraAttEntityP', {'name': 'AAEP-ESXi'}),
+    mo('infraFuncP', {}, mo('infraAccPortGrp', {'name': 'IPG-ESXi'}, mo('infraRsAttEntP', {'tDn': 'uni/infra/attentp-AAEP-ESXi'}))),
+    mo('infraAccPortP', {'name': 'IntProf-Leaf101-102'},
+       mo('infraHPortS', {'name': 'ESXi-Ports', 'type': 'range'},
+          mo('infraPortBlk', {'name': 'block2', 'fromPort': '11', 'toPort': '11'}),
+          mo('infraRsAccBaseGrp', {'tDn': 'uni/infra/funcprof/accportgrp-IPG-ESXi'})))))
+VC12 = {'name': 'vcsa01', 'ip': '192.168.10.50', 'datacenter': 'DC-Frankfurt', 'user': 'administrator@vsphere.local', 'pwd': 'Lab12!vc',
+        'hosts': [{'name': 'esx01', 'links': [[L101, 'eth1/11']], 'dvs': ['VDS-Prod'],
+                   'vms': [{'name': 'web-vm1', 'mac': '00:50:56:12:10:21', 'ip': '10.10.10.21/24', 'gw': '10.10.10.1', 'network': 'Shop|Webshop|Web', 'silent': False}]},
+                  {'name': 'esx02', 'links': [[L102, 'eth1/11']], 'dvs': ['VDS-Prod'],
+                   'vms': [{'name': 'app-vm1', 'mac': '00:50:56:12:20:21', 'ip': '10.10.20.21/24', 'gw': '10.10.20.1', 'network': 'Shop|Webshop|App', 'silent': False}]}]}
+VMM12 = mo('polUni', {},
+    mo('infraInfra', {}, mo('fvnsVlanInstP', {'name': 'VLAN-Pool-VMM', 'allocMode': 'dynamic'}, mo('fvnsEncapBlk', {'from': 'vlan-1000', 'to': 'vlan-1099'})),
+       mo('infraAttEntityP', {'name': 'AAEP-ESXi'}, mo('infraRsDomP', {'tDn': 'uni/vmmp-VMware/dom-VDS-Prod'}))),
+    mo('vmmProvP', {'vendor': 'VMware'}, mo('vmmDomP', {'name': 'VDS-Prod'},
+       mo('infraRsVlanNs', {'tDn': 'uni/infra/vlanns-[VLAN-Pool-VMM]-dynamic'}),
+       mo('vmmUsrAccP', {'name': 'vc-admin', 'usr': 'administrator@vsphere.local', 'pwd': 'Lab12!vc'}),
+       mo('vmmCtrlrP', {'name': 'vcsa01', 'hostOrIp': '192.168.10.50', 'rootContName': 'DC-Frankfurt'},
+          mo('vmmRsAcc', {'tDn': 'uni/vmmp-VMware/dom-VDS-Prod/usracc-vc-admin'})))))
+lab(id='12-vmm-vcenter', title='12 VMM-Integration mit VMware vCenter', topic='Virtual Networking', level='Fortgeschritten',
+    duration='40 min', fabric='discovered',
+    goals=['Eine vCenter VMM Domain mit dynamischem VLAN Pool anlegen', 'Port Groups Tenant|AP|EPG vom APIC erzeugen lassen',
+           'Resolution Immediacy und LLDP-Discovery zum ESXi verstehen'],
+    intro='Im Webshop kommen virtuelle Server dazu. Im vCenter **vcsa01** (192.168.10.50, Datacenter **DC-Frankfurt**, Benutzer '
+          '**administrator@vsphere.local**, Passwort **Lab12!vc**) gibt es den Distributed Switch **VDS-Prod** mit den Hosts **esx01** '
+          '(leaf101 eth1/11) und **esx02** (leaf102 eth1/11). Die VMs **web-vm1** und **app-vm1** sind schon auf die Port Groups '
+          '`Shop|Webshop|Web` und `Shop|Webshop|App` eingestellt – nur gibt es diese Port Groups noch nicht.\n\n'
+          'Policy Group **IPG-ESXi** und Selector für Port 1/11 sind vorhanden, das AAEP **AAEP-ESXi** ist aber noch leer. '
+          'Den Zustand im vCenter siehst du unter **Simulation > vCenter**.',
+    config=[SERVER_ACCESS, ESXI_ACCESS, shop_tenant(with_contracts=True)], hosts=[WEB1, APP1], vcenters=[VC12],
+    tasks=[
+        task('Dynamischer VLAN Pool', '**Fabric > Access Policies > Pools > VLAN**: **VLAN-Pool-VMM** mit *Dynamic Allocation* '
+             'und dem Encap Block vlan-1000 bis vlan-1099.',
+             'Ein statischer Pool reicht nicht: Der APIC vergibt die VLANs für die Port Groups selbst.'),
+        task('VMM Domain', '**Virtual Networking > VMM Domains > VMware**, Rechtsklick **Create vCenter Domain**: Name **VDS-Prod**, '
+             'VLAN Pool VLAN-Pool-VMM, AAEP **AAEP-ESXi**, Credential **vc-admin** und Controller **vcsa01** mit IP und Datacenter.',
+             'Der Datacenter-Name muss exakt stimmen. Unter **Operational** der Domain siehst du, ob der APIC verbunden ist (Fault S0606, wenn nicht).'),
+        task('EPGs anbinden', 'An den EPGs **Web** und **App** jeweils **Add VMM Domain Association** mit VDS-Prod, '
+             'Resolution Immediacy **Immediate**.'),
+        task('Prüfen', 'Unter **Simulation > vCenter** erscheinen die Port Groups mit VLANs aus dem Pool, die VMs werden gelernt. '
+             'Auf leaf101: `show vlan extended` und `show endpoint` – Learning Source *learned,vmm*.'),
+        task('Experiment', 'Stelle die Resolution Immediacy an der EPG App auf **On Demand** und lösche app-vm1. Was passiert mit dem VLAN auf leaf102?'),
+    ],
+    checks=[check('VMM Domain VDS-Prod mit vCenter verbunden', 'vmm', dn='uni/vmmp-VMware/dom-VDS-Prod'),
+            check('web-vm1 in EPG Web gelernt', 'endpoint', host='web-vm1', epg='uni/tn-Shop/ap-Webshop/epg-Web'),
+            check('app-vm1 in EPG App gelernt', 'endpoint', host='app-vm1', epg='uni/tn-Shop/ap-Webshop/epg-App'),
+            check('web-vm1 → app-vm1 TCP 8080', 'traffic', src='web-vm1', dst='app-vm1', proto='tcp', port=8080, expect=True),
+            check('web1 (Bare Metal) → app-vm1 Ping', 'traffic', src='web1', dst='app-vm1', proto='icmp', expect=True)],
+    solution='Domain: `' + json.dumps(VMM12) + '`\n\nAn der EPG: `fvRsDomAtt tDn=uni/vmmp-VMware/dom-VDS-Prod resImedcy=immediate`. '
+             'Die Port Group heißt `Tenant|Application Profile|EPG`.')
+
+# ----------------------------------------------------------------------------
+# Lab 13 - Shared Services zwischen Tenants
+# ----------------------------------------------------------------------------
+DNS1 = host('dns1', '00:50:56:13:99:53', '10.99.0.53/24', '10.99.0.1', 199, [[L102, 'eth1/4']], descr='zentraler DNS-Server')
+SHARED13 = mo('fvTenant', {'name': 'Shared'}, mo('fvCtx', {'name': 'Services'}), bd('BD-DNS', 'Services', '10.99.0.1/24'),
+              mo('fvAp', {'name': 'Infra'}, epg('DNS', 'BD-DNS', ports=[(path(102, 'eth1/4'), 199)])))
+lab(id='13-shared-services', title='13 Shared Services: Route Leaking zwischen Tenants', topic='Policy / Inter-VRF', level='Fortgeschritten',
+    duration='35 min', fabric='discovered',
+    goals=['Einen Contract mit Scope global in einen anderen Tenant exportieren', 'Provider-Subnetz an der EPG und Consumer-Subnetz '
+           'mit "Shared between VRFs" setzen', 'Verstehen, warum Route Leaking in der ACI an den Contract gekoppelt ist'],
+    intro='Der zentrale DNS-Server **dns1** (10.99.0.53) steht im Tenant **Shared**, VRF **Services**, EPG **DNS**. Die Webserver im '
+          'Tenant **Shop** (VRF Prod) sollen ihn per **DNS (UDP 53)** erreichen – sonst nichts. Die App-Server dürfen gar nicht zum DNS.\n\n'
+          'Zwischen zwei VRFs gibt es in der ACI erst Routen, wenn ein Contract die EPGs verbindet und die Subnetze als *shared* markiert sind.',
+    config=[SERVER_ACCESS, shop_tenant(with_contracts=True), SHARED13], hosts=[WEB1, APP1, DNS1],
+    tasks=[
+        task('Filter und Contract', 'Im Tenant **Shared**: Filter **dns** (udp, Destination Port dns/53) und Contract **dns** mit '
+             '**Scope Global**. Die EPG **DNS** stellt ihn bereit (**Provided**).',
+             'Scope VRF (context) wirkt nur innerhalb eines VRFs, Scope Tenant nur innerhalb des Tenants.'),
+        task('Provider-Subnetz', 'Unter der EPG **DNS** (nicht der BD!) das Subnetz **10.99.0.1/24** mit Scope *Shared between VRFs* anlegen.',
+             'Beim Provider muss das Subnetz für das Route Leaking an der EPG stehen.'),
+        task('Contract exportieren', 'Rechtsklick auf den Contract **dns** > **Export Contract**: Name **dns**, Ziel-Tenant **Shop**. '
+             'Im Tenant Shop erscheint er unter **Contracts > Imported**.'),
+        task('Consumer', 'An der EPG **Web** im Tenant Shop **Add Consumed Contract Interface** mit **dns**. '
+             'Am **BD-Web** das Subnetz 10.10.10.1/24 zusätzlich auf *Shared between VRFs* stellen.'),
+        task('Prüfen', 'web1 → dns1 UDP 53 klappt, TCP 22 nicht, app1 → dns1 gar nicht. Auf leaf101: `show ip route vrf Shop:Prod` '
+             '– die Route 10.99.0.0/24 ist geleakt.'),
+    ],
+    checks=[check('Imported Contract dns im Tenant Shop', 'exists', dn='uni/tn-Shop/cif-dns'),
+            check('web1 → dns1 UDP 53', 'traffic', src='web1', dst='dns1', proto='udp', port=53, expect=True),
+            check('web1 → dns1 TCP 22 blockiert', 'traffic', src='web1', dst='dns1', proto='tcp', port=22, expect=False),
+            check('app1 → dns1 blockiert', 'traffic', src='app1', dst='dns1', proto='udp', port=53, expect=False)],
+    solution='Tenant Shared: `vzBrCP dns scope=global` mit Filter udp/53, an der EPG DNS `fvRsProv` und `fvSubnet ip=10.99.0.1/24 '
+             'scope=private,shared`. Export: `vzCPIf name=dns` im Tenant Shop mit `vzRsIf tDn=uni/tn-Shared/brc-dns`. Consumer: '
+             '`fvRsConsIf tnVzCPIfName=dns` an der EPG Web und `fvSubnet 10.10.10.1/24 scope=private,shared` am BD-Web.')
+
+# ----------------------------------------------------------------------------
+# Lab 14 - L2Out und Migration vom Legacy-Netz
+# ----------------------------------------------------------------------------
+WEB2 = host('web2', '00:50:56:14:50:11', '10.10.50.11/24', '10.10.50.1', 150, [[L101, 'eth1/6']], descr='neuer Server in der ACI')
+OLD14 = dict(host('old-srv', '00:50:56:14:50:20', '10.10.50.20/24', '10.10.50.1', 300, [[L103, 'eth1/20']],
+                  descr='Altsystem hinter dem Legacy-Switch, sendet nie von selbst'), silent=True)
+MIG14 = mo('fvTenant', {'name': 'Shop'},
+           bd('BD-Migration', 'Prod', unicastRoute='no', arpFlood='no', unkMacUcastAct='flood'),
+           mo('fvAp', {'name': 'Migration'}, epg('Neu', 'BD-Migration', ports=[(path(101, 'eth1/6'), 150)])))
+L2ACC14 = mo('polUni', {},
+             mo('infraInfra', {},
+                mo('fvnsVlanInstP', {'name': 'VLAN-Pool-Legacy', 'allocMode': 'static'}, mo('fvnsEncapBlk', {'from': 'vlan-300', 'to': 'vlan-300'})),
+                mo('infraAttEntityP', {'name': 'AAEP-Legacy'}, mo('infraRsDomP', {'tDn': 'uni/l2dom-L2Dom-Legacy'})),
+                mo('infraFuncP', {}, mo('infraAccPortGrp', {'name': 'IPG-Legacy'}, mo('infraRsAttEntP', {'tDn': 'uni/infra/attentp-AAEP-Legacy'}))),
+                mo('infraAccPortP', {'name': 'IntProf-Leaf103'}, mo('infraHPortS', {'name': 'legacy', 'type': 'range'},
+                   mo('infraPortBlk', {'name': 'block2', 'fromPort': '20', 'toPort': '20'}),
+                   mo('infraRsAccBaseGrp', {'tDn': 'uni/infra/funcprof/accportgrp-IPG-Legacy'}))),
+                mo('infraNodeP', {'name': 'SwProf-Leaf103'}, mo('infraLeafS', {'name': '103', 'type': 'range'},
+                   mo('infraNodeBlk', {'name': 'blk', 'from_': '103', 'to_': '103'})),
+                   mo('infraRsAccPortP', {'tDn': 'uni/infra/accportprof-IntProf-Leaf103'}))),
+             mo('l2extDomP', {'name': 'L2Dom-Legacy'}, mo('infraRsVlanNs', {'tDn': 'uni/infra/vlanns-[VLAN-Pool-Legacy]-static'})))
+L2OUT14 = mo('fvTenant', {'name': 'Shop'},
+             mo('vzBrCP', {'name': 'migration', 'scope': 'context'}, mo('vzSubj', {'name': 'any', 'revFltPorts': 'yes'}, mo('vzRsSubjFiltAtt', {'tnVzFilterName': 'default'}))),
+             mo('fvAp', {'name': 'Migration'}, mo('fvAEPg', {'name': 'Neu'}, mo('fvRsCons', {'tnVzBrCPName': 'migration'}))),
+             mo('l2extOut', {'name': 'Legacy'}, mo('l2extRsEBd', {'tnFvBDName': 'BD-Migration', 'encap': 'vlan-300'}),
+                mo('l2extRsL2DomAtt', {'tDn': 'uni/l2dom-L2Dom-Legacy'}),
+                mo('l2extLNodeP', {'name': 'default'}, mo('l2extLIfP', {'name': 'default'}, mo('l2extRsPathL2OutAtt', {'tDn': path(103, 'eth1/20')}))),
+                mo('l2extInstP', {'name': 'LegacyNet'}, mo('fvRsProv', {'tnVzBrCPName': 'migration'}))))
+lab(id='14-l2out-migration', title='14 L2Out und Migration: stille Hosts und ARP Flooding', topic='Netzwerk-Migration', level='Fortgeschritten',
+    duration='40 min', fabric='discovered',
+    goals=['Ein altes Netz per L2Out (External Bridged Network) an eine Bridge Domain anbinden',
+           'Verstehen, warum stille Hosts ohne ARP Flooding unerreichbar bleiben', 'BD-Einstellungen für eine Migrationsphase wählen'],
+    intro='Das Subnetz **10.10.50.0/24** zieht vom alten Netz in die ACI. Das Gateway **10.10.50.1** bleibt während der Migration noch '
+          'auf dem Legacy-Router – die **BD-Migration** ist deshalb reines Layer 2 (Unicast Routing aus, kein Subnetz). Der neue Server '
+          '**web2** (EPG **Neu**) ist schon in der ACI.\n\nDer Legacy-Switch hängt an **leaf103 eth1/20** und spricht **VLAN 300**. Dahinter '
+          'steht **old-srv** (10.10.50.20) – ein Altsystem, das nie von selbst sendet. Die ACI kann es also nicht lernen, bis jemand es per ARP anfragt.',
+    config=[SERVER_ACCESS, shop_tenant(), MIG14], hosts=[WEB2, OLD14],
+    tasks=[
+        task('Access Policies', 'VLAN Pool **VLAN-Pool-Legacy** (static, vlan-300), **External Bridged Domain** **L2Dom-Legacy** '
+             '(Physical and External Domains > External Bridged Domains), AAEP **AAEP-Legacy**, Policy Group **IPG-Legacy**, '
+             'Interface Profile **IntProf-Leaf103** mit Port 1/20 und Switch Profile **SwProf-Leaf103** für Node 103.'),
+        task('L2Out', 'Im Tenant Shop **Networking > L2Outs**, **Create L2Out**: Name **Legacy**, Bridge Domain **BD-Migration**, '
+             'Encap **vlan-300**, Domain L2Dom-Legacy, Path leaf103 eth1/20, External EPG **LegacyNet**.'),
+        task('Contract', 'Contract **migration** (Filter **default** aus common): LegacyNet *Provided*, EPG **Neu** *Consumed*.',
+             'Ein L2Out hat ein eigenes External EPG (eigener pcTag) – auch im selben BD braucht es einen Contract.'),
+        task('Erster Test', 'Ping von web2 zu old-srv. Warum scheitert er? Lies den Schritt im Ergebnis.'),
+        task('ARP Flooding', 'Im **BD-Migration** unter Policy > General **ARP Flooding** aktivieren und erneut testen.',
+             'Ohne Unicast Routing kann die ACI kein ARP Glean machen. Den ARP-Request für einen unbekannten Host muss sie dann fluten.'),
+    ],
+    checks=[check('L2Out Legacy ohne F0467', 'nofaults', under='uni/tn-Shop/l2out-Legacy', code='F0467'),
+            check('L2Out Legacy auf leaf103 eth1/20', 'exists', dn='uni/tn-Shop/l2out-Legacy/lnodep-default/lifp-default/rspathL2OutAtt-[topology/pod-1/paths-103/pathep-[eth1/20]]'),
+            check('ARP Flooding im BD-Migration', 'exists', dn='uni/tn-Shop/BD-BD-Migration', attrs={'arpFlood': 'yes'}),
+            check('web2 → old-srv Ping', 'traffic', src='web2', dst='old-srv', proto='icmp', expect=True)],
+    solution='Access: `' + json.dumps(L2ACC14) + '`\n\nTenant: `' + json.dumps(L2OUT14) + '`\n\nUnd am BD: `arpFlood=yes`. '
+             'In der Migrationsphase typisch: L2 Unknown Unicast *Flood*, ARP Flooding *an*, Unicast Routing *aus*.')
+
+
+# ----------------------------------------------------------------------------
 # Maschinenlesbare Musterloesungen (fuer die Tests: [URL-DN, Body])
 # ----------------------------------------------------------------------------
 BGP_RR = ['uni/fabric/bgpInstP-default', mo('bgpInstPol', {}, mo('bgpAsP', {'asn': '65001'}),
@@ -630,6 +777,17 @@ SOLUTIONS = {
     '11-static-leaf-taboo': [['uni/tn-Shop', mo('fvTenant', {}, mo('vzTaboo', {'name': 'no-ping'}, mo('vzTSubj', {'name': 'deny'}, mo('vzRsDenyRule', {'tnVzFilterName': 'icmp'}))),
                                                 mo('fvAp', {'name': 'Webshop'}, mo('fvAEPg', {'name': 'App'}, mo('fvRsNodeAtt', {'tDn': 'topology/pod-1/node-102', 'encap': 'vlan-120'}),
                                                                                     mo('fvRsProtBy', {'tnVzTabooName': 'no-ping'}))))]],
+    '12-vmm-vcenter': [['uni', VMM12],
+                       ['uni/tn-Shop/ap-Webshop', mo('fvAp', {}, *[mo('fvAEPg', {'name': n}, mo('fvRsDomAtt', {'tDn': 'uni/vmmp-VMware/dom-VDS-Prod', 'resImedcy': 'immediate'})) for n in ('Web', 'App')])]],
+    '13-shared-services': [['uni/tn-Shared', mo('fvTenant', {},
+                               filt('dns', {'name': 'dns', 'etherT': 'ip', 'prot': 'udp', 'dFromPort': 'dns', 'dToPort': 'dns'}),
+                               contract('dns', ['dns'], scope='global'),
+                               mo('fvAp', {'name': 'Infra'}, mo('fvAEPg', {'name': 'DNS'}, mo('fvRsProv', {'tnVzBrCPName': 'dns'}),
+                                                                 mo('fvSubnet', {'ip': '10.99.0.1/24', 'scope': 'private,shared'}))))],
+                           ['uni/tn-Shop', mo('fvTenant', {}, mo('vzCPIf', {'name': 'dns'}, mo('vzRsIf', {'tDn': 'uni/tn-Shared/brc-dns'})),
+                                              mo('fvBD', {'name': 'BD-Web'}, mo('fvSubnet', {'ip': '10.10.10.1/24', 'scope': 'private,shared'})),
+                                              mo('fvAp', {'name': 'Webshop'}, mo('fvAEPg', {'name': 'Web'}, mo('fvRsConsIf', {'tnVzCPIfName': 'dns'}))))]],
+    '14-l2out-migration': [['uni', L2ACC14], ['uni', L2OUT14], ['uni/tn-Shop/BD-BD-Migration', mo('fvBD', {'arpFlood': 'yes'})]],
 }
 
 
@@ -642,6 +800,7 @@ def main():
         l.setdefault('config', [])
         l.setdefault('hosts', [])
         l.setdefault('routers', [])
+        l.setdefault('vcenters', [])
         l['solutionConfig'] = SOLUTIONS[l['id']]
         with open(os.path.join(OUT, l['id'] + '.json'), 'w', encoding='utf-8') as f:
             json.dump(l, f, ensure_ascii=False, indent=1)

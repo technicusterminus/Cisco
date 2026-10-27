@@ -647,6 +647,7 @@
  ],
  "solution": "1. VLAN Pool VLAN-Pool-Ops reicht nur bis 149, pc1 nutzt 150 → Encap Block erweitern (z. B. bis 199).\n2. Interface Selector Ops-Ports deckt nur 1/1-10 ab → Port 12 ergänzen (Port Block 12-12).\n3. Filter http hat Destination Port 8080 → auf 80 (http) ändern.\n4. BD-App hat Unicast Routing aus → einschalten.\n5. EPG Backup zeigt auf BD **BD-Bakup** (Tippfehler) → BD-Backup wählen.\n6. Subject im Contract web-to-app hat Reverse Filter Ports aus → einschalten, sonst passt die Antwort (Quellport 80) nicht auf den Filter.",
  "routers": [],
+ "vcenters": [],
  "solutionConfig": [
   [
    "uni/infra/vlanns-[VLAN-Pool-Ops]-static",

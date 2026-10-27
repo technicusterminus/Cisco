@@ -498,6 +498,7 @@
   }
  ],
  "solution": "Interface: `l3extRsPathL3OutAtt tDn=topology/pod-1/paths-104/pathep-[eth1/47] ifInstT=sub-interface encap=vlan-301 addr=172.16.1.1/30`, darunter `bgpPeerP addr=172.16.1.2` mit `bgpAsP asn=65100`. Am L3Out `bgpExtP`. Ohne Fabric-AS (bgpAsP unter uni/fabric/bgpInstP-default) startet BGP nicht.",
+ "vcenters": [],
  "solutionConfig": [
   [
    "uni/fabric/bgpInstP-default",

@@ -105,6 +105,7 @@ class Engine:
         self._resolve()
         self._classes()
         self._epgs()
+        self._vmm()
         self._endpoints()
         self._l3outs()
         self._ntp()
@@ -591,6 +592,24 @@ class Engine:
                             'prov': self._rs_targets(dn, 'fvRsProv'),
                             'cons': self._rs_targets(dn, 'fvRsCons'),
                             'pref': a['prefGrMemb'] == 'include', 'isolation': False}
+        for dn in self.store.by_class('l2extInstP'):
+            a = self.A(dn)
+            out = parent_dn(dn)
+            rs = self.A(out + '/rseBd') or {}
+            bd = rs.get('tDn', '') if rs.get('state') == 'formed' else ''
+            vrf = self.A(bd + '/rsctx')['tDn'] if bd and self.has(bd + '/rsctx') else ''
+            a['scope'] = self.A(vrf)['scope'] if vrf else ''
+            self.cls[dn] = {'dn': dn, 'kind': 'l2ext', 'name': a['name'], 'tenant': tenant_of(dn),
+                            'ap': None, 'bd': bd, 'vrf': vrf, 'pcTag': a['pcTag'], 'out': out,
+                            'prov': self._rs_targets(dn, 'fvRsProv'),
+                            'cons': self._rs_targets(dn, 'fvRsCons'),
+                            'pref': a['prefGrMemb'] == 'include', 'isolation': False}
+        for dn, c in self.cls.items():
+            for cif in self._rs_targets(dn, 'fvRsConsIf'):
+                t = (self.A(cif + '/rsif') or {})
+                if t.get('state') == 'formed':
+                    c['cons'].append(t['tDn'])
+                    c.setdefault('imported', []).append((cif, t['tDn']))
         for dn in self.store.by_class('fvBD'):
             vrf = self.A(dn + '/rsctx')['tDn'] if self.has(dn + '/rsctx') else ''
             self.A(dn)['scope'] = self.A(vrf)['scope'] if vrf else ''
@@ -644,6 +663,191 @@ class Engine:
                 doms = self._rs_targets(dn, 'fvRsDomAtt')
                 for rs in self.kids(dn, 'fvRsNodeAtt'):
                     self._node_bind(rs, dn, c, doms)
+        for out in self.store.by_class('l2extOut'):
+            self._l2out(out)
+
+    def _l2out(self, out):
+        name = self.A(out)['name']
+        insts = self.kids(out, 'l2extInstP')
+        rs = self.A(out + '/rseBd') or {}
+        vlan = vlan_num(rs.get('encap'))
+        drs = self.A(out + '/rsl2DomAtt') or {}
+        dom = drs.get('tDn') if drs.get('state') == 'formed' else ''
+
+        def flt(reason, text):
+            self.fault(out, 'F0467', 'minor', 'Configuration failed for L2Out %s due to %s, debug message: %s: %s'
+                       % (name, 'Invalid VLAN Configuration' if reason == 'invalid-vlan' else 'Invalid Path Configuration',
+                          reason, text), 'configuration-failed')
+        if not insts:
+            return
+        c = self.cls[insts[0]]
+        if not c['bd']:
+            self.fault(out, 'S0523', 'minor', 'L2Out %s has no valid Bridge Domain' % name, 'bd-not-present')
+            return
+        if vlan is None:
+            flt('invalid-vlan', 'Encap is missing on the Bridge Domain association')
+            return
+        if not dom or not self.vlan_in_domain(dom, vlan):
+            flt('invalid-vlan', 'vlan-%d :: Either the L2Out is not associated with a domain or the domain does not have '
+                'this vlan assigned to it' % vlan)
+            return
+        for np in self.kids(out, 'l2extLNodeP'):
+            for lif in self.kids(np, 'l2extLIfP'):
+                for ri in self.kids(lif, 'l2extRsPathL2OutAtt'):
+                    tdn = self.A(ri)['tDn']
+                    path = self.paths.get(tdn)
+                    if path is None or path.get('member_of'):
+                        flt('invalid-path', '%s :: Path is not present' % tdn)
+                        continue
+                    if dom not in (self._pg_info(path['pg'])['domains'] if path['pg'] else []):
+                        flt('invalid-path', 'Either the EpG/L2Out is not associated with a domain or the domain does not '
+                            'have this interface assigned to it')
+                        continue
+                    other = [self.leaf_vlans.get(n, {}).get(vlan) for n in path['nodes']]
+                    if any(o and o != c['dn'] for o in other):
+                        flt('invalid-vlan', 'Encap (vlan-%d) is already in use' % vlan)
+                        continue
+                    self._deploy(c['dn'], c, tdn, path, vlan, 'regular')
+
+    # ------------------------------------------------------------------
+    # VMM: simuliertes vCenter, VDS, Port Groups, dynamische VLANs
+    # ------------------------------------------------------------------
+    def _vmm(self):
+        self.vmm = {}
+        self.vm_hosts = []
+        vcs = self.sim.get('vcenters', [])
+        for dom in self.store.by_class('vmmDomP'):
+            name = self.A(dom)['name']
+            info = {'dn': dom, 'name': name, 'state': 'offline', 'reasons': [], 'vc': None, 'pgs': {},
+                    'discovery': 'lldp', 'hosts': []}
+            self.vmm[dom] = info
+            ctrls = self.kids(dom, 'vmmCtrlrP')
+            if not ctrls:
+                info['reasons'].append('Kein vCenter Controller konfiguriert')
+                continue
+            ca = self.A(ctrls[0])
+            vc = next((v for v in vcs if v.get('ip') == ca['hostOrIp'] or v.get('name') == ca['hostOrIp']), None)
+            acc = self.A(ctrls[0] + '/rsacc') or {}
+            cred = self.A(acc.get('tDn', '')) if acc.get('state') == 'formed' else None
+            if vc is None:
+                why = 'vCenter %s nicht erreichbar' % (ca['hostOrIp'] or '(keine Adresse)')
+            elif not cred:
+                why = 'Keine Credentials am Controller (Associated Credential)'
+            elif cred['usr'] != vc.get('user') or cred.get('pwd') != vc.get('pwd'):
+                why = 'Anmeldung am vCenter fehlgeschlagen (Benutzer oder Passwort falsch)'
+            elif ca['rootContName'] != vc.get('datacenter'):
+                why = 'Datacenter %s existiert im vCenter nicht' % (ca['rootContName'] or '(leer)')
+            else:
+                why = None
+            if why:
+                info['reasons'].append(why)
+                self.fault(ctrls[0], 'S0606', 'major', 'Connection to VMM controller %s failed: %s' % (ca['hostOrIp'], why),
+                           'connect-failed', domain='infra')
+                continue
+            info['state'] = 'online'
+            info['vc'] = vc['name']
+            sw = dom + '/vswitchpolcont'
+            cdp = (self.A(sw + '/rsvswitchOverrideCdpIfPol') or {}).get('tDn')
+            lldp = (self.A(sw + '/rsvswitchOverrideLldpIfPol') or {}).get('tDn')
+            if lldp and self.has(lldp) and self.A(lldp)['adminRxSt'] == 'enabled':
+                info['discovery'] = 'lldp'
+            elif cdp and self.has(cdp) and self.A(cdp)['adminSt'] == 'enabled':
+                info['discovery'] = 'cdp'
+            elif lldp and self.has(lldp):
+                info['discovery'] = 'none'
+            pool = (self.A(dom + '/rsvlanNs') or {}).get('tDn', '')
+            vlans = []
+            if self.has(pool):
+                pmode = self.A(pool)['allocMode']
+                for b in self.kids(pool, 'fvnsEncapBlk'):
+                    a = self.A(b)
+                    mode = pmode if a['allocMode'] == 'inherit' else a['allocMode']
+                    f, t = vlan_num(a['from']), vlan_num(a['to'])
+                    if mode == 'dynamic' and f and t:
+                        vlans.extend(range(f, t + 1))
+            if not vlans:
+                self.fault(dom, 'S0607', 'minor', 'VMM Domain %s has no dynamic VLAN range (VLAN Pool with dynamic '
+                           'allocation)' % name, 'encap-pool-empty', domain='infra')
+            epgs = sorted(d for d, c in self.cls.items() if c['kind'] == 'epg' and
+                          any(self.A(r)['tDn'] == dom and self.A(r)['state'] == 'formed' for r in self.kids(d, 'fvRsDomAtt')))
+            for epg in epgs:
+                if not vlans:
+                    break
+                v = vlans.pop(0)
+                p = split_dn(epg)
+                pg = '%s|%s|%s' % (p[1][3:], p[2][3:], p[3][4:])
+                imm = next(self.A(r)['resImedcy'] for r in self.kids(epg, 'fvRsDomAtt') if self.A(r)['tDn'] == dom)
+                info['pgs'][epg] = {'name': pg, 'vlan': v, 'imm': imm}
+            # ESXi-Hosts im DVS dieser Domain
+            for esx in vc.get('hosts', []):
+                if name not in esx.get('dvs', []):
+                    continue
+                legs = []
+                for s_, port in esx.get('links', []):
+                    nid = self.serial_active.get(s_)
+                    if nid and (nid, port) in self.ports and self.ports[(nid, port)]['qual'] != 'admin-down':
+                        legs.append((nid, port))
+                hinfo = {'name': esx['name'], 'legs': legs, 'ok': [], 'reasons': []}
+                for leg in legs:
+                    pg_dn = self.ports[leg]['pg']
+                    pgi = self._pg_info(pg_dn) if pg_dn else None
+                    if not pgi or dom not in pgi['domains']:
+                        hinfo['reasons'].append('%s %s: Access Policy enthaelt die VMM Domain nicht' % (self.nodes[leg[0]]['name'], leg[1]))
+                        continue
+                    disc = info['discovery']
+                    if disc == 'none' or (disc == 'lldp' and not pgi['lldp']) or (disc == 'cdp' and pgi['cdp'] != 'enabled'):
+                        hinfo['reasons'].append('%s %s: keine %s-Nachbarschaft zwischen ESXi und Leaf' % (
+                            self.nodes[leg[0]]['name'], leg[1], disc.upper() if disc != 'none' else 'LLDP/CDP'))
+                        hinfo['nodisc'] = True
+                    hinfo['ok'].append(leg)
+                info['hosts'].append(hinfo)
+            # Deployment je Port Group nach Resolution Immediacy
+            for epg, pgi in info['pgs'].items():
+                c = self.cls[epg]
+                targets = set()
+                if pgi['imm'] == 'pre-provision':
+                    for (nid, port), pi in self.ports.items():
+                        if pi['pg'] and dom in self._pg_info(pi['pg'])['domains'] and not pi['fabric']:
+                            targets.add((nid, port))
+                else:
+                    for hinfo in info['hosts']:
+                        if hinfo.get('nodisc'):
+                            continue
+                        if pgi['imm'] == 'lazy':
+                            esx = next(e for e in vc['hosts'] if e['name'] == hinfo['name'])
+                            if not any(vm.get('network') == pgi['name'] for vm in esx.get('vms', [])):
+                                continue
+                        targets.update(hinfo['ok'])
+                for leg in sorted(targets):
+                    pdn = '%s/paths-%d/pathep-[%s]' % (self.poddn, leg[0], leg[1])
+                    if pdn in self.paths:
+                        self._deploy(epg, c, pdn, self.paths[pdn], pgi['vlan'], 'regular')
+            # VMs als Endpoints
+            for esx in vc.get('hosts', []):
+                hinfo = next((x for x in info['hosts'] if x['name'] == esx['name']), None)
+                for vm in esx.get('vms', []):
+                    pg = next((g for g in info['pgs'].values() if g['name'] == vm.get('network')), None)
+                    if not pg:
+                        continue
+                    h = {'name': vm['name'], 'mac': vm['mac'], 'ip': vm['ip'], 'gw': vm.get('gw', ''), 'vlan': pg['vlan'],
+                         'links': [[s_, p_] for s_, p_ in esx.get('links', [])], 'bond': 'none', 'vm': True,
+                         'esxi': esx['name'], 'network': vm.get('network'), 'silent': vm.get('silent', False)}
+                    if hinfo is None:
+                        h['vmreason'] = 'ESXi-Host %s ist nicht im DVS %s' % (esx['name'], name)
+                    self.vm_hosts.append(h)
+        # VMs ohne passende Port Group
+        known = {h['name'] for h in self.vm_hosts}
+        for vc in vcs:
+            for esx in vc.get('hosts', []):
+                for vm in esx.get('vms', []):
+                    if vm['name'] not in known:
+                        self.vm_hosts.append({'name': vm['name'], 'mac': vm['mac'], 'ip': vm['ip'], 'gw': vm.get('gw', ''),
+                                              'vlan': 0, 'links': [], 'bond': 'none', 'vm': True, 'esxi': esx['name'],
+                                              'network': vm.get('network'),
+                                              'vmreason': 'Port Group %s gibt es im vCenter %s nicht' % (vm.get('network') or '(keine)', vc['name'])})
+
+    def all_hosts(self):
+        return list(self.sim.get('hosts', [])) + list(getattr(self, 'vm_hosts', []))
 
     def _node_bind(self, rs, dn, c, doms):
         """Static Leaf: EPG auf allen Ports des Leafs, deren Access Policy die Domain enthaelt."""
@@ -751,10 +955,15 @@ class Engine:
 
     def _endpoints(self):
         self.hosts = {}
-        for h in self.sim.get('hosts', []):
+        woken = set(self.sim.get('woken', []))
+        for h in self.all_hosts():
             hs = {'name': h['name'], 'learned': False, 'ipLearned': False, 'reasons': [], 'legs': [],
-                  'path': None, 'epg': None, 'bd': None, 'vrf': None, 'nodes': [], 'linkdown': []}
+                  'path': None, 'epg': None, 'bd': None, 'vrf': None, 'nodes': [], 'linkdown': [],
+                  'vm': h.get('vm', False), 'silent': bool(h.get('silent')) and h['name'] not in woken}
             self.hosts[h['name']] = hs
+            if h.get('vmreason'):
+                hs['reasons'].append(h['vmreason'])
+                continue
             legs = []
             for s, p in h.get('links', []):
                 nid = self.serial_active.get(s)
@@ -846,10 +1055,15 @@ class Engine:
                 hs['reasons'].append('IP %s wird nicht gelernt (%s)' % (
                     ip, 'Unicast Routing im BD aus' if bda['unicastRoute'] != 'yes'
                     else 'IP liegt in keinem BD-Subnetz und "Limit IP Learning to Subnet" ist aktiv'))
+            if hs['silent']:
+                hs['learned'] = False
+                hs['quiet'] = True
+                hs['reasons'].append('Stiller Host: sendet erst, wenn ihn jemand anspricht (ARP)')
+                continue
             mac = h['mac'].upper()
             cep = match['epg'] + '/cep-' + mac
             self.store.add(cep, 'fvCEp', {'mac': mac, 'name': mac, 'ip': str(ip) if ip_learn else '0.0.0.0',
-                                          'encap': 'vlan-%d' % match['vlan'], 'lcC': 'learned',
+                                          'encap': 'vlan-%d' % match['vlan'], 'lcC': 'learned,vmm' if h.get('vm') else 'learned',
                                           'fabricPathDn': path, 'id': '0', 'mcastAddr': 'not-applicable',
                                           'contName': '', 'baseEpgDn': ''}, True)
             if ip_learn:
@@ -1018,8 +1232,15 @@ class Engine:
         """BD-Subnetze, die die ACI über dieses L3Out ankündigt."""
         o = self.outs[out]
         res = []
+        exts = [d for d, c in self.cls.items() if c['kind'] == 'ext' and c.get('out') == out]
         for bd in self.store.by_class('fvBD'):
-            if (self.A(bd + '/rsctx') or {}).get('tDn') != o['vrf']:
+            bvrf = (self.A(bd + '/rsctx') or {}).get('tDn')
+            if bvrf != o['vrf']:
+                # Shared L3Out: BD-Subnetz public+shared und Contract zum External EPG
+                epgs = [d for d, c in self.cls.items() if c['kind'] == 'epg' and c['bd'] == bd]
+                if any(self._related(e, x) for e in epgs for x in exts):
+                    res.extend(str(s_['net']) for s_ in self.bd_subnets(bd)
+                               if {'public', 'shared'} <= set(s_['scope'].split(',')))
                 continue
             outs = self._rs_targets(bd, 'fvRsBDToOut')
             if out not in outs:
@@ -1031,6 +1252,12 @@ class Engine:
                 continue
             res.extend(str(s['net']) for s in subs)
         return res
+
+    def _related(self, a, b):
+        for brc, rel in self.contracts.items():
+            if (a in rel['prov'] and b in rel['cons']) or (a in rel['cons'] and b in rel['prov']):
+                return True
+        return False
 
     def bd_on_border(self, bd, out, nid):
         if bd in self.dep_bd.get(nid, set()):

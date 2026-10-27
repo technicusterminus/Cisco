@@ -156,7 +156,7 @@ const SPEC = {
         { l: 'Identity', fields: [NAME, ALIAS, relName('fvRsBd', 'tnFvBDName', 'Bridge Domain', 'fvBD', { req: true }),
           { k: 'pcEnfPref', l: 'Intra EPG Isolation', t: 'radio', o: [['unenforced', 'Unenforced'], ['enforced', 'Enforced']], def: 'unenforced' },
           { k: 'prefGrMemb', l: 'Preferred Group Member', t: 'radio', o: [['exclude', 'Exclude'], ['include', 'Include']], def: 'exclude' }, DESCR,
-          { k: '_doms', l: 'Associate to Domain Profiles', t: 'rows', cols: [{ k: 'tDn', l: 'Domain Profile', t: 'tdn', target: ['physDomP', 'l3extDomP'] }] },
+          { k: '_doms', l: 'Associate to Domain Profiles', t: 'rows', cols: [{ k: 'tDn', l: 'Domain Profile', t: 'tdn', target: ['physDomP', 'vmmDomP'] }, { k: 'imm', l: 'Resolution Immediacy', t: 'select', o: RES_IMM, def: 'immediate' }] },
           { k: '_static', l: 'Statically Link with Leaves/Paths', t: 'yesno', def: 'no' }] },
         { l: 'Leaves/Paths', show: v => v._static === 'yes', fields: [
           { k: '_paths', l: 'Paths', t: 'rows', cols: [{ k: 'tDn', l: 'Path', t: 'path' }, { k: 'encap', l: 'Port Encap', ph: 'vlan-10', req: true, w: '90px' }, { k: 'mode', l: 'Mode', t: 'select', o: MODES, def: 'regular' }] },
@@ -166,21 +166,23 @@ const SPEC = {
         dn: parent + '/epg-' + v.name,
         body: mo('fvAEPg', { name: v.name, nameAlias: v.nameAlias, descr: v.descr, pcEnfPref: v.pcEnfPref, prefGrMemb: v.prefGrMemb },
           mo('fvRsBd', { tnFvBDName: v['fvRsBd.tnFvBDName'] }),
-          (v._doms || []).map(d => mo('fvRsDomAtt', { tDn: d.tDn })),
+          (v._doms || []).filter(d => d.tDn).map(d => mo('fvRsDomAtt', { tDn: d.tDn, resImedcy: d.imm || 'immediate' })),
           (v._static === 'yes' ? v._paths || [] : []).map(p => mo('fvRsPathAtt', { tDn: p.tDn, encap: vlanify(p.encap), mode: p.mode })),
           (v._static === 'yes' ? v._leaves || [] : []).filter(l => l.tDn).map(l => mo('fvRsNodeAtt', { tDn: l.tDn, encap: vlanify(l.encap), mode: l.mode }))),
       }),
     },
     actions: [['Deploy Static EPG on PC, VPC, or Interface', dn => createDialog(dn, 'fvRsPathAtt', 'Deploy Static EPG on PC, VPC, or Interface')],
       ['Add Physical Domain Association', dn => createDialog(dn, 'fvRsDomAtt', 'Add Physical Domain Association')],
+      ['Add VMM Domain Association', dn => createDialog(dn, 'fvRsDomAtt', 'Add VMM Domain Association', { resImedcy: 'immediate' })],
       ['Add Static Leaf', dn => createDialog(dn, 'fvRsNodeAtt')],
       ['Add Provided Contract', dn => createDialog(dn, 'fvRsProv', 'Add Provided Contract')],
       ['Add Consumed Contract', dn => createDialog(dn, 'fvRsCons', 'Add Consumed Contract')],
-      ['Add Taboo Contract', dn => createDialog(dn, 'fvRsProtBy', 'Add Taboo Contract')]],
+      ['Add Taboo Contract', dn => createDialog(dn, 'fvRsProtBy', 'Add Taboo Contract')],
+      ['Add Consumed Contract Interface', dn => createDialog(dn, 'fvRsConsIf', 'Add Consumed Contract Interface')]],
   },
   fvRsDomAtt: {
     label: 'Domain',
-    fields: [{ k: 'tDn', l: 'Domain', t: 'tdn', target: ['physDomP', 'l3extDomP'], create: true, req: true },
+    fields: [{ k: 'tDn', l: 'Domain', t: 'tdn', target: ['physDomP', 'vmmDomP', 'l3extDomP'], create: true, req: true },
       { k: 'resImedcy', l: 'Resolution Immediacy', t: 'select', o: RES_IMM },
       { k: 'instrImedcy', l: 'Deployment Immediacy', t: 'select', o: IMM },
       { k: 'primaryEncap', l: 'Primary VLAN for Micro-Seg', ph: 'unknown' }],
@@ -226,7 +228,7 @@ const SPEC = {
           (v._subj || []).map(s => mo('vzSubj', { name: s.name, revFltPorts: s.rev }, (s.filters || []).map(f => mo('vzRsSubjFiltAtt', { tnVzFilterName: f }))))),
       }),
     },
-    actions: [['Create Contract Subject', dn => createDialog(dn, 'vzSubj')]],
+    actions: [['Create Contract Subject', dn => createDialog(dn, 'vzSubj')], ['Export Contract', dn => exportContract(dn)]],
   },
   vzSubj: {
     label: 'Contract Subject',
@@ -417,7 +419,7 @@ const SPEC = {
     },
     cols: [ac('name'), col('Subnets', r => MIT.kids(r.dn, ['l3extSubnet']).map(d => MIT.a(d).ip).join(', ')), col('pcTag', r => r.pcTag)],
     info: r => [['pcTag (sclass)', r.pcTag]], summary: true,
-    actions: [['Add Provided Contract', dn => createDialog(dn, 'fvRsProv')], ['Add Consumed Contract', dn => createDialog(dn, 'fvRsCons')]],
+    actions: [['Add Provided Contract', dn => createDialog(dn, 'fvRsProv')], ['Add Consumed Contract', dn => createDialog(dn, 'fvRsCons')], ['Add Consumed Contract Interface', dn => createDialog(dn, 'fvRsConsIf')]],
   },
   l3extSubnet: {
     label: 'Subnet',
@@ -475,12 +477,12 @@ const SPEC = {
     fields: [NAME, DESCR],
     wizard: {
       title: 'Create Attachable Access Entity Profile',
-      steps: [{ l: 'Profile', fields: [NAME, DESCR, { k: '_d', l: 'Domains (VMM, Physical or External) To Be Associated To Interfaces', t: 'rows', start: true, cols: [{ k: 'tDn', l: 'Domain Profile', t: 'tdn', target: ['physDomP', 'l3extDomP'] }] }] }],
+      steps: [{ l: 'Profile', fields: [NAME, DESCR, { k: '_d', l: 'Domains (VMM, Physical or External) To Be Associated To Interfaces', t: 'rows', start: true, cols: [{ k: 'tDn', l: 'Domain Profile', t: 'tdn', target: ['physDomP', 'vmmDomP', 'l2extDomP', 'l3extDomP'] }] }] }],
       build: (v, parent) => ({ dn: parent + '/attentp-' + v.name, body: mo('infraAttEntityP', { name: v.name, descr: v.descr }, (v._d || []).map(d => mo('infraRsDomP', { tDn: d.tDn }))) }),
     },
     cols: [ac('name'), col('Domains', r => MIT.kids(r.dn, ['infraRsDomP']).map(d => nameOfDn(MIT.a(d).tDn)).join(', ')), ac('descr')],
   },
-  infraRsDomP: { label: 'Domain', fields: [{ k: 'tDn', l: 'Domain Profile', t: 'tdn', target: ['physDomP', 'l3extDomP'], create: true, req: true }], cols: [col('Domain Profile', r => r.tDn), col('State', relState)] },
+  infraRsDomP: { label: 'Domain', fields: [{ k: 'tDn', l: 'Domain Profile', t: 'tdn', target: ['physDomP', 'vmmDomP', 'l2extDomP', 'l3extDomP'], create: true, req: true }], cols: [col('Domain Profile', r => r.tDn), col('State', relState)] },
   infraAccPortGrp: {
     label: 'Leaf Access Port Policy Group',
     fields: [NAME, DESCR,
@@ -611,6 +613,139 @@ const SPEC = {
   },
 };
 
+/* ---------------- VMM, Imported Contracts, L2Out ---------------- */
+Object.assign(SPEC, {
+  vmmDomP: {
+    label: 'VMM Domain', menu: 'Create vCenter Domain',
+    fields: [NAME, relDn('infraRsVlanNs', 'VLAN Pool', 'fvnsVlanInstP'),
+      { k: 'enfPref', l: 'Endpoint Retention / Enforcement', t: 'select', o: [['hw', 'hw'], ['sw', 'sw'], ['unknown', 'unknown']] }],
+    cols: [ac('name'), col('VLAN Pool', r => nameOfDn(relOf(r.dn, 'infraRsVlanNs', 'tDn'))),
+      col('vCenter', r => MIT.kids(r.dn, ['vmmCtrlrP']).map(d => MIT.a(d).hostOrIp).join(', ')),
+      col('State', r => { const v = ((App.state || {}).vmm || []).find(x => x.dn === r.dn); return stateBadge(v ? v.state : 'offline'); })],
+    summary: true, oper: ['vmm', 'deployed', 'endpoints'],
+    wizard: {
+      title: 'Create vCenter Domain',
+      steps: [{ l: 'Domain', fields: [
+        { k: 'name', l: 'Virtual Switch Name', create: true, req: true, ph: 'z. B. VDS1', help: 'Name der VMM Domain = Name des Distributed Switch im vCenter' },
+        { k: '_vs', l: 'Virtual Switch', t: 'radio', o: [['vds', 'VMware vSphere Distributed Switch']], def: 'vds' },
+        relDn('infraRsVlanNs', 'VLAN Pool', 'fvnsVlanInstP', { help: 'Für Port Groups braucht die Domain einen Pool mit dynamischer Allocation' }),
+        { k: '_aaep', l: 'Associated Attachable Entity Profile', t: 'tdn', target: ['infraAttEntityP'], help: 'Fügt die Domain gleich dem AAEP hinzu (optional)' },
+        { k: '_creds', l: 'vCenter Credentials', t: 'rows', start: true, cols: [{ k: 'name', l: 'Name', ph: 'vc-cred', req: true },
+          { k: 'usr', l: 'Username', ph: 'administrator@vsphere.local', req: true }, { k: 'pwd', l: 'Password', t: 'password', req: true }] },
+        { k: '_ctrls', l: 'vCenter', t: 'rows', start: true, cols: [{ k: 'name', l: 'Name', ph: 'vcenter1', req: true },
+          { k: 'ip', l: 'Host Name (or IP Address)', ph: '192.168.10.50', req: true }, { k: 'dc', l: 'Datacenter', ph: 'DC1', req: true },
+          { k: 'cred', l: 'Associated Credential', ph: 'vc-cred', req: true }] },
+        { k: '_lldp', l: 'vSwitch Policy: LLDP Policy', t: 'tdn', target: ['lldpIfPol'], under: 'uni/infra/' },
+        { k: '_cdp', l: 'vSwitch Policy: CDP Policy', t: 'tdn', target: ['cdpIfPol'], under: 'uni/infra/' },
+        { k: '_lacp', l: 'vSwitch Policy: Port Channel Policy', t: 'tdn', target: ['lacpLagPol'], under: 'uni/infra/' }] }],
+      build: v => {
+        const dn = 'uni/vmmp-VMware/dom-' + v.name;
+        const sw = [v._lldp && mo('vmmRsVswitchOverrideLldpIfPol', { tDn: v._lldp }), v._cdp && mo('vmmRsVswitchOverrideCdpIfPol', { tDn: v._cdp }),
+          v._lacp && mo('vmmRsVswitchOverrideLacpPol', { tDn: v._lacp })].filter(Boolean);
+        const dom = mo('vmmDomP', { name: v.name, enfPref: 'hw' },
+          v['infraRsVlanNs.tDn'] ? mo('infraRsVlanNs', { tDn: v['infraRsVlanNs.tDn'] }) : null,
+          (v._creds || []).map(c => mo('vmmUsrAccP', { name: c.name, usr: c.usr, pwd: c.pwd })),
+          (v._ctrls || []).map(c => mo('vmmCtrlrP', { name: c.name, hostOrIp: c.ip, rootContName: c.dc }, mo('vmmRsAcc', { tDn: dn + '/usracc-' + c.cred }))),
+          sw.length ? mo('vmmVSwitchPolicyCont', {}, sw) : null);
+        const kids = [mo('vmmProvP', { vendor: 'VMware' }, dom)];
+        if (v._aaep) kids.push({ infraInfra: { attributes: {}, children: [mo('infraAttEntityP', { name: nameOfDn(v._aaep) }, mo('infraRsDomP', { tDn: dn }))] } });
+        return { url: 'uni', dn, body: mo('polUni', {}, kids) };
+      },
+    },
+    actions: [['Create vCenter Credential', dn => createDialog(dn, 'vmmUsrAccP')], ['Create vCenter Controller', dn => createDialog(dn, 'vmmCtrlrP')],
+      ['vSwitch Policy', dn => createDialog(dn, 'vmmVSwitchPolicyCont', 'vSwitch Policy')]],
+  },
+  vmmUsrAccP: {
+    label: 'vCenter Credential',
+    fields: [NAME, { k: 'usr', l: 'Username', req: true, ph: 'administrator@vsphere.local' }, { k: 'pwd', l: 'Password', t: 'password', help: 'leer lassen = unverändert' }, DESCR],
+    cols: [ac('name'), col('Username', r => r.usr), ac('descr')],
+  },
+  vmmCtrlrP: {
+    label: 'vCenter Controller',
+    fields: [NAME, { k: 'hostOrIp', l: 'Host Name (or IP Address)', req: true, ph: '192.168.10.50' },
+      { k: 'rootContName', l: 'Datacenter', req: true, ph: 'DC1', help: 'Name des Datacenter-Objekts im vCenter (Groß-/Kleinschreibung beachten)' },
+      relDn('vmmRsAcc', 'Associated Credential', 'vmmUsrAccP', { req: true })],
+    cols: [ac('name'), col('Host or IP', r => r.hostOrIp), col('Datacenter', r => r.rootContName), col('Credential', r => nameOfDn(relOf(r.dn, 'vmmRsAcc', 'tDn'))),
+      col('Connection', r => { const v = ((App.state || {}).vmm || []).find(x => r.dn.startsWith(x.dn + '/')); return stateBadge(v ? v.state : 'offline'); })],
+  },
+  vmmVSwitchPolicyCont: {
+    label: 'vSwitch Policy',
+    fields: [relDn('vmmRsVswitchOverrideLldpIfPol', 'LLDP Policy', 'lldpIfPol', { under: 'uni/infra/' }),
+      relDn('vmmRsVswitchOverrideCdpIfPol', 'CDP Policy', 'cdpIfPol', { under: 'uni/infra/' }),
+      relDn('vmmRsVswitchOverrideLacpPol', 'Port Channel Policy', 'lacpLagPol', { under: 'uni/infra/' })],
+    cols: [col('LLDP', r => nameOfDn(relOf(r.dn, 'vmmRsVswitchOverrideLldpIfPol', 'tDn'))), col('CDP', r => nameOfDn(relOf(r.dn, 'vmmRsVswitchOverrideCdpIfPol', 'tDn')))],
+  },
+  vzCPIf: {
+    label: 'Imported Contract',
+    fields: [NAME, relDn('vzRsIf', 'Global Contract', 'vzBrCP', { req: true, help: 'Exportierter Contract aus einem anderen Tenant (Scope global)' }), DESCR],
+    cols: [ac('name'), col('Contract', r => relOf(r.dn, 'vzRsIf', 'tDn')), col('State', r => relState(MIT.a(r.dn + '/rsif') || {}))],
+  },
+  fvRsConsIf: { label: 'Consumed Contract Interface', fields: [relNameSelf('tnVzCPIfName', 'Contract Interface', 'vzCPIf')],
+    cols: [col('Contract', r => r.tnVzCPIfName), col('Typ', () => 'Consumed Contract Interface'), col('State', relState)] },
+  l2extDomP: {
+    label: 'External Bridged Domain',
+    fields: [NAME, relDn('infraRsVlanNs', 'VLAN Pool', 'fvnsVlanInstP')],
+    cols: [ac('name'), col('VLAN Pool', r => nameOfDn(relOf(r.dn, 'infraRsVlanNs', 'tDn')))],
+  },
+  l2extOut: {
+    label: 'L2Out',
+    fields: [NAME, ALIAS, relName('l2extRsEBd', 'tnFvBDName', 'Bridge Domain', 'fvBD', { req: true }),
+      { rel: 'l2extRsEBd', k: 'encap', l: 'Encap', ph: 'vlan-300' },
+      relDn('l2extRsL2DomAtt', 'External Bridged Domain', 'l2extDomP', { req: true }), DESCR],
+    cols: [ac('name'), col('Bridge Domain', r => relOf(r.dn, 'l2extRsEBd', 'tnFvBDName')), col('Encap', r => relOf(r.dn, 'l2extRsEBd', 'encap')),
+      col('Domain', r => nameOfDn(relOf(r.dn, 'l2extRsL2DomAtt', 'tDn')))],
+    normalize: v => { if (v['l2extRsEBd.encap']) v['l2extRsEBd.encap'] = vlanify(v['l2extRsEBd.encap']); return v; },
+    summary: true, oper: ['deployed', 'endpoints'],
+    wizard: {
+      title: 'Create L2Out',
+      steps: [
+        { l: 'Identity', fields: [NAME, relName('l2extRsEBd', 'tnFvBDName', 'Bridge Domain', 'fvBD', { req: true }),
+          { k: '_encap', l: 'Encap', req: true, ph: 'vlan-300', help: 'VLAN auf dem Draht zum Legacy-Netz' },
+          relDn('l2extRsL2DomAtt', 'External Bridged Domain', 'l2extDomP', { req: true }),
+          { k: '_paths', l: 'Path', t: 'rows', start: true, cols: [{ k: 'tDn', l: 'Interface', t: 'path' }] }] },
+        { l: 'External EPG', fields: [{ k: '_epg', l: 'External EPG Name', req: true, ph: 'LegacyNet' }] }],
+      build: (v, parent) => ({
+        dn: parent + '/l2out-' + v.name,
+        body: mo('l2extOut', { name: v.name }, mo('l2extRsEBd', { tnFvBDName: v['l2extRsEBd.tnFvBDName'], encap: vlanify(v._encap) }),
+          mo('l2extRsL2DomAtt', { tDn: v['l2extRsL2DomAtt.tDn'] }),
+          mo('l2extLNodeP', { name: 'default' }, mo('l2extLIfP', { name: 'default' }, (v._paths || []).filter(p => p.tDn).map(p => mo('l2extRsPathL2OutAtt', { tDn: p.tDn })))),
+          mo('l2extInstP', { name: v._epg })),
+      }),
+    },
+    actions: [['Create Node Profile', dn => createDialog(dn, 'l2extLNodeP')], ['Create External EPG', dn => createDialog(dn, 'l2extInstP')]],
+  },
+  l2extLNodeP: { label: 'Node Profile', fields: [NAME, DESCR], cols: [ac('name'), ac('descr')], actions: [['Create Interface Profile', dn => createDialog(dn, 'l2extLIfP')]] },
+  l2extLIfP: { label: 'Interface Profile', fields: [NAME, DESCR], cols: [ac('name'), ac('descr')], actions: [['Create Path', dn => createDialog(dn, 'l2extRsPathL2OutAtt')]] },
+  l2extRsPathL2OutAtt: { label: 'L2Out Path', fields: [{ k: 'tDn', l: 'Path', t: 'path', create: true, req: true }, DESCR],
+    cols: [col('Path', r => pathLabel(r.tDn)), col('State', relState)] },
+  l2extInstP: {
+    label: 'External EPG (L2)',
+    fields: [NAME, { k: 'prefGrMemb', l: 'Preferred Group Member', t: 'radio', o: [['exclude', 'Exclude'], ['include', 'Include']] }, DESCR],
+    cols: [ac('name'), col('pcTag (sclass)', r => r.pcTag), ac('descr')],
+    summary: true, oper: ['endpoints', 'contracts'],
+    actions: [['Add Provided Contract', dn => createDialog(dn, 'fvRsProv')], ['Add Consumed Contract', dn => createDialog(dn, 'fvRsCons')],
+      ['Add Consumed Contract Interface', dn => createDialog(dn, 'fvRsConsIf')]],
+  },
+});
+
+/* Contract in einen anderen Tenant exportieren: legt dort ein vzCPIf (Imported Contract) an */
+async function exportContract(dn) {
+  const tenants = (await API.cls('fvTenant')).map(r => r.fvTenant.attributes.name).filter(n => 'uni/tn-' + n !== tenantOf(dn));
+  const f = buildForm([{ k: 'name', l: 'Name', req: true, help: 'Name des Imported Contract im Ziel-Tenant' },
+    { k: 'tenant', l: 'Tenant', t: 'select', o: tenants.map(n => [n, n]), req: true }], { name: MIT.a(dn).name, tenant: tenants[0] }, {}, 'create');
+  const scope = MIT.a(dn).scope;
+  const body = h('div', null, scope !== 'global' ? h('div', { class: 'card note warn' }, 'Der Contract hat Scope ' + scope + '. Für einen anderen Tenant braucht er Scope global.') : null, f.el);
+  modal('Export Contract', body, [{ l: 'Abbrechen' }, {
+    l: 'Submit', primary: true, fn: async () => {
+      const v = f.get();
+      if (!v.name || !v.tenant) throw new ApiError('Eingabe', 'Name und Tenant angeben');
+      await API.postMo('uni/tn-' + v.tenant, mo('vzCPIf', { name: v.name }, mo('vzRsIf', { tDn: dn })));
+      toast('Contract nach Tenant ' + v.tenant + ' exportiert');
+      App.reload();
+    },
+  }]);
+}
+
 function ipInNet(ip, cidr) {
   const toN = s => s.split('.').reduce((a, b) => a * 256 + Number(b), 0);
   const [net, len] = cidr.split('/');
@@ -625,16 +760,16 @@ const PH = (l, text) => ({ l, ph: text || l + ' ist in Datacenter Prep nur als M
 const TREE = {
   fvTenant: [
     { l: 'Application Profiles', cls: ['fvAp'] },
-    { l: 'Networking', sub: [{ l: 'Bridge Domains', cls: ['fvBD'] }, { l: 'VRFs', cls: ['fvCtx'] }, PH('L2Outs'), { l: 'L3Outs', cls: ['l3extOut'] }, PH('SR-MPLS VRF L3Outs'), PH('Dot1Q Tunnels')] },
+    { l: 'Networking', sub: [{ l: 'Bridge Domains', cls: ['fvBD'] }, { l: 'VRFs', cls: ['fvCtx'] }, { l: 'L2Outs', cls: ['l2extOut'] }, { l: 'L3Outs', cls: ['l3extOut'] }, PH('SR-MPLS VRF L3Outs'), PH('Dot1Q Tunnels')] },
     PH('IP Address Pools'),
-    { l: 'Contracts', sub: [{ l: 'Standard', cls: ['vzBrCP'] }, { l: 'Taboos', cls: ['vzTaboo'] }, PH('Imported'), { l: 'Filters', cls: ['vzFilter'] }, PH('Out-Of-Band Contracts')] },
+    { l: 'Contracts', sub: [{ l: 'Standard', cls: ['vzBrCP'] }, { l: 'Taboos', cls: ['vzTaboo'] }, { l: 'Imported', cls: ['vzCPIf'] }, { l: 'Filters', cls: ['vzFilter'] }, PH('Out-Of-Band Contracts')] },
     { l: 'Policies', sub: [{ l: 'Protocol', sub: [PH('BFD'), PH('BGP'), PH('Custom QoS'), PH('DHCP'), PH('EIGRP'), PH('End Point Retention'), PH('IGMP Snoop'), PH('ND RA Prefix'),
       { l: 'OSPF Interface', cls: ['ospfIfPol'] }, PH('OSPF Timers'), PH('Route Maps for Route Control')] }, PH('Troubleshoot'), PH('Monitoring'), PH('NetFlow')] },
     { l: 'Services', sub: [PH('L4-L7', 'Service Graphs, Devices und PBR sind in Datacenter Prep nicht nachgebildet.')] },
   ],
   fvAp: [{ l: 'Application EPGs', cls: ['fvAEPg'] }, PH('uSeg EPGs'), PH('Endpoint Security Groups')],
   fvAEPg: [{ l: 'Domains (VMs and Bare-Metals)', cls: ['fvRsDomAtt'], flat: 1 }, PH('EPG Members'), { l: 'Static Ports', cls: ['fvRsPathAtt'], flat: 1 },
-    { l: 'Static Leafs', cls: ['fvRsNodeAtt'], flat: 1 }, { l: 'Contracts', cls: ['fvRsProv', 'fvRsCons', 'fvRsProtBy'], flat: 1 }, PH('Static Endpoint'), { l: 'Subnets', cls: ['fvSubnet'], flat: 1 }],
+    { l: 'Static Leafs', cls: ['fvRsNodeAtt'], flat: 1 }, { l: 'Contracts', cls: ['fvRsProv', 'fvRsCons', 'fvRsConsIf', 'fvRsProtBy'], flat: 1 }, PH('Static Endpoint'), { l: 'Subnets', cls: ['fvSubnet'], flat: 1 }],
   fvBD: [{ l: 'Subnets', cls: ['fvSubnet'], flat: 1 }, { l: 'Associated L3 Outs', cls: ['fvRsBDToOut'], flat: 1, hidden: 1 }, PH('ND Proxy Subnets')],
   fvCtx: [{ l: 'EPG Collection for VRF', rn: 'any' }],
   vzAny: [{ l: 'Contracts', cls: ['vzRsAnyToProv', 'vzRsAnyToCons'], flat: 1 }],
@@ -649,7 +784,12 @@ const TREE = {
   ipRouteP: [{ l: 'Next Hop Addresses', cls: ['ipNexthopP'], flat: 1 }],
   l3extLIfP: [{ l: 'Routed Interfaces / Sub-Interfaces / SVIs', cls: ['l3extRsPathL3OutAtt'] }, { l: 'OSPF Interface Profile', cls: ['ospfIfP'], flat: 1, max: 1 }],
   l3extRsPathL3OutAtt: [{ l: 'BGP Peer Connectivity Profiles', cls: ['bgpPeerP'], flat: 1 }],
-  l3extInstP: [{ l: 'Subnets', cls: ['l3extSubnet'], flat: 1 }, { l: 'Contracts', cls: ['fvRsProv', 'fvRsCons', 'fvRsProtBy'], flat: 1 }],
+  l3extInstP: [{ l: 'Subnets', cls: ['l3extSubnet'], flat: 1 }, { l: 'Contracts', cls: ['fvRsProv', 'fvRsCons', 'fvRsConsIf', 'fvRsProtBy'], flat: 1 }],
+  l2extOut: [{ l: 'Logical Node Profiles', cls: ['l2extLNodeP'] }, { l: 'External EPGs', cls: ['l2extInstP'] }],
+  l2extLNodeP: [{ l: 'Logical Interface Profiles', cls: ['l2extLIfP'] }],
+  l2extLIfP: [{ l: 'Paths', cls: ['l2extRsPathL2OutAtt'], flat: 1 }],
+  l2extInstP: [{ l: 'Contracts', cls: ['fvRsProv', 'fvRsCons', 'fvRsConsIf', 'fvRsProtBy'], flat: 1 }],
+  vmmDomP: [{ l: 'Controllers', cls: ['vmmCtrlrP'] }, { l: 'vCenter Credentials', cls: ['vmmUsrAccP'], flat: 1 }, { l: 'vSwitch Policy', rn: 'vswitchpolcont' }],
   fvnsVlanInstP: [{ l: 'Encap Blocks', cls: ['fvnsEncapBlk'], flat: 1 }],
   infraAttEntityP: [{ l: 'Domains', cls: ['infraRsDomP'], flat: 1 }],
   infraNodeP: [{ l: 'Leaf Selectors', cls: ['infraLeafS'] }, { l: 'Associated Interface Selector Profiles', cls: ['infraRsAccPortP'], flat: 1 }],
@@ -691,8 +831,13 @@ const ACCESS_TREE = [
     { l: 'Global', sub: [{ l: 'Attachable Access Entity Profiles', cls: ['infraAttEntityP'], parent: 'uni/infra' }, PH('QOS Class'), PH('DHCP Relay'), PH('MCP Instance Policy default')] },
     PH('Monitoring'), PH('Troubleshooting')] },
   { l: 'Pools', sub: [{ l: 'VLAN', cls: ['fvnsVlanInstP'], parent: 'uni/infra' }, PH('VXLAN'), PH('VSAN')] },
-  { l: 'Physical and External Domains', sub: [{ l: 'Physical Domains', cls: ['physDomP'], parent: 'uni' }, PH('L2 Domains'), PH('External Bridged Domains'),
+  { l: 'Physical and External Domains', sub: [{ l: 'Physical Domains', cls: ['physDomP'], parent: 'uni' }, PH('L2 Domains'), { l: 'External Bridged Domains', cls: ['l2extDomP'], parent: 'uni' },
     { l: 'L3 Domains', cls: ['l3extDomP'], parent: 'uni' }, PH('Fibre Channel Domains')] },
+];
+
+const VMM_TREE = [
+  { l: 'VMM Domains', sub: [{ l: 'VMware', cls: ['vmmDomP'], parent: 'uni/vmmp-VMware' }, PH('Microsoft'), PH('Kubernetes'), PH('Red Hat'), PH('OpenStack')] },
+  PH('Container Domains'),
 ];
 
 const FABRICPOL_TREE = [
@@ -711,4 +856,5 @@ const ICON = {
   l3extDomP: 'L3D', fvnsVlanInstP: 'VL', infraHPortS: 'S', infraLeafS: 'S', fabricExplicitGEp: 'vPC', ospfIfPol: 'O',
   cdpIfPol: 'P', lldpIfPol: 'P', lacpLagPol: 'P', fabricHIfPol: 'P', mcpIfPol: 'P', stpIfPol: 'P', fabricProtPol: 'vPC',
   fabricPodPGrp: 'PG', fabricPodP: 'PP', datetimePol: 'NTP', mgmtOoB: 'OOB',
+  vmmDomP: 'VDS', vmmCtrlrP: 'VC', l2extOut: 'L2', l2extInstP: 'EX', l2extDomP: 'L2D', vzCPIf: 'IC', l2extLNodeP: 'NP', l2extLIfP: 'IP',
 };

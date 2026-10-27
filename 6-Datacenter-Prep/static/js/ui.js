@@ -104,7 +104,7 @@ function sevBadge(sev) {
 
 function stateBadge(state) {
   const cls = { formed: 'ok', 'missing-target': 'bad', active: 'ok', discovering: 'warn', inactive: 'bad', pending: 'warn',
-    undiscovered: 'off', up: 'ok', down: 'bad', FULL: 'ok', Established: 'ok', learned: 'ok' }[state] || 'off';
+    undiscovered: 'off', up: 'ok', down: 'bad', FULL: 'ok', Established: 'ok', learned: 'ok', online: 'ok', offline: 'bad', silent: 'warn' }[state] || 'off';
   return h('span', { class: 'pill ' + cls }, state || '—');
 }
 

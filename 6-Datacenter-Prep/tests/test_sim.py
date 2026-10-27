@@ -369,7 +369,7 @@ class TestLabs(Base):
     def test_all_labs_solvable(self):
         self.S.sim['settings']['discoverySeconds'] = 0
         labs = self.S.labs()
-        self.assertGreaterEqual(len(labs), 11)
+        self.assertGreaterEqual(len(labs), 14)
         for lab in labs:
             with self.subTest(lab=lab['id']):
                 self.S.load_lab(lab['id'])
@@ -422,3 +422,98 @@ class TestApicFeatures(Base):
         self.assertTrue(any('rsTimePol' in self.st.attrs(d)['affected'] for d in audit))
         events = [self.st.attrs(d)['descr'] for d in self.st.by_class('eventRecord')]
         self.assertTrue(events is not None)
+
+
+VCENTER = [{'name': 'vc1', 'ip': '192.168.10.50', 'datacenter': 'DC1', 'user': 'administrator@vsphere.local', 'pwd': 'VMware1!',
+            'hosts': [{'name': 'esx1', 'links': [['SAL1931LA01', 'eth1/9']], 'dvs': ['VDS1'],
+                       'vms': [{'name': 'vm1', 'mac': '00:50:56:AA:00:01', 'ip': '10.1.1.50/24', 'gw': '10.1.1.1',
+                                'network': 'T|A|Web'}]}]}]
+
+
+class TestNewFeatures(Base):
+    def vmm_tree(self, imm='immediate', pwd='VMware1!', mode='dynamic'):
+        return {"polUni": {"attributes": {}, "children": [
+            {"infraInfra": {"attributes": {}, "children": [
+                {"fvnsVlanInstP": {"attributes": {"name": "VMM", "allocMode": mode}, "children": [
+                    {"fvnsEncapBlk": {"attributes": {"from": "vlan-1000", "to": "vlan-1009"}}}]}},
+                {"infraAttEntityP": {"attributes": {"name": "AAEP"}, "children": [
+                    {"infraRsDomP": {"attributes": {"tDn": "uni/vmmp-VMware/dom-VDS1"}}}]}}]}},
+            {"vmmProvP": {"attributes": {"vendor": "VMware"}, "children": [
+                {"vmmDomP": {"attributes": {"name": "VDS1"}, "children": [
+                    {"infraRsVlanNs": {"attributes": {"tDn": "uni/infra/vlanns-[VMM]-%s" % mode}}},
+                    {"vmmUsrAccP": {"attributes": {"name": "cred", "usr": "administrator@vsphere.local", "pwd": pwd}}},
+                    {"vmmCtrlrP": {"attributes": {"name": "vc1", "hostOrIp": "192.168.10.50", "rootContName": "DC1"}, "children": [
+                        {"vmmRsAcc": {"attributes": {"tDn": "uni/vmmp-VMware/dom-VDS1/usracc-cred"}}}]}}]}}]}},
+            {"fvTenant": {"attributes": {"name": "T"}, "children": [{"fvAp": {"attributes": {"name": "A"}, "children": [
+                {"fvAEPg": {"attributes": {"name": "Web"}, "children": [
+                    {"fvRsDomAtt": {"attributes": {"tDn": "uni/vmmp-VMware/dom-VDS1", "resImedcy": imm}}}]}}]}}]}}]}}
+
+    def test_vmm(self):
+        self.S.sim['vcenters'] = json.loads(json.dumps(VCENTER))
+        self.apply(ACCESS, tenant(), self.vmm_tree(pwd='falsch'), hosts=HOSTS)
+        self.assertEqual(self.e.vmm['uni/vmmp-VMware/dom-VDS1']['state'], 'offline')
+        self.assertFalse(self.e.hosts['vm1']['learned'])
+        post(self.st, 'uni', self.vmm_tree())
+        self.S.changed()
+        v = self.e.vmm['uni/vmmp-VMware/dom-VDS1']
+        self.assertEqual(v['state'], 'online')
+        self.assertEqual(v['pgs']['uni/tn-T/ap-A/epg-Web']['vlan'], 1000)
+        self.assertTrue(self.e.hosts['vm1']['learned'], self.e.hosts['vm1']['reasons'])
+        self.assertTrue(self.traffic('vm1', 'web1')['ok'])
+        # Static-Pool: keine dynamischen VLANs
+        post(self.st, 'uni', self.vmm_tree(mode='static'))
+        post(self.st, 'uni/vmmp-VMware/dom-VDS1', {"vmmDomP": {"attributes": {}, "children": [
+            {"infraRsVlanNs": {"attributes": {"tDn": "uni/infra/vlanns-[VMM]-static"}}}]}})
+        self.S.changed()
+        self.assertFalse(self.e.hosts['vm1']['learned'])
+
+    def test_shared_services(self):
+        t = tenant()
+        t['fvTenant']['children'].insert(1, {"fvCtx": {"attributes": {"name": "V2"}}})
+        # Cli in eigenen VRF
+        t['fvTenant']['children'][3]['fvBD']['children'][0] = {"fvRsCtx": {"attributes": {"tnFvCtxName": "V2"}}}
+        self.apply(ACCESS, t, hosts=HOSTS)
+        r = self.traffic('cli1', 'web1', 'tcp', 80)
+        self.assertFalse(r['ok'])
+        post(self.st, 'uni/tn-T/brc-web', {"vzBrCP": {"attributes": {"scope": "tenant"}}})
+        post(self.st, 'uni/tn-T/ap-A/epg-Web', {"fvSubnet": {"attributes": {"ip": "10.1.1.1/24", "scope": "private,shared"}}})
+        post(self.st, 'uni/tn-T/BD-BD2', {"fvSubnet": {"attributes": {"ip": "10.1.2.1/24", "scope": "private,shared"}}})
+        self.S.changed()
+        r = self.traffic('cli1', 'web1', 'tcp', 80)
+        self.assertTrue(r['ok'], r)
+        self.assertFalse(self.traffic('cli1', 'web1', 'tcp', 22)['ok'])
+
+    def test_l2out_silent(self):
+        l2 = {"polUni": {"attributes": {}, "children": [
+            {"infraInfra": {"attributes": {}, "children": [
+                {"fvnsVlanInstP": {"attributes": {"name": "L2", "allocMode": "static"}, "children": [
+                    {"fvnsEncapBlk": {"attributes": {"from": "vlan-300", "to": "vlan-300"}}}]}},
+                {"infraAttEntityP": {"attributes": {"name": "AAEP"}, "children": [
+                    {"infraRsDomP": {"attributes": {"tDn": "uni/l2dom-Legacy"}}}]}}]}},
+            {"l2extDomP": {"attributes": {"name": "Legacy"}, "children": [
+                {"infraRsVlanNs": {"attributes": {"tDn": "uni/infra/vlanns-[L2]-static"}}}]}},
+            {"fvTenant": {"attributes": {"name": "T"}, "children": [
+                {"l2extOut": {"attributes": {"name": "Legacy"}, "children": [
+                    {"l2extRsEBd": {"attributes": {"tnFvBDName": "BD1", "encap": "vlan-300"}}},
+                    {"l2extRsL2DomAtt": {"attributes": {"tDn": "uni/l2dom-Legacy"}}},
+                    {"l2extLNodeP": {"attributes": {"name": "np"}, "children": [{"l2extLIfP": {"attributes": {"name": "ifp"}, "children": [
+                        {"l2extRsPathL2OutAtt": {"attributes": {"tDn": "topology/pod-1/paths-101/pathep-[eth1/7]"}}}]}}]}},
+                    {"l2extInstP": {"attributes": {"name": "LegacyNet"}, "children": [{"fvRsProv": {"attributes": {"tnVzBrCPName": "web"}}}]}}]}}]}}]}}
+        legacy = {'name': 'old1', 'mac': '00:50:56:00:00:77', 'ip': '10.1.1.77/24', 'gw': '10.1.1.1', 'vlan': 300,
+                  'links': [['SAL1931LA01', 'eth1/7']], 'bond': 'none', 'silent': True}
+        self.apply(ACCESS, tenant(), l2, hosts=HOSTS + [legacy])
+        self.assertEqual([f for f in self.faults('uni/tn-T/l2out') if f[1] == 'F0467'], [])
+        self.assertTrue(self.e.hosts['old1'].get('quiet'))
+        # web1 (EPG Web) -> old1 (L2Out, provider web) braucht Contract: web1 ist Provider, nicht Consumer
+        self.assertFalse(self.traffic('web1', 'old1', 'tcp', 80)['ok'])
+        post(self.st, 'uni/tn-T/ap-A/epg-Web', {"fvRsCons": {"attributes": {"tnVzBrCPName": "web"}}})
+        post(self.st, 'uni/tn-T/BD-BD1', {"fvBD": {"attributes": {"unicastRoute": "no"}}})
+        self.S.changed()
+        r = self.traffic('web1', 'old1', 'tcp', 80)
+        self.assertFalse(r['ok'])
+        self.assertIn('flutet den ARP-Request nicht', ' '.join(s['detail'] for s in r['steps']))
+        post(self.st, 'uni/tn-T/BD-BD1', {"fvBD": {"attributes": {"arpFlood": "yes"}}})
+        self.S.changed()
+        r = self.traffic('web1', 'old1', 'tcp', 80)
+        self.assertTrue(r['ok'], r)
+        self.assertIn('old1', r['woken'])

@@ -43,6 +43,9 @@ Der Zustand bleibt beim Beenden erhalten. Beim ersten Start ist die Fabric ferti
 | MP-BGP | Externe Routen erreichen die anderen Leafs nur mit BGP Route Reflector Policy (Fabric-AS und Spine als RR). |
 | Taboo Contracts, Static Leafs | Taboos sperren passenden Verkehr trotz Contract. Ein Static Leaf deployt die EPG auf allen Ports des Leafs, deren Access Policy die Domain hat. |
 | Management und NTP | Static Node Management Addresses setzen die OOB-Adresse der Switches. NTP synchronisiert erst, wenn Date and Time Policy, Pod Policy Group, Pod Profile und Management-Adresse zusammenpassen. |
+| VMM (vCenter) | Simuliertes vCenter mit ESXi-Hosts und VMs (Menü *Simulation > vCenter*). Die VMM Domain verbindet sich nur mit richtiger IP, Datacenter und Credentials. Der APIC legt je EPG eine Port Group `Tenant|AP|EPG` mit einem VLAN aus dem dynamischen Pool an. LLDP oder CDP zwischen ESXi und Leaf, Resolution Immediacy (Pre-provision, Immediate, On Demand). VMs werden als Endpoint mit Learning Source *learned,vmm* gelernt. |
+| Shared Services | Route Leaking zwischen VRFs und Tenants: Contract mit Scope Tenant oder Global, exportierter Contract (Imported Contract, *Consumed Contract Interface*), Provider-Subnetz an der EPG und Consumer-Subnetz mit *Shared between VRFs*. Shared L3Out über External-EPG-Subnetze mit *Shared Route Control* und *Shared Security Import*. |
+| L2Out und stille Hosts | External Bridged Domain, L2Out mit Encap, Paths und External EPG an einer Bridge Domain. Stille Hosts (*Stiller Host* im Host-Dialog) lernt die ACI erst, wenn sie per ARP Flooding oder ARP Glean (Unicast Routing mit BD-Subnetz) gefragt werden. |
 | Disabled Interfaces | Deaktivierte Ports gehen admin-down, Endpoints und Nachbarschaften dahinter fallen weg. |
 | Faults, Events, Audit Log | Faults mit Code, Severity und Beschreibung am Objekt, Health Scores. Events bei Zustandswechseln (Switch aktiv, Endpoint gelernt, Nachbarschaft, Fault ausgelöst oder behoben). Jede Änderung im Audit Log mit Benutzer, altem und neuem Wert. |
 
@@ -53,21 +56,22 @@ Menüs und Untermenüs wie beim APIC:
 | Menü | Inhalt |
 |---|---|
 | System | QuickStart, Dashboard, Controllers, System Settings (BGP Route Reflector), Faults, Events, Audit Log, Active Sessions |
-| Tenants | ALL TENANTS, Add Tenant, Tenant Search und je Tenant der Baum: Application Profiles (EPGs mit Domains, Static Ports, Static Leafs, Contracts, Subnets), Networking (Bridge Domains, VRFs, L3Outs), Contracts (Standard, Taboos, Filters), Policies (OSPF Interface), im Tenant mgmt die Node Management Addresses |
-| Fabric | Inventory (Topologie, Pod 1 mit jedem Switch: Physical/PC/VPC Interfaces, LLDP, OSPF, BGP, NTP; Fabric Membership; Disabled Interfaces), Fabric Policies (Pods, Date and Time), Access Policies (Quick Start, Interface Configuration, Switches, Interfaces, Policies, Pools, Domains) |
+| Tenants | ALL TENANTS, Add Tenant, Tenant Search und je Tenant der Baum: Application Profiles (EPGs mit Domains, Static Ports, Static Leafs, Contracts, Subnets), Networking (Bridge Domains, VRFs, L2Outs, L3Outs), Contracts (Standard, Taboos, Imported, Filters), Policies (OSPF Interface), im Tenant mgmt die Node Management Addresses |
+| Fabric | Inventory (Topologie, Pod 1 mit jedem Switch: Physical/PC/VPC Interfaces, LLDP, OSPF, BGP, NTP; Fabric Membership; Disabled Interfaces), Fabric Policies (Pods, Date and Time), Access Policies (Quick Start, Interface Configuration, Switches, Interfaces, Policies, Pools, Physical, External Bridged und L3 Domains) |
+| Virtual Networking | VMM Domains > VMware: vCenter Domain mit Controllern, Credentials und vSwitch Policy; Operational zeigt Verbindung, Port Groups und Hypervisors |
 | Admin | AAA, Firmware, Config Rollbacks, Import/Export |
 | Operations | Visibility & Troubleshooting (Traffic-Test), Capacity Dashboard, EP Tracker |
-| **Simulation** | gibt es nur hier: Topologie und simulierte Hosts, externe Router, Labs, Einstellungen |
+| **Simulation** | gibt es nur hier: Topologie und simulierte Hosts, externe Router, vCenter (ESXi-Hosts und VMs), Labs, Einstellungen |
 
 Wie beim APIC:
 - **Tabs im Arbeitsbereich:** Summary, Policy (mit Untertabs, z. B. beim BD *General*, *L3 Configurations*, *Advanced/Troubleshooting*), Operational (Client End-Points, Deployed Leaves, Contracts, Neighbors, Routes), Stats, Health, Faults, History (Events und Audit Log).
 - **Rechtsklick im Baum** und **Actions-Menü** (⚙): *Create Bridge Domain*, *Deploy Static EPG on PC, VPC, or Interface*, *Add Consumed Contract*, *Delete*, *Save as …*, *Post …*, *Open In Object Store Browser* usw.
-- **Wizards:** Create Tenant (mit VRFs), Create VRF (optional mit BD), Create Bridge Domain (3 Schritte, Subnetz-Tabelle), Create Application EPG (Domains, Static Paths und Static Leafs), Create Filter (Entries-Tabelle), Create Contract (Subjects mit Filtern), Create L3Out (Identity, Nodes and Interfaces, Protocols, External EPG), Create VLAN Pool, Leaf Profile, Interface Profile und *Configure Interface, PC, and VPC*.
+- **Wizards:** Create Tenant (mit VRFs), Create VRF (optional mit BD), Create Bridge Domain (3 Schritte, Subnetz-Tabelle), Create Application EPG (Domains, Static Paths und Static Leafs), Create Filter (Entries-Tabelle), Create Contract (Subjects mit Filtern), Create L3Out (Identity, Nodes and Interfaces, Protocols, External EPG), Create L2Out, Create vCenter Domain, *Export Contract*, Create VLAN Pool, Leaf Profile, Interface Profile und *Configure Interface, PC, and VPC*.
 - **Interfaces deaktivieren** und wieder aktivieren (Inventory > Switch > Interfaces > Physical Interfaces).
 
 Oben rechts: Fault-Zähler, **CLI** (APIC und alle Switches), **API Inspector** (zeigt jeden REST-Aufruf der GUI mit Payload und Antwort) und **Visore** (Object Store Browser).
 
-Datacenter Prep bildet Aufbau, Begriffe und Arbeitsabläufe der APIC-GUI nach. Layout und Grafik sind eigenständig, Bereiche ohne Funktion (z. B. VMM, L4-L7, SNMP) sind als Menüpunkt vorhanden und so gekennzeichnet.
+Datacenter Prep bildet Aufbau, Begriffe und Arbeitsabläufe der APIC-GUI nach. Layout und Grafik sind eigenständig, Bereiche ohne Funktion (z. B. L4-L7, SNMP, Kubernetes) sind als Menüpunkt vorhanden und so gekennzeichnet.
 
 ## Labs
 
@@ -86,6 +90,9 @@ Unter *Simulation > Labs* laden. Jedes Lab setzt die Konfiguration auf einen Sta
 | 09 | L3Out mit eBGP über Sub-Interface | 45 min |
 | 10 | OOB-Management und NTP | 30 min |
 | 11 | Static Leaf und Taboo Contracts | 25 min |
+| 12 | VMM-Integration mit VMware vCenter | 40 min |
+| 13 | Shared Services: Route Leaking zwischen Tenants | 35 min |
+| 14 | L2Out und Migration: stille Hosts und ARP Flooding | 40 min |
 
 Die Lab-Dateien entstehen aus `Labs-Quelle/build_labs.py` (`python3 Labs-Quelle/build_labs.py`). Die Tests prüfen für jedes Lab, dass es ohne Lösung nicht bestanden und mit Musterlösung vollständig bestanden ist.
 
@@ -134,6 +141,8 @@ Für Ansible: `use_ssl: false` und `port: 8080` setzen, siehe `beispiele/ansible
 | S0475, S0476 | vPC Protection Group unvollständig oder Node doppelt |
 | S0477 | vPC Policy Group auf Leaf ohne vPC-Partner |
 | S0523 | EPG ohne gültige Bridge Domain |
+| S0606 | Verbindung zum vCenter fehlgeschlagen (IP, Credentials oder Datacenter falsch) |
+| S0607 | VMM Domain ohne dynamischen VLAN-Bereich |
 | S0841 | Port in mehreren Interface Selectors mit verschiedenen Policy Groups |
 | S0956 | BD oder L3Out ohne gültiges VRF |
 | S1123 | Relation lässt sich nicht auflösen (Ziel fehlt) |
@@ -150,7 +159,7 @@ Die externen Router, Hosts und Pakete sind simuliert. Ein echter Router aus CML 
 
 ## Grenzen
 
-Nicht simuliert: VMM (vCenter, Kubernetes), Multi-Pod und Multi-Site, Service Graphs und PBR, Route Leaking zwischen VRFs (Shared Services), L2Outs, uSeg-EPGs, Route-Maps und Import/Export Route Control, Multicast, QoS, SNMP und Syslog, Monitoring-Policies, Firmware-Upgrades. Die Pakete fließen nicht wirklich: Der Traffic-Test berechnet anhand von Konfiguration und Zustand, ob ein Paket und seine Antwort ankommen würden, und begründet jeden Schritt.
+Nicht simuliert: VMM für Kubernetes, Microsoft und OpenStack, Multi-Pod und Multi-Site, Service Graphs und PBR, uSeg-EPGs, Route-Maps und Import/Export Route Control, Multicast, QoS, SNMP und Syslog, Monitoring-Policies, Firmware-Upgrades. Die Pakete fließen nicht wirklich: Der Traffic-Test berechnet anhand von Konfiguration und Zustand, ob ein Paket und seine Antwort ankommen würden, und begründet jeden Schritt.
 
 ## Aufbau des Ordners
 

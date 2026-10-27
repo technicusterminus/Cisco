@@ -12,7 +12,7 @@ const TABS = [
   { id: 'ops', l: 'Operations', subs: [['vis', 'Visibility & Troubleshooting'], ['capacity', 'Capacity Dashboard'], ['ep', 'EP Tracker'], ['viz', 'Visualization']] },
   { id: 'apps', l: 'Apps', subs: [['apps', 'Installed Apps'], ['appfaults', 'Faults']] },
   { id: 'integrations', l: 'Integrations', subs: [['integrations', 'Integrations']] },
-  { id: 'sim', l: 'Simulation', subs: [['topo', 'Topologie & Hosts'], ['routers', 'Externe Router'], ['labs', 'Labs'], ['simset', 'Einstellungen']], special: true },
+  { id: 'sim', l: 'Simulation', subs: [['topo', 'Topologie & Hosts'], ['routers', 'Externe Router'], ['vcenter', 'vCenter'], ['labs', 'Labs'], ['simset', 'Einstellungen']], special: true },
 ];
 
 const App = {
@@ -145,7 +145,7 @@ const App = {
 
   isTreeView() {
     const k = this.tab + '/' + this.sub;
-    return (this.tab === 'tenants' && !['all', 'search'].includes(this.sub)) || ['fabric/access', 'fabric/inventory', 'fabric/fabricpol', 'system/settings'].includes(k);
+    return (this.tab === 'tenants' && !['all', 'search'].includes(this.sub)) || ['fabric/access', 'fabric/inventory', 'fabric/fabricpol', 'system/settings', 'vnet/vmm'].includes(k);
   },
 
   async rootsFor() {
@@ -153,6 +153,7 @@ const App = {
     if (this.tab === 'tenants') return this.tenantRoots();
     if (k === 'fabric/access') return this.accessRoots();
     if (k === 'fabric/fabricpol') return this.fabricPolRoots();
+    if (k === 'vnet/vmm') return this.vmmRoots();
     if (k === 'fabric/inventory') return Views.inventoryRoots();
     if (k === 'system/settings') { await MIT.load('uni/fabric/bgpInstP-default'); return Views.settingsRoots(); }
     return [];
@@ -190,10 +191,17 @@ const App = {
     await MIT.load('uni/fabric/protpol');
     await MIT.loadClass('physDomP', 'rsp-subtree=full&rsp-subtree-include=faults');
     await MIT.loadClass('l3extDomP', 'rsp-subtree=full&rsp-subtree-include=faults');
-    attachToUni(MIT.ofClass('physDomP').concat(MIT.ofClass('l3extDomP')));
+    await MIT.loadClass('l2extDomP', 'rsp-subtree=full&rsp-subtree-include=faults');
+    attachToUni(MIT.ofClass('physDomP').concat(MIT.ofClass('l3extDomP'), MIT.ofClass('l2extDomP')));
     return [{ key: 'access-qs', label: 'Quick Start', icon: '?', kind: 'view', view: w => Views.accessQuickStart(w) },
       { key: 'access-ifcfg', label: 'Interface Configuration', icon: 'IF', kind: 'view', view: w => Views.interfaceConfiguration(w) }]
       .concat(ACCESS_TREE.map(s => folderNode('', s)));
+  },
+
+  async vmmRoots() {
+    await MIT.load('uni/vmmp-VMware');
+    await MIT.load('uni/infra');
+    return [{ key: 'vmm-qs', label: 'Quick Start', icon: '?', kind: 'view', view: w => Views.vmmQuickStart(w) }].concat(VMM_TREE.map(s => folderNode('', s)));
   },
 
   async fabricPolRoots() {
@@ -206,6 +214,11 @@ const App = {
     this.roots = roots;
     this.navEl = nav;
     this.workEl = work;
+    if (this.sel && this.sel.startsWith('mo:') && !this.findNode(this.sel)) {
+      let d = parentDn(this.sel.slice(3));
+      while (d && d !== 'uni' && !this.findNode('mo:' + d)) d = parentDn(d);
+      if (d && this.findNode('mo:' + d)) this.sel = 'mo:' + d;
+    }
     if (this.sel) this.expandTo(this.sel);
     else if (roots[0]) this.sel = roots[0].key;
     this.renderTree();
@@ -294,7 +307,8 @@ const App = {
     dn = dn.replace(/^subj-\[(.*)\]\/(mod|rec)-\d+$/, '$1');
     const tn = tenantOf(dn);
     if (tn) return this.go('tenants', tn.slice(7), 'mo:' + bestMoDn(dn));
-    if (/^uni\/(infra|phys-|l3dom-|fabric\/protpol)/.test(dn)) return this.go('fabric', 'access', 'mo:' + bestMoDn(dn));
+    if (/^uni\/vmmp-/.test(dn)) return this.go('vnet', 'vmm', 'mo:' + bestMoDn(dn));
+    if (/^uni\/(infra|phys-|l3dom-|l2dom-|fabric\/protpol)/.test(dn)) return this.go('fabric', 'access', 'mo:' + bestMoDn(dn));
     if (/^uni\/fabric\/bgpInstP/.test(dn)) return this.go('system', 'settings');
     if (/^uni\/fabric\/(funcprof|podprof|time-)/.test(dn)) return this.go('fabric', 'fabricpol', 'mo:' + bestMoDn(dn));
     if (/^uni\/fabric\/outofsvc/.test(dn)) return this.go('fabric', 'inventory', 'disabled');
@@ -314,6 +328,7 @@ function attachToUni(dns) {
 
 function bestMoDn(dn) {
   let d = dn.replace(/\/fault-[^/]+$/, '');
+  if (!MIT.get(d)) return d;
   while (d && !(MIT.get(d) && SPEC[MIT.get(d).cls])) {
     const p = parentDn(d);
     if (!p || p === d) break;
@@ -344,7 +359,7 @@ function actionsFor(node) {
   const out = [];
   if (node.ph) return out;
   if (node.kind === 'folder' && node.spec.cls) {
-    node.spec.cls.filter(c => MIT.meta[c] && MIT.meta[c].config).forEach(c => out.push({ l: 'Create ' + createLabel(c), fn: () => createDialog(node.parent, c, null, node.spec.defaults) }));
+    node.spec.cls.filter(c => MIT.meta[c] && MIT.meta[c].config).forEach(c => out.push({ l: (SPEC[c] && SPEC[c].menu) || 'Create ' + createLabel(c), fn: () => createDialog(node.parent, c, null, node.spec.defaults) }));
   }
   if (node.kind === 'mo' && node.dn) {
     const o = MIT.get(node.dn);
@@ -375,7 +390,7 @@ function moLabel(dn) {
   const a = o.a;
   if (o.cls === 'vzAny') return 'EPG Collection for VRF';
   if (o.cls === 'fabricProtPol') return 'Virtual Port Channel default';
-  if (['l3extRsNodeL3OutAtt', 'l3extRsPathL3OutAtt', 'mgmtRsOoBStNode'].includes(o.cls)) return pathLabel(a.tDn);
+  if (['l3extRsNodeL3OutAtt', 'l3extRsPathL3OutAtt', 'l2extRsPathL2OutAtt', 'mgmtRsOoBStNode'].includes(o.cls)) return pathLabel(a.tDn);
   if (['ipRouteP', 'fvSubnet', 'l3extSubnet'].includes(o.cls)) return a.ip;
   if (o.cls === 'bgpPeerP') return a.addr;
   return a.name || rnOf(dn);

@@ -237,14 +237,14 @@ mo('fvRsPathAtt', 'rspathAtt-[{tDn}]', ('fvAEPg',),
    {'encap': '', 'mode': 'regular', 'instrImedcy': 'lazy', 'primaryEncap': 'unknown'},
    enums={'mode': ('regular', 'native', 'untagged'), 'instrImedcy': IMMED},
    checks={'encap': _vlan}, rel=('dn', 'tDn', ('fabricPathEp',)), label='Static Port')
-mo('fvRsProv', 'rsprov-{tnVzBrCPName}', ('fvAEPg', 'l3extInstP'),
+mo('fvRsProv', 'rsprov-{tnVzBrCPName}', ('fvAEPg', 'l3extInstP', 'l2extInstP'),
    {'prio': 'unspecified', 'matchT': 'AtleastOne'},
    rel=('name', 'tnVzBrCPName', 'vzBrCP', 'tenant'), label='Provided Contract')
-mo('fvRsCons', 'rscons-{tnVzBrCPName}', ('fvAEPg', 'l3extInstP'), {'prio': 'unspecified'},
+mo('fvRsCons', 'rscons-{tnVzBrCPName}', ('fvAEPg', 'l3extInstP', 'l2extInstP'), {'prio': 'unspecified'},
    rel=('name', 'tnVzBrCPName', 'vzBrCP', 'tenant'), label='Consumed Contract')
 
 # Operative Endpunkte (vom Simulator gelernt)
-mo('fvCEp', 'cep-{mac}', ('fvAEPg', 'l3extInstP'),
+mo('fvCEp', 'cep-{mac}', ('fvAEPg', 'l3extInstP', 'l2extInstP'),
    {'ip': '0.0.0.0', 'encap': '', 'lcC': 'learned', 'fabricPathDn': '', 'id': '0',
     'name': '', 'mcastAddr': 'not-applicable', 'contName': '', 'baseEpgDn': ''},
    config=False, label='Client Endpoint')
@@ -348,11 +348,11 @@ mo('fvnsEncapBlk', 'from-[{from}]-to-[{to}]', ('fvnsVlanInstP',),
    checks={'from': _vlan, 'to': _vlan}, label='Encap Block')
 mo('physDomP', 'phys-{name}', ('polUni',), {}, label='Physical Domain')
 mo('l3extDomP', 'l3dom-{name}', ('polUni',), {}, label='L3 Domain')
-mo('infraRsVlanNs', 'rsvlanNs', ('physDomP', 'l3extDomP'), {'tDn': ''},
+mo('infraRsVlanNs', 'rsvlanNs', ('physDomP', 'l3extDomP', 'vmmDomP', 'l2extDomP'), {'tDn': ''},
    rel=('dn', 'tDn', ('fvnsVlanInstP',)), label='VLAN Pool')
 mo('infraAttEntityP', 'attentp-{name}', ('infraInfra',), {}, label='Attachable Access Entity Profile')
 mo('infraRsDomP', 'rsdomP-[{tDn}]', ('infraAttEntityP',), {},
-   rel=('dn', 'tDn', ('physDomP', 'l3extDomP', 'vmmDomP')), label='Domain')
+   rel=('dn', 'tDn', ('physDomP', 'l3extDomP', 'vmmDomP', 'l2extDomP')), label='Domain')
 mo('infraAccPortGrp', 'accportgrp-{name}', ('infraFuncP',), {}, label='Leaf Access Port Policy Group')
 mo('infraAccBndlGrp', 'accbundle-{name}', ('infraFuncP',), {'lagT': 'link'},
    enums={'lagT': ('link', 'node')}, label='PC/VPC Interface Policy Group')
@@ -469,7 +469,7 @@ PASSIVE = [
               'fvRsBdFloodTo:rsbdFloodTo-[{tDn}]', 'fvRsBDSubnetToProfile:rsBDSubnetToProfile']),
     ('fvSubnet', ['fvRsBDSubnetToProfile:rsBDSubnetToProfile', 'fvRsNdPfxPol:rsNdPfxPol', 'fvRsBDSubnetToOut:rsBDSubnetToOut-{tnL3extOutName}']),
     ('fvAEPg', ['fvRsCustQosPol:rscustQosPol', 'fvRsAEPgMonPol:rsAEPgMonPol', 'fvRsDppPol:rsdppPol', 'fvRsTrustCtrl:rstrustCtrl',
-                'fvRsIntraEpg:rsintraEpg-{tnVzBrCPName}', 'fvRsConsIf:rsconsIf-{tnVzCPIfName}', 
+                'fvRsIntraEpg:rsintraEpg-{tnVzBrCPName}', 
                 'fvRsSecInherited:rssecInherited-[{tDn}]', 'fvRsFcPathAtt:rsfcPathAtt-[{tDn}]',
                 'fvCrtrn:crtrn', 'fvRsEPgToCollectionStatsPol:rsEPgToCollectionStatsPol']),
     ('fvAp', ['fvRsApMonPol:rsApMonPol']),
@@ -479,7 +479,7 @@ PASSIVE = [
                   'l3extRsOutToBDPublicSubnetHolder:rsoutToBDPublicSubnetHolder-[{tDn}]', 'pimExtP:pimextp',
                   'l3extRsRedistributePol:rsredistributePol-[{tnRtctrlProfileName}]-{src}']),
     ('l3extInstP', ['fvRsCustQosPol:rscustQosPol', 'l3extRsInstPToProfile:rsinstPToProfile-[{tnRtctrlProfileName}]-{direction}',
-                    'fvRsIntraEpg:rsintraEpg-{tnVzBrCPName}', 'fvRsConsIf:rsconsIf-{tnVzCPIfName}', 'fvRsProtBy:rsprotBy-{tnVzTabooName}',
+                    'fvRsIntraEpg:rsintraEpg-{tnVzBrCPName}', 'fvRsProtBy:rsprotBy-{tnVzTabooName}',
                     'l3extRsInstPToNatMappingEPg:rsinstPToNatMappingEPg']),
     ('l3extSubnet', ['l3extRsSubnetToProfile:rssubnetToProfile-[{tnRtctrlProfileName}]-{direction}', 'l3extRsSubnetToRtSumm:rsSubnetToRtSumm']),
     ('l3extLNodeP', ['l3extRsNodeL3OutAtt', 'l3extRsLNodePMonPol:rsLNodePMonPol']),
@@ -535,7 +535,7 @@ mo('vzTaboo', 'taboo-{name}', ('fvTenant',), {'scope': 'context'}, label='Taboo 
 mo('vzTSubj', 'tsubj-{name}', ('vzTaboo',), {}, label='Taboo Subject')
 mo('vzRsDenyRule', 'rsdenyRule-{tnVzFilterName}', ('vzTSubj',), {'directives': ''},
    rel=('name', 'tnVzFilterName', 'vzFilter', 'tenant'), label='Deny Filter')
-mo('fvRsProtBy', 'rsprotBy-{tnVzTabooName}', ('fvAEPg', 'l3extInstP'), {},
+mo('fvRsProtBy', 'rsprotBy-{tnVzTabooName}', ('fvAEPg', 'l3extInstP', 'l2extInstP'), {},
    rel=('name', 'tnVzTabooName', 'vzTaboo', 'tenant'), label='Taboo Contract')
 mo('fvRsNodeAtt', 'rsnodeAtt-[{tDn}]', ('fvAEPg',),
    {'encap': '', 'mode': 'regular', 'instrImedcy': 'lazy', 'descr': ''},
@@ -572,6 +572,44 @@ mo('eventRecord', 'rec-{id}', [], {'affected': '', 'cause': '', 'changeSet': '',
                                    'descr': '', 'ind': 'state-transition', 'severity': 'info', 'trig': 'oper',
                                    'user': 'internal'}, config=False, label='Event')
 
+
+# ---------------------------- VMM ------------------------------------------
+mo('vmmProvP', 'vmmp-{vendor}', ('polUni',), {}, fixed=True, label='VMM Provider')
+mo('vmmDomP', 'dom-{name}', ('vmmProvP',), {'mode': 'default', 'enfPref': 'hw', 'encapMode': 'auto',
+                                           'mcastAddr': '0.0.0.0', 'delimiter': '', 'configInfraPg': 'no'},
+   enums={'mode': ('default', 'n1kv', 'unknown', 'ovs', 'k8s', 'rhev', 'cf', 'openshift'), 'enfPref': ('hw', 'sw', 'unknown'),
+          'encapMode': ('auto', 'vlan', 'vxlan', 'unknown')}, label='VMM Domain')
+mo('vmmCtrlrP', 'ctrlr-{name}', ('vmmDomP',), {'hostOrIp': '', 'rootContName': '', 'mode': 'default',
+                                              'dvsVersion': 'unmanaged', 'port': '0', 'statsMode': 'disabled'},
+   enums={'statsMode': ED}, label='vCenter Controller')
+mo('vmmRsAcc', 'rsacc', ('vmmCtrlrP',), {'tDn': ''}, rel=('dn', 'tDn', ('vmmUsrAccP',)), label='Credentials')
+mo('vmmUsrAccP', 'usracc-{name}', ('vmmDomP',), {'usr': '', 'pwd': ''}, label='vCenter Credential')
+mo('vmmVSwitchPolicyCont', 'vswitchpolcont', ('vmmDomP',), {}, label='vSwitch Policy')
+mo('vmmRsVswitchOverrideLldpIfPol', 'rsvswitchOverrideLldpIfPol', ('vmmVSwitchPolicyCont',), {'tDn': ''},
+   rel=('dn', 'tDn', ('lldpIfPol',)), label='LLDP Policy')
+mo('vmmRsVswitchOverrideCdpIfPol', 'rsvswitchOverrideCdpIfPol', ('vmmVSwitchPolicyCont',), {'tDn': ''},
+   rel=('dn', 'tDn', ('cdpIfPol',)), label='CDP Policy')
+mo('vmmRsVswitchOverrideLacpPol', 'rsvswitchOverrideLacpPol', ('vmmVSwitchPolicyCont',), {'tDn': ''},
+   rel=('dn', 'tDn', ('lacpLagPol',)), label='Port Channel Policy')
+
+# ---------------------------- Imported Contracts ---------------------------
+mo('vzCPIf', 'cif-{name}', ('fvTenant',), {}, label='Imported Contract')
+mo('vzRsIf', 'rsif', ('vzCPIf',), {'tDn': '', 'prio': 'unspecified'}, rel=('dn', 'tDn', ('vzBrCP',)), label='Exported Contract')
+mo('fvRsConsIf', 'rsconsIf-{tnVzCPIfName}', ('fvAEPg', 'l3extInstP', 'l2extInstP'), {'prio': 'unspecified'},
+   rel=('name', 'tnVzCPIfName', 'vzCPIf', 'tenant'), label='Consumed Contract Interface')
+
+# ---------------------------- L2Out ----------------------------------------
+mo('l2extDomP', 'l2dom-{name}', ('polUni',), {}, label='External Bridged Domain')
+mo('l2extOut', 'l2out-{name}', ('fvTenant',), {'targetDscp': 'unspecified'}, label='L2Out')
+mo('l2extRsEBd', 'rseBd', ('l2extOut',), {'tnFvBDName': '', 'encap': 'unknown'}, checks={'encap': _vlan},
+   rel=('name', 'tnFvBDName', 'fvBD', 'tenant'), label='Bridge Domain')
+mo('l2extRsL2DomAtt', 'rsl2DomAtt', ('l2extOut',), {'tDn': ''}, rel=('dn', 'tDn', ('l2extDomP',)), label='External Bridged Domain')
+mo('l2extLNodeP', 'lnodep-{name}', ('l2extOut',), {}, label='Node Profile')
+mo('l2extLIfP', 'lifp-{name}', ('l2extLNodeP',), {}, label='Interface Profile')
+mo('l2extRsPathL2OutAtt', 'rspathL2OutAtt-[{tDn}]', ('l2extLIfP',), {'targetDscp': 'unspecified'},
+   rel=('dn', 'tDn', ('fabricPathEp',)), label='Path')
+mo('l2extInstP', 'instP-{name}', ('l2extOut',), {'prefGrMemb': 'exclude', 'pcTag': '', 'scope': ''},
+   enums={'prefGrMemb': ('include', 'exclude')}, ro=('pcTag', 'scope'), label='External Network (L2)')
 
 def check_attr(meta, k, v, dn):
     if not isinstance(v, str):

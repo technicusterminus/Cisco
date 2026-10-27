@@ -322,7 +322,7 @@ class Cli:
                '+-----------------------------------+---------------+-----------------+--------------+-------------+']
         piv = {(d['epg'], d['vlan']): vid for vid, _, _, _, _, d in self._pivlans(nid) if d}
         po = self._po_ids(nid)
-        for h in self.sim.get('hosts', []):
+        for h in e.all_hosts():
             hs = e.hosts.get(h['name'])
             if not hs or not hs['learned'] or nid not in hs['nodes']:
                 continue

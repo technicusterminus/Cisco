@@ -66,6 +66,7 @@
  "config": [],
  "hosts": [],
  "routers": [],
+ "vcenters": [],
  "solutionConfig": [
   [
    "uni/tn-mgmt/mgmtp-default/oob-default",

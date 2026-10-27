@@ -16,7 +16,7 @@ from . import model
 from .model import AciError, CLASSES, rn_of, Store, post as mit_post, delete as mit_delete, now_ts
 from .query import run_query
 from .engine import Engine, ip_of
-from .topology import default_topology, discovered_members, base_config
+from .topology import default_topology, discovered_members, base_config, ensure_base
 from .cli import Cli
 from . import trace
 
@@ -56,6 +56,7 @@ class Sim:
             with open(self.state_file, encoding='utf-8') as f:
                 d = json.load(f)
             self.store.load_config(d['config'], d.get('counters'))
+            ensure_base(self.store)
             self.sim = d['sim']
             self.engine = Engine(self.store, self.sim)
             return True
@@ -132,7 +133,7 @@ class Sim:
         for name, (learned, epg, path) in after['hosts'].items():
             ob = before['hosts'].get(name, (False, None, None))
             if learned and (not ob[0] or ob[1] != epg):
-                h = next((x for x in self.sim['hosts'] if x['name'] == name), {})
+                h = next((x for x in self.engine.all_hosts() if x['name'] == name), {})
                 self._event(epg, 'Endpoint %s (%s) learned on %s' % (h.get('mac', ''), name, path), code='E4209232')
             if ob[0] and not learned:
                 self._event(ob[1], 'Endpoint of host %s aged out / no longer learned' % name, code='E4209233')
@@ -214,6 +215,7 @@ class Sim:
             mit_post(self.store, 'uni', tree)
         self.sim['hosts'] = json.loads(json.dumps(lab.get('hosts', [])))
         self.sim['routers'] = json.loads(json.dumps(lab.get('routers', [])))
+        self.sim['vcenters'] = json.loads(json.dumps(lab.get('vcenters', [])))
         self.sim['lab'] = lid
         self.changed()
         return lab
@@ -261,6 +263,10 @@ class Sim:
                     bad = {e.nodes[n]['name']: why for n, why in e.ntp['nodes'].items() if why}
                     ok = not bad and len(e.ntp['nodes']) >= c.get('min', 1)
                     info = '; '.join('%s: %s' % kv for kv in sorted(bad.items())) or '%d Switches synchron' % len(e.ntp['nodes'])
+                elif t == 'vmm':
+                    v = e.vmm.get(c['dn'], {})
+                    ok = v.get('state') == 'online'
+                    info = 'Zustand: %s%s' % (v.get('state', 'nicht vorhanden'), ' - ' + '; '.join(v['reasons']) if v.get('reasons') else '')
                 elif t == 'router':
                     rs = e.routers.get(c['name'], {})
                     ok = rs.get('adj') == c.get('adj', 'FULL')
@@ -299,6 +305,7 @@ class Sim:
             with open(fn, encoding='utf-8') as f:
                 s = json.load(f)
             self.store.load_config(s['config'], s.get('counters'))
+            ensure_base(self.store)
             self.changed()
         elif op == 'delete':
             if os.path.exists(fn):
@@ -317,6 +324,11 @@ class Sim:
         for r in self.sim['routers']:
             if r['name'] != skip:
                 used[(r['serial'], r['port'])] = 'Router ' + r['name']
+        for vc in self.sim.get('vcenters', []):
+            for esx in vc.get('hosts', []):
+                if esx['name'] != skip:
+                    for s_, p_ in esx.get('links', []):
+                        used[(s_, p_)] = 'ESXi ' + esx['name']
         return used
 
     def _check_port(self, serial, port, used):
@@ -361,7 +373,8 @@ class Sim:
             raise AciError(400, 'Bonding ungueltig')
         clean = {'name': h['name'], 'mac': h['mac'].upper().replace('-', ':'), 'ip': h['ip'], 'gw': h.get('gw', ''),
                  'vlan': v, 'links': [[s, p] for s, p in links], 'bond': h.get('bond', 'none'),
-                 'descr': h.get('descr', '')}
+                 'descr': h.get('descr', ''), 'silent': bool(h.get('silent'))}
+        self.sim['woken'] = [n for n in self.sim.get('woken', []) if n != clean['name']]
         self.sim['hosts'] = [x for x in self.sim['hosts'] if x['name'] != (old or h['name'])] + [clean]
 
     def set_router(self, r, old=None):
@@ -394,6 +407,67 @@ class Sim:
         clean['bgp'] = {'asn': str(b.get('asn', '65100')), 'peerAs': str(b.get('peerAs', '65001'))}
         self.sim['routers'] = [x for x in self.sim['routers'] if x['name'] != (old or r['name'])] + [clean]
 
+    def vcenter_op(self, b):
+        """Verwaltung des simulierten vCenters: vCenter, ESXi-Hosts, VMs."""
+        vcs = self.sim.setdefault('vcenters', [])
+        op, kind = b.get('op'), b.get('kind')
+        o = b.get('obj') or {}
+        if kind == 'vcenter':
+            if op == 'delete':
+                self.sim['vcenters'] = [v for v in vcs if v['name'] != b.get('name')]
+                return
+            if not NAME_RE.match(o.get('name', '')):
+                raise AciError(400, 'Name ungueltig')
+            try:
+                ipaddress.ip_address(o.get('ip', ''))
+            except ValueError:
+                raise AciError(400, 'IP-Adresse des vCenters ungueltig')
+            old = next((v for v in vcs if v['name'] == (b.get('old') or o['name'])), None)
+            pwd = old['pwd'] if old and o.get('pwd') in (None, '***') else o.get('pwd', '')
+            clean = {'name': o['name'], 'ip': o['ip'], 'datacenter': o.get('datacenter') or 'DC1', 'user': o.get('user', ''),
+                     'pwd': pwd, 'hosts': old['hosts'] if old else []}
+            self.sim['vcenters'] = [v for v in vcs if v is not old] + [clean]
+            return
+        vc = next((v for v in vcs if v['name'] == b.get('vc')), None)
+        if not vc:
+            raise AciError(400, 'vCenter %s nicht gefunden' % b.get('vc'))
+        if kind == 'esxi':
+            if op == 'delete':
+                vc['hosts'] = [h for h in vc['hosts'] if h['name'] != b.get('name')]
+                return
+            if not NAME_RE.match(o.get('name', '')):
+                raise AciError(400, 'Name ungueltig')
+            old = next((h for h in vc['hosts'] if h['name'] == (b.get('old') or o['name'])), None)
+            links = o.get('links') or []
+            if not 1 <= len(links) <= 2:
+                raise AciError(400, 'Ein ESXi-Host braucht 1 oder 2 Uplinks')
+            used = self.used_ports(skip=old['name'] if old else None)
+            for s_, p_ in links:
+                self._check_port(s_, p_, used)
+            clean = {'name': o['name'], 'links': [[s_, p_] for s_, p_ in links], 'dvs': list(o.get('dvs') or []),
+                     'vms': old['vms'] if old else []}
+            vc['hosts'] = [h for h in vc['hosts'] if h is not old] + [clean]
+            return
+        if kind == 'vm':
+            esx = next((h for h in vc['hosts'] if h['name'] == b.get('esxi')), None)
+            if not esx:
+                raise AciError(400, 'ESXi-Host %s nicht gefunden' % b.get('esxi'))
+            for h in vc['hosts']:
+                h['vms'] = [v for v in h['vms'] if v['name'] != (b.get('old') or b.get('name') or o.get('name'))]
+            if op == 'delete':
+                return
+            if not NAME_RE.match(o.get('name', '')) or not MAC_RE.match(o.get('mac', '')):
+                raise AciError(400, 'Name oder MAC ungueltig')
+            try:
+                ipaddress.ip_interface(o['ip'])
+                assert '/' in o['ip']
+            except (ValueError, KeyError, AssertionError):
+                raise AciError(400, 'IP mit Maske angeben, z. B. 10.1.1.20/24')
+            esx['vms'].append({'name': o['name'], 'mac': o['mac'].upper().replace('-', ':'), 'ip': o['ip'], 'gw': o.get('gw', ''),
+                               'network': o.get('network', ''), 'silent': bool(o.get('silent'))})
+            return
+        raise AciError(400, 'Unbekannter Typ')
+
     def state(self):
         e = self.engine
         topo = self.sim['topology']
@@ -409,7 +483,7 @@ class Sim:
         hosts = []
         for h in self.sim['hosts']:
             hs = e.hosts.get(h['name'], {})
-            hosts.append(dict(h, status={'learned': hs.get('learned', False), 'ipLearned': hs.get('ipLearned'),
+            hosts.append(dict(h, status={'learned': hs.get('learned', False), 'ipLearned': hs.get('ipLearned'), 'quiet': hs.get('quiet', False),
                                          'epg': hs.get('epg'), 'reasons': hs.get('reasons', []),
                                          'path': hs.get('path'), 'encap': hs.get('encap')}))
         routers = []
@@ -418,6 +492,12 @@ class Sim:
             routers.append(dict(r, status={'link': rs.get('link'), 'adj': rs.get('adj'),
                                            'reasons': rs.get('reasons', []), 'learned': rs.get('learned', []),
                                            'iface': rs.get('iface', {}).get('dn') if rs.get('iface') else None}))
+        vmm = [{'dn': d, 'name': v['name'], 'state': v['state'], 'reasons': v['reasons'], 'vc': v['vc'],
+                'discovery': v['discovery'], 'pgs': [dict(g, epg=k) for k, g in v['pgs'].items()],
+                'hosts': v['hosts']} for d, v in getattr(e, 'vmm', {}).items()]
+        vms = {h['name']: {'learned': e.hosts.get(h['name'], {}).get('learned', False),
+                           'epg': e.hosts.get(h['name'], {}).get('epg'),
+                           'reasons': e.hosts.get(h['name'], {}).get('reasons', [])} for h in getattr(e, 'vm_hosts', [])}
         sev = {}
         for d in self.store.by_class('faultInst'):
             s = self.store.attrs(d)['severity']
@@ -426,6 +506,7 @@ class Sim:
         return {'now': time.time(), 'apic': topo['apic'], 'nodes': nodes, 'links': topo['links'],
                 'pending': e.pending, 'hosts': hosts, 'routers': routers, 'settings': self.sim['settings'],
                 'faults': sev, 'vpc': e.vpc_groups, 'mpbgp': e.mpbgp_ok,
+                'vcenters': [dict(v, pwd='***') for v in self.sim.get('vcenters', [])], 'vmm': vmm, 'vms': vms,
                 'lab': {k: lab.get(k) for k in ('id', 'title', 'intro', 'tasks', 'goals', 'solution')} if lab else None,
                 'nextEvent': e.next_event}
 
@@ -640,8 +721,12 @@ def make_handler(S):
                     return self.send(200, {'pgrp': e.ntp['pgrp'], 'pol': e.ntp['pol'], 'provs': e.ntp['provs'],
                                            'nodes': {str(k): v for k, v in e.ntp['nodes'].items()}})
                 if rest == 'traffic':
-                    return self.send(200, trace.run(e, S.sim, b.get('src'), b.get('dst'), b.get('proto', 'icmp'),
-                                                    b.get('port', 0)))
+                    r = trace.run(e, S.sim, b.get('src'), b.get('dst'), b.get('proto', 'icmp'), b.get('port', 0))
+                    new = [n for n in r.pop('woken', []) if n not in S.sim.setdefault('woken', [])]
+                    if new:
+                        S.sim['woken'].extend(new)
+                        S.changed()
+                    return self.send(200, r)
                 if rest == 'cli':
                     return self.send(200, {'output': Cli(e, S.sim).run(b.get('node', 'apic1'), b.get('cmd', ''))})
                 if rest == 'hosts':
@@ -649,6 +734,10 @@ def make_handler(S):
                         S.sim['hosts'] = [h for h in S.sim['hosts'] if h['name'] != b.get('name')]
                     else:
                         S.set_host(b.get('host') or {}, b.get('old'))
+                    S.changed()
+                    return self.send(200, {'ok': True})
+                if rest == 'vcenters':
+                    S.vcenter_op(b)
                     S.changed()
                     return self.send(200, {'ok': True})
                 if rest == 'routers':
@@ -701,11 +790,12 @@ def oper_info(S, dn):
 
     def ep_rows(epgs):
         out = []
-        for h in S.sim.get('hosts', []):
+        for h in e.all_hosts():
             hs = e.hosts.get(h['name'], {})
             if hs.get('learned') and hs.get('epg') in epgs:
                 out.append({'name': h['name'], 'mac': h['mac'].upper(), 'ip': str(ip_of(h['ip'])) if hs.get('ipLearned') else '',
                             'encap': hs.get('encap'), 'path': hs.get('path'), 'epg': hs.get('epg'),
+                            'src': 'learned,vmm' if h.get('vm') else 'learned',
                             'nodes': [e.nodes[n]['name'] for n in hs.get('nodes', [])]})
         return out
     if cls == 'fvAEPg':
@@ -742,6 +832,18 @@ def oper_info(S, dn):
                     res['routes'].append(dict(rt, node=e.nodes.get(nid, {}).get('name', nid)))
     elif cls == 'fvTenant':
         res['endpoints'] = ep_rows({d for d, c in e.cls.items() if c.get('tenant') == dn})
+    elif cls == 'vmmDomP':
+        v = e.vmm.get(dn, {})
+        res['vmm'] = {'state': v.get('state'), 'reasons': v.get('reasons', []), 'vc': v.get('vc'), 'discovery': v.get('discovery'),
+                      'pgs': [dict(g, epg=k) for k, g in v.get('pgs', {}).items()], 'hosts': v.get('hosts', [])}
+        res['endpoints'] = ep_rows(set(v.get('pgs', {})))
+        res['deployed'] = [{'node': e.nodes[n]['name'], 'id': n, 'path': d['path'], 'encap': 'vlan-%d' % d['vlan'],
+                            'state': 'deployed', 'epg': d['epg']} for d in e.deploys if d['epg'] in v.get('pgs', {}) for n in d['nodes']]
+    elif cls == 'l2extOut':
+        insts = set(st.children(dn, 'l2extInstP'))
+        res['endpoints'] = ep_rows(insts)
+        res['deployed'] = [{'node': e.nodes[n]['name'], 'id': n, 'path': d['path'], 'encap': 'vlan-%d' % d['vlan'],
+                            'state': 'deployed'} for d in e.deploys if d['epg'] in insts for n in d['nodes']]
     return res
 
 

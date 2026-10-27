@@ -476,6 +476,7 @@
  ],
  "solution": "Static Leaf: `fvRsNodeAtt tDn=topology/pod-1/node-102 encap=vlan-120` an der EPG App. Taboo: `vzTaboo no-ping` mit `vzTSubj` und `vzRsDenyRule tnVzFilterName=icmp`, an der EPG `fvRsProtBy tnVzTabooName=no-ping`.",
  "routers": [],
+ "vcenters": [],
  "solutionConfig": [
   [
    "uni/tn-Shop",

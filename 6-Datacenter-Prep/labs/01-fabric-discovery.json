@@ -102,6 +102,7 @@
  "config": [],
  "hosts": [],
  "routers": [],
+ "vcenters": [],
  "solutionConfig": [
   [
    "uni/controller/nodeidentpol",

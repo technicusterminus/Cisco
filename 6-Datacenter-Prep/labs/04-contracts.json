@@ -492,6 +492,7 @@
  ],
  "solution": "Contract web-to-app: `{\"vzBrCP\": {\"attributes\": {\"name\": \"web-to-app\", \"scope\": \"context\"}, \"children\": [{\"vzSubj\": {\"attributes\": {\"name\": \"subj\", \"revFltPorts\": \"yes\"}, \"children\": [{\"vzRsSubjFiltAtt\": {\"attributes\": {\"tnVzFilterName\": \"tcp-8080\"}}}, {\"vzRsSubjFiltAtt\": {\"attributes\": {\"tnVzFilterName\": \"icmp\"}}}]}}]}}`\n\nvzAny: `POST /api/mo/uni/tn-Shop/ctx-Prod/any.json` mit `{\"vzRsAnyToProv\":{\"attributes\":{\"tnVzBrCPName\":\"mgmt-ssh\"}}}`, an der EPG Mgmt `fvRsCons` mit `tnVzBrCPName=mgmt-ssh`.",
  "routers": [],
+ "vcenters": [],
  "solutionConfig": [
   [
    "uni",

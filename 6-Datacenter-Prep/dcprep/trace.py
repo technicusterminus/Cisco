@@ -8,6 +8,7 @@ class Trace:
     def __init__(self):
         self.steps = []
         self.ok = True
+        self.woken = []
 
     def step(self, ok, title, detail=''):
         self.steps.append({'ok': ok, 'title': title, 'detail': detail})
@@ -19,11 +20,15 @@ class Trace:
         if summary is None:
             summary = 'Erfolgreich: Anfrage und Antwort kommen an.' if self.ok else \
                 'Fehlgeschlagen: siehe ersten roten Schritt.'
-        return {'ok': self.ok, 'summary': summary, 'steps': self.steps}
+        return {'ok': self.ok, 'summary': summary, 'steps': self.steps, 'woken': self.woken if self.ok else []}
 
 
-def _host(sim, name):
-    return next((h for h in sim.get('hosts', []) if h['name'] == name), None)
+def _hosts(eng, sim):
+    return eng.all_hosts() if hasattr(eng, 'all_hosts') else sim.get('hosts', [])
+
+
+def _host(eng, sim, name):
+    return next((h for h in _hosts(eng, sim) if h['name'] == name), None)
 
 
 def _router(sim, name):
@@ -32,7 +37,7 @@ def _router(sim, name):
 
 def _resolve(eng, sim, x):
     x = (x or '').strip()
-    h = _host(sim, x)
+    h = _host(eng, sim, x)
     if h:
         return {'kind': 'host', 'h': h, 'ip': ip_of(h['ip'])}
     r = _router(sim, x)
@@ -42,7 +47,7 @@ def _resolve(eng, sim, x):
         ip = ipaddress.ip_address(x)
     except ValueError:
         return None
-    for h in sim.get('hosts', []):
+    for h in _hosts(eng, sim):
         if ip_of(h['ip']) == ip:
             return {'kind': 'host', 'h': h, 'ip': ip}
     for r in sim.get('routers', []):
@@ -79,15 +84,93 @@ def _classify_ext(eng, vrf, ip):
 def _host_checks(eng, t, ep, role):
     h = ep['h']
     hs = eng.hosts.get(h['name'])
+    if hs and hs.get('quiet'):
+        if role == 'Quelle':
+            t.woken.append(h['name'])
+            t.step(None, 'Stiller Host %s sendet jetzt' % h['name'], 'Die Fabric lernt ihn mit dem ersten Paket')
+        hs = dict(hs, learned=True, silent_dst=role != 'Quelle')
     if not hs or not hs['learned']:
         reasons = (hs or {}).get('reasons') or ['Host ist mit keinem aktiven Leaf verbunden']
         t.step(False, '%s %s: Endpoint nicht gelernt' % (role, h['name']), '; '.join(reasons))
         return None
     c = eng.cls[hs['epg']]
+    if hs.get('silent_dst'):
+        t.step(None, '%s %s ist ein stiller Host' % (role, h['name']), 'Noch nicht gelernt; erreichbar nur per ARP Flooding '
+               'oder ARP Glean (Unicast Routing mit BD-Subnetz). Wartet in EPG %s, %s' % (eng.short(hs['epg']), eng.path_label(hs['path'])))
+        return hs, c
     t.step(True, '%s %s gelernt in EPG %s' % (role, h['name'], eng.short(hs['epg'])),
            'MAC %s, %s, %s, BD %s, VRF %s' % (h['mac'].upper(), hs['encap'], eng.path_label(hs['path']),
                                               eng.short(hs['bd']), eng.short(hs['vrf'])))
     return hs, c
+
+
+def _shared_scope_ok(eng, brc, s, d):
+    sc = eng.A(brc)['scope']
+    return sc == 'global' or (sc == 'tenant' and s['tenant'] == d['tenant'])
+
+
+def _contract_between(eng, s, d):
+    """Contract zwischen zwei Klassen fuer Shared Services: (brc, provider, consumer) oder None."""
+    for brc, rel in eng.contracts.items():
+        if s['dn'] in rel['cons'] and d['dn'] in rel['prov']:
+            return brc, d, s
+        if s['dn'] in rel['prov'] and d['dn'] in rel['cons']:
+            return brc, s, d
+    return None
+
+
+def _leak(eng, t, sc, dc, shs, dhs, sh, dh):
+    r = _contract_between(eng, sc, dc)
+    if not r:
+        t.step(False, 'Route Leaking', 'Ziel liegt in VRF %s, Quelle in VRF %s. Zwischen VRFs leakt die ACI Routen nur mit '
+               'einem Contract zwischen den EPGs (Scope Tenant oder Global)' % (eng.short(dhs['vrf']), eng.short(shs['vrf'])))
+        return False
+    brc, prov, cons = r
+    if not _shared_scope_ok(eng, brc, sc, dc):
+        t.step(False, 'Route Leaking', 'Contract %s hat Scope %s - fuer Verkehr zwischen VRFs braucht er Scope %s'
+               % (eng.short(brc), eng.A(brc)['scope'], 'Tenant oder Global' if sc['tenant'] == dc['tenant'] else 'Global'))
+        return False
+    ph, phs = (dh, dhs) if prov is dc else (sh, shs)
+    ch, chs = (sh, shs) if prov is dc else (dh, dhs)
+    pip, cip = ip_of(ph['ip']), ip_of(ch['ip'])
+    psub = [x for x in eng.epg_subnets(prov['dn']) if pip in x['net'] and 'shared' in x['scope'].split(',')]
+    if not psub:
+        t.step(False, 'Route Leaking', 'Am Provider (EPG %s) fehlt ein Subnetz mit Scope "Shared between VRFs" fuer %s. '
+               'Bei Shared Services gehoert das Provider-Subnetz an die EPG.' % (eng.short(prov['dn']), pip))
+        return False
+    csub = [x for x in eng.bd_subnets(chs['bd']) + eng.epg_subnets(cons['dn']) if cip in x['net'] and 'shared' in x['scope'].split(',')]
+    if not csub:
+        t.step(False, 'Route Leaking', 'Am Consumer (BD %s) fehlt ein Subnetz mit Scope "Shared between VRFs" fuer %s'
+               % (eng.short(chs['bd']), cip))
+        return False
+    t.step(True, 'Route Leaking', '%s wird in VRF %s und %s in VRF %s geleakt (Contract %s, Scope %s)' % (
+        psub[0]['net'], eng.short(chs['vrf']), csub[0]['net'], eng.short(phs['vrf']), eng.short(brc), eng.A(brc)['scope']))
+    return True
+
+
+def _shared_l3out(eng, sc, ip):
+    """Ziel hinter einem L3Out in einem anderen VRF (Shared L3Out)."""
+    best = None
+    for inst in eng.store.by_class('l3extInstP'):
+        c = eng.cls.get(inst)
+        if not c or c['vrf'] == sc['vrf'] or not c['vrf']:
+            continue
+        for sub in eng.kids(inst, 'l3extSubnet'):
+            a = eng.A(sub)
+            n = net_of(a['ip'])
+            sco = a['scope'].split(',')
+            if not n or ip not in n or 'shared-rtctrl' not in sco or 'shared-security' not in sco:
+                continue
+            r = _contract_between(eng, sc, c)
+            if not r or not _shared_scope_ok(eng, r[0], sc, c):
+                continue
+            for (v, nid), rts in eng.routes.items():
+                if v != c['vrf']:
+                    continue
+                rt = _lpm([x for x in rts if not x.get('border')], ip)
+                if rt and (best is None or n.prefixlen > best['net'].prefixlen):
+                    best = {'vrf': v, 'node': nid, 'route': rt, 'inst': inst, 'net': n}
+    return best
 
 
 def _gw_ok(eng, t, h, hs, who):
@@ -171,7 +254,15 @@ def run(eng, sim, src, dst, proto='icmp', port=0):
                 t.step(False, 'ARP', 'Unicast Routing und ARP Flooding sind im BD aus - die ACI kennt die Ziel-IP '
                        'nicht und flutet den ARP-Request nicht')
                 return t.result()
-            if not dhs['ipLearned'] and bd['arpFlood'] == 'no':
+            if dhs.get('silent_dst'):
+                glean = bd['unicastRoute'] == 'yes' and any(D['ip'] in x['net'] for x in eng.bd_subnets(dhs['bd']))
+                if bd['arpFlood'] != 'yes' and not glean:
+                    t.step(False, 'ARP', 'Das Ziel ist ein stiller Host: Die ACI kennt es nicht, ARP Flooding ist aus und '
+                           'ohne Unicast Routing mit BD-Subnetz gibt es kein ARP Glean - der ARP-Request wird verworfen')
+                    return t.result()
+                t.step(True, 'ARP erreicht den stillen Host', 'ARP Flooding im BD' if bd['arpFlood'] == 'yes' else 'ARP Glean vom Pervasive Gateway')
+                t.woken.append(dh['name'])
+            elif not dhs['ipLearned'] and bd['arpFlood'] == 'no':
                 t.step(False, 'ARP', 'Ziel-IP ist nicht gelernt und ARP Flooding ist aus')
                 return t.result()
             t.step(True, 'ARP aufgeloest', 'ARP Flooding' if bd['arpFlood'] == 'yes' else
@@ -185,12 +276,14 @@ def run(eng, sim, src, dst, proto='icmp', port=0):
             if not _gw_ok(eng, t, sh, shs, 'Quelle'):
                 return t.result()
             if shs['vrf'] != dhs['vrf']:
-                t.step(False, 'Routing', 'Ziel liegt in VRF %s, Quelle in VRF %s - Route Leaking (Shared Services) '
-                       'simuliert dieses Tool nicht' % (eng.short(dhs['vrf']), eng.short(shs['vrf'])))
-                return t.result()
+                if not _leak(eng, t, sc, dc, shs, dhs, sh, dh):
+                    return t.result()
             if not any(D['ip'] in s['net'] for s in eng.bd_subnets(dhs['bd']) + eng.bd_subnets(dhs['epg'])):
                 t.step(False, 'Routing', 'Ziel-IP %s liegt in keinem Subnetz des BD %s' % (D['ip'], eng.short(dhs['bd'])))
                 return t.result()
+            if dhs.get('silent_dst'):
+                t.step(True, 'ARP Glean', 'Die ACI fragt den stillen Host per ARP vom Pervasive Gateway aus an')
+                t.woken.append(dh['name'])
             t.step(True, 'Routing in VRF %s' % eng.short(shs['vrf']),
                    '%s -> %s (Pervasive Route, Ziel-Leaf %s)' % (snet, net_of(dh['ip']),
                                                               '/'.join(eng.nodes[n]['name'] for n in dhs['nodes'])))
@@ -228,6 +321,14 @@ def run(eng, sim, src, dst, proto='icmp', port=0):
         if rt:
             best = (leaf, rt)
             break
+    leaked = None
+    if not best:
+        leaked = _shared_l3out(eng, sc, D['ip'])
+        if leaked:
+            vrf = leaked['vrf']
+            best = (leaked['node'], leaked['route'])
+            t.step(True, 'Shared L3Out', 'Route %s aus VRF %s per Route Leaking in VRF %s (Shared Route Control Subnet am '
+                   'External EPG %s)' % (leaked['route']['prefix'], eng.short(vrf), eng.short(shs['vrf']), eng.short(leaked['inst'])))
     if not best:
         hint = ''
         border = [n for (v, n), rts in eng.routes.items() if v == vrf and _lpm(rts, D['ip'])]
@@ -260,7 +361,7 @@ def run(eng, sim, src, dst, proto='icmp', port=0):
         if not rname:
             t.step(False, 'Ziel', '%s ist im Transfernetz, aber dort antwortet kein Router' % D['ip'])
             return t.result()
-    cl = _classify_ext(eng, vrf, D['ip'])
+    cl = _classify_ext(eng, vrf, D['ip']) if not leaked else (leaked['net'], leaked['inst'])
     if not cl:
         t.step(False, 'Klassifizierung', 'Ziel-IP %s passt zu keinem External EPG Subnetz ("External Subnets for '
                'the External EPG") in VRF %s' % (D['ip'], eng.short(vrf)))

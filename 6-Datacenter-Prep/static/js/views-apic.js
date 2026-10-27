@@ -36,11 +36,11 @@ Object.assign(Views, {
 
   async oper(body, dn, o, spec) {
     const op = await API.sim('oper?dn=' + encodeURIComponent(dn));
-    const names = { endpoints: 'Client End-Points', deployed: 'Deployed Leaves', contracts: 'Contracts', neighbors: 'Neighbors', routes: 'Routes' };
+    const names = { endpoints: 'Client End-Points', deployed: 'Deployed Leaves', contracts: 'Contracts', neighbors: 'Neighbors', routes: 'Routes', vmm: 'General' };
     const holder = h('div');
     const show = id => {
       clear(holder);
-      if (id === 'endpoints') holder.appendChild(table([{ l: 'End Point', f: r => r.mac }, { l: 'IP', f: r => r.ip }, { l: 'Learning Source', f: () => 'learned' }, { l: 'Hosting Server', f: r => r.name },
+      if (id === 'endpoints') holder.appendChild(table([{ l: 'End Point', f: r => r.mac }, { l: 'IP', f: r => r.ip }, { l: 'Learning Source', f: r => r.src || 'learned' }, { l: 'Hosting Server', f: r => r.name },
         { l: 'Interface', f: r => pathLabel(r.path) }, { l: 'Encap', f: r => r.encap }, { l: 'EPG', f: r => r.epg.replace(/^uni\//, '') }], op.endpoints,
       { empty: 'Keine Endpoints gelernt. Prüfe Static Ports, Domains, VLAN und Faults – und ob ein simulierter Host mit diesem VLAN an dem Port sendet.' }));
       if (id === 'deployed') holder.appendChild(table([{ l: 'Node', f: r => r.node }, { l: 'Node ID', f: r => r.id }, { l: 'Interface', f: r => r.path ? pathLabel(r.path) : '—' },
@@ -48,6 +48,19 @@ Object.assign(Views, {
       if (id === 'contracts') holder.appendChild(table([{ l: 'Contract', f: r => r.contract.replace(/^uni\//, '') }, { l: 'Role', f: r => r.role }, { l: 'Scope', f: r => r.scope }], op.contracts, { empty: 'Keine Contracts.' }));
       if (id === 'neighbors') holder.appendChild(table([{ l: 'Neighbor', f: r => r.name }, { l: 'Node', f: r => r.node }, { l: 'Interface', f: r => r.iface }, { l: 'Protocol', f: r => r.proto },
         { l: 'Neighbor IP', f: r => r.ip }, { l: 'State', f: r => stateBadge(r.state) }, { l: 'Routen an Nachbar', f: r => r.learned.join(', ') }], op.neighbors, { empty: 'Keine Routing-Nachbarn.' }));
+      if (id === 'vmm') {
+        const v = op.vmm || {};
+        holder.appendChild(h('div', { class: 'card' }, h('div', { class: 'card-h' }, 'vCenter-Verbindung ', stateBadge(v.state || 'offline')),
+          v.state === 'online' ? h('p', null, 'Verbunden mit vCenter ', h('b', null, v.vc), ' · Discovery Protocol am DVS: ', h('b', null, (v.discovery || '').toUpperCase())) : null,
+          (v.reasons || []).map(r => h('p', { class: 'note warn' }, r))));
+        holder.appendChild(h('div', { class: 'card' }, h('div', { class: 'card-h' }, 'Port Groups am Distributed Switch'),
+          table([{ l: 'Port Group', f: r => r.name }, { l: 'EPG', f: r => r.epg.replace(/^uni\//, '') }, { l: 'VLAN', f: r => 'vlan-' + r.vlan }, { l: 'Resolution Immediacy', f: r => r.imm }],
+            v.pgs || [], { empty: 'Keine Port Groups. Hänge eine EPG mit "Add VMM Domain Association" an diese Domain.' })));
+        holder.appendChild(h('div', { class: 'card' }, h('div', { class: 'card-h' }, 'Hypervisors (ESXi im DVS)'),
+          table([{ l: 'Host', f: r => r.name }, { l: 'Uplinks', f: r => r.legs.map(l => 'Node-' + l[0] + ' ' + l[1]).join(', ') },
+            { l: 'Status', f: r => stateBadge(r.ok.length ? 'up' : 'down') }, { l: 'Hinweis', f: r => r.reasons.join('; ') }],
+            v.hosts || [], { empty: 'Kein ESXi-Host in diesem DVS. ESXi-Hosts verwaltest du unter Simulation > vCenter.' })));
+      }
       if (id === 'routes') holder.appendChild(table([{ l: 'Node', f: r => r.node }, { l: 'Prefix', f: r => r.prefix }, { l: 'Next Hop', f: r => r.nh }, { l: 'Interface', f: r => r.via }, { l: 'Protocol', f: r => r.proto }], op.routes, { empty: 'Keine Routen.' }));
     };
     const ids = spec.oper;
@@ -377,6 +390,152 @@ Object.assign(Views, {
     w.appendChild(paneHead('Firmware', 'Installierte Versionen'));
     w.appendChild(h('div', { class: 'card note' }, 'Firmware-Upgrades (Upgrade Groups, Repository) sind in Datacenter Prep nicht nachgebildet.'));
     w.appendChild(table([{ l: 'Node', f: r => r.name }, { l: 'ID', f: r => r.id }, { l: 'Role', f: r => r.role }, { l: 'Model', f: r => r.model }, { l: 'Current Firmware', f: r => r.version || '—' }], n));
+  },
+
+  /* ================================================================ Virtual Networking */
+  async vmmQuickStart(w) {
+    w.appendChild(paneHead('Virtual Networking – Quick Start', 'VMware vCenter anbinden'));
+    w.appendChild(h('div', { class: 'card' }, md([
+      'So bindest du ein vCenter an (wie im echten APIC):',
+      '1. **VLAN Pool** mit **Dynamic Allocation** anlegen (Fabric > Access Policies > Pools > VLAN), z. B. vlan-1000 bis vlan-1099.',
+      '2. **VMM Domain** anlegen: Rechtsklick auf **VMM Domains > VMware > Create vCenter Domain**. Name = Name des Distributed Switch, dazu VLAN Pool, AAEP, Credentials, vCenter (IP und Datacenter-Name) und die vSwitch Policy (LLDP oder CDP).',
+      '3. Das **AAEP** an den ESXi-Ports muss die VMM Domain enthalten; die Interface Policy Group braucht LLDP oder CDP passend zur vSwitch Policy.',
+      '4. In der EPG **Add VMM Domain Association** – der APIC legt im vCenter die Port Group **Tenant|AP|EPG** mit einem VLAN aus dem dynamischen Pool an.',
+      '5. Unter **Simulation > vCenter** die VM-Netzwerkkarte in diese Port Group legen. Die VM wird als Endpoint gelernt (Learning Source **learned,vmm**).',
+      '',
+      '**Resolution Immediacy:** *Pre-provision* programmiert das VLAN auf allen Ports mit dem AAEP, *Immediate* sobald ein ESXi per LLDP/CDP am Port erkannt wird, *On Demand* erst, wenn eine VM in der Port Group läuft.',
+    ].join('\n'))));
+    const st = App.state;
+    w.appendChild(h('div', { class: 'card' }, h('div', { class: 'card-h' }, 'VMM Domains'),
+      table([{ l: 'Domain', f: r => r.name }, { l: 'vCenter', f: r => r.vc || '—' }, { l: 'State', f: r => stateBadge(r.state) }, { l: 'Port Groups', f: r => String(r.pgs.length) },
+        { l: 'Hinweis', f: r => r.reasons.join('; ') }], st.vmm || [], { onRow: r => App.select('mo:' + r.dn), empty: 'Noch keine VMM Domain.' })));
+  },
+
+  async 'sim/vcenter'(w) {
+    const draw = () => {
+      clear(w);
+      const st = App.state;
+      w.appendChild(paneHead('Simulation – vCenter', 'Simulierter VMware vCenter mit ESXi-Hosts und VMs',
+        [h('button', { class: 'btn primary small', onclick: () => Views.vcenterDialog() }, '+ vCenter')]));
+      if (!(st.vcenters || []).length) w.appendChild(h('div', { class: 'card note' }, 'Noch kein vCenter. Lege eines an – der APIC verbindet sich über die VMM Domain (Controller-IP, Datacenter, Credentials) damit.'));
+      (st.vcenters || []).forEach(vc => {
+        const doms = (st.vmm || []).filter(v => v.vc === vc.name);
+        const pgs = doms.flatMap(d => d.pgs.map(g => Object.assign({ dom: d.name }, g)));
+        w.appendChild(h('div', { class: 'card' },
+          h('div', { class: 'card-h' }, 'vCenter ', h('b', null, vc.name), ' · ', vc.ip, ' · Datacenter ', vc.datacenter, ' ', stateBadge(doms.length ? 'online' : 'offline'),
+            h('span', { class: 'grow' }),
+            h('button', { class: 'btn small', onclick: () => Views.vcenterDialog(vc) }, 'Bearbeiten'),
+            h('button', { class: 'btn small', onclick: () => Views.esxiDialog(vc) }, '+ ESXi-Host'),
+            iconBtn('🗑', 'Löschen', () => confirmBox('vCenter ' + vc.name + ' mit allen Hosts entfernen?', async () => { await API.sim('vcenters', { op: 'delete', kind: 'vcenter', name: vc.name }); await App.refreshState(); draw(); }), 'danger')),
+          h('div', { class: 'muted small' }, 'Benutzer: ', vc.user || '—', doms.length ? ' · verbunden mit VMM Domain ' + doms.map(d => d.name).join(', ') : ' · keine verbundene VMM Domain'),
+          h('h4', null, 'Distributed Port Groups (vom APIC angelegt)'),
+          table([{ l: 'Port Group', f: r => r.name }, { l: 'DVS', f: r => r.dom }, { l: 'VLAN', f: r => 'vlan-' + r.vlan }, { l: 'EPG', f: r => r.epg.replace(/^uni\//, '') }], pgs,
+            { empty: 'Keine Port Groups – erst wenn eine EPG an die VMM Domain gebunden ist, legt der APIC sie an.' }),
+          h('h4', null, 'ESXi-Hosts'),
+          table([{ l: 'Host', f: r => r.name }, { l: 'Uplinks', f: r => r.links.map(l => nodeName(l[0]) + ' ' + l[1]).join(' + ') }, { l: 'Im DVS', f: r => r.dvs.join(', ') || '—' },
+            { l: 'Status', f: r => { const x = (st.vmm || []).flatMap(v => v.hosts).find(z => z.name === r.name); return x ? h('span', { title: x.reasons.join('; ') }, stateBadge(x.ok.length ? 'up' : 'down'), ' ', x.reasons.join('; ')) : stateBadge('—'); } },
+            { l: 'VMs', f: r => String(r.vms.length) }], vc.hosts, {
+            onRow: r => Views.esxiDialog(vc, r),
+            actions: r => [h('button', { class: 'btn small', onclick: ev => { ev.stopPropagation(); Views.vmDialog(vc, r); } }, '+ VM'),
+              iconBtn('🗑', 'Löschen', () => confirmBox('ESXi ' + r.name + ' entfernen?', async () => { await API.sim('vcenters', { op: 'delete', kind: 'esxi', vc: vc.name, name: r.name }); await App.refreshState(); draw(); }), 'danger')],
+            empty: 'Keine ESXi-Hosts. Ein ESXi hängt mit 1–2 Uplinks an Leaf-Ports.',
+          }),
+          h('h4', null, 'Virtuelle Maschinen'),
+          table([{ l: 'VM', f: r => r.name }, { l: 'ESXi', f: r => r.esxi }, { l: 'MAC', f: r => r.mac }, { l: 'IP', f: r => r.ip }, { l: 'Network Adapter', f: r => r.network || '—' },
+            { l: 'Status', f: r => { const s = (st.vms || {})[r.name] || {}; return s.learned ? h('span', null, stateBadge('learned'), ' ', (s.epg || '').replace(/^uni\//, '')) : stateBadge(r.silent ? 'silent' : 'down'); } },
+            { l: 'Hinweis', f: r => (((st.vms || {})[r.name] || {}).reasons || []).join('; ') }],
+          vc.hosts.flatMap(x => x.vms.map(v => Object.assign({ esxi: x.name }, v))), {
+            onRow: r => Views.vmDialog(vc, vc.hosts.find(x => x.name === r.esxi), r),
+            actions: r => [iconBtn('🗑', 'Löschen', () => confirmBox('VM ' + r.name + ' entfernen?', async () => { await API.sim('vcenters', { op: 'delete', kind: 'vm', vc: vc.name, esxi: r.esxi, name: r.name }); await App.refreshState(); draw(); }), 'danger')],
+            empty: 'Keine VMs.',
+          })));
+      });
+    };
+    draw();
+    App.view = { auto: draw };
+  },
+
+  async vcSave(body, msg) {
+    await API.sim('vcenters', body);
+    toast(msg);
+    await App.refreshState();
+    if (App.view && App.view.auto) App.view.auto();
+  },
+
+  vcenterDialog(vc) {
+    const f = buildForm([{ k: 'name', l: 'Name', req: true, ph: 'vcenter1' }, { k: 'ip', l: 'IP-Adresse', req: true, ph: '192.168.10.50' },
+      { k: 'datacenter', l: 'Datacenter', req: true, ph: 'DC1' }, { k: 'user', l: 'Benutzer', ph: 'administrator@vsphere.local' },
+      { k: 'pwd', l: 'Passwort', t: 'password', help: vc ? 'leer lassen = unverändert' : '' }],
+    vc ? { name: vc.name, ip: vc.ip, datacenter: vc.datacenter, user: vc.user } : { datacenter: 'DC1', user: 'administrator@vsphere.local' }, {}, 'create');
+    modal(vc ? 'vCenter ' + vc.name : 'vCenter hinzufügen', f.el, [{ l: 'Abbrechen' }, {
+      l: 'Speichern', primary: true, fn: async () => {
+        const v = f.get();
+        if (vc && !v.pwd) v.pwd = '***';
+        await Views.vcSave({ op: 'set', kind: 'vcenter', obj: v, old: vc ? vc.name : null }, 'vCenter ' + v.name + ' gespeichert');
+      },
+    }]);
+  },
+
+  esxiDialog(vc, x) {
+    const st = App.state;
+    const used = new Set();
+    st.links.forEach(l => { used.add(l[0] + '|' + l[1]); used.add(l[2] + '|' + l[3]); });
+    st.hosts.forEach(o => o.links.forEach(l => used.add(l[0] + '|' + l[1])));
+    st.routers.forEach(o => used.add(o.serial + '|' + o.port));
+    (st.vcenters || []).forEach(c => c.hosts.filter(o => !x || o.name !== x.name).forEach(o => o.links.forEach(l => used.add(l[0] + '|' + l[1]))));
+    const leafOpts = leafNodes().map(n => [n.serial, (n.name || '(nicht registriert)') + (n.id ? ' – Node ' + n.id : '')]);
+    const linkRow = (i, val) => {
+      const leaf = h('select', null, i > 0 ? h('option', { value: '' }, '— kein zweiter Uplink —') : null, leafOpts.map(([v, l]) => h('option', { value: v }, l)));
+      const port = h('select');
+      const fill = () => {
+        const cur = port.value || (val ? val[1] : '');
+        clear(port);
+        const n = leafNodes().find(z => z.serial === leaf.value);
+        if (!n) return;
+        for (let p = 1; p <= n.ports; p++) {
+          const pn = 'eth1/' + p;
+          const u = used.has(n.serial + '|' + pn);
+          port.appendChild(h('option', { value: pn, disabled: u }, pn + (u ? ' (belegt)' : '')));
+        }
+        if (cur) port.value = cur;
+        if (!port.value || port.selectedOptions[0].disabled) { const free = [...port.options].find(o => !o.disabled); if (free) port.value = free.value; }
+      };
+      leaf.onchange = fill;
+      if (val) leaf.value = val[0]; else if (i > 0) leaf.value = '';
+      fill();
+      return { el: h('div', { class: 'pathw' }, leaf, port), get: () => leaf.value ? [leaf.value, port.value] : null };
+    };
+    const links = [linkRow(0, x && x.links[0]), linkRow(1, x && x.links[1])];
+    const f = buildForm([{ k: 'name', l: 'Hostname', req: true, ph: 'esxi1' },
+      { k: 'dvs', l: 'Distributed Switches', ph: 'VDS1', help: 'Namen der DVS (= VMM Domains), denen der Host im vCenter hinzugefügt ist, kommagetrennt' }],
+    x ? { name: x.name, dvs: x.dvs.join(', ') } : {}, {}, 'create');
+    const body = h('div', null, f.el, h('div', { class: 'form' },
+      h('div', { class: 'frow' }, h('label', { class: 'flab' }, 'vmnic0'), h('div', { class: 'fctl' }, links[0].el)),
+      h('div', { class: 'frow' }, h('label', { class: 'flab' }, 'vmnic1'), h('div', { class: 'fctl' }, links[1].el))));
+    modal(x ? 'ESXi ' + x.name : 'ESXi-Host hinzufügen (' + vc.name + ')', body, [{ l: 'Abbrechen' }, {
+      l: 'Speichern', primary: true, fn: async () => {
+        const v = f.get();
+        const obj = { name: v.name, dvs: String(v.dvs || '').split(',').map(z => z.trim()).filter(Boolean), links: links.map(l => l.get()).filter(Boolean) };
+        await Views.vcSave({ op: 'set', kind: 'esxi', vc: vc.name, obj, old: x ? x.name : null }, 'ESXi ' + v.name + ' gespeichert');
+      },
+    }], { wide: true });
+  },
+
+  vmDialog(vc, esx, x) {
+    const pgs = (App.state.vmm || []).filter(d => d.vc === vc.name).flatMap(d => d.pgs.map(g => g.name));
+    const nets = [['', '— nicht verbunden —']].concat(pgs.map(p => [p, p]));
+    if (x && x.network && !pgs.includes(x.network)) nets.push([x.network, x.network + ' (existiert nicht)']);
+    const f = buildForm([{ k: 'name', l: 'VM-Name', req: true, ph: 'web-vm1' }, { k: 'mac', l: 'MAC-Adresse', req: true }, { k: 'ip', l: 'IP-Adresse/Maske', req: true, ph: '10.1.1.50/24' },
+      { k: 'gw', l: 'Default Gateway', ph: '10.1.1.1' },
+      { k: 'network', l: 'Network Adapter 1', t: 'select', o: nets, help: 'Port Group am DVS – erscheint erst, wenn der APIC sie angelegt hat' },
+      { k: 'silent', l: 'Stille VM', t: 'yesno', cl: 'sendet nichts von sich aus' }],
+    x ? { name: x.name, mac: x.mac, ip: x.ip, gw: x.gw, network: x.network, silent: x.silent ? 'yes' : 'no' } : { mac: randMac(), silent: 'no', network: pgs[0] || '' }, {}, 'create');
+    modal(x ? 'VM ' + x.name : 'VM auf ' + esx.name + ' anlegen', f.el, [{ l: 'Abbrechen' }, {
+      l: 'Speichern', primary: true, fn: async () => {
+        const v = f.get();
+        await Views.vcSave({ op: 'set', kind: 'vm', vc: vc.name, esxi: esx.name, obj: Object.assign(v, { silent: v.silent === 'yes' }), old: x ? x.name : null }, 'VM ' + v.name + ' gespeichert');
+      },
+    }]);
   },
 
   /* ================================================================ Operations */

@@ -1,4 +1,4 @@
-# ACI Simulator als Container:
+# Datacenter Prep als Container:
 #   docker build -t dcprep .
 #   docker run -d -p 8080:8080 -v dcprep-data:/app/data --name dcprep dcprep
 FROM python:3.12-slim

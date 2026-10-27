@@ -83,5 +83,28 @@ def base_config(store, admin_pwd):
     create_obj(store, f + '/podprof-default', 'fabricPodP', {'name': 'default'}, ts)
     create_obj(store, f + '/podprof-default/pods-default-typ-ALL', 'fabricPodS', {'name': 'default', 'type': 'ALL'}, ts)
     create_obj(store, f + '/podprof-default/pods-default-typ-ALL/rspodPGrp', 'fabricRsPodPGrp', {'tDn': ''}, ts)
+    create_obj(store, 'uni/vmmp-VMware', 'vmmProvP', {'vendor': 'VMware'}, ts)
     create_obj(store, 'uni/tn-mgmt/mgmtp-default', 'mgmtMgmtP', {'name': 'default'}, ts)
     create_obj(store, 'uni/tn-mgmt/mgmtp-default/oob-default', 'mgmtOoB', {'name': 'default'}, ts)
+
+
+def ensure_base(store):
+    """Ergaenzt Systemobjekte, die in aelteren gespeicherten Zustaenden fehlen."""
+    ts = now_ts()
+    for dn, cls, attrs in [
+            ('uni/vmmp-VMware', 'vmmProvP', {'vendor': 'VMware'}),
+            ('uni/fabric/outofsvc', 'fabricOOServicePol', {}),
+            ('uni/fabric/funcprof', 'fabricFuncP', {}),
+            ('uni/fabric/time-default', 'datetimePol', {'name': 'default'}),
+            ('uni/fabric/podprof-default', 'fabricPodP', {'name': 'default'}),
+            ('uni/fabric/podprof-default/pods-default-typ-ALL', 'fabricPodS', {'name': 'default', 'type': 'ALL'}),
+            ('uni/fabric/podprof-default/pods-default-typ-ALL/rspodPGrp', 'fabricRsPodPGrp', {'tDn': ''}),
+            ('uni/tn-mgmt/mgmtp-default', 'mgmtMgmtP', {'name': 'default'}),
+            ('uni/tn-mgmt/mgmtp-default/oob-default', 'mgmtOoB', {'name': 'default'})]:
+        if dn not in store.objs and parent_ok(store, dn):
+            create_obj(store, dn, cls, attrs, ts)
+
+
+def parent_ok(store, dn):
+    from .model import parent_dn
+    return parent_dn(dn) in store.objs
