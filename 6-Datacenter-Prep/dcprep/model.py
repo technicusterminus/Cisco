@@ -237,14 +237,14 @@ mo('fvRsPathAtt', 'rspathAtt-[{tDn}]', ('fvAEPg',),
    {'encap': '', 'mode': 'regular', 'instrImedcy': 'lazy', 'primaryEncap': 'unknown'},
    enums={'mode': ('regular', 'native', 'untagged'), 'instrImedcy': IMMED},
    checks={'encap': _vlan}, rel=('dn', 'tDn', ('fabricPathEp',)), label='Static Port')
-mo('fvRsProv', 'rsprov-{tnVzBrCPName}', ('fvAEPg', 'l3extInstP', 'l2extInstP'),
+mo('fvRsProv', 'rsprov-{tnVzBrCPName}', ('fvAEPg', 'l3extInstP', 'l2extInstP', 'fvESg'),
    {'prio': 'unspecified', 'matchT': 'AtleastOne'},
    rel=('name', 'tnVzBrCPName', 'vzBrCP', 'tenant'), label='Provided Contract')
-mo('fvRsCons', 'rscons-{tnVzBrCPName}', ('fvAEPg', 'l3extInstP', 'l2extInstP'), {'prio': 'unspecified'},
+mo('fvRsCons', 'rscons-{tnVzBrCPName}', ('fvAEPg', 'l3extInstP', 'l2extInstP', 'fvESg'), {'prio': 'unspecified'},
    rel=('name', 'tnVzBrCPName', 'vzBrCP', 'tenant'), label='Consumed Contract')
 
 # Operative Endpunkte (vom Simulator gelernt)
-mo('fvCEp', 'cep-{mac}', ('fvAEPg', 'l3extInstP', 'l2extInstP', 'vnsEPpInfo'),
+mo('fvCEp', 'cep-{mac}', ('fvAEPg', 'l3extInstP', 'l2extInstP', 'vnsEPpInfo', 'fvESg'),
    {'ip': '0.0.0.0', 'encap': '', 'lcC': 'learned', 'fabricPathDn': '', 'id': '0',
     'name': '', 'mcastAddr': 'not-applicable', 'contName': '', 'baseEpgDn': ''},
    config=False, label='Client Endpoint')
@@ -473,7 +473,7 @@ PASSIVE = [
     ('fvAEPg', ['fvRsCustQosPol:rscustQosPol', 'fvRsAEPgMonPol:rsAEPgMonPol', 'fvRsDppPol:rsdppPol', 'fvRsTrustCtrl:rstrustCtrl',
                 'fvRsIntraEpg:rsintraEpg-{tnVzBrCPName}', 
                 'fvRsSecInherited:rssecInherited-[{tDn}]', 'fvRsFcPathAtt:rsfcPathAtt-[{tDn}]',
-                'fvCrtrn:crtrn', 'fvRsEPgToCollectionStatsPol:rsEPgToCollectionStatsPol']),
+                'fvRsEPgToCollectionStatsPol:rsEPgToCollectionStatsPol']),
     ('fvAp', ['fvRsApMonPol:rsApMonPol']),
     ('vzBrCP', ['vzRsGraphAtt:rsGraphAtt']),
     ('vzSubj', ['vzInTerm:intmnl', 'vzOutTerm:outtmnl', 'vzRsSdwanPol:rssdwanPol']),
@@ -612,6 +612,61 @@ mo('rtctrlRsCtxPToSubjP', 'rsctxPToSubjP-{tnRtctrlSubjPName}', ('rtctrlCtxP',), 
 mo('rtctrlSubjP', 'subj-{name}', ('fvTenant',), {}, label='Match Rule')
 mo('rtctrlMatchRtDest', 'dest-[{ip}]', ('rtctrlSubjP',), {'aggregate': 'no', 'fromPfxLen': '0', 'toPfxLen': '0'},
    enums={'aggregate': ('yes', 'no')}, label='Match Prefix')
+
+# ---------------------------- AAA / RBAC -----------------------------------
+mo('aaaTacacsPlusEp', 'tacacsext', ('aaaUserEp',), {}, fixed=True, label='TACACS+ Management')
+mo('aaaRadiusEp', 'radiusext', ('aaaUserEp',), {}, fixed=True, label='RADIUS Management')
+mo('aaaLdapEp', 'ldapext', ('aaaUserEp',), {}, fixed=True, label='LDAP Management')
+mo('aaaTacacsPlusProvider', 'tacacsplusprovider-{name}', ('aaaTacacsPlusEp',),
+   {'key': '', 'port': '49', 'authProtocol': 'pap', 'timeout': '5', 'retries': '1', 'monitorServer': 'disabled'},
+   enums={'authProtocol': ('pap', 'chap', 'mschap')}, label='TACACS+ Provider')
+mo('aaaRadiusProvider', 'radiusprovider-{name}', ('aaaRadiusEp',),
+   {'key': '', 'authPort': '1812', 'authProtocol': 'pap', 'timeout': '5', 'retries': '1', 'monitorServer': 'disabled'},
+   enums={'authProtocol': ('pap', 'chap', 'mschap')}, label='RADIUS Provider')
+mo('aaaLdapProvider', 'ldapprovider-{name}', ('aaaLdapEp',),
+   {'key': '', 'port': '389', 'rootdn': '', 'basedn': '', 'filter': 'cn=$userid', 'attribute': 'CiscoAVPair', 'SSLValidationLevel': 'strict',
+    'enableSSL': 'no', 'timeout': '30', 'retries': '1'}, label='LDAP Provider')
+mo('aaaRsSecProvToEpg', 'rsSecProvToEpg', ('aaaTacacsPlusProvider', 'aaaRadiusProvider', 'aaaLdapProvider'), {'tDn': ''},
+   rel=('dn', 'tDn', ('mgmtOoB', 'mgmtInB')), label='Management EPG')
+mo('aaaTacacsPlusProviderGroup', 'tacacsplusprovidergroup-{name}', ('aaaTacacsPlusEp',), {}, label='TACACS+ Provider Group')
+mo('aaaRadiusProviderGroup', 'radiusprovidergroup-{name}', ('aaaRadiusEp',), {}, label='RADIUS Provider Group')
+mo('aaaLdapProviderGroup', 'ldapprovidergroup-{name}', ('aaaLdapEp',), {}, label='LDAP Provider Group')
+mo('aaaProviderRef', 'providerref-{name}', ('aaaTacacsPlusProviderGroup', 'aaaRadiusProviderGroup', 'aaaLdapProviderGroup'),
+   {'order': '1'}, label='Provider')
+mo('aaaAuthRealm', 'authrealm', ('aaaUserEp',), {'defRolePolicy': 'no-login'}, enums={'defRolePolicy': ('no-login', 'assign-default-role')},
+   fixed=True, label='Authentication')
+mo('aaaDefaultAuth', 'defaultauth', ('aaaAuthRealm',), {'realm': 'local', 'providerGroup': '', 'fallbackCheck': 'false'},
+   enums={'realm': ('local', 'tacacs', 'radius', 'ldap'), 'fallbackCheck': ('true', 'false')}, fixed=True, label='Default Authentication')
+mo('aaaConsoleAuth', 'consoleauth', ('aaaAuthRealm',), {'realm': 'local', 'providerGroup': ''},
+   enums={'realm': ('local', 'tacacs', 'radius', 'ldap')}, fixed=True, label='Console Authentication')
+mo('aaaLoginDomain', 'logindomain-{name}', ('aaaUserEp',), {}, label='Login Domain')
+mo('aaaDomainAuth', 'domainauth', ('aaaLoginDomain',), {'realm': 'local', 'providerGroup': ''},
+   enums={'realm': ('local', 'tacacs', 'radius', 'ldap')}, label='Domain Authentication')
+mo('aaaDomain', 'domain-{name}', ('aaaUserEp',), {'restrictedRbacDomain': 'no'}, label='Security Domain')
+mo('aaaDomainRef', 'domain-{name}', ('fvTenant', 'physDomP', 'l3extDomP', 'vmmDomP', 'l2extDomP', 'infraAttEntityP'), {},
+   label='Security Domain Association')
+mo('aaaUserDomain', 'userdomain-{name}', ('aaaUser',), {}, label='User Security Domain')
+ROLES = ('admin', 'aaa', 'access-admin', 'fabric-admin', 'nw-svc-admin', 'nw-svc-params', 'ops', 'read-all', 'tenant-admin',
+         'tenant-ext-admin', 'vmm-admin')
+mo('aaaUserRole', 'role-{name}', ('aaaUserDomain',), {'privType': 'readPriv'}, enums={'privType': ('readPriv', 'writePriv'), 'name': ROLES},
+   label='User Role')
+
+# ---------------------------- In-Band-Management ---------------------------
+mo('mgmtInB', 'inb-{name}', ('mgmtMgmtP',), {'encap': 'unknown', 'prio': 'unspecified'}, checks={'encap': _vlan}, label='In-Band EPG')
+mo('mgmtRsMgmtBD', 'rsmgmtBD', ('mgmtInB',), {'tnFvBDName': ''}, rel=('name', 'tnFvBDName', 'fvBD', 'tenant'), label='Bridge Domain')
+mo('mgmtRsInBStNode', 'rsinBStNode-[{tDn}]', ('mgmtInB',), {'addr': '', 'gw': '', 'v6Addr': '::', 'v6Gw': '::'},
+   checks={'addr': lambda v: v == '' or _ipmask(v), 'gw': _ip}, rel=('dn', 'tDn', ('fabricNode',)), label='Static In-Band Address')
+
+# ---------------------------- ESG und uSeg ---------------------------------
+mo('fvESg', 'esg-{name}', ('fvAp',), {'pcEnfPref': 'unenforced', 'prefGrMemb': 'exclude', 'shutdown': 'no', 'pcTag': '', 'scope': ''},
+   enums={'pcEnfPref': ('enforced', 'unenforced'), 'prefGrMemb': ('include', 'exclude'), 'shutdown': ('yes', 'no')},
+   ro=('pcTag', 'scope'), label='Endpoint Security Group')
+mo('fvRsScope', 'rsscope', ('fvESg',), {'tnFvCtxName': ''}, rel=('name', 'tnFvCtxName', 'fvCtx', 'tenant'), label='VRF')
+mo('fvEPgSelector', 'epgselector-[{matchEpgDn}]', ('fvESg',), {'descr': ''}, label='EPG Selector')
+mo('fvEPSelector', 'epselector-[{matchExpression}]', ('fvESg',), {'descr': ''}, label='IP Subnet Selector')
+mo('fvCrtrn', 'crtrn', ('fvAEPg',), {'match': 'any', 'prec': '0'}, enums={'match': ('any', 'all')}, label='uSeg Attributes')
+mo('fvIpAttr', 'ipattr-{name}', ('fvCrtrn',), {'ip': '', 'usefvSubnet': 'no'}, label='IP Attribute')
+mo('fvMacAttr', 'macattr-{name}', ('fvCrtrn',), {'mac': ''}, label='MAC Attribute')
 
 # ---------------------------- L3Out-Varianten ------------------------------
 mo('l3extMember', 'mem-{side}', ('l3extRsPathL3OutAtt',), {'addr': '0.0.0.0', 'ipv6Dad': 'enabled', 'llAddr': '::'},
@@ -827,7 +882,7 @@ def _alloc(store, meta, attrs):
     if meta.name == 'fvBD':
         c['seg'] += 1
         attrs['seg'] = str(15990000 + 4099 * c['seg'])
-    if meta.name in ('fvCtx', 'fvBD', 'fvAEPg', 'l3extInstP'):
+    if meta.name in ('fvCtx', 'fvBD', 'fvAEPg', 'l3extInstP', 'fvESg', 'l2extInstP'):
         c['pctag'] += 1
         attrs['pcTag'] = str(16385 + c['pctag'] if meta.name == 'fvCtx' else 32769 + c['pctag'])
 

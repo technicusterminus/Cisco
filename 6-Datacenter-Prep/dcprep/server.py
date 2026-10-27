@@ -17,6 +17,7 @@ from .model import AciError, CLASSES, rn_of, Store, post as mit_post, delete as 
 from .query import run_query
 from .engine import Engine, ip_of
 from . import setup as apic_setup
+from . import aaa
 from .topology import default_topology, discovered_members, base_config, ensure_base
 from .cli import Cli
 from . import trace
@@ -82,7 +83,7 @@ class Sim:
             if k in old:
                 self.sim[k] = old[k]
         if keep_sim:
-            for k in ('hosts', 'routers', 'vcenters', 'devices'):
+            for k in ('hosts', 'routers', 'vcenters', 'devices', 'aaa'):
                 if k in old:
                     self.sim[k] = old[k]
         if mode == 'factory':
@@ -90,6 +91,11 @@ class Sim:
             self.sim['audit'], self.sim['events'] = [], []
             self.tokens.clear()
         self.engine = Engine(self.store, self.sim)
+        if mode != 'factory':
+            su = self.sim['setup']
+            mit_post(self.store, 'uni/tn-mgmt/mgmtp-default/oob-default', {'mgmtOoB': {'attributes': {}, 'children': [
+                {'mgmtRsOoBStNode': {'attributes': {'tDn': 'topology/pod-%d/node-1' % int(su['podId']), 'addr': su['oobIp'],
+                                                    'gw': su['oobGw']}}}]}})
         if mode == 'discovered':
             for m in discovered_members():
                 mit_post(self.store, 'uni/controller/nodeidentpol', m)
@@ -200,12 +206,17 @@ class Sim:
     def login(self, name, pwd):
         if self.sim.get('setup', 0) is None:
             raise AciError(503, 'Der APIC ist noch nicht eingerichtet - zuerst den Setup-Dialog an der Konsole abschliessen.', 503)
-        u = self.store.attrs('uni/userext/user-%s' % name)
-        if not u or u.get('pwd') != pwd or u.get('accountStatus') == 'inactive':
-            return None
+        user, roles, how = aaa.authenticate(self, name, pwd)
         tok = secrets.token_urlsafe(48)
-        self.tokens[tok] = (name, time.time() + 3600, now_ts())
+        self.tokens[tok] = (user, time.time() + 3600, now_ts(), roles, how)
+        self.sim.setdefault('logins', []).append({'ts': now_ts(), 'user': user, 'how': how, 'roles': aaa.describe(roles)})
+        del self.sim['logins'][:-200]
         return tok
+
+    def roles_of(self, user, tok):
+        if tok and tok in self.tokens and len(self.tokens[tok]) > 3:
+            return self.tokens[tok][3]
+        return aaa.local_roles(self.store, user)
 
     def check(self, cookies, headers):
         tok = cookies.get('APIC-cookie') or headers.get('APIC-challenge')
@@ -250,6 +261,7 @@ class Sim:
         self.sim['routers'] = json.loads(json.dumps(lab.get('routers', [])))
         self.sim['vcenters'] = json.loads(json.dumps(lab.get('vcenters', [])))
         self.sim['devices'] = json.loads(json.dumps(lab.get('devices', [])))
+        self.sim['aaa'] = json.loads(json.dumps(lab.get('aaa', [])))
         self.sim['lab'] = lid
         self.changed()
         return lab
@@ -303,6 +315,22 @@ class Sim:
                     g = next((g for g in getattr(e, 'graphs', {}).values() if g['brc'] == c['contract']), None)
                     ok = bool(g) and g['state'] == 'applied'
                     info = ('Zustand: %s%s' % (g['state'], ' - ' + '; '.join(g['reasons']) if g['reasons'] else '')) if g else 'kein Service Graph am Contract'
+                elif t in ('login', 'rbac'):
+                    try:
+                        u_, roles_, how_ = aaa.authenticate(self, c['user'], c['pwd'])
+                        logged = True
+                    except AciError as ex:
+                        logged, roles_, how_ = False, [], ex.text
+                    if t == 'login':
+                        ok = logged == c.get('expect', True) and (not c.get('role') or any(r['role'] == c['role'] for r in roles_))
+                        info = ('angemeldet: %s - %s' % (how_, aaa.describe(roles_))) if logged else 'abgelehnt: %s' % how_
+                    else:
+                        can = logged and aaa.can_write(self.store, roles_, c['dn'])
+                        ok = can == c.get('expect', True)
+                        info = '%s darf %s %s schreiben' % (c['user'], '' if can else 'NICHT', c['dn'])
+                elif t == 'inb':
+                    ok = all(n in getattr(e, 'inb', {}) for n in c['nodes'])
+                    info = 'In-Band aktiv auf: %s' % (', '.join(str(n) for n in sorted(getattr(e, 'inb', {}))) or 'keinem Node')
                 elif t == 'learned':
                     rs = e.routers.get(c['router'], {})
                     has = c['prefix'] in rs.get('learned', [])
@@ -581,6 +609,31 @@ class Sim:
                     raise AciError(400, 'BGP %s: ungueltige IP' % k)
         self.sim['routers'] = [x for x in self.sim['routers'] if x['name'] != (old or r['name'])] + [clean]
 
+    def aaa_server_op(self, b):
+        """Simulierte AAA-Server (TACACS+, RADIUS, LDAP) im OOB-Netz."""
+        lst = self.sim.setdefault('aaa', [])
+        if b.get('op') == 'delete':
+            self.sim['aaa'] = [x for x in lst if x['ip'] != b.get('ip')]
+            return
+        o = b.get('obj') or {}
+        try:
+            ipaddress.ip_address(o.get('ip', ''))
+        except ValueError:
+            raise AciError(400, 'IP-Adresse des Servers ungueltig')
+        if o.get('type') not in ('tacacs', 'radius', 'ldap'):
+            raise AciError(400, 'Typ tacacs, radius oder ldap')
+        old = next((x for x in lst if x['ip'] == (b.get('old') or o['ip'])), None)
+        key = old['key'] if old and o.get('key') in (None, '***') else o.get('key', '')
+        users = []
+        for u in o.get('users') or []:
+            if not u.get('name'):
+                continue
+            ou = next((x for x in (old or {}).get('users', []) if x['name'] == u['name']), {})
+            users.append({'name': u['name'], 'pwd': ou.get('pwd', '') if u.get('pwd') in (None, '***') else u.get('pwd', ''),
+                          'avpair': u.get('avpair', '')})
+        clean = {'name': o.get('name') or o['ip'], 'ip': o['ip'], 'type': o['type'], 'key': key, 'down': bool(o.get('down')), 'users': users}
+        self.sim['aaa'] = [x for x in lst if x is not old] + [clean]
+
     def device_op(self, b):
         """Simulierte L4-L7-Geraete (Firewalls) verwalten."""
         devs = self.sim.setdefault('devices', [])
@@ -855,15 +908,13 @@ def make_handler(S):
                 a = (b.get('aaaUser') or {}).get('attributes') or {}
                 with S.lock:
                     tok = S.login(a.get('name', ''), a.get('pwd', ''))
-                if not tok:
-                    raise AciError(401, 'Username or password is incorrect - FAILED local authentication', 401)
-                return self.send(200, self._login_resp(tok, a['name']),
+                return self.send(200, self._login_resp(tok, S.tokens[tok][0]),
                                  headers={'Set-Cookie': 'APIC-cookie=%s; path=/; HttpOnly' % tok})
             if rest == 'aaaRefresh':
                 user, tok = self.auth()
                 with S.lock:
                     if tok:
-                        S.tokens[tok] = (user, time.time() + 3600, S.tokens[tok][2])
+                        S.tokens[tok] = (user, time.time() + 3600) + tuple(S.tokens[tok][2:])
                 return self.send(200, self._login_resp(tok or '', user),
                                  headers={'Set-Cookie': 'APIC-cookie=%s; path=/; HttpOnly' % tok} if tok else None)
             if rest == 'aaaLogout':
@@ -871,7 +922,8 @@ def make_handler(S):
                 with S.lock:
                     S.tokens.pop(c, None)
                 return self.send(200, {'totalCount': '0', 'imdata': []})
-            user, _ = self.auth()
+            user, tok_ = self.auth()
+            roles = S.roles_of(user, tok_)
             rest = re.sub(r'^node/', '', rest)
             m = re.match(r'^(mo|class)/?(.*)$', rest)
             if not m:
@@ -885,15 +937,28 @@ def make_handler(S):
                     res, total = run_query(S.store, kind, target, q, S.engine)
                     if 'rsp-prop-include' in q and q['rsp-prop-include'][0] == 'config-only':
                         res = [_strip_oper(S.store, r) for r in res]
+                    if not aaa.is_admin(roles):
+                        n0 = len(res)
+                        res = [x for x in (_rbac_filter(S.store, roles, r) for r in res) if x is not None]
+                        total = int(total) - (n0 - len(res))
                     return self.send(200, {'totalCount': str(total), 'imdata': res})
                 if kind != 'mo':
                     raise AciError(400, 'POST/DELETE only on /api/mo')
                 if method == 'POST':
                     b = self.body()
-                    S.audit(user, mit_post(S.store, target, b))
+                    backup = S.store.backup()
+                    ch = mit_post(S.store, target, b)
+                    bad = [c['dn'] for c in ch if not aaa.can_write(S.store, roles, c['dn'])]
+                    if bad and not aaa.is_admin(roles):
+                        S.store.restore(backup)
+                        raise AciError(403, 'Access denied (RBAC): Benutzer %s hat kein Schreibrecht auf %s (Rollen: %s)'
+                                       % (user, bad[0], aaa.describe(roles) or 'keine'), 403)
+                    S.audit(user, ch)
                     S.changed()
                     return self.send(200, {'totalCount': '0', 'imdata': []})
                 if method == 'DELETE':
+                    if not aaa.can_write(S.store, roles, target):
+                        raise AciError(403, 'Access denied (RBAC): Benutzer %s hat kein Schreibrecht auf %s' % (user, target), 403)
                     S.audit(user, mit_delete(S.store, target))
                     S.changed()
                     return self.send(200, {'totalCount': '0', 'imdata': []})
@@ -931,7 +996,14 @@ def make_handler(S):
                         return self.send(200, {'text': apic_setup.summary(apic_setup.normalize(b.get('answers') or {}))})
                     S.setup_apply(b.get('answers') or {})
                     return self.send(200, {'ok': True})
-            self.auth()
+            if rest == 'logindomains':
+                with S.lock:
+                    return self.send(200, sorted(S.store.attrs(d)['name'] for d in S.store.by_class('aaaLoginDomain')))
+            user, tok_ = self.auth()
+            if method == 'POST' and rest not in ('traffic', 'cli', 'labs/check'):
+                with S.lock:
+                    if not aaa.is_admin(S.roles_of(user, tok_)):
+                        raise AciError(403, 'Access denied: Die Simulation darf nur ein Benutzer mit admin-Rolle in der Domain all aendern', 403)
             with S.lock:
                 S.tick()
                 b = self.body() if method == 'POST' else {}
@@ -978,6 +1050,18 @@ def make_handler(S):
                         S.set_host(b.get('host') or {}, b.get('old'))
                     S.changed()
                     return self.send(200, {'ok': True})
+                if rest == 'aaaservers':
+                    if method == 'POST':
+                        S.aaa_server_op(b)
+                        S.changed()
+                    return self.send(200, [dict(x, key='***' if x.get('key') else '', users=[dict(u, pwd='***') for u in x.get('users', [])])
+                                           for x in S.sim.get('aaa', [])])
+                if rest == 'logins':
+                    return self.send(200, list(reversed(S.sim.get('logins', [])))[:100])
+                if rest == 'whoami':
+                    roles = S.roles_of(user, tok_)
+                    return self.send(200, {'user': user, 'roles': roles, 'admin': aaa.is_admin(roles),
+                                           'how': S.tokens[tok_][4] if tok_ and len(S.tokens.get(tok_, ())) > 4 else 'lokal'})
                 if rest == 'devices':
                     S.device_op(b)
                     S.changed()
@@ -1110,6 +1194,14 @@ def oper_info(S, dn):
                     res['routes'].append(dict(rt, node=e.nodes.get(nid, {}).get('name', nid)))
     elif cls == 'fvTenant':
         res['endpoints'] = ep_rows({d for d, c in e.cls.items() if c.get('tenant') == dn})
+    elif cls == 'mgmtInB':
+        info = next((i for i in getattr(e, 'inb_info', []) if i['dn'] == dn), {})
+        res['inb'] = {'reasons': info.get('reasons', []), 'ports': info.get('ports', []),
+                      'nodes': [{'node': e.nodes[n]['name'] if n in e.nodes else 'apic1' if n == 1 else str(n), 'why': w}
+                                for n, w in sorted(info.get('nodes', {}).items())]}
+    elif cls == 'fvESg':
+        res['endpoints'] = [r for r in ep_rows(set(e.cls)) if e.hosts.get(r['name'], {}).get('esg') == dn]
+        res['contracts'] = [{'contract': c, 'role': k, 'scope': (e.A(c) or {}).get('scope')} for k in ('prov', 'cons') for c in e.cls[dn][k]] if dn in e.cls else []
     elif cls == 'vmmDomP':
         v = e.vmm.get(dn, {})
         res['vmm'] = {'state': v.get('state'), 'reasons': v.get('reasons', []), 'vc': v.get('vc'), 'discovery': v.get('discovery'),
@@ -1179,6 +1271,17 @@ def node_info(S, nid):
             'lldp': sorted(lldp, key=lambda x: (len(x['local']), x['local'])), 'pcs': pcs, 'neighbors': nbrs,
             'vpc': next((g for g in e.vpc_groups if nid in g['nodes']), None),
             'oos': sorted(t for t in e.oos if e.paths.get(t, {}).get('nodes') and nid in e.paths[t]['nodes'])}
+
+
+def _rbac_filter(store, roles, node):
+    cls = next(iter(node))
+    body = node[cls]
+    dn = (body.get('attributes') or {}).get('dn')
+    if dn and dn not in ('uni', 'topology', '') and not aaa.can_read(store, roles, dn):
+        return None
+    if body.get('children'):
+        body['children'] = [x for x in (_rbac_filter(store, roles, c) for c in body['children']) if x is not None]
+    return node
 
 
 def _strip_oper(store, node):

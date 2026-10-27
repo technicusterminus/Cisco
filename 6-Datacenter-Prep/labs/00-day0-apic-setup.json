@@ -82,6 +82,7 @@
  "routers": [],
  "vcenters": [],
  "devices": [],
+ "aaa": [],
  "solutionConfig": [
   [
    "#setup",

@@ -1,6 +1,7 @@
 /* Formular-, Wizard- und Baum-Spezifikationen je ACI-Klasse */
 'use strict';
 
+const AAA_ROLES = ['admin', 'aaa', 'access-admin', 'fabric-admin', 'nw-svc-admin', 'nw-svc-params', 'ops', 'read-all', 'tenant-admin', 'tenant-ext-admin', 'vmm-admin'];
 const NAME = { k: 'name', l: 'Name', create: true, req: true, ph: 'z. B. Web' };
 const ALIAS = { k: 'nameAlias', l: 'Alias', ph: 'optional' };
 const DESCR = { k: 'descr', l: 'Description', ph: 'optional' };
@@ -52,9 +53,12 @@ const SPEC = {
     fields: [NAME, ALIAS, DESCR], cols: [ac('name'), ac('nameAlias'), ac('descr')], summary: true,
     wizard: {
       title: 'Create Tenant',
-      steps: [{ l: 'Tenant', fields: [NAME, ALIAS, DESCR, { k: '_vrfs', l: 'VRF', t: 'rows', cols: [{ k: 'name', l: 'Name', ph: 'z. B. Prod' }] }] }],
-      build: v => ({ url: 'uni', dn: 'uni/tn-' + v.name, body: mo('fvTenant', { name: v.name, nameAlias: v.nameAlias, descr: v.descr }, (v._vrfs || []).map(r => mo('fvCtx', { name: r.name }))) }),
+      steps: [{ l: 'Tenant', fields: [NAME, ALIAS, DESCR, { k: '_doms', l: 'Security Domains', t: 'rows', cols: [{ k: 'name', l: 'Security Domain', t: 'tname', target: 'aaaDomain', scope: 'aaa' }] },
+        { k: '_vrfs', l: 'VRF', t: 'rows', cols: [{ k: 'name', l: 'Name', ph: 'z. B. Prod' }] }] }],
+      build: v => ({ url: 'uni', dn: 'uni/tn-' + v.name, body: mo('fvTenant', { name: v.name, nameAlias: v.nameAlias, descr: v.descr },
+        (v._doms || []).filter(d => d.name).map(d => mo('aaaDomainRef', { name: d.name })), (v._vrfs || []).map(r => mo('fvCtx', { name: r.name }))) }),
     },
+    actions: [['Add Security Domain', dn => createDialog(dn, 'aaaDomainRef', 'Add Security Domain')]],
   },
   fvCtx: {
     groups: [['general', 'General']],
@@ -158,15 +162,19 @@ const SPEC = {
           { k: 'pcEnfPref', l: 'Intra EPG Isolation', t: 'radio', o: [['unenforced', 'Unenforced'], ['enforced', 'Enforced']], def: 'unenforced' },
           { k: 'prefGrMemb', l: 'Preferred Group Member', t: 'radio', o: [['exclude', 'Exclude'], ['include', 'Include']], def: 'exclude' }, DESCR,
           { k: '_doms', l: 'Associate to Domain Profiles', t: 'rows', cols: [{ k: 'tDn', l: 'Domain Profile', t: 'tdn', target: ['physDomP', 'vmmDomP'] }, { k: 'imm', l: 'Resolution Immediacy', t: 'select', o: RES_IMM, def: 'immediate' }] },
-          { k: '_static', l: 'Statically Link with Leaves/Paths', t: 'yesno', def: 'no' }] },
+          { k: 'isAttrBasedEPg', l: 'uSeg EPG (attributbasiert)', t: 'yesno', def: 'no' },
+          { k: '_uip', l: 'uSeg Attribut: IP oder Subnetz', ph: '10.10.10.50 oder 10.10.10.0/28', show: v => v.isAttrBasedEPg === 'yes' },
+          { k: '_umac', l: 'uSeg Attribut: MAC', ph: '00:50:56:AA:BB:CC', show: v => v.isAttrBasedEPg === 'yes' },
+          { k: '_static', l: 'Statically Link with Leaves/Paths', t: 'yesno', def: 'no', show: v => v.isAttrBasedEPg !== 'yes' }] },
         { l: 'Leaves/Paths', show: v => v._static === 'yes', fields: [
           { k: '_paths', l: 'Paths', t: 'rows', cols: [{ k: 'tDn', l: 'Path', t: 'path' }, { k: 'encap', l: 'Port Encap', ph: 'vlan-10', req: true, w: '90px' }, { k: 'mode', l: 'Mode', t: 'select', o: MODES, def: 'regular' }] },
           { k: '_leaves', l: 'Leaves', t: 'rows', cols: [{ k: 'tDn', l: 'Node', t: 'node' }, { k: 'encap', l: 'Encap', ph: 'vlan-10', req: true, w: '90px' }, { k: 'mode', l: 'Mode', t: 'select', o: MODES, def: 'regular' }] }] },
       ],
       build: (v, parent) => ({
         dn: parent + '/epg-' + v.name,
-        body: mo('fvAEPg', { name: v.name, nameAlias: v.nameAlias, descr: v.descr, pcEnfPref: v.pcEnfPref, prefGrMemb: v.prefGrMemb },
+        body: mo('fvAEPg', { name: v.name, nameAlias: v.nameAlias, descr: v.descr, pcEnfPref: v.pcEnfPref, prefGrMemb: v.prefGrMemb, isAttrBasedEPg: v.isAttrBasedEPg || 'no' },
           mo('fvRsBd', { tnFvBDName: v['fvRsBd.tnFvBDName'] }),
+          v.isAttrBasedEPg === 'yes' ? mo('fvCrtrn', { match: 'any' }, v._uip ? mo('fvIpAttr', { name: 'ip1', ip: v._uip }) : null, v._umac ? mo('fvMacAttr', { name: 'mac1', mac: v._umac.toUpperCase() }) : null) : null,
           (v._doms || []).filter(d => d.tDn).map(d => mo('fvRsDomAtt', { tDn: d.tDn, resImedcy: d.imm || 'immediate' })),
           (v._static === 'yes' ? v._paths || [] : []).map(p => mo('fvRsPathAtt', { tDn: p.tDn, encap: vlanify(p.encap), mode: p.mode })),
           (v._static === 'yes' ? v._leaves || [] : []).filter(l => l.tDn).map(l => mo('fvRsNodeAtt', { tDn: l.tDn, encap: vlanify(l.encap), mode: l.mode }))),
@@ -692,12 +700,99 @@ const SPEC = {
       { k: 'name', l: 'Node Name', req: true, ph: 'leaf101' }],
     cols: [col('Serial', r => r.serial), col('Node ID', r => r.nodeId), col('Name', r => r.name), col('Pod', r => r.podId)],
   },
+  aaaAuthRealm: { label: 'AAA Policy', fields: [{ k: 'defRolePolicy', l: 'Remote user login policy', t: 'radio', o: [['no-login', 'No Login'], ['assign-default-role', 'Assign Default Role']],
+    help: 'Was passiert, wenn der AAA-Server kein gültiges Cisco AV-Pair liefert' }], cols: [col('Remote User Login Policy', r => r.defRolePolicy)] },
+  aaaDefaultAuth: { label: 'Default Authentication', fields: [{ k: 'realm', l: 'Realm', t: 'select', o: [['local', 'Local'], ['tacacs', 'TACACS+'], ['radius', 'RADIUS'], ['ldap', 'LDAP']] },
+    { k: 'providerGroup', l: 'Provider Group', show: v => v.realm !== 'local' },
+    { k: 'fallbackCheck', l: 'Fallback Check', t: 'select', o: [['false', 'False (bei Ausfall lokal anmelden)'], ['true', 'True']], show: v => v.realm !== 'local' }],
+    cols: [col('Realm', r => r.realm), col('Provider Group', r => r.providerGroup), col('Fallback Check', r => r.fallbackCheck)] },
+  aaaConsoleAuth: { label: 'Console Authentication', fields: [{ k: 'realm', l: 'Realm', t: 'select', o: [['local', 'Local'], ['tacacs', 'TACACS+'], ['radius', 'RADIUS'], ['ldap', 'LDAP']] },
+    { k: 'providerGroup', l: 'Provider Group', show: v => v.realm !== 'local' }], cols: [col('Realm', r => r.realm)] },
+  aaaLoginDomain: {
+    label: 'Login Domain', fields: [NAME, DESCR],
+    wizard: { title: 'Create Login Domain', steps: [{ l: 'Login Domain', fields: [NAME, DESCR, { k: '_realm', l: 'Realm', t: 'select', o: [['local', 'Local'], ['tacacs', 'TACACS+'], ['radius', 'RADIUS'], ['ldap', 'LDAP']], def: 'tacacs' },
+      { k: '_grp', l: 'Provider Group', ph: 'ISE', show: v => v._realm !== 'local' }] }],
+      build: (v, parent) => ({ dn: parent + '/logindomain-' + v.name, body: mo('aaaLoginDomain', { name: v.name, descr: v.descr }, mo('aaaDomainAuth', { realm: v._realm, providerGroup: v._realm === 'local' ? '' : v._grp })) }) },
+    cols: [ac('name'), col('Realm', r => (MIT.a(r.dn + '/domainauth') || {}).realm), col('Provider Group', r => (MIT.a(r.dn + '/domainauth') || {}).providerGroup), ac('descr')],
+  },
+  aaaDomainAuth: { label: 'Domain Authentication', fields: [{ k: 'realm', l: 'Realm', t: 'select', o: [['local', 'Local'], ['tacacs', 'TACACS+'], ['radius', 'RADIUS'], ['ldap', 'LDAP']] }, { k: 'providerGroup', l: 'Provider Group' }],
+    cols: [col('Realm', r => r.realm), col('Provider Group', r => r.providerGroup)] },
+  aaaDomain: { label: 'Security Domain', fields: [NAME, { k: 'restrictedRbacDomain', l: 'Restricted Domain', t: 'yesno' }, DESCR], cols: [ac('name'), ac('descr')] },
+  aaaDomainRef: { label: 'Security Domain', fields: [{ k: 'name', l: 'Security Domain', t: 'tname', target: 'aaaDomain', scope: 'aaa', create: true, req: true }], cols: [col('Security Domain', r => r.name)] },
+  aaaUserDomain: { label: 'User Security Domain', fields: [{ k: 'name', l: 'Security Domain', t: 'tname', target: 'aaaDomain', scope: 'aaa', create: true, req: true }],
+    cols: [col('Domain', r => r.name), col('Roles', r => MIT.kids(r.dn, ['aaaUserRole']).map(d => MIT.a(d).name + (MIT.a(d).privType === 'writePriv' ? ' (write)' : ' (read)')).join(', '))] },
+  aaaUserRole: { label: 'Role', fields: [{ k: 'name', l: 'Role', t: 'select', o: AAA_ROLES.map(r => [r, r]), create: true, req: true },
+    { k: 'privType', l: 'Privilege Type', t: 'radio', o: [['readPriv', 'Read'], ['writePriv', 'Write']] }], cols: [col('Role', r => r.name), col('Privilege', r => r.privType)] },
+  aaaTacacsPlusProvider: { label: 'TACACS+ Provider', fields: [{ k: 'name', l: 'Host Name (or IP Address)', create: true, req: true, ph: '192.168.10.40' },
+    { k: 'key', l: 'Key', t: 'password', help: 'leer lassen = unverändert' }, { k: 'port', l: 'Port' }, { k: 'authProtocol', l: 'Authorization Protocol', t: 'select', o: [['pap', 'PAP'], ['chap', 'CHAP'], ['mschap', 'MS-CHAP']] },
+    { k: 'timeout', l: 'Timeout (sec)' }, { k: 'retries', l: 'Retries' }, relDn('aaaRsSecProvToEpg', 'Management EPG', ['mgmtOoB', 'mgmtInB'], { empty: 'default (Out-of-Band)' })],
+    cols: [ac('name'), col('Port', r => r.port), col('Protocol', r => r.authProtocol), col('Management EPG', r => nameOfDn(relOf(r.dn, 'aaaRsSecProvToEpg', 'tDn')) || 'default (OOB)')] },
+  aaaRadiusProvider: { label: 'RADIUS Provider', fields: [{ k: 'name', l: 'Host Name (or IP Address)', create: true, req: true, ph: '192.168.10.41' },
+    { k: 'key', l: 'Key', t: 'password', help: 'leer lassen = unverändert' }, { k: 'authPort', l: 'Authorization Port' }, { k: 'authProtocol', l: 'Authorization Protocol', t: 'select', o: [['pap', 'PAP'], ['chap', 'CHAP'], ['mschap', 'MS-CHAP']] },
+    { k: 'timeout', l: 'Timeout (sec)' }, { k: 'retries', l: 'Retries' }, relDn('aaaRsSecProvToEpg', 'Management EPG', ['mgmtOoB', 'mgmtInB'], { empty: 'default (Out-of-Band)' })],
+    cols: [ac('name'), col('Port', r => r.authPort), col('Management EPG', r => nameOfDn(relOf(r.dn, 'aaaRsSecProvToEpg', 'tDn')) || 'default (OOB)')] },
+  aaaLdapProvider: { label: 'LDAP Provider', fields: [{ k: 'name', l: 'Host Name (or IP Address)', create: true, req: true, ph: '192.168.10.42' },
+    { k: 'rootdn', l: 'Bind DN', ph: 'cn=apic,ou=svc,dc=lab,dc=local' }, { k: 'basedn', l: 'Base DN', ph: 'ou=users,dc=lab,dc=local' }, { k: 'key', l: 'Password', t: 'password', help: 'leer lassen = unverändert' },
+    { k: 'port', l: 'Port' }, { k: 'attribute', l: 'Attribute', ph: 'CiscoAVPair' }, { k: 'filter', l: 'Filter', ph: 'cn=$userid' }, relDn('aaaRsSecProvToEpg', 'Management EPG', ['mgmtOoB', 'mgmtInB'], { empty: 'default (Out-of-Band)' })],
+    cols: [ac('name'), col('Base DN', r => r.basedn), col('Attribute', r => r.attribute)] },
+  aaaTacacsPlusProviderGroup: { label: 'TACACS+ Provider Group', fields: [NAME, DESCR], cols: [ac('name'), col('Providers', r => MIT.kids(r.dn, ['aaaProviderRef']).map(d => MIT.a(d).name).join(', '))] },
+  aaaRadiusProviderGroup: { label: 'RADIUS Provider Group', fields: [NAME, DESCR], cols: [ac('name'), col('Providers', r => MIT.kids(r.dn, ['aaaProviderRef']).map(d => MIT.a(d).name).join(', '))] },
+  aaaLdapProviderGroup: { label: 'LDAP Provider Group', fields: [NAME, DESCR], cols: [ac('name'), col('Providers', r => MIT.kids(r.dn, ['aaaProviderRef']).map(d => MIT.a(d).name).join(', '))] },
+  aaaProviderRef: { label: 'Provider', fields: [{ k: 'name', l: 'Name (Provider)', create: true, req: true, ph: '192.168.10.40' }, { k: 'order', l: 'Priority' }], cols: [col('Provider', r => r.name), col('Priority', r => r.order)] },
+  mgmtInB: {
+    label: 'In-Band EPG', menu: 'Create In-Band Management EPG',
+    fields: [NAME, { k: 'encap', l: 'Encap', ph: 'vlan-90', req: true }, relName('mgmtRsMgmtBD', 'tnFvBDName', 'Bridge Domain', 'fvBD', { req: true })],
+    normalize: v => { v.encap = vlanify(v.encap); return v; },
+    wizard: { title: 'Create In-Band Management EPG', steps: [{ l: 'In-Band EPG', fields: [NAME, { k: 'encap', l: 'Encap', ph: 'vlan-90', req: true },
+      relName('mgmtRsMgmtBD', 'tnFvBDName', 'Bridge Domain', 'fvBD', { req: true, def: 'inb' }),
+      { k: '_n', l: 'Static Node Addresses', t: 'rows', start: true, cols: [{ k: 'tDn', l: 'Node', t: 'node', role: ['leaf', 'spine', 'controller'] }, { k: 'addr', l: 'IPv4 Address', ph: '10.90.0.101/24' }, { k: 'gw', l: 'Gateway', ph: '10.90.0.1' }] }] }],
+      build: (v, parent) => ({ dn: parent + '/inb-' + v.name, body: mo('mgmtInB', { name: v.name, encap: vlanify(v.encap) }, mo('mgmtRsMgmtBD', { tnFvBDName: v['mgmtRsMgmtBD.tnFvBDName'] }),
+        (v._n || []).filter(n => n.tDn).map(n => mo('mgmtRsInBStNode', { tDn: n.tDn, addr: n.addr, gw: n.gw }))) }) },
+    cols: [ac('name'), col('Encap', r => r.encap), col('BD', r => relOf(r.dn, 'mgmtRsMgmtBD', 'tnFvBDName'))], oper: ['inb'],
+  },
+  mgmtRsInBStNode: { label: 'Static In-Band Address', fields: [{ k: 'tDn', l: 'Node', t: 'node', role: ['leaf', 'spine', 'controller'], create: true, req: true },
+    { k: 'addr', l: 'IPv4 Address', req: true }, { k: 'gw', l: 'IPv4 Gateway', req: true }],
+    cols: [col('Node', r => pathLabel(r.tDn)), col('Address', r => r.addr), col('Gateway', r => r.gw)] },
+  fvESg: {
+    label: 'Endpoint Security Group', menu: 'Create Endpoint Security Group',
+    fields: [NAME, relName('fvRsScope', 'tnFvCtxName', 'VRF', 'fvCtx', { req: true }), { k: 'pcEnfPref', l: 'Intra ESG Isolation', t: 'radio', o: [['unenforced', 'Unenforced'], ['enforced', 'Enforced']] },
+      { k: 'shutdown', l: 'Shutdown', t: 'yesno' }, DESCR],
+    wizard: { title: 'Create Endpoint Security Group', steps: [{ l: 'Identity', fields: [NAME, relName('fvRsScope', 'tnFvCtxName', 'VRF', 'fvCtx', { req: true }), DESCR] },
+      { l: 'Selectors', fields: [{ k: '_epgs', l: 'EPG Selectors', t: 'rows', cols: [{ k: 'tDn', l: 'EPG', t: 'tdn', target: ['fvAEPg'], tenantScope: true }] },
+        { k: '_ips', l: 'IP Subnet Selectors', t: 'rows', cols: [{ k: 'ip', l: 'IP oder Subnetz', ph: '10.10.10.0/28' }] }] }],
+      build: (v, parent) => ({ dn: parent + '/esg-' + v.name, body: mo('fvESg', { name: v.name, descr: v.descr }, mo('fvRsScope', { tnFvCtxName: v['fvRsScope.tnFvCtxName'] }),
+        (v._epgs || []).filter(e => e.tDn).map(e => mo('fvEPgSelector', { matchEpgDn: e.tDn })),
+        (v._ips || []).filter(e => e.ip).map(e => mo('fvEPSelector', { matchExpression: "ip=='" + e.ip + "'" }))) }) },
+    cols: [ac('name'), col('VRF', r => relOf(r.dn, 'fvRsScope', 'tnFvCtxName')), col('pcTag', r => r.pcTag),
+      col('Selectors', r => MIT.kids(r.dn, ['fvEPgSelector']).map(d => nameOfDn(MIT.a(d).matchEpgDn)).concat(MIT.kids(r.dn, ['fvEPSelector']).map(d => MIT.a(d).matchExpression)).join(', '))],
+    summary: true, oper: ['endpoints', 'contracts'],
+    actions: [['Add Provided Contract', dn => createDialog(dn, 'fvRsProv')], ['Add Consumed Contract', dn => createDialog(dn, 'fvRsCons')]],
+  },
+  fvEPgSelector: { label: 'EPG Selector', fields: [{ k: 'matchEpgDn', l: 'EPG', t: 'tdn', target: ['fvAEPg'], tenantScope: true, create: true, req: true }, DESCR],
+    cols: [col('EPG', r => r.matchEpgDn.replace(/^uni\//, ''))] },
+  fvEPSelector: { label: 'IP Subnet Selector', fields: [{ k: 'matchExpression', l: 'Match Expression', create: true, req: true, ph: "ip=='10.10.10.0/28'" }, DESCR],
+    cols: [col('Match Expression', r => r.matchExpression)] },
+  fvCrtrn: { label: 'uSeg Attributes', fields: [{ k: 'match', l: 'Match', t: 'radio', o: [['any', 'Match Any'], ['all', 'Match All']] }], cols: [col('Match', r => r.match)] },
+  fvIpAttr: { label: 'IP Attribute', fields: [NAME, { k: 'ip', l: 'IP Address oder Subnetz', req: true, ph: '10.10.10.50' }], cols: [ac('name'), col('IP', r => r.ip)] },
+  fvMacAttr: { label: 'MAC Attribute', fields: [NAME, { k: 'mac', l: 'MAC Address', req: true }], cols: [ac('name'), col('MAC', r => r.mac)] },
   aaaUser: {
     label: 'Local User',
     fields: [{ k: 'name', l: 'Login ID', create: true, req: true }, { k: 'pwd', l: 'Password', t: 'password', help: 'leer lassen = unverändert' },
       { k: 'firstName', l: 'First Name' }, { k: 'lastName', l: 'Last Name' }, { k: 'email', l: 'Email' },
       { k: 'accountStatus', l: 'Account Status', t: 'radio', o: [['active', 'Active'], ['inactive', 'Inactive']] }],
-    cols: [col('Login ID', r => r.name), col('First Name', r => r.firstName), col('Last Name', r => r.lastName), col('Account Status', r => r.accountStatus)],
+    cols: [col('Login ID', r => r.name), col('First Name', r => r.firstName), col('Last Name', r => r.lastName), col('Account Status', r => r.accountStatus),
+      col('Security Domains', r => MIT.kids(r.dn, ['aaaUserDomain']).map(d => MIT.a(d).name + ': ' + MIT.kids(d, ['aaaUserRole']).map(x => MIT.a(x).name + (MIT.a(x).privType === 'writePriv' ? '(w)' : '(r)')).join('/')).join(', '))],
+    wizard: { title: 'Create Local User', steps: [
+      { l: 'User Identity', fields: [{ k: 'name', l: 'Login ID', req: true }, { k: 'pwd', l: 'Password', t: 'password', req: true }, { k: 'firstName', l: 'First Name' }, { k: 'lastName', l: 'Last Name' },
+        { k: 'email', l: 'Email' }, { k: 'accountStatus', l: 'Account Status', t: 'radio', o: [['active', 'Active'], ['inactive', 'Inactive']], def: 'active' }] },
+      { l: 'Security', fields: [{ k: '_d', l: 'Security Domains und Rollen', t: 'rows', start: true, cols: [{ k: 'dom', l: 'Security Domain', t: 'tname', target: 'aaaDomain', scope: 'aaa', req: true },
+        { k: 'role', l: 'Role', t: 'select', o: AAA_ROLES.map(r => [r, r]), def: 'read-all' }, { k: 'priv', l: 'Privilege', t: 'select', o: [['readPriv', 'Read'], ['writePriv', 'Write']], def: 'readPriv' }] }] }],
+      build: (v, parent) => {
+        const by = {};
+        (v._d || []).filter(d => d.dom).forEach(d => { (by[d.dom] = by[d.dom] || []).push(mo('aaaUserRole', { name: d.role, privType: d.priv })); });
+        return { dn: parent + '/user-' + v.name, body: mo('aaaUser', { name: v.name, pwd: v.pwd, firstName: v.firstName, lastName: v.lastName, email: v.email, accountStatus: v.accountStatus },
+          Object.entries(by).map(([d, roles]) => mo('aaaUserDomain', { name: d }, roles))) };
+      } },
   },
 };
 
@@ -1036,6 +1131,7 @@ const PH = (l, text) => ({ l, ph: text || l + ' ist in Datacenter Prep nur als M
 const TREE = {
   fvTenant: [
     { l: 'Application Profiles', cls: ['fvAp'] },
+    { l: 'Security Domains', cls: ['aaaDomainRef'], flat: 1, hidden: 1 },
     { l: 'Networking', sub: [{ l: 'Bridge Domains', cls: ['fvBD'] }, { l: 'VRFs', cls: ['fvCtx'] }, { l: 'L2Outs', cls: ['l2extOut'] }, { l: 'L3Outs', cls: ['l3extOut'] }, PH('SR-MPLS VRF L3Outs'), PH('Dot1Q Tunnels')] },
     PH('IP Address Pools'),
     { l: 'Contracts', sub: [{ l: 'Standard', cls: ['vzBrCP'] }, { l: 'Taboos', cls: ['vzTaboo'] }, { l: 'Imported', cls: ['vzCPIf'] }, { l: 'Filters', cls: ['vzFilter'] }, PH('Out-Of-Band Contracts')] },
@@ -1048,8 +1144,20 @@ const TREE = {
       { l: 'Devices', cls: ['vnsLDevVip'] }, PH('Imported Devices'), { l: 'Devices Selection Policies', cls: ['vnsLDevCtx'] },
       { l: 'Deployed Graph Instances', view: (w, tn) => Views.graphInstances(w, tn) }, PH('Deployed Devices'), PH('Inband Management Configuration for L4-L7 devices')] }] },
   ],
-  fvAp: [{ l: 'Application EPGs', cls: ['fvAEPg'] }, PH('uSeg EPGs'), PH('Endpoint Security Groups')],
-  fvAEPg: [{ l: 'Domains (VMs and Bare-Metals)', cls: ['fvRsDomAtt'], flat: 1 }, PH('EPG Members'), { l: 'Static Ports', cls: ['fvRsPathAtt'], flat: 1 },
+  fvAp: [{ l: 'Application EPGs', cls: ['fvAEPg'], filter: a => a.isAttrBasedEPg !== 'yes' }, { l: 'uSeg EPGs', cls: ['fvAEPg'], filter: a => a.isAttrBasedEPg === 'yes', defaults: { isAttrBasedEPg: 'yes' } },
+    { l: 'Endpoint Security Groups', cls: ['fvESg'] }],
+  fvESg: [{ l: 'Selectors', sub: [{ l: 'EPG Selectors', cls: ['fvEPgSelector'], flat: 1 }, { l: 'IP Subnet Selectors', cls: ['fvEPSelector'], flat: 1 }] },
+    { l: 'Contracts', cls: ['fvRsProv', 'fvRsCons'], flat: 1 }],
+  fvCrtrn: [{ l: 'IP Attributes', cls: ['fvIpAttr'], flat: 1 }, { l: 'MAC Attributes', cls: ['fvMacAttr'], flat: 1 }],
+  aaaUser: [{ l: 'Security Domains', cls: ['aaaUserDomain'] }],
+  aaaAuthRealm: [{ l: 'Default Authentication', rn: 'defaultauth' }, { l: 'Console Authentication', rn: 'consoleauth' }],
+  aaaLoginDomain: [{ l: 'Domain Authentication', rn: 'domainauth' }],
+  aaaUserDomain: [{ l: 'Roles', cls: ['aaaUserRole'], flat: 1 }],
+  aaaTacacsPlusProviderGroup: [{ l: 'Providers', cls: ['aaaProviderRef'], flat: 1 }],
+  aaaRadiusProviderGroup: [{ l: 'Providers', cls: ['aaaProviderRef'], flat: 1 }],
+  aaaLdapProviderGroup: [{ l: 'Providers', cls: ['aaaProviderRef'], flat: 1 }],
+  mgmtInB: [{ l: 'Static Node Management Addresses (In-Band)', cls: ['mgmtRsInBStNode'], flat: 1 }],
+  fvAEPg: [{ l: 'uSeg Attributes', rn: 'crtrn' }, { l: 'Domains (VMs and Bare-Metals)', cls: ['fvRsDomAtt'], flat: 1 }, PH('EPG Members'), { l: 'Static Ports', cls: ['fvRsPathAtt'], flat: 1 },
     { l: 'Static Leafs', cls: ['fvRsNodeAtt'], flat: 1 }, { l: 'Contracts', cls: ['fvRsProv', 'fvRsCons', 'fvRsConsIf', 'fvRsProtBy'], flat: 1 }, PH('Static Endpoint'), { l: 'Subnets', cls: ['fvSubnet'], flat: 1 }],
   fvBD: [{ l: 'Subnets', cls: ['fvSubnet'], flat: 1 }, { l: 'Associated L3 Outs', cls: ['fvRsBDToOut'], flat: 1, hidden: 1 }, PH('ND Proxy Subnets')],
   fvCtx: [{ l: 'EPG Collection for VRF', rn: 'any' }],
@@ -1099,9 +1207,18 @@ const TREE = {
 
 /* Zusatzordner im Tenant mgmt */
 const MGMT_TREE = [
-  { l: 'Node Management EPGs', cls: ['mgmtOoB'], parent: 'uni/tn-mgmt/mgmtp-default' },
+  { l: 'Node Management EPGs', cls: ['mgmtOoB', 'mgmtInB'], parent: 'uni/tn-mgmt/mgmtp-default' },
   { l: 'Node Management Addresses', sub: [{ l: 'Static Node Management Addresses', cls: ['mgmtRsOoBStNode'], parent: 'uni/tn-mgmt/mgmtp-default/oob-default', flat: 1 }] },
   PH('Managed Node Connectivity Groups'),
+];
+
+const AAA_TREE = [
+  { l: 'Authentication', sub: [{ l: 'AAA (Default / Console / Remote User Policy)', mo: 'uni/userext/authrealm' }, { l: 'Login Domains', cls: ['aaaLoginDomain'], parent: 'uni/userext' }] },
+  { l: 'Security', sub: [{ l: 'Security Domains', cls: ['aaaDomain'], parent: 'uni/userext' }, { l: 'Local Users', cls: ['aaaUser'], parent: 'uni/userext' }, PH('Roles', 'Die Rollen sind fest vorgegeben: admin, aaa, access-admin, fabric-admin, nw-svc-admin, ops, read-all, tenant-admin, tenant-ext-admin, vmm-admin.')] },
+  { l: 'TACACS+ Management', sub: [{ l: 'TACACS+ Providers', cls: ['aaaTacacsPlusProvider'], parent: 'uni/userext/tacacsext' }, { l: 'TACACS+ Provider Groups', cls: ['aaaTacacsPlusProviderGroup'], parent: 'uni/userext/tacacsext' }] },
+  { l: 'RADIUS Management', sub: [{ l: 'RADIUS Providers', cls: ['aaaRadiusProvider'], parent: 'uni/userext/radiusext' }, { l: 'RADIUS Provider Groups', cls: ['aaaRadiusProviderGroup'], parent: 'uni/userext/radiusext' }] },
+  { l: 'LDAP Management', sub: [{ l: 'LDAP Providers', cls: ['aaaLdapProvider'], parent: 'uni/userext/ldapext' }, { l: 'LDAP Provider Groups', cls: ['aaaLdapProviderGroup'], parent: 'uni/userext/ldapext' }] },
+  { l: 'Login-Protokoll', view: w => Views.loginLog(w) },
 ];
 
 const isPC = a => a.lagT === 'link', isVPC = a => a.lagT === 'node';

@@ -1,0 +1,532 @@
+{
+ "id": "22-inband-management",
+ "title": "22 In-Band-Management",
+ "topic": "Fabric-Betrieb",
+ "level": "Fortgeschritten",
+ "duration": "35 min",
+ "fabric": "discovered",
+ "goals": [
+  "In-Band-Management mit eigenem VLAN, BD inb und In-Band EPG einrichten",
+  "Verstehen, warum die APIC-Ports eine Access Policy brauchen",
+  "Einen AAA-Server über In-Band ansprechen"
+ ],
+ "intro": "Das Management soll zusätzlich **In-Band** über die Fabric laufen: Netz **10.90.0.0/24**, Gateway **10.90.0.1** (BD **inb** im Tenant mgmt), **vlan-90**. Adressen: apic1 **10.90.0.10**, leaf101 **10.90.0.101**, leaf102 **10.90.0.102**.\n\nAnschließend soll der RADIUS-Server **192.168.20.41** (Key **Rad#2026**) über das In-Band EPG erreicht werden. Benutzer dort: **opsuser** / Ops#2026 mit AV-Pair `shell:domains=all/read-all/`.",
+ "config": [
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "infraInfra": {
+       "attributes": {},
+       "children": [
+        {
+         "fvnsVlanInstP": {
+          "attributes": {
+           "name": "VLAN-Pool-Server",
+           "allocMode": "static"
+          },
+          "children": [
+           {
+            "fvnsEncapBlk": {
+             "attributes": {
+              "from": "vlan-100",
+              "to": "vlan-199"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAttEntityP": {
+          "attributes": {
+           "name": "AAEP-Server"
+          },
+          "children": [
+           {
+            "infraRsDomP": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraFuncP": {
+          "attributes": {},
+          "children": [
+           {
+            "infraAccPortGrp": {
+             "attributes": {
+              "name": "IPG-Server-Access"
+             },
+             "children": [
+              {
+               "infraRsAttEntP": {
+                "attributes": {
+                 "tDn": "uni/infra/attentp-AAEP-Server"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAccPortP": {
+          "attributes": {
+           "name": "IntProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraHPortS": {
+             "attributes": {
+              "name": "Server-Ports",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraPortBlk": {
+                "attributes": {
+                 "name": "block2",
+                 "fromPort": "1",
+                 "toPort": "10"
+                }
+               }
+              },
+              {
+               "infraRsAccBaseGrp": {
+                "attributes": {
+                 "tDn": "uni/infra/funcprof/accportgrp-IPG-Server-Access"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraNodeP": {
+          "attributes": {
+           "name": "SwProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraLeafS": {
+             "attributes": {
+              "name": "101-102",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraNodeBlk": {
+                "attributes": {
+                 "name": "blk",
+                 "from_": "101",
+                 "to_": "102"
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "infraRsAccPortP": {
+             "attributes": {
+              "tDn": "uni/infra/accportprof-IntProf-Leaf101-102"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "physDomP": {
+       "attributes": {
+        "name": "PhysDom-Server"
+       },
+       "children": [
+        {
+         "infraRsVlanNs": {
+          "attributes": {
+           "tDn": "uni/infra/vlanns-[VLAN-Pool-Server]-static"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "hosts": [
+  {
+   "name": "web1",
+   "mac": "00:50:56:10:10:11",
+   "ip": "10.10.10.11/24",
+   "gw": "10.10.10.1",
+   "vlan": 110,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/1"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Webserver"
+  }
+ ],
+ "aaa": [
+  {
+   "name": "radius1",
+   "ip": "192.168.20.41",
+   "type": "radius",
+   "key": "Rad#2026",
+   "down": false,
+   "users": [
+    {
+     "name": "opsuser",
+     "pwd": "Ops#2026",
+     "avpair": "shell:domains=all/read-all/"
+    }
+   ]
+  }
+ ],
+ "tasks": [
+  {
+   "title": "Access Policies für die APIC-Ports",
+   "text": "Der APIC hängt an **leaf101/102 eth1/48**. VLAN Pool **VLAN-Pool-INB** (static, vlan-90), Physical Domain **PhysDom-INB**, AAEP **AAEP-APIC**, Policy Group **IPG-APIC** und im Interface Profile IntProf-Leaf101-102 einen Selector **APIC-Ports** für Port 1/48.",
+   "hint": "Ohne diese Kette darf vlan-90 nicht auf den Port zum APIC – Fault S0211 am In-Band EPG."
+  },
+  {
+   "title": "BD inb",
+   "text": "Im Tenant **mgmt** am BD **inb** das Subnetz **10.90.0.1/24** anlegen."
+  },
+  {
+   "title": "In-Band EPG",
+   "text": "**Tenants > mgmt > Node Management EPGs**: Rechtsklick **Create In-Band Management EPG**: **default**, vlan-90, BD inb, Adressen für Node 1 (APIC), 101 und 102."
+  },
+  {
+   "title": "RADIUS über In-Band",
+   "text": "RADIUS Provider 192.168.20.41 mit Key Rad#2026 und Management EPG **In-Band (default)**, Provider Group **RAD**, Login Domain **RAD** (Realm RADIUS)."
+  },
+  {
+   "title": "Verifizieren",
+   "text": "Operational-Tab des In-Band EPG, `show controller`, auf leaf101 `show vlan extended`. Login als `opsuser` mit Domain RAD."
+  }
+ ],
+ "checks": [
+  {
+   "desc": "In-Band aktiv auf apic1, leaf101 und leaf102",
+   "type": "inb",
+   "nodes": [
+    1,
+    101,
+    102
+   ]
+  },
+  {
+   "desc": "Kein S0211-Fault mehr",
+   "type": "nofaults",
+   "under": "uni/tn-mgmt",
+   "code": "S0211"
+  },
+  {
+   "desc": "opsuser meldet sich über RADIUS (In-Band) an",
+   "type": "login",
+   "user": "apic#RAD\\opsuser",
+   "pwd": "Ops#2026",
+   "role": "read-all"
+  }
+ ],
+ "solution": "Access: `{\"polUni\": {\"attributes\": {}, \"children\": [{\"infraInfra\": {\"attributes\": {}, \"children\": [{\"fvnsVlanInstP\": {\"attributes\": {\"name\": \"VLAN-Pool-INB\", \"allocMode\": \"static\"}, \"children\": [{\"fvnsEncapBlk\": {\"attributes\": {\"from\": \"vlan-90\", \"to\": \"vlan-90\"}}}]}}, {\"infraAttEntityP\": {\"attributes\": {\"name\": \"AAEP-APIC\"}, \"children\": [{\"infraRsDomP\": {\"attributes\": {\"tDn\": \"uni/phys-PhysDom-INB\"}}}]}}, {\"infraFuncP\": {\"attributes\": {}, \"children\": [{\"infraAccPortGrp\": {\"attributes\": {\"name\": \"IPG-APIC\"}, \"children\": [{\"infraRsAttEntP\": {\"attributes\": {\"tDn\": \"uni/infra/attentp-AAEP-APIC\"}}}]}}]}}, {\"infraAccPortP\": {\"attributes\": {\"name\": \"IntProf-Leaf101-102\"}, \"children\": [{\"infraHPortS\": {\"attributes\": {\"name\": \"APIC-Ports\", \"type\": \"range\"}, \"children\": [{\"infraPortBlk\": {\"attributes\": {\"name\": \"block2\", \"fromPort\": \"48\", \"toPort\": \"48\"}}}, {\"infraRsAccBaseGrp\": {\"attributes\": {\"tDn\": \"uni/infra/funcprof/accportgrp-IPG-APIC\"}}}]}}]}}]}}, {\"physDomP\": {\"attributes\": {\"name\": \"PhysDom-INB\"}, \"children\": [{\"infraRsVlanNs\": {\"attributes\": {\"tDn\": \"uni/infra/vlanns-[VLAN-Pool-INB]-static\"}}}]}}]}}`\\n\\nIn-Band: `{\"fvTenant\": {\"attributes\": {\"name\": \"mgmt\"}, \"children\": [{\"fvBD\": {\"attributes\": {\"name\": \"inb\"}, \"children\": [{\"fvSubnet\": {\"attributes\": {\"ip\": \"10.90.0.1/24\"}}}]}}, {\"mgmtMgmtP\": {\"attributes\": {\"name\": \"default\"}, \"children\": [{\"mgmtInB\": {\"attributes\": {\"name\": \"default\", \"encap\": \"vlan-90\"}, \"children\": [{\"mgmtRsMgmtBD\": {\"attributes\": {\"tnFvBDName\": \"inb\"}}}, {\"mgmtRsInBStNode\": {\"attributes\": {\"tDn\": \"topology/pod-1/node-1\", \"addr\": \"10.90.0.10/24\", \"gw\": \"10.90.0.1\"}}}, {\"mgmtRsInBStNode\": {\"attributes\": {\"tDn\": \"topology/pod-1/node-101\", \"addr\": \"10.90.0.101/24\", \"gw\": \"10.90.0.1\"}}}, {\"mgmtRsInBStNode\": {\"attributes\": {\"tDn\": \"topology/pod-1/node-102\", \"addr\": \"10.90.0.102/24\", \"gw\": \"10.90.0.1\"}}}]}}]}}]}}`\\n\\nRADIUS-Provider mit `aaaRsSecProvToEpg tDn=uni/tn-mgmt/mgmtp-default/inb-default`.",
+ "routers": [],
+ "vcenters": [],
+ "devices": [],
+ "solutionConfig": [
+  [
+   "uni",
+   {
+    "polUni": {
+     "attributes": {},
+     "children": [
+      {
+       "infraInfra": {
+        "attributes": {},
+        "children": [
+         {
+          "fvnsVlanInstP": {
+           "attributes": {
+            "name": "VLAN-Pool-INB",
+            "allocMode": "static"
+           },
+           "children": [
+            {
+             "fvnsEncapBlk": {
+              "attributes": {
+               "from": "vlan-90",
+               "to": "vlan-90"
+              }
+             }
+            }
+           ]
+          }
+         },
+         {
+          "infraAttEntityP": {
+           "attributes": {
+            "name": "AAEP-APIC"
+           },
+           "children": [
+            {
+             "infraRsDomP": {
+              "attributes": {
+               "tDn": "uni/phys-PhysDom-INB"
+              }
+             }
+            }
+           ]
+          }
+         },
+         {
+          "infraFuncP": {
+           "attributes": {},
+           "children": [
+            {
+             "infraAccPortGrp": {
+              "attributes": {
+               "name": "IPG-APIC"
+              },
+              "children": [
+               {
+                "infraRsAttEntP": {
+                 "attributes": {
+                  "tDn": "uni/infra/attentp-AAEP-APIC"
+                 }
+                }
+               }
+              ]
+             }
+            }
+           ]
+          }
+         },
+         {
+          "infraAccPortP": {
+           "attributes": {
+            "name": "IntProf-Leaf101-102"
+           },
+           "children": [
+            {
+             "infraHPortS": {
+              "attributes": {
+               "name": "APIC-Ports",
+               "type": "range"
+              },
+              "children": [
+               {
+                "infraPortBlk": {
+                 "attributes": {
+                  "name": "block2",
+                  "fromPort": "48",
+                  "toPort": "48"
+                 }
+                }
+               },
+               {
+                "infraRsAccBaseGrp": {
+                 "attributes": {
+                  "tDn": "uni/infra/funcprof/accportgrp-IPG-APIC"
+                 }
+                }
+               }
+              ]
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      },
+      {
+       "physDomP": {
+        "attributes": {
+         "name": "PhysDom-INB"
+        },
+        "children": [
+         {
+          "infraRsVlanNs": {
+           "attributes": {
+            "tDn": "uni/infra/vlanns-[VLAN-Pool-INB]-static"
+           }
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "uni",
+   {
+    "fvTenant": {
+     "attributes": {
+      "name": "mgmt"
+     },
+     "children": [
+      {
+       "fvBD": {
+        "attributes": {
+         "name": "inb"
+        },
+        "children": [
+         {
+          "fvSubnet": {
+           "attributes": {
+            "ip": "10.90.0.1/24"
+           }
+          }
+         }
+        ]
+       }
+      },
+      {
+       "mgmtMgmtP": {
+        "attributes": {
+         "name": "default"
+        },
+        "children": [
+         {
+          "mgmtInB": {
+           "attributes": {
+            "name": "default",
+            "encap": "vlan-90"
+           },
+           "children": [
+            {
+             "mgmtRsMgmtBD": {
+              "attributes": {
+               "tnFvBDName": "inb"
+              }
+             }
+            },
+            {
+             "mgmtRsInBStNode": {
+              "attributes": {
+               "tDn": "topology/pod-1/node-1",
+               "addr": "10.90.0.10/24",
+               "gw": "10.90.0.1"
+              }
+             }
+            },
+            {
+             "mgmtRsInBStNode": {
+              "attributes": {
+               "tDn": "topology/pod-1/node-101",
+               "addr": "10.90.0.101/24",
+               "gw": "10.90.0.1"
+              }
+             }
+            },
+            {
+             "mgmtRsInBStNode": {
+              "attributes": {
+               "tDn": "topology/pod-1/node-102",
+               "addr": "10.90.0.102/24",
+               "gw": "10.90.0.1"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "uni/userext",
+   {
+    "aaaUserEp": {
+     "attributes": {},
+     "children": [
+      {
+       "aaaRadiusEp": {
+        "attributes": {},
+        "children": [
+         {
+          "aaaRadiusProvider": {
+           "attributes": {
+            "name": "192.168.20.41",
+            "key": "Rad#2026"
+           },
+           "children": [
+            {
+             "aaaRsSecProvToEpg": {
+              "attributes": {
+               "tDn": "uni/tn-mgmt/mgmtp-default/inb-default"
+              }
+             }
+            }
+           ]
+          }
+         },
+         {
+          "aaaRadiusProviderGroup": {
+           "attributes": {
+            "name": "RAD"
+           },
+           "children": [
+            {
+             "aaaProviderRef": {
+              "attributes": {
+               "name": "192.168.20.41"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      },
+      {
+       "aaaLoginDomain": {
+        "attributes": {
+         "name": "RAD"
+        },
+        "children": [
+         {
+          "aaaDomainAuth": {
+           "attributes": {
+            "realm": "radius",
+            "providerGroup": "RAD"
+           }
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  ]
+ ]
+}

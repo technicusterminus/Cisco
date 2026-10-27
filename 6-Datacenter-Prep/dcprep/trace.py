@@ -93,7 +93,11 @@ def _host_checks(eng, t, ep, role):
         reasons = (hs or {}).get('reasons') or ['Host ist mit keinem aktiven Leaf verbunden']
         t.step(False, '%s %s: Endpoint nicht gelernt' % (role, h['name']), '; '.join(reasons))
         return None
-    c = eng.cls[hs['epg']]
+    c = eng.cls[hs.get('esg') or hs['epg']]
+    if hs.get('esg') or hs.get('base'):
+        t.step(None, '%s %s: Klassifizierung' % (role, h['name']), ('uSeg EPG %s (Basis-EPG %s)' % (eng.short(hs['epg']), eng.short(hs['base']))
+                                                                  if hs.get('base') else 'EPG %s' % eng.short(hs['epg'])) +
+               (' -> ESG %s: fuer die Policy zaehlen jetzt die Contracts der ESG' % eng.short(hs['esg']) if hs.get('esg') else ''))
     if hs.get('silent_dst'):
         t.step(None, '%s %s ist ein stiller Host' % (role, h['name']), 'Noch nicht gelernt; erreichbar nur per ARP Flooding '
                'oder ARP Glean (Unicast Routing mit BD-Subnetz). Wartet in EPG %s, %s' % (eng.short(hs['epg']), eng.path_label(hs['path'])))

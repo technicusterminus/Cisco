@@ -12,7 +12,7 @@ const TABS = [
   { id: 'ops', l: 'Operations', subs: [['vis', 'Visibility & Troubleshooting'], ['capacity', 'Capacity Dashboard'], ['ep', 'EP Tracker'], ['viz', 'Visualization']] },
   { id: 'apps', l: 'Apps', subs: [['apps', 'Installed Apps'], ['appfaults', 'Faults']] },
   { id: 'integrations', l: 'Integrations', subs: [['integrations', 'Integrations']] },
-  { id: 'sim', l: 'Simulation', subs: [['topo', 'Topologie & Hosts'], ['routers', 'Externe Router'], ['vcenter', 'vCenter'], ['devices', 'L4-L7 Geräte'], ['labs', 'Labs'], ['saves', 'Speichern & Laden'], ['simset', 'Einstellungen']], special: true },
+  { id: 'sim', l: 'Simulation', subs: [['topo', 'Topologie & Hosts'], ['routers', 'Externe Router'], ['vcenter', 'vCenter'], ['devices', 'L4-L7 Geräte'], ['aaasrv', 'AAA-Server'], ['labs', 'Labs'], ['saves', 'Speichern & Laden'], ['simset', 'Einstellungen']], special: true },
 ];
 
 const App = {
@@ -34,13 +34,23 @@ const App = {
 
   showLogin(msg) {
     clearInterval(this.timer);
+    const open = document.querySelector('.login-box .login-err');
+    if (open) { if (msg) open.textContent = msg; return; }
     const user = h('input', { value: 'admin', autocomplete: 'username' });
+    const dom = h('select', null, h('option', { value: '' }, 'DefaultAuth'));
+    const loadDomains = () => fetch('/sim/logindomains', { cache: 'no-store' }).then(r => r.json()).then(list => {
+      if (dom.options.length > 1) return;
+      list.forEach(d => dom.appendChild(h('option', { value: d }, d)));
+    }).catch(() => setTimeout(loadDomains, 1000));
+    setTimeout(loadDomains, 0);
+    dom.addEventListener('focus', loadDomains);
     const pwd = h('input', { type: 'password', autocomplete: 'current-password' });
     const err = h('div', { class: 'login-err' }, msg || '');
     const go = async () => {
       err.textContent = '';
       try {
-        const r = await API.post('/api/aaaLogin.json', { aaaUser: { attributes: { name: user.value, pwd: pwd.value } } });
+        const name = dom.value ? 'apic#' + dom.value + '\\' + user.value : user.value;
+        const r = await API.post('/api/aaaLogin.json', { aaaUser: { attributes: { name, pwd: pwd.value } } });
         this.user = r.imdata[0].aaaLogin.attributes.userName;
         this.start();
       } catch (e) { err.textContent = e.text || e.message; }
@@ -51,7 +61,7 @@ const App = {
     root.appendChild(h('div', { class: 'login' },
       h('div', { class: 'login-box' },
         h('div', { class: 'login-brand' }, h('div', { class: 'logo-mark' }, 'DC'), h('div', null, h('b', null, 'Datacenter Prep'), h('div', { class: 'muted' }, 'Application Policy Infrastructure Controller – Trainingsumgebung'))),
-        h('label', null, 'User ID'), user, h('label', null, 'Password'), pwd, err,
+        h('label', null, 'User ID'), user, h('label', null, 'Password'), pwd, h('label', null, 'Domain'), dom, err,
         h('button', { class: 'btn primary block', onclick: go }, 'Login'),
         h('p', { class: 'muted small' }, 'Standard-Login: admin / admin. Simulierte Umgebung zum Üben, kein Cisco-Produkt.'))));
     pwd.focus();
@@ -148,7 +158,7 @@ const App = {
 
   isTreeView() {
     const k = this.tab + '/' + this.sub;
-    return (this.tab === 'tenants' && !['all', 'search'].includes(this.sub)) || ['fabric/access', 'fabric/inventory', 'fabric/fabricpol', 'system/settings', 'vnet/vmm'].includes(k);
+    return (this.tab === 'tenants' && !['all', 'search'].includes(this.sub)) || ['fabric/access', 'fabric/inventory', 'fabric/fabricpol', 'system/settings', 'vnet/vmm', 'admin/aaa'].includes(k);
   },
 
   async rootsFor() {
@@ -157,6 +167,7 @@ const App = {
     if (k === 'fabric/access') return this.accessRoots();
     if (k === 'fabric/fabricpol') return this.fabricPolRoots();
     if (k === 'vnet/vmm') return this.vmmRoots();
+    if (k === 'admin/aaa') { await MIT.load('uni/userext'); return [{ key: 'aaa-qs', label: 'Quick Start', icon: '?', kind: 'view', view: w => Views.aaaQuickStart(w) }].concat(AAA_TREE.map(s => folderNode('', s))); }
     if (k === 'fabric/inventory') return Views.inventoryRoots();
     if (k === 'system/settings') { await MIT.load('uni/fabric/bgpInstP-default'); return Views.settingsRoots(); }
     return [];
@@ -311,6 +322,7 @@ const App = {
     const tn = tenantOf(dn);
     if (tn) return this.go('tenants', tn.slice(7), 'mo:' + bestMoDn(dn));
     if (/^uni\/vmmp-/.test(dn)) return this.go('vnet', 'vmm', 'mo:' + bestMoDn(dn));
+    if (/^uni\/userext/.test(dn)) return this.go('admin', 'aaa', 'mo:' + bestMoDn(dn));
     if (/^uni\/(infra|phys-|l3dom-|l2dom-|fabric\/protpol)/.test(dn)) return this.go('fabric', 'access', 'mo:' + bestMoDn(dn));
     if (/^uni\/fabric\/bgpInstP/.test(dn)) return this.go('system', 'settings');
     if (/^uni\/fabric\/(funcprof|podprof|time-)/.test(dn)) return this.go('fabric', 'fabricpol', 'mo:' + bestMoDn(dn));

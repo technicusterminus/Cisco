@@ -104,6 +104,7 @@
  "routers": [],
  "vcenters": [],
  "devices": [],
+ "aaa": [],
  "solutionConfig": [
   [
    "uni/controller/nodeidentpol",

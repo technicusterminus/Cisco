@@ -604,6 +604,7 @@
  "solution": "Domain: `{\"polUni\": {\"attributes\": {}, \"children\": [{\"infraInfra\": {\"attributes\": {}, \"children\": [{\"fvnsVlanInstP\": {\"attributes\": {\"name\": \"VLAN-Pool-VMM\", \"allocMode\": \"dynamic\"}, \"children\": [{\"fvnsEncapBlk\": {\"attributes\": {\"from\": \"vlan-1000\", \"to\": \"vlan-1099\"}}}]}}, {\"infraAttEntityP\": {\"attributes\": {\"name\": \"AAEP-ESXi\"}, \"children\": [{\"infraRsDomP\": {\"attributes\": {\"tDn\": \"uni/vmmp-VMware/dom-VDS-Prod\"}}}]}}]}}, {\"vmmProvP\": {\"attributes\": {\"vendor\": \"VMware\"}, \"children\": [{\"vmmDomP\": {\"attributes\": {\"name\": \"VDS-Prod\"}, \"children\": [{\"infraRsVlanNs\": {\"attributes\": {\"tDn\": \"uni/infra/vlanns-[VLAN-Pool-VMM]-dynamic\"}}}, {\"vmmUsrAccP\": {\"attributes\": {\"name\": \"vc-admin\", \"usr\": \"administrator@vsphere.local\", \"pwd\": \"Lab12!vc\"}}}, {\"vmmCtrlrP\": {\"attributes\": {\"name\": \"vcsa01\", \"hostOrIp\": \"192.168.10.50\", \"rootContName\": \"DC-Frankfurt\"}, \"children\": [{\"vmmRsAcc\": {\"attributes\": {\"tDn\": \"uni/vmmp-VMware/dom-VDS-Prod/usracc-vc-admin\"}}}]}}]}}]}}]}}`\n\nAn der EPG: `fvRsDomAtt tDn=uni/vmmp-VMware/dom-VDS-Prod resImedcy=immediate`. Die Port Group heißt `Tenant|Application Profile|EPG`.",
  "routers": [],
  "devices": [],
+ "aaa": [],
  "solutionConfig": [
   [
    "uni",

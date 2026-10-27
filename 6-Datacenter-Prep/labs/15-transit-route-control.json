@@ -1141,6 +1141,7 @@
  "solution": "`{\"fvTenant\": {\"attributes\": {\"name\": \"Shop\"}, \"children\": [{\"vzBrCP\": {\"attributes\": {\"name\": \"transit\", \"scope\": \"context\"}, \"children\": [{\"vzSubj\": {\"attributes\": {\"name\": \"subj\", \"revFltPorts\": \"yes\"}, \"children\": [{\"vzRsSubjFiltAtt\": {\"attributes\": {\"tnVzFilterName\": \"default\"}}}]}}]}}, {\"l3extOut\": {\"attributes\": {\"name\": \"WAN\"}, \"children\": [{\"l3extInstP\": {\"attributes\": {\"name\": \"Internet\"}, \"children\": [{\"l3extSubnet\": {\"attributes\": {\"ip\": \"192.168.50.0/24\", \"scope\": \"export-rtctrl\"}}}, {\"fvRsProv\": {\"attributes\": {\"tnVzBrCPName\": \"transit\"}}}]}}]}}, {\"l3extOut\": {\"attributes\": {\"name\": \"Partner\", \"enforceRtctrl\": \"export,import\"}, \"children\": [{\"l3extInstP\": {\"attributes\": {\"name\": \"PartnerNet\"}, \"children\": [{\"l3extSubnet\": {\"attributes\": {\"ip\": \"192.168.50.0/24\", \"scope\": \"import-security,import-rtctrl\"}}}, {\"l3extSubnet\": {\"attributes\": {\"ip\": \"8.8.8.0/24\", \"scope\": \"export-rtctrl\"}}}, {\"fvRsCons\": {\"attributes\": {\"tnVzBrCPName\": \"transit\"}}}]}}]}}]}}`\\n\\nExport Route Control Subnets steuern, welche Routen ein L3Out an seinen Nachbarn gibt; Import Route Control Subnets (nur mit Enforcement *Import*) steuern, was die ACI übernimmt. Klassifiziert wird weiterhin nur über *External Subnets for the External EPG*.",
  "vcenters": [],
  "devices": [],
+ "aaa": [],
  "solutionConfig": [
   [
    "uni",

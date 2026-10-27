@@ -11,7 +11,7 @@ cd 6-Datacenter-Prep
 python3 -m dcprep          # oder ./start.sh, unter Windows start.bat
 ```
 
-Dann im Browser **http://localhost:8080** öffnen und mit **admin / admin** anmelden.
+Dann im Browser **http://localhost:8080** öffnen und mit **admin / admin** anmelden (Domain *DefaultAuth*). Mit Login-Domains lautet der Benutzername per REST `apic#<Domain>\\<user>`.
 
 | Option | Wirkung |
 |---|---|
@@ -47,6 +47,9 @@ Der Zustand bleibt beim Beenden erhalten. Beim ersten Start ist die Fabric ferti
 | Shared Services | Route Leaking zwischen VRFs und Tenants: Contract mit Scope Tenant oder Global, exportierter Contract (Imported Contract, *Consumed Contract Interface*), Provider-Subnetz an der EPG und Consumer-Subnetz mit *Shared between VRFs*. Shared L3Out über External-EPG-Subnetze mit *Shared Route Control* und *Shared Security Import*. |
 | L2Out und stille Hosts | External Bridged Domain, L2Out mit Encap, Paths und External EPG an einer Bridge Domain. Stille Hosts (*Stiller Host* im Host-Dialog) lernt die ACI erst, wenn sie per ARP Flooding oder ARP Glean (Unicast Routing mit BD-Subnetz) gefragt werden. |
 | L3Out in der Praxis | SVI auf vPC (Side A/B, Secondary IP, Nachbarschaft zu beiden Border Leafs, LACP zum Router), Floating SVI mit Anchor Node und Floating IP, EIGRP, BFD (OSPF, EIGRP, BGP, Static), eBGP über Loopbacks mit Multihop-TTL, MD5-Passwort, BGP Timers Policy am VRF, Route Summarization (BGP/OSPF), Static Routes mit Preference und IP SLA Track. |
+| AAA und RBAC | TACACS+-, RADIUS- und LDAP-Provider mit Provider Groups, Login-Domains, Default- und Console-Authentication, Fallback auf lokal bei Serverausfall, Cisco AV-Pair (`shell:domains=...`) und Remote User Login Policy. Security Domains an Tenants, lokale Benutzer mit Domain, Rolle und Read/Write. Die REST-API filtert Lesezugriffe und lehnt Schreibzugriffe ohne Recht mit 403 ab. Simulierte AAA-Server unter *Simulation > AAA-Server*, Login-Protokoll unter *Admin > AAA*. |
+| In-Band-Management | In-Band EPG mit VLAN und BD inb, Static Node Addresses, Prüfung der Access Policy auf den APIC-Ports (Fault S0211). AAA-Provider und NTP können das In-Band EPG nutzen. |
+| ESG und uSeg | Endpoint Security Groups mit EPG- und IP-Selektoren (danach zählen nur noch die ESG-Contracts, ESG↔EPG ist nicht möglich), uSeg EPGs mit IP- und MAC-Attributen in derselben BD und Domain. |
 | Route Control und Transit Routing | Export und Import Route Control Subnets am External EPG (exakt oder *Aggregate*), Route Control Enforcement *Import* am L3Out, Route-Profile `default-export` und `default-import` mit Contexts und Match Rules. Routen eines L3Outs gehen nur mit Export Route Control an ein anderes L3Out (Transit Routing). |
 | Service Graph mit PBR | L4-L7 Device (Concrete Device, Cluster Interfaces mit Encap), Service Graph Template mit Function Node (Routing Mode Redirect), Device Selection Policy und PBR Policies. Die ACI legt Shadow-EPGs auf den Firewall-Ports an, lernt die Firewall-Interfaces und leitet den Verkehr um. Die simulierte Firewall (*Simulation > L4-L7 Geräte*) hat ein eigenes Regelwerk. Falsche MAC, fehlendes VLAN oder fehlende Device Selection Policy führen zu nachvollziehbaren Fehlern. Bei gleicher Priorität gewinnt Redirect vor Permit. |
 | Disabled Interfaces | Deaktivierte Ports gehen admin-down, Endpoints und Nachbarschaften dahinter fallen weg. |
@@ -62,7 +65,7 @@ Menüs und Untermenüs wie beim APIC:
 | Tenants | ALL TENANTS, Add Tenant, Tenant Search und je Tenant der Baum: Application Profiles (EPGs mit Domains, Static Ports, Static Leafs, Contracts, Subnets), Networking (Bridge Domains, VRFs, L2Outs, L3Outs mit Route Maps), Contracts (Standard, Taboos, Imported, Filters), Policies (OSPF Interface, Match Rules, L4-L7 Policy-Based Redirect), Services > L4-L7 (Service Graph Templates, Devices, Device Selection Policies, Deployed Graph Instances), im Tenant mgmt die Node Management Addresses |
 | Fabric | Inventory (Topologie, Pod 1 mit jedem Switch: Physical/PC/VPC Interfaces, LLDP, OSPF, BGP, NTP; Fabric Membership; Disabled Interfaces), Fabric Policies (Pods, Date and Time), Access Policies (Quick Start, Interface Configuration, Switches, Interfaces, Policies, Pools, Physical, External Bridged und L3 Domains) |
 | Virtual Networking | VMM Domains > VMware: vCenter Domain mit Controllern, Credentials und vSwitch Policy; Operational zeigt Verbindung, Port Groups und Hypervisors |
-| Admin | AAA, Firmware, Config Rollbacks, Import/Export |
+| Admin | AAA (Authentication, Login Domains, Security Domains, Local Users, TACACS+/RADIUS/LDAP, Login-Protokoll), Firmware, Config Rollbacks, Import/Export |
 | Operations | Visibility & Troubleshooting (Traffic-Test), Capacity Dashboard, EP Tracker |
 | **Simulation** | gibt es nur hier: Topologie und simulierte Hosts, externe Router, vCenter (ESXi-Hosts und VMs), L4-L7 Geräte (Firewalls), Labs, Einstellungen |
 
@@ -111,6 +114,9 @@ Unter *Simulation > Labs* laden. Jedes Lab setzt die Konfiguration auf einen Sta
 | 18 | eBGP über Loopbacks: Multihop, MD5, Timer und Summarization | 40 min |
 | 19 | EIGRP und Static Route mit IP SLA Track | 40 min |
 | 20 | Floating SVI für einen virtuellen Router | 30 min |
+| 21 | AAA: TACACS+, Login-Domain und RBAC | 35 min |
+| 22 | In-Band-Management | 35 min |
+| 23 | Endpoint Security Groups und uSeg EPGs | 35 min |
 
 Die Lab-Dateien entstehen aus `Labs-Quelle/build_labs.py` (`python3 Labs-Quelle/build_labs.py`). Die Tests prüfen für jedes Lab, dass es ohne Lösung nicht bestanden und mit Musterlösung vollständig bestanden ist.
 
@@ -160,6 +166,7 @@ Für Ansible: `use_ssl: false` und `port: 8080` setzen, siehe `beispiele/ansible
 |---|---|
 | S0101 | Cluster-Größe aus dem Setup passt nicht zur Anzahl der APICs (nicht Fully Fit) |
 | S0134 | Node ID doppelt vergeben |
+| S0211 | In-Band-VLAN nicht auf den APIC-Ports erlaubt (Access Policy fehlt) |
 | S0468 | L3Out-Interface unvollständig (Node fehlt im Node Profile, keine IP) |
 | S0475, S0476 | vPC Protection Group unvollständig oder Node doppelt |
 | S0477 | vPC Policy Group auf Leaf ohne vPC-Partner |

@@ -701,6 +701,7 @@
  "solution": "`{\"fvTenant\": {\"attributes\": {\"name\": \"Shop\"}, \"children\": [{\"l3extOut\": {\"attributes\": {\"name\": \"VNF\"}, \"children\": [{\"l3extRsEctx\": {\"attributes\": {\"tnFvCtxName\": \"Prod\"}}}, {\"l3extRsL3DomAtt\": {\"attributes\": {\"tDn\": \"uni/l3dom-L3Dom-WAN\"}}}, {\"ospfExtP\": {\"attributes\": {\"areaId\": \"0.0.0.2\"}}}, {\"l3extLNodeP\": {\"attributes\": {\"name\": \"anchor\"}, \"children\": [{\"l3extRsNodeL3OutAtt\": {\"attributes\": {\"tDn\": \"topology/pod-1/node-103\", \"rtrId\": \"1.1.1.103\"}}}, {\"l3extLIfP\": {\"attributes\": {\"name\": \"floating\"}, \"children\": [{\"ospfIfP\": {\"attributes\": {}}}, {\"l3extVirtualLIfP\": {\"attributes\": {\"nodeDn\": \"topology/pod-1/node-103\", \"encap\": \"vlan-150\", \"addr\": \"172.16.10.11/24\", \"mtu\": \"1500\"}, \"children\": [{\"l3extRsDynPathAtt\": {\"attributes\": {\"tDn\": \"uni/phys-PhysDom-Server\", \"floatingAddr\": \"172.16.10.100/24\"}}}]}}]}}]}}, {\"l3extInstP\": {\"attributes\": {\"name\": \"VNF-Net\"}, \"children\": [{\"l3extSubnet\": {\"attributes\": {\"ip\": \"10.77.0.0/16\"}}}, {\"fvRsProv\": {\"attributes\": {\"tnVzBrCPName\": \"web-to-vnf\"}}}]}}]}}]}}`",
  "vcenters": [],
  "devices": [],
+ "aaa": [],
  "solutionConfig": [
   [
    "uni",

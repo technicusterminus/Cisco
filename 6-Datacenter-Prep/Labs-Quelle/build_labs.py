@@ -1119,6 +1119,144 @@ lab(id='20-floating-svi', title='20 Floating SVI für einen virtuellen Router', 
 
 
 # ----------------------------------------------------------------------------
+# Lab 21 - AAA mit TACACS+, Login-Domain und RBAC
+# ----------------------------------------------------------------------------
+ISE21 = {'name': 'ise1', 'ip': '192.168.10.40', 'type': 'tacacs', 'key': 'Tac#Key2026', 'down': False,
+         'users': [{'name': 'netadmin', 'pwd': 'Net#2026', 'avpair': 'shell:domains=all/admin/'},
+                   {'name': 'shopops', 'pwd': 'Shop#2026', 'avpair': 'shell:domains=Shop-Dom/tenant-admin/'},
+                   {'name': 'guest', 'pwd': 'Guest#2026', 'avpair': ''}]}
+SOL21 = [['uni/userext', mo('aaaUserEp', {},
+            mo('aaaTacacsPlusEp', {}, mo('aaaTacacsPlusProvider', {'name': '192.168.10.40', 'key': 'Tac#Key2026'},
+                                         mo('aaaRsSecProvToEpg', {'tDn': 'uni/tn-mgmt/mgmtp-default/oob-default'})),
+                 mo('aaaTacacsPlusProviderGroup', {'name': 'ISE-TACACS'}, mo('aaaProviderRef', {'name': '192.168.10.40', 'order': '1'}))),
+            mo('aaaLoginDomain', {'name': 'ISE'}, mo('aaaDomainAuth', {'realm': 'tacacs', 'providerGroup': 'ISE-TACACS'})),
+            mo('aaaDomain', {'name': 'Shop-Dom'}),
+            mo('aaaUser', {'name': 'shopro', 'pwd': 'Read#2026'}, mo('aaaUserDomain', {'name': 'Shop-Dom'}, mo('aaaUserRole', {'name': 'tenant-admin', 'privType': 'readPriv'}))))],
+         ['uni/tn-Shop', mo('fvTenant', {}, mo('aaaDomainRef', {'name': 'Shop-Dom'}))]]
+lab(id='21-aaa-tacacs-rbac', title='21 AAA: TACACS+, Login-Domain und RBAC', topic='Security', level='Fortgeschritten', duration='35 min',
+    fabric='discovered',
+    goals=['Einen TACACS+-Provider mit Provider Group und Login-Domain einrichten', 'Rechte über das Cisco AV-Pair vergeben',
+           'Security Domains für mandantengetrennte Rechte nutzen'],
+    intro='Die Admins melden sich künftig über **ISE** (TACACS+) an: Server **192.168.10.40**, Shared Key **Tac#Key2026**, erreichbar über '
+          'das Out-of-Band-Netz. Auf dem ISE sind die Benutzer schon angelegt:\n'
+          '- **netadmin** / Net#2026 – AV-Pair `shell:domains=all/admin/`\n'
+          '- **shopops** / Shop#2026 – AV-Pair `shell:domains=Shop-Dom/tenant-admin/`\n'
+          '- **guest** / Guest#2026 – ohne AV-Pair\n\n'
+          'Dazu soll es einen lokalen Benutzer **shopro** (Passwort Read#2026) geben, der den Tenant Shop nur **lesen** darf. '
+          'Die lokale Anmeldung (admin) bleibt Standard.',
+    config=[SERVER_ACCESS, shop_tenant(with_contracts=True)], hosts=[WEB1, APP1], aaa=[ISE21],
+    tasks=[
+        task('TACACS+ Provider', '**Admin > AAA > TACACS+ Management > TACACS+ Providers**: 192.168.10.40, Key Tac#Key2026, Management EPG '
+             '**default (Out-of-Band)**.'),
+        task('Provider Group', 'TACACS+ Provider Group **ISE-TACACS** mit dem Provider (Priorität 1).'),
+        task('Login Domain', '**Authentication > Login Domains**: **ISE**, Realm TACACS+, Provider Group ISE-TACACS.',
+             'Anmelden dann mit Domain ISE auf der Login-Seite oder per REST als `apic#ISE\\\\netadmin`.'),
+        task('Security Domain', '**Security > Security Domains**: **Shop-Dom**. Am Tenant Shop (Rechtsklick > Add Security Domain) Shop-Dom zuordnen.',
+             'Der Name muss zum AV-Pair passen: shopops bekommt tenant-admin nur in Shop-Dom.'),
+        task('Lokaler Benutzer', '**Local Users > Create Local User**: **shopro**, Passwort Read#2026, Security Domain Shop-Dom, Rolle '
+             '**tenant-admin** mit **Read**.'),
+        task('Ausprobieren', 'Ab- und als shopops (Domain ISE) wieder anmelden: Den Tenant Shop darfst du ändern, Access Policies nicht. '
+             'Was passiert bei guest? Unter *Login-Protokoll* siehst du, wie jede Anmeldung lief.'),
+    ],
+    checks=[check('netadmin meldet sich über ISE als admin an', 'login', user='apic#ISE\\netadmin', pwd='Net#2026', role='admin'),
+            check('shopops darf den Tenant Shop ändern', 'rbac', user='apic#ISE\\shopops', pwd='Shop#2026', dn='uni/tn-Shop/BD-BD-Web'),
+            check('shopops darf keine Access Policies ändern', 'rbac', user='apic#ISE\\shopops', pwd='Shop#2026', dn='uni/infra/attentp-AAEP-Server', expect=False),
+            check('guest ohne AV-Pair wird abgewiesen', 'login', user='apic#ISE\\guest', pwd='Guest#2026', expect=False),
+            check('shopro darf Shop nur lesen', 'rbac', user='shopro', pwd='Read#2026', dn='uni/tn-Shop/BD-BD-Web', expect=False),
+            check('shopro kann sich anmelden', 'login', user='shopro', pwd='Read#2026')],
+    solution='Provider `aaaTacacsPlusProvider name=192.168.10.40` mit `key` und `aaaRsSecProvToEpg` auf oob-default, Provider Group '
+             '`aaaTacacsPlusProviderGroup ISE-TACACS` mit `aaaProviderRef`, Login Domain `aaaLoginDomain ISE` mit `aaaDomainAuth realm=tacacs '
+             'providerGroup=ISE-TACACS`. Security Domain `aaaDomain Shop-Dom`, am Tenant `aaaDomainRef name=Shop-Dom`. Lokaler Benutzer mit '
+             '`aaaUserDomain Shop-Dom` und `aaaUserRole tenant-admin privType=readPriv`.')
+
+# ----------------------------------------------------------------------------
+# Lab 22 - In-Band-Management
+# ----------------------------------------------------------------------------
+INBACC22 = mo('polUni', {},
+              mo('infraInfra', {},
+                 mo('fvnsVlanInstP', {'name': 'VLAN-Pool-INB', 'allocMode': 'static'}, mo('fvnsEncapBlk', {'from': 'vlan-90', 'to': 'vlan-90'})),
+                 mo('infraAttEntityP', {'name': 'AAEP-APIC'}, mo('infraRsDomP', {'tDn': 'uni/phys-PhysDom-INB'})),
+                 mo('infraFuncP', {}, mo('infraAccPortGrp', {'name': 'IPG-APIC'}, mo('infraRsAttEntP', {'tDn': 'uni/infra/attentp-AAEP-APIC'}))),
+                 mo('infraAccPortP', {'name': 'IntProf-Leaf101-102'}, mo('infraHPortS', {'name': 'APIC-Ports', 'type': 'range'},
+                    mo('infraPortBlk', {'name': 'block2', 'fromPort': '48', 'toPort': '48'}),
+                    mo('infraRsAccBaseGrp', {'tDn': 'uni/infra/funcprof/accportgrp-IPG-APIC'})))),
+              mo('physDomP', {'name': 'PhysDom-INB'}, mo('infraRsVlanNs', {'tDn': 'uni/infra/vlanns-[VLAN-Pool-INB]-static'})))
+INB22 = mo('fvTenant', {'name': 'mgmt'},
+           mo('fvBD', {'name': 'inb'}, mo('fvSubnet', {'ip': '10.90.0.1/24'})),
+           mo('mgmtMgmtP', {'name': 'default'}, mo('mgmtInB', {'name': 'default', 'encap': 'vlan-90'}, mo('mgmtRsMgmtBD', {'tnFvBDName': 'inb'}),
+              *[mo('mgmtRsInBStNode', {'tDn': 'topology/pod-1/node-%d' % n, 'addr': '10.90.0.%d/24' % (10 if n == 1 else n), 'gw': '10.90.0.1'})
+                for n in (1, 101, 102)])))
+lab(id='22-inband-management', title='22 In-Band-Management', topic='Fabric-Betrieb', level='Fortgeschritten', duration='35 min',
+    fabric='discovered',
+    goals=['In-Band-Management mit eigenem VLAN, BD inb und In-Band EPG einrichten', 'Verstehen, warum die APIC-Ports eine Access Policy brauchen',
+           'Einen AAA-Server über In-Band ansprechen'],
+    intro='Das Management soll zusätzlich **In-Band** über die Fabric laufen: Netz **10.90.0.0/24**, Gateway **10.90.0.1** (BD **inb** im '
+          'Tenant mgmt), **vlan-90**. Adressen: apic1 **10.90.0.10**, leaf101 **10.90.0.101**, leaf102 **10.90.0.102**.\n\n'
+          'Anschließend soll der RADIUS-Server **192.168.20.41** (Key **Rad#2026**) über das In-Band EPG erreicht werden. Benutzer dort: '
+          '**opsuser** / Ops#2026 mit AV-Pair `shell:domains=all/read-all/`.',
+    config=[SERVER_ACCESS], hosts=[WEB1],
+    aaa=[{'name': 'radius1', 'ip': '192.168.20.41', 'type': 'radius', 'key': 'Rad#2026', 'down': False,
+          'users': [{'name': 'opsuser', 'pwd': 'Ops#2026', 'avpair': 'shell:domains=all/read-all/'}]}],
+    tasks=[
+        task('Access Policies für die APIC-Ports', 'Der APIC hängt an **leaf101/102 eth1/48**. VLAN Pool **VLAN-Pool-INB** (static, vlan-90), '
+             'Physical Domain **PhysDom-INB**, AAEP **AAEP-APIC**, Policy Group **IPG-APIC** und im Interface Profile IntProf-Leaf101-102 '
+             'einen Selector **APIC-Ports** für Port 1/48.',
+             'Ohne diese Kette darf vlan-90 nicht auf den Port zum APIC – Fault S0211 am In-Band EPG.'),
+        task('BD inb', 'Im Tenant **mgmt** am BD **inb** das Subnetz **10.90.0.1/24** anlegen.'),
+        task('In-Band EPG', '**Tenants > mgmt > Node Management EPGs**: Rechtsklick **Create In-Band Management EPG**: **default**, '
+             'vlan-90, BD inb, Adressen für Node 1 (APIC), 101 und 102.'),
+        task('RADIUS über In-Band', 'RADIUS Provider 192.168.20.41 mit Key Rad#2026 und Management EPG **In-Band (default)**, Provider Group '
+             '**RAD**, Login Domain **RAD** (Realm RADIUS).'),
+        task('Verifizieren', 'Operational-Tab des In-Band EPG, `show controller`, auf leaf101 `show vlan extended`. Login als `opsuser` '
+             'mit Domain RAD.'),
+    ],
+    checks=[check('In-Band aktiv auf apic1, leaf101 und leaf102', 'inb', nodes=[1, 101, 102]),
+            check('Kein S0211-Fault mehr', 'nofaults', under='uni/tn-mgmt', code='S0211'),
+            check('opsuser meldet sich über RADIUS (In-Band) an', 'login', user='apic#RAD\\opsuser', pwd='Ops#2026', role='read-all')],
+    solution='Access: `' + json.dumps(INBACC22) + '`\\n\\nIn-Band: `' + json.dumps(INB22) + '`\\n\\nRADIUS-Provider mit `aaaRsSecProvToEpg '
+             'tDn=uni/tn-mgmt/mgmtp-default/inb-default`.')
+
+# ----------------------------------------------------------------------------
+# Lab 23 - Endpoint Security Groups und uSeg EPGs
+# ----------------------------------------------------------------------------
+INF23 = host('web-inf', '00:50:56:10:10:66', '10.10.10.66/24', '10.10.10.1', 110, [[L101, 'eth1/3']], descr='kompromittierter Webserver')
+SOL23 = mo('fvTenant', {'name': 'Shop'},
+           filt('tcp-8080', {'name': 'tcp-8080', 'etherT': 'ip', 'prot': 'tcp', 'dFromPort': '8080', 'dToPort': '8080'}),
+           contract('frontend-to-backend', ['tcp-8080']),
+           mo('fvAp', {'name': 'Webshop'},
+              mo('fvAEPg', {'name': 'Web'}, mo('fvRsPathAtt', {'tDn': path(101, 'eth1/3'), 'encap': 'vlan-110'})),
+              mo('fvAEPg', {'name': 'Quarantine', 'isAttrBasedEPg': 'yes'}, mo('fvRsBd', {'tnFvBDName': 'BD-Web'}),
+                 mo('fvRsDomAtt', {'tDn': 'uni/phys-PhysDom-Server'}), mo('fvCrtrn', {}, mo('fvIpAttr', {'name': 'infected', 'ip': '10.10.10.66'}))),
+              mo('fvESg', {'name': 'Frontend'}, mo('fvRsScope', {'tnFvCtxName': 'Prod'}),
+                 mo('fvEPgSelector', {'matchEpgDn': 'uni/tn-Shop/ap-Webshop/epg-Web'}), mo('fvRsCons', {'tnVzBrCPName': 'frontend-to-backend'})),
+              mo('fvESg', {'name': 'Backend'}, mo('fvRsScope', {'tnFvCtxName': 'Prod'}),
+                 mo('fvEPgSelector', {'matchEpgDn': 'uni/tn-Shop/ap-Webshop/epg-App'}), mo('fvRsProv', {'tnVzBrCPName': 'frontend-to-backend'}))))
+lab(id='23-esg-useg', title='23 Endpoint Security Groups und uSeg EPGs', topic='Policy / Segmentierung', level='Fortgeschritten',
+    duration='35 min', fabric='discovered',
+    goals=['Policy mit Endpoint Security Groups statt EPG-Contracts aufbauen', 'Einen einzelnen Host per uSeg EPG nach IP isolieren',
+           'Verstehen, welche Contracts nach der ESG-Zuordnung noch gelten'],
+    intro='Das Security-Team stellt auf **Endpoint Security Groups** um: Die Policy hängt nicht mehr an den EPGs, sondern an ESGs im VRF Prod. '
+          'Gleichzeitig ist der Webserver **web-inf** (10.10.10.66 an leaf101 eth1/3, vlan-110) kompromittiert und muss sofort isoliert werden, '
+          'ohne ihn umzukonfigurieren.\n\nZwischen Web und App gibt es noch **keinen** Contract.',
+    config=[SERVER_ACCESS, shop_tenant()], hosts=[WEB1, APP1, INF23],
+    tasks=[
+        task('Static Port für web-inf', 'An der EPG **Web** einen Static Port leaf101 eth1/3, vlan-110 ergänzen. web-inf ist dann in Web gelernt.'),
+        task('uSeg EPG', 'Im AP Webshop unter **uSeg EPGs** die EPG **Quarantine** (BD-Web, Domain PhysDom-Server) mit dem IP-Attribut '
+             '**10.10.10.66** anlegen.', 'Die ACI klassifiziert den Host jetzt nach seiner IP in Quarantine – Port und VLAN bleiben gleich.'),
+        task('Filter und Contract', 'Filter **tcp-8080** und Contract **frontend-to-backend**.'),
+        task('ESGs', '**Endpoint Security Groups**: **Frontend** (VRF Prod, EPG Selector Web) konsumiert, **Backend** (VRF Prod, EPG Selector App) '
+             'stellt den Contract bereit.', 'Ein Contract zwischen einer ESG und einer EPG ist nicht möglich.'),
+        task('Prüfen', 'web1 → app1 tcp/8080 klappt, web-inf → app1 nicht. Im Traffic-Test siehst du die Klassifizierung (EPG → ESG). '
+             'Auf leaf101: `show zoning-rule` – welche pcTags stehen in den Regeln?'),
+    ],
+    checks=[check('web-inf liegt in der uSeg EPG Quarantine', 'endpoint', host='web-inf', epg='uni/tn-Shop/ap-Webshop/epg-Quarantine'),
+            check('web1 → app1 tcp/8080 über die ESGs', 'traffic', src='web1', dst='app1', proto='tcp', port=8080, expect=True, via='ESG'),
+            check('web-inf → app1 blockiert', 'traffic', src='web-inf', dst='app1', proto='tcp', port=8080, expect=False),
+            check('web1 → app1 tcp/22 blockiert', 'traffic', src='web1', dst='app1', proto='tcp', port=22, expect=False)],
+    solution='`' + json.dumps(SOL23) + '`')
+
+
+# ----------------------------------------------------------------------------
 # Maschinenlesbare Musterloesungen (fuer die Tests: [URL-DN, Body])
 # ----------------------------------------------------------------------------
 BGP_RR = ['uni/fabric/bgpInstP-default', mo('bgpInstPol', {}, mo('bgpAsP', {'asn': '65001'}),
@@ -1211,6 +1349,14 @@ SOLUTIONS = {
     '18-ebgp-loopback-md5-summary': [['uni', SOL18]],
     '19-eigrp-static-track': [['uni', SOL19]],
     '20-floating-svi': [['uni', SOL20]],
+    '21-aaa-tacacs-rbac': SOL21,
+    '22-inband-management': [['uni', INBACC22], ['uni', INB22],
+                             ['uni/userext', mo('aaaUserEp', {}, mo('aaaRadiusEp', {},
+                                 mo('aaaRadiusProvider', {'name': '192.168.20.41', 'key': 'Rad#2026'},
+                                    mo('aaaRsSecProvToEpg', {'tDn': 'uni/tn-mgmt/mgmtp-default/inb-default'})),
+                                 mo('aaaRadiusProviderGroup', {'name': 'RAD'}, mo('aaaProviderRef', {'name': '192.168.20.41'}))),
+                                 mo('aaaLoginDomain', {'name': 'RAD'}, mo('aaaDomainAuth', {'realm': 'radius', 'providerGroup': 'RAD'})))]],
+    '23-esg-useg': [['uni', SOL23]],
     '14-l2out-migration': [['uni', L2ACC14], ['uni', L2OUT14], ['uni/tn-Shop/BD-BD-Migration', mo('fvBD', {'arpFlood': 'yes'})]],
 }
 
@@ -1226,6 +1372,7 @@ def main():
         l.setdefault('routers', [])
         l.setdefault('vcenters', [])
         l.setdefault('devices', [])
+        l.setdefault('aaa', [])
         l['solutionConfig'] = SOLUTIONS[l['id']]
         with open(os.path.join(OUT, l['id'] + '.json'), 'w', encoding='utf-8') as f:
             json.dump(l, f, ensure_ascii=False, indent=1)

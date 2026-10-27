@@ -36,7 +36,7 @@ Object.assign(Views, {
 
   async oper(body, dn, o, spec) {
     const op = await API.sim('oper?dn=' + encodeURIComponent(dn));
-    const names = { endpoints: 'Client End-Points', deployed: 'Deployed Leaves', contracts: 'Contracts', neighbors: 'Neighbors', routes: 'Routes', vmm: 'General' };
+    const names = { endpoints: 'Client End-Points', deployed: 'Deployed Leaves', contracts: 'Contracts', neighbors: 'Neighbors', routes: 'Routes', vmm: 'General', inb: 'General' };
     const holder = h('div');
     const show = id => {
       clear(holder);
@@ -60,6 +60,13 @@ Object.assign(Views, {
           table([{ l: 'Host', f: r => r.name }, { l: 'Uplinks', f: r => r.legs.map(l => 'Node-' + l[0] + ' ' + l[1]).join(', ') },
             { l: 'Status', f: r => stateBadge(r.ok.length ? 'up' : 'down') }, { l: 'Hinweis', f: r => r.reasons.join('; ') }],
             v.hosts || [], { empty: 'Kein ESXi-Host in diesem DVS. ESXi-Hosts verwaltest du unter Simulation > vCenter.' })));
+      }
+      if (id === 'inb') {
+        const v = op.inb || {};
+        holder.appendChild(h('div', { class: 'card' }, h('div', { class: 'card-h' }, 'In-Band EPG ', stateBadge(v.reasons && v.reasons.length ? 'failed' : 'applied')),
+          (v.reasons || []).map(r => h('p', { class: 'note warn' }, r)),
+          h('p', null, 'VLAN auf den APIC-Ports: ', (v.ports || []).map(p => 'Node-' + p[0] + ' ' + p[1]).join(', ') || '—')));
+        holder.appendChild(table([{ l: 'Node', f: r => r.node }, { l: 'Zustand', f: r => stateBadge(r.why ? 'down' : 'up') }, { l: 'Hinweis', f: r => r.why || '' }], v.nodes || [], { empty: 'Keine Static Node Addresses.' }));
       }
       if (id === 'routes') holder.appendChild(table([{ l: 'Node', f: r => r.node }, { l: 'Prefix', f: r => r.prefix }, { l: 'Next Hop', f: r => r.nh }, { l: 'Interface', f: r => r.via }, { l: 'Protocol', f: r => r.proto }], op.routes, { empty: 'Keine Routen.' }));
     };
@@ -626,6 +633,60 @@ Object.assign(Views, {
       }));
     };
     await draw();
+  },
+
+  /* ================================================================ AAA */
+  async aaaQuickStart(w) {
+    w.appendChild(paneHead('AAA – Quick Start', 'Authentifizierung, Login-Domains und rollenbasierte Rechte'));
+    w.appendChild(h('div', { class: 'card' }, md([
+      '1. **Provider** anlegen (TACACS+, RADIUS oder LDAP Management): IP des Servers, Shared Key, Management EPG (Out-of-Band oder In-Band).',
+      '2. **Provider Group** mit diesen Providern (Reihenfolge = Priorität).',
+      '3. **Login Domain** mit Realm und Provider Group – oder unter *AAA* die **Default Authentication** umstellen. Die Domain *fallback* bleibt immer lokal.',
+      '4. Der Server liefert im **Cisco AV-Pair** die Rechte, z. B. `shell:domains=all/admin/` oder `shell:domains=Shop/tenant-admin/`. Fehlt es, entscheidet die *Remote user login policy*.',
+      '5. Für lokale Benutzer: **Security Domains** anlegen, Tenants zuordnen (Tenant > Add Security Domain) und beim Benutzer Domain + Rolle + Read/Write vergeben.',
+      '',
+      'Anmelden: auf der Login-Seite die **Domain** wählen; per REST `apic#<Domain>\\\\<user>` als Benutzername. Die simulierten Server verwaltest du unter **Simulation > AAA-Server**.',
+    ].join('\n'))));
+    const who = await API.sim('whoami');
+    w.appendChild(h('div', { class: 'card' }, h('div', { class: 'card-h' }, 'Angemeldet als ', h('b', null, who.user)),
+      h('p', null, 'Anmeldung: ', who.how), table([{ l: 'Security Domain', f: r => r.domain }, { l: 'Rolle', f: r => r.role }, { l: 'Recht', f: r => r.priv === 'writePriv' ? 'Write' : 'Read' }], who.roles)));
+  },
+
+  async loginLog(w) {
+    const rows = await API.sim('logins');
+    w.appendChild(paneHead('Login-Protokoll', 'Wer hat sich wie angemeldet (neueste zuerst)'));
+    w.appendChild(table([{ l: 'Zeit', f: r => fmtTs(r.ts) }, { l: 'Benutzer', f: r => r.user }, { l: 'Authentifizierung', f: r => r.how }, { l: 'Rollen', f: r => r.roles }], rows, { empty: 'Noch keine Logins.' }));
+  },
+
+  async 'sim/aaasrv'(w) {
+    const draw = async () => {
+      const list = await API.sim('aaaservers');
+      clear(w);
+      w.appendChild(paneHead('Simulation – AAA-Server', 'TACACS+-, RADIUS- und LDAP-Server im Management-Netz', [h('button', { class: 'btn primary small', onclick: () => Views.aaaServerDialog(null, draw) }, '+ Server')]));
+      w.appendChild(h('div', { class: 'card note' }, md('Jeder Server kennt Benutzer mit Passwort und **Cisco AV-Pair**. Der APIC erreicht ihn nur über das Management EPG des Providers – also mit OOB-Adresse des APIC bzw. aktiver In-Band-Adresse. Mit **ausgefallen** testest du Fallback und Provider-Reihenfolge.')));
+      w.appendChild(table([{ l: 'Name', f: r => r.name }, { l: 'Typ', f: r => r.type.toUpperCase() }, { l: 'IP', f: r => r.ip }, { l: 'Shared Key', f: r => r.key ? 'gesetzt' : '—' },
+        { l: 'Zustand', f: r => stateBadge(r.down ? 'down' : 'up') }, { l: 'Benutzer', f: r => r.users.map(u => u.name + ' (' + (u.avpair || 'kein AV-Pair') + ')').join(', ') }], list, {
+        onRow: r => Views.aaaServerDialog(r, draw),
+        actions: r => [iconBtn('🗑', 'Löschen', () => confirmBox('Server ' + r.ip + ' entfernen?', async () => { await API.sim('aaaservers', { op: 'delete', ip: r.ip }); draw(); }), 'danger')],
+        empty: 'Noch keine AAA-Server.',
+      }));
+    };
+    await draw();
+  },
+
+  aaaServerDialog(x, after) {
+    const f = buildForm([{ k: 'name', l: 'Name', ph: 'ise1' }, { k: 'type', l: 'Typ', t: 'radio', o: [['tacacs', 'TACACS+'], ['radius', 'RADIUS'], ['ldap', 'LDAP']] },
+      { k: 'ip', l: 'IP-Adresse', req: true, ph: '192.168.10.40' }, { k: 'key', l: 'Shared Key / Bind-Passwort', t: 'password', help: x ? 'leer = unverändert' : '' },
+      { k: 'down', l: 'Server ausgefallen', t: 'yesno' },
+      { k: 'users', l: 'Benutzer', t: 'rows', start: true, cols: [{ k: 'name', l: 'Benutzer', ph: 'netops1', req: true }, { k: 'pwd', l: 'Passwort', t: 'password' },
+        { k: 'avpair', l: 'Cisco AV-Pair', ph: 'shell:domains=all/admin/' }] }],
+    x ? { name: x.name, type: x.type, ip: x.ip, down: x.down ? 'yes' : 'no', users: x.users.map(u => ({ name: u.name, pwd: '***', avpair: u.avpair })) } : { type: 'tacacs', down: 'no' }, {}, 'create');
+    modal(x ? 'AAA-Server ' + x.ip : 'AAA-Server hinzufügen', f.el, [{ l: 'Abbrechen' }, { l: 'Speichern', primary: true, fn: async () => {
+      const v = f.get();
+      await API.sim('aaaservers', { op: 'set', old: x ? x.ip : null, obj: Object.assign(v, { down: v.down === 'yes', key: x && !v.key ? '***' : v.key }) });
+      toast('Server gespeichert');
+      if (after) after();
+    } }], { wide: true });
   },
 
   /* ================================================================ Operations */

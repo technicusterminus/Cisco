@@ -111,6 +111,7 @@ class Engine:
         self._services()
         self._endpoints()
         self._l3outs()
+        self._inband()
         self._ntp()
         self._emit_ports()
         self._emit_faults()
@@ -128,6 +129,59 @@ class Engine:
                 a = dict(r)
                 a['id'] = str(a['id'])
                 self.store.add('subj-[%s]/%s-%s' % (a['affected'], rn, a['id']), cls, a, True)
+
+    def _inband(self):
+        """In-Band-Management: In-Band EPG (VLAN), BD inb und Access Policies an den APIC-Ports."""
+        self.inb = {}
+        self.inb_info = []
+        for epg in self.store.by_class('mgmtInB'):
+            a = self.A(epg)
+            info = {'dn': epg, 'vlan': vlan_num(a['encap']), 'reasons': [], 'ports': [], 'nodes': {}}
+            self.inb_info.append(info)
+            vlan = info['vlan']
+            bdrs = self.A(epg + '/rsmgmtBD') or {}
+            bd = bdrs.get('tDn') if bdrs.get('state') == 'formed' else None
+            if vlan is None:
+                info['reasons'].append('Encap (VLAN) fehlt am In-Band EPG')
+            if not bd:
+                info['reasons'].append('In-Band EPG ist mit keiner gueltigen Bridge Domain verknuepft')
+            gws = [x for x in self.bd_subnets(bd)] if bd else []
+            if bd and not gws:
+                info['reasons'].append('BD %s hat kein Subnetz (Gateway fuer In-Band)' % self.short(bd))
+            ctl = sorted(l for l, pi in self.ports.items() if (pi.get('peer') or ('',))[0] == 'controller')
+            if vlan is not None:
+                for l in ctl:
+                    pg = self.ports[l]['pg']
+                    doms = self._pg_info(pg)['domains'] if pg else []
+                    if any(self.vlan_in_domain(d, vlan) for d in doms):
+                        info['ports'].append(l)
+                if not info['ports']:
+                    info['reasons'].append('Die APIC-Ports (%s) haben keine Access Policy mit einer Domain, deren VLAN Pool vlan-%d enthaelt' % (
+                        ', '.join('%s %s' % (self.nodes[n]['name'], p) for n, p in ctl) or 'keine', vlan))
+                    self.fault(epg, 'S0211', 'major', 'In-Band management VLAN vlan-%d cannot be deployed on the APIC-facing ports: '
+                               'no domain with this VLAN on their access policy' % vlan, 'inb-vlan-not-deployable', domain='infra')
+            for rs in self.kids(epg, 'mgmtRsInBStNode'):
+                ra = self.A(rs)
+                m = re.search(r'/node-(\d+)$', ra['tDn'])
+                if not m or not ra['addr']:
+                    continue
+                nid = int(m.group(1))
+                net = net_of(ra['addr'])
+                why = None
+                if info['reasons']:
+                    why = info['reasons'][0]
+                elif not any(net == x['net'] for x in gws):
+                    why = 'Adresse %s liegt in keinem Subnetz des BD %s' % (ra['addr'], self.short(bd))
+                elif not any(ra['gw'] == x['gw'] for x in gws):
+                    why = 'Gateway %s ist nicht die Gateway-IP des BD %s' % (ra['gw'], self.short(bd))
+                elif nid != 1 and self.nodes.get(nid, {}).get('state') != 'active':
+                    why = 'Node %d ist nicht aktiv' % nid
+                info['nodes'][nid] = why
+                if not why:
+                    self.inb[nid] = ra['addr']
+                    sysdn = '%s/node-%d/sys' % (self.poddn, nid)
+                    if self.has(sysdn):
+                        self.A(sysdn)['inbMgmtAddr'] = str(ip_of(ra['addr']))
 
     def _ntp(self):
         pgrp, pol = None, None
@@ -151,10 +205,15 @@ class Engine:
                 why = 'Date and Time Policy fehlt oder ist deaktiviert'
             elif not provs:
                 why = 'keine NTP-Server in der Date and Time Policy'
-            elif not self.oob.get(nid):
-                why = 'keine Management-Adresse (Static Node Management Address) - NTP-Server nicht erreichbar'
             else:
-                why = None
+                epgs = [(self.A(p + '/rsNtpProvToEpg') or {}).get('tDn', '') for p in self.kids(pol, 'datetimeNtpProv')]
+                inb_only = epgs and all('/inb-' in x for x in epgs)
+                if inb_only and not getattr(self, 'inb', {}).get(nid):
+                    why = 'NTP-Server ist ueber In-Band konfiguriert, der Switch hat keine aktive In-Band-Adresse'
+                elif not inb_only and not self.oob.get(nid):
+                    why = 'keine Management-Adresse (Static Node Management Address) - NTP-Server nicht erreichbar'
+                else:
+                    why = None
             self.ntp['nodes'][nid] = why
 
     # ------------------------------------------------------------------
@@ -599,6 +658,14 @@ class Engine:
                             'prov': self._rs_targets(dn, 'fvRsProv'),
                             'cons': self._rs_targets(dn, 'fvRsCons'),
                             'pref': a['prefGrMemb'] == 'include',
+                            'isolation': a['pcEnfPref'] == 'enforced'}
+        for dn in self.store.by_class('fvESg'):
+            a = self.A(dn)
+            vrs = self.A(dn + '/rsscope') or {}
+            vrf = vrs.get('tDn') if vrs.get('state') == 'formed' else ''
+            self.cls[dn] = {'dn': dn, 'kind': 'esg', 'name': a['name'], 'tenant': tenant_of(dn), 'ap': parent_dn(dn), 'bd': None,
+                            'vrf': vrf, 'pcTag': a['pcTag'], 'prov': self._rs_targets(dn, 'fvRsProv'),
+                            'cons': self._rs_targets(dn, 'fvRsCons'), 'pref': a['prefGrMemb'] == 'include',
                             'isolation': a['pcEnfPref'] == 'enforced'}
         for dn in self.store.by_class('l3extInstP'):
             a = self.A(dn)
@@ -1104,6 +1171,41 @@ class Engine:
     # ------------------------------------------------------------------
     # Hosts: Port-Channel/LACP, Endpoint-Learning
     # ------------------------------------------------------------------
+    def _useg(self, h, match):
+        """uSeg EPG: gleiche BD, gemeinsame Domain, IP- oder MAC-Attribut passt."""
+        base = match['epg']
+        bdoms = set(self._rs_targets(base, 'fvRsDomAtt'))
+        ip = ip_of(h['ip'])
+        for d, c in self.cls.items():
+            if c['kind'] != 'epg' or d == base or c['bd'] != match['bd'] or self.A(d).get('isAttrBasedEPg') != 'yes':
+                continue
+            if not bdoms & set(self._rs_targets(d, 'fvRsDomAtt')):
+                continue
+            for a in self.kids(d + '/crtrn', 'fvIpAttr'):
+                n = net_of(self.A(a)['ip']) if '/' in self.A(a)['ip'] else None
+                if (n and ip in n) or self.A(a)['ip'] == str(ip):
+                    return d
+            for a in self.kids(d + '/crtrn', 'fvMacAttr'):
+                if self.A(a)['mac'].upper() == h['mac'].upper():
+                    return d
+        return None
+
+    def _esg(self, h, hs):
+        ip = ip_of(h['ip'])
+        for d, c in self.cls.items():
+            if c['kind'] != 'esg' or c['vrf'] != hs['vrf'] or self.A(d)['shutdown'] == 'yes':
+                continue
+            for sel in self.kids(d, 'fvEPgSelector'):
+                if self.A(sel)['matchEpgDn'] == hs['epg']:
+                    return d
+            for sel in self.kids(d, 'fvEPSelector'):
+                m = re.match(r'''^\s*ip\s*==\s*['"]([^'"]+)['"]\s*$''', self.A(sel)['matchExpression'])
+                if m:
+                    n = net_of(m.group(1)) if '/' in m.group(1) else None
+                    if (n and ip in n) or m.group(1) == str(ip):
+                        return d
+        return None
+
     def bd_subnets(self, bd):
         out = []
         for s in self.kids(bd, 'fvSubnet'):
@@ -1214,6 +1316,12 @@ class Engine:
             hs.update({'learned': True, 'ipLearned': ip_learn, 'epg': match['epg'], 'bd': bd,
                        'vrf': match['vrf'], 'nodes': match['nodes'], 'encap': 'vlan-%d' % match['vlan'],
                        'dep': match})
+            useg = self._useg(h, match)
+            if useg:
+                hs['base'], hs['epg'] = match['epg'], useg
+            esg = self._esg(h, hs)
+            if esg:
+                hs['esg'] = esg
             if not ip_learn:
                 hs['reasons'].append('IP %s wird nicht gelernt (%s)' % (
                     ip, 'Unicast Routing im BD aus' if bda['unicastRoute'] != 'yes'
@@ -1224,7 +1332,7 @@ class Engine:
                 hs['reasons'].append('Stiller Host: sendet erst, wenn ihn jemand anspricht (ARP)')
                 continue
             mac = h['mac'].upper()
-            cep = match['epg'] + '/cep-' + mac
+            cep = hs['epg'] + '/cep-' + mac
             self.store.add(cep, 'fvCEp', {'mac': mac, 'name': mac, 'ip': str(ip) if ip_learn else '0.0.0.0',
                                           'encap': 'vlan-%d' % match['vlan'], 'lcC': 'learned,vmm' if h.get('vm') else 'learned',
                                           'fabricPathDn': path, 'id': '0', 'mcastAddr': 'not-applicable',
@@ -2054,6 +2162,9 @@ class Engine:
                         if self._entry_match(self.A(e), proto, sport, dport, flags, False):
                             return 'deny', 'Taboo Contract %s (Filter %s) schuetzt %s' % (
                                 self.short(tb), self.A(rda['tDn'])['name'], self.short(d['dn']))
+        if (s['kind'] == 'esg') != (d['kind'] == 'esg') and 'epg' in (s['kind'], d['kind']):
+            return 'deny', 'Contracts zwischen einer ESG und einer EPG werden nicht unterstuetzt - beide Seiten muessen ESGs sein ' \
+                           '(oder ein External EPG)'
         if s['dn'] == d['dn']:
             if s.get('isolation'):
                 return 'deny', 'Intra-EPG-Isolation ist aktiv'

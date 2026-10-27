@@ -416,7 +416,7 @@ class TestLabs(Base):
     def test_all_labs_solvable(self):
         self.S.sim['settings']['discoverySeconds'] = 0
         labs = self.S.labs()
-        self.assertGreaterEqual(len(labs), 21)
+        self.assertGreaterEqual(len(labs), 24)
         for lab in labs:
             with self.subTest(lab=lab['id']):
                 self.S.load_lab(lab['id'])
@@ -632,3 +632,68 @@ class TestServiceGraph(Base):
         g = next(iter(self.S.engine.graphs.values()))
         self.assertEqual(g['state'], 'failed')
         self.assertTrue(any(self.S.store.attrs(d)['code'] == 'S1690' for d in self.S.store.by_class('faultInst')))
+
+
+class TestSecurity(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.S, cls.httpd = serve('127.0.0.1', 0, tempfile.mkdtemp(), 'secret')
+        cls.port = cls.httpd.server_address[1]
+        threading.Thread(target=cls.httpd.serve_forever, daemon=True).start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.httpd.shutdown()
+
+    req = TestRest.req
+
+    def login(self, name, pwd):
+        s, j, _ = self.req('POST', '/api/aaaLogin.json', {"aaaUser": {"attributes": {"name": name, "pwd": pwd}}})
+        if s != 200:
+            return s, j['imdata'][0]['error']['attributes']['text']
+        return s, 'APIC-cookie=' + j['imdata'][0]['aaaLogin']['attributes']['token']
+
+    def test_aaa_rbac(self):
+        S = self.S
+        with S.lock:
+            S.sim['settings']['discoverySeconds'] = 0
+            S.load_lab('21-aaa-tacacs-rbac')
+            for url, body in S.lab('21-aaa-tacacs-rbac')['solutionConfig']:
+                post(S.store, url, body)
+            S.changed()
+        s, ck = self.login('apic#ISE\\netadmin', 'Net#2026')
+        self.assertEqual(s, 200, ck)
+        s, ck2 = self.login('apic#ISE\\shopops', 'Shop#2026')
+        self.assertEqual(s, 200, ck2)
+        # Lesen gefiltert: nur Shop und common
+        s, j, _ = self.req('GET', '/api/class/fvTenant.json', cookie=ck2)
+        names = sorted(x['fvTenant']['attributes']['name'] for x in j['imdata'])
+        self.assertEqual(names, ['Shop', 'common'])
+        # Schreiben im eigenen Tenant ja, Access Policies nein
+        s, _, _ = self.req('POST', '/api/mo/uni/tn-Shop.json', {"fvBD": {"attributes": {"name": "BD-Neu"}}}, ck2)
+        self.assertEqual(s, 200)
+        s, j, _ = self.req('POST', '/api/mo/uni/infra.json', {"fvnsVlanInstP": {"attributes": {"name": "X", "allocMode": "static"}}}, ck2)
+        self.assertEqual(s, 403)
+        self.assertNotIn('uni/infra/vlanns-[X]-static', S.store.objs)
+        s, _, _ = self.req('POST', '/sim/hosts', {'op': 'delete', 'name': 'web1'}, ck2)
+        self.assertEqual(s, 403)
+        # Falscher Key -> abgelehnt; Server aus -> Login-Domain ohne Fallback
+        with S.lock:
+            post(S.store, 'uni/userext/tacacsext/tacacsplusprovider-192.168.10.40', {"aaaTacacsPlusProvider": {"attributes": {"key": "falsch"}}})
+        s, txt = self.login('apic#ISE\\netadmin', 'Net#2026')
+        self.assertEqual(s, 401)
+        self.assertIn('Shared Key', txt)
+        with S.lock:
+            post(S.store, 'uni/userext/tacacsext/tacacsplusprovider-192.168.10.40', {"aaaTacacsPlusProvider": {"attributes": {"key": "Tac#Key2026"}}})
+            S.sim['aaa'][0]['down'] = True
+            # Default Authentication auf TACACS: bei Ausfall lokaler Fallback
+            post(S.store, 'uni/userext/authrealm/defaultauth', {"aaaDefaultAuth": {"attributes": {"realm": "tacacs", "providerGroup": "ISE-TACACS"}}})
+        s, txt = self.login('apic#ISE\\netadmin', 'Net#2026')
+        self.assertEqual(s, 401)
+        self.assertIn('kein Server erreichbar', txt)
+        s, ck3 = self.login('admin', 'secret')
+        self.assertEqual(s, 200, ck3)
+        s, w, _ = self.req('GET', '/sim/whoami', cookie=ck3)
+        self.assertIn('Fallback', w['how'])
+        s, ck4 = self.login('apic#fallback\\admin', 'secret')
+        self.assertEqual(s, 200)

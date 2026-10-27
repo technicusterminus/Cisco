@@ -1,0 +1,608 @@
+{
+ "id": "23-esg-useg",
+ "title": "23 Endpoint Security Groups und uSeg EPGs",
+ "topic": "Policy / Segmentierung",
+ "level": "Fortgeschritten",
+ "duration": "35 min",
+ "fabric": "discovered",
+ "goals": [
+  "Policy mit Endpoint Security Groups statt EPG-Contracts aufbauen",
+  "Einen einzelnen Host per uSeg EPG nach IP isolieren",
+  "Verstehen, welche Contracts nach der ESG-Zuordnung noch gelten"
+ ],
+ "intro": "Das Security-Team stellt auf **Endpoint Security Groups** um: Die Policy hängt nicht mehr an den EPGs, sondern an ESGs im VRF Prod. Gleichzeitig ist der Webserver **web-inf** (10.10.10.66 an leaf101 eth1/3, vlan-110) kompromittiert und muss sofort isoliert werden, ohne ihn umzukonfigurieren.\n\nZwischen Web und App gibt es noch **keinen** Contract.",
+ "config": [
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "infraInfra": {
+       "attributes": {},
+       "children": [
+        {
+         "fvnsVlanInstP": {
+          "attributes": {
+           "name": "VLAN-Pool-Server",
+           "allocMode": "static"
+          },
+          "children": [
+           {
+            "fvnsEncapBlk": {
+             "attributes": {
+              "from": "vlan-100",
+              "to": "vlan-199"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAttEntityP": {
+          "attributes": {
+           "name": "AAEP-Server"
+          },
+          "children": [
+           {
+            "infraRsDomP": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraFuncP": {
+          "attributes": {},
+          "children": [
+           {
+            "infraAccPortGrp": {
+             "attributes": {
+              "name": "IPG-Server-Access"
+             },
+             "children": [
+              {
+               "infraRsAttEntP": {
+                "attributes": {
+                 "tDn": "uni/infra/attentp-AAEP-Server"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAccPortP": {
+          "attributes": {
+           "name": "IntProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraHPortS": {
+             "attributes": {
+              "name": "Server-Ports",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraPortBlk": {
+                "attributes": {
+                 "name": "block2",
+                 "fromPort": "1",
+                 "toPort": "10"
+                }
+               }
+              },
+              {
+               "infraRsAccBaseGrp": {
+                "attributes": {
+                 "tDn": "uni/infra/funcprof/accportgrp-IPG-Server-Access"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraNodeP": {
+          "attributes": {
+           "name": "SwProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraLeafS": {
+             "attributes": {
+              "name": "101-102",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraNodeBlk": {
+                "attributes": {
+                 "name": "blk",
+                 "from_": "101",
+                 "to_": "102"
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "infraRsAccPortP": {
+             "attributes": {
+              "tDn": "uni/infra/accportprof-IntProf-Leaf101-102"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "physDomP": {
+       "attributes": {
+        "name": "PhysDom-Server"
+       },
+       "children": [
+        {
+         "infraRsVlanNs": {
+          "attributes": {
+           "tDn": "uni/infra/vlanns-[VLAN-Pool-Server]-static"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Shop"
+    },
+    "children": [
+     {
+      "fvCtx": {
+       "attributes": {
+        "name": "Prod"
+       }
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Web"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.10.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-App"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.20.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Webshop"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Web"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Web"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/1]",
+              "encap": "vlan-110",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "App"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-App"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/2]",
+              "encap": "vlan-120",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "hosts": [
+  {
+   "name": "web1",
+   "mac": "00:50:56:10:10:11",
+   "ip": "10.10.10.11/24",
+   "gw": "10.10.10.1",
+   "vlan": 110,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/1"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Webserver"
+  },
+  {
+   "name": "app1",
+   "mac": "00:50:56:10:20:11",
+   "ip": "10.10.20.11/24",
+   "gw": "10.10.20.1",
+   "vlan": 120,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/2"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Applikationsserver"
+  },
+  {
+   "name": "web-inf",
+   "mac": "00:50:56:10:10:66",
+   "ip": "10.10.10.66/24",
+   "gw": "10.10.10.1",
+   "vlan": 110,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/3"
+    ]
+   ],
+   "bond": "none",
+   "descr": "kompromittierter Webserver"
+  }
+ ],
+ "tasks": [
+  {
+   "title": "Static Port für web-inf",
+   "text": "An der EPG **Web** einen Static Port leaf101 eth1/3, vlan-110 ergänzen. web-inf ist dann in Web gelernt."
+  },
+  {
+   "title": "uSeg EPG",
+   "text": "Im AP Webshop unter **uSeg EPGs** die EPG **Quarantine** (BD-Web, Domain PhysDom-Server) mit dem IP-Attribut **10.10.10.66** anlegen.",
+   "hint": "Die ACI klassifiziert den Host jetzt nach seiner IP in Quarantine – Port und VLAN bleiben gleich."
+  },
+  {
+   "title": "Filter und Contract",
+   "text": "Filter **tcp-8080** und Contract **frontend-to-backend**."
+  },
+  {
+   "title": "ESGs",
+   "text": "**Endpoint Security Groups**: **Frontend** (VRF Prod, EPG Selector Web) konsumiert, **Backend** (VRF Prod, EPG Selector App) stellt den Contract bereit.",
+   "hint": "Ein Contract zwischen einer ESG und einer EPG ist nicht möglich."
+  },
+  {
+   "title": "Prüfen",
+   "text": "web1 → app1 tcp/8080 klappt, web-inf → app1 nicht. Im Traffic-Test siehst du die Klassifizierung (EPG → ESG). Auf leaf101: `show zoning-rule` – welche pcTags stehen in den Regeln?"
+  }
+ ],
+ "checks": [
+  {
+   "desc": "web-inf liegt in der uSeg EPG Quarantine",
+   "type": "endpoint",
+   "host": "web-inf",
+   "epg": "uni/tn-Shop/ap-Webshop/epg-Quarantine"
+  },
+  {
+   "desc": "web1 → app1 tcp/8080 über die ESGs",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "app1",
+   "proto": "tcp",
+   "port": 8080,
+   "expect": true,
+   "via": "ESG"
+  },
+  {
+   "desc": "web-inf → app1 blockiert",
+   "type": "traffic",
+   "src": "web-inf",
+   "dst": "app1",
+   "proto": "tcp",
+   "port": 8080,
+   "expect": false
+  },
+  {
+   "desc": "web1 → app1 tcp/22 blockiert",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "app1",
+   "proto": "tcp",
+   "port": 22,
+   "expect": false
+  }
+ ],
+ "solution": "`{\"fvTenant\": {\"attributes\": {\"name\": \"Shop\"}, \"children\": [{\"vzFilter\": {\"attributes\": {\"name\": \"tcp-8080\"}, \"children\": [{\"vzEntry\": {\"attributes\": {\"name\": \"tcp-8080\", \"etherT\": \"ip\", \"prot\": \"tcp\", \"dFromPort\": \"8080\", \"dToPort\": \"8080\"}}}]}}, {\"vzBrCP\": {\"attributes\": {\"name\": \"frontend-to-backend\", \"scope\": \"context\"}, \"children\": [{\"vzSubj\": {\"attributes\": {\"name\": \"subj\", \"revFltPorts\": \"yes\"}, \"children\": [{\"vzRsSubjFiltAtt\": {\"attributes\": {\"tnVzFilterName\": \"tcp-8080\"}}}]}}]}}, {\"fvAp\": {\"attributes\": {\"name\": \"Webshop\"}, \"children\": [{\"fvAEPg\": {\"attributes\": {\"name\": \"Web\"}, \"children\": [{\"fvRsPathAtt\": {\"attributes\": {\"tDn\": \"topology/pod-1/paths-101/pathep-[eth1/3]\", \"encap\": \"vlan-110\"}}}]}}, {\"fvAEPg\": {\"attributes\": {\"name\": \"Quarantine\", \"isAttrBasedEPg\": \"yes\"}, \"children\": [{\"fvRsBd\": {\"attributes\": {\"tnFvBDName\": \"BD-Web\"}}}, {\"fvRsDomAtt\": {\"attributes\": {\"tDn\": \"uni/phys-PhysDom-Server\"}}}, {\"fvCrtrn\": {\"attributes\": {}, \"children\": [{\"fvIpAttr\": {\"attributes\": {\"name\": \"infected\", \"ip\": \"10.10.10.66\"}}}]}}]}}, {\"fvESg\": {\"attributes\": {\"name\": \"Frontend\"}, \"children\": [{\"fvRsScope\": {\"attributes\": {\"tnFvCtxName\": \"Prod\"}}}, {\"fvEPgSelector\": {\"attributes\": {\"matchEpgDn\": \"uni/tn-Shop/ap-Webshop/epg-Web\"}}}, {\"fvRsCons\": {\"attributes\": {\"tnVzBrCPName\": \"frontend-to-backend\"}}}]}}, {\"fvESg\": {\"attributes\": {\"name\": \"Backend\"}, \"children\": [{\"fvRsScope\": {\"attributes\": {\"tnFvCtxName\": \"Prod\"}}}, {\"fvEPgSelector\": {\"attributes\": {\"matchEpgDn\": \"uni/tn-Shop/ap-Webshop/epg-App\"}}}, {\"fvRsProv\": {\"attributes\": {\"tnVzBrCPName\": \"frontend-to-backend\"}}}]}}]}}]}}`",
+ "routers": [],
+ "vcenters": [],
+ "devices": [],
+ "aaa": [],
+ "solutionConfig": [
+  [
+   "uni",
+   {
+    "fvTenant": {
+     "attributes": {
+      "name": "Shop"
+     },
+     "children": [
+      {
+       "vzFilter": {
+        "attributes": {
+         "name": "tcp-8080"
+        },
+        "children": [
+         {
+          "vzEntry": {
+           "attributes": {
+            "name": "tcp-8080",
+            "etherT": "ip",
+            "prot": "tcp",
+            "dFromPort": "8080",
+            "dToPort": "8080"
+           }
+          }
+         }
+        ]
+       }
+      },
+      {
+       "vzBrCP": {
+        "attributes": {
+         "name": "frontend-to-backend",
+         "scope": "context"
+        },
+        "children": [
+         {
+          "vzSubj": {
+           "attributes": {
+            "name": "subj",
+            "revFltPorts": "yes"
+           },
+           "children": [
+            {
+             "vzRsSubjFiltAtt": {
+              "attributes": {
+               "tnVzFilterName": "tcp-8080"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      },
+      {
+       "fvAp": {
+        "attributes": {
+         "name": "Webshop"
+        },
+        "children": [
+         {
+          "fvAEPg": {
+           "attributes": {
+            "name": "Web"
+           },
+           "children": [
+            {
+             "fvRsPathAtt": {
+              "attributes": {
+               "tDn": "topology/pod-1/paths-101/pathep-[eth1/3]",
+               "encap": "vlan-110"
+              }
+             }
+            }
+           ]
+          }
+         },
+         {
+          "fvAEPg": {
+           "attributes": {
+            "name": "Quarantine",
+            "isAttrBasedEPg": "yes"
+           },
+           "children": [
+            {
+             "fvRsBd": {
+              "attributes": {
+               "tnFvBDName": "BD-Web"
+              }
+             }
+            },
+            {
+             "fvRsDomAtt": {
+              "attributes": {
+               "tDn": "uni/phys-PhysDom-Server"
+              }
+             }
+            },
+            {
+             "fvCrtrn": {
+              "attributes": {},
+              "children": [
+               {
+                "fvIpAttr": {
+                 "attributes": {
+                  "name": "infected",
+                  "ip": "10.10.10.66"
+                 }
+                }
+               }
+              ]
+             }
+            }
+           ]
+          }
+         },
+         {
+          "fvESg": {
+           "attributes": {
+            "name": "Frontend"
+           },
+           "children": [
+            {
+             "fvRsScope": {
+              "attributes": {
+               "tnFvCtxName": "Prod"
+              }
+             }
+            },
+            {
+             "fvEPgSelector": {
+              "attributes": {
+               "matchEpgDn": "uni/tn-Shop/ap-Webshop/epg-Web"
+              }
+             }
+            },
+            {
+             "fvRsCons": {
+              "attributes": {
+               "tnVzBrCPName": "frontend-to-backend"
+              }
+             }
+            }
+           ]
+          }
+         },
+         {
+          "fvESg": {
+           "attributes": {
+            "name": "Backend"
+           },
+           "children": [
+            {
+             "fvRsScope": {
+              "attributes": {
+               "tnFvCtxName": "Prod"
+              }
+             }
+            },
+            {
+             "fvEPgSelector": {
+              "attributes": {
+               "matchEpgDn": "uni/tn-Shop/ap-Webshop/epg-App"
+              }
+             }
+            },
+            {
+             "fvRsProv": {
+              "attributes": {
+               "tnVzBrCPName": "frontend-to-backend"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  ]
+ ]
+}

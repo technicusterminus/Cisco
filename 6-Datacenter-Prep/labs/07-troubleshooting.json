@@ -649,6 +649,7 @@
  "routers": [],
  "vcenters": [],
  "devices": [],
+ "aaa": [],
  "solutionConfig": [
   [
    "uni/infra/vlanns-[VLAN-Pool-Ops]-static",

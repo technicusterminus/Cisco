@@ -13,6 +13,7 @@ async function optionsFor(f, ctx) {
     const rows = await classRows(f.target);
     let list;
     if (f.scope === 'infra') list = rows.filter(a => a.dn.startsWith('uni/infra/'));
+    else if (f.scope === 'aaa') list = rows.filter(a => a.dn.startsWith('uni/userext/'));
     else if (f.scope === 'fabric') list = rows.filter(a => a.dn.startsWith('uni/fabric/'));
     else list = rows.filter(a => (tn && a.dn.startsWith(tn + '/')) || a.dn.startsWith('uni/tn-common/'));
     const own = list.filter(a => !a.dn.startsWith('uni/tn-common/') || tn === 'uni/tn-common');

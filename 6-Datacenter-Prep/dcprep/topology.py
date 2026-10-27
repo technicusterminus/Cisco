@@ -89,6 +89,32 @@ def base_config(store, admin_pwd):
     create_obj(store, 'uni/vmmp-VMware', 'vmmProvP', {'vendor': 'VMware'}, ts)
     create_obj(store, 'uni/tn-mgmt/mgmtp-default', 'mgmtMgmtP', {'name': 'default'}, ts)
     create_obj(store, 'uni/tn-mgmt/mgmtp-default/oob-default', 'mgmtOoB', {'name': 'default'}, ts)
+    _aaa_base(store, ts)
+
+
+AAA_BASE = [
+    ('uni/userext/tacacsext', 'aaaTacacsPlusEp', {}),
+    ('uni/userext/radiusext', 'aaaRadiusEp', {}),
+    ('uni/userext/ldapext', 'aaaLdapEp', {}),
+    ('uni/userext/authrealm', 'aaaAuthRealm', {}),
+    ('uni/userext/authrealm/defaultauth', 'aaaDefaultAuth', {'realm': 'local'}),
+    ('uni/userext/authrealm/consoleauth', 'aaaConsoleAuth', {'realm': 'local'}),
+    ('uni/userext/logindomain-fallback', 'aaaLoginDomain', {'name': 'fallback'}),
+    ('uni/userext/logindomain-fallback/domainauth', 'aaaDomainAuth', {'realm': 'local'}),
+    ('uni/userext/domain-all', 'aaaDomain', {'name': 'all'}),
+    ('uni/userext/domain-common', 'aaaDomain', {'name': 'common'}),
+    ('uni/userext/domain-mgmt', 'aaaDomain', {'name': 'mgmt'}),
+    ('uni/userext/user-admin/userdomain-all', 'aaaUserDomain', {'name': 'all'}),
+    ('uni/userext/user-admin/userdomain-all/role-admin', 'aaaUserRole', {'name': 'admin', 'privType': 'writePriv'}),
+    ('uni/tn-mgmt/BD-inb', 'fvBD', {'name': 'inb'}),
+    ('uni/tn-mgmt/BD-inb/rsctx', 'fvRsCtx', {'tnFvCtxName': 'inb'}),
+]
+
+
+def _aaa_base(store, ts):
+    for dn, cls, attrs in AAA_BASE:
+        if dn not in store.objs and parent_ok(store, dn):
+            create_obj(store, dn, cls, attrs, ts)
 
 
 def ensure_base(store):
@@ -109,6 +135,7 @@ def ensure_base(store):
             ('uni/tn-mgmt/mgmtp-default/oob-default', 'mgmtOoB', {'name': 'default'})]:
         if dn not in store.objs and parent_ok(store, dn):
             create_obj(store, dn, cls, attrs, ts)
+    _aaa_base(store, ts)
 
 
 def parent_ok(store, dn):

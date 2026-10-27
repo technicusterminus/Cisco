@@ -521,6 +521,7 @@
  "solution": "Wichtige Objekte: `l3extOut WAN` mit `l3extRsEctx(Prod)`, `l3extRsL3DomAtt(uni/l3dom-L3Dom-WAN)`, `ospfExtP areaId=0.0.0.1`; `l3extRsNodeL3OutAtt tDn=topology/pod-1/node-103 rtrId=1.1.1.103`; `l3extRsPathL3OutAtt tDn=topology/pod-1/paths-103/pathep-[eth1/48] ifInstT=l3-port addr=172.16.0.1/30 mtu=1500` plus `ospfIfP`; `l3extInstP Internet` mit `l3extSubnet 0.0.0.0/0` und `fvRsProv web-to-internet`; BD-Web: `fvSubnet scope=public` und `fvRsBDToOut WAN`. Dazu die BGP Route Reflector Policy (AS 65001, RR 201/202).",
  "vcenters": [],
  "devices": [],
+ "aaa": [],
  "solutionConfig": [
   [
    "uni",

@@ -494,6 +494,7 @@
  "routers": [],
  "vcenters": [],
  "devices": [],
+ "aaa": [],
  "solutionConfig": [
   [
    "uni",

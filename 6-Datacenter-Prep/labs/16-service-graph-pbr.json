@@ -548,6 +548,7 @@
  "solution": "Wichtig sind die drei Teile: **L4-L7 Device** (Concrete Device mit Paths, Cluster Interfaces mit Encap), **Service Graph Template** (Node N1, Redirect) und die **Device Selection Policy** (Contract/Graph/Node, je Connector BD, Cluster Interface und PBR Policy). Am Subject des Contracts hängt `vzRsSubjGraphAtt tnVnsAbsGraphName=FW-Graph`. Die PBR-Ziele brauchen die richtige MAC der Firewall-Interfaces.",
  "routers": [],
  "vcenters": [],
+ "aaa": [],
  "solutionConfig": [
   [
    "uni/infra/vlanns-[VLAN-Pool-Server]-static",
