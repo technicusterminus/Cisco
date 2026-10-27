@@ -294,6 +294,16 @@ class Sim:
                     bad = {e.nodes[n]['name']: why for n, why in e.ntp['nodes'].items() if why}
                     ok = not bad and len(e.ntp['nodes']) >= c.get('min', 1)
                     info = '; '.join('%s: %s' % kv for kv in sorted(bad.items())) or '%d Switches synchron' % len(e.ntp['nodes'])
+                elif t == 'learned':
+                    rs = e.routers.get(c['router'], {})
+                    has = c['prefix'] in rs.get('learned', [])
+                    ok = has == c.get('expect', True)
+                    info = '%s kennt von der ACI: %s' % (c['router'], ', '.join(rs.get('learned', [])) or 'nichts')
+                elif t == 'route':
+                    v = 'uni/tn-%s/ctx-%s' % tuple(c['vrf'].split(':'))
+                    has = any(r['prefix'] == c['prefix'] for r in e.routes.get((v, c['node']), []))
+                    ok = has == c.get('expect', True)
+                    info = 'Route %s auf Node %s: %s' % (c['prefix'], c['node'], 'vorhanden' if has else 'nicht vorhanden')
                 elif t == 'setup':
                     su = self.sim.get('setup') or {}
                     ok = bool(su) and all(su.get(k) == v for k, v in c.get('attrs', {}).items())

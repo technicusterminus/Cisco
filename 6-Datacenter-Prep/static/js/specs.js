@@ -728,6 +728,49 @@ Object.assign(SPEC, {
   },
 });
 
+Object.assign(SPEC, {
+  rtctrlProfile: {
+    label: 'Route Map for Import and Export Route Control',
+    fields: [{ k: 'name', l: 'Name', t: 'select', o: [['default-export', 'default-export'], ['default-import', 'default-import']], create: true, req: true,
+      help: 'default-export steuert, was das L3Out ankündigt; default-import, was die ACI übernimmt (nur mit Enforcement Import)' },
+    { k: 'type', l: 'Type', t: 'radio', o: [['combinable', 'Match Prefix AND Routing Policy'], ['global', 'Match Routing Policy Only']] }, DESCR],
+    cols: [ac('name'), col('Type', r => r.type), col('Contexts', r => String(MIT.kids(r.dn, ['rtctrlCtxP']).length))],
+  },
+  rtctrlCtxP: {
+    label: 'Context', menu: 'Create Route Control Context',
+    fields: [NAME, { k: 'order', l: 'Order', ph: '0' }, { k: 'action', l: 'Action', t: 'radio', o: [['permit', 'Permit'], ['deny', 'Deny']] },
+      DESCR],
+    wizard: {
+      title: 'Create Route Control Context',
+      steps: [{ l: 'Context', fields: [NAME, { k: 'order', l: 'Order', def: '0' }, { k: 'action', l: 'Action', t: 'radio', o: [['permit', 'Permit'], ['deny', 'Deny']], def: 'permit' },
+        { k: '_rule', l: 'Associated Matched Rule', t: 'tname', target: 'rtctrlSubjP' }, DESCR] }],
+      build: (v, parent) => ({ dn: parent + '/ctx-' + v.name, body: mo('rtctrlCtxP', { name: v.name, order: v.order || '0', action: v.action, descr: v.descr },
+        v._rule ? mo('rtctrlRsCtxPToSubjP', { tnRtctrlSubjPName: v._rule }) : null) }),
+    },
+    cols: [ac('name'), col('Order', r => r.order), col('Action', r => r.action),
+      col('Match Rules', r => MIT.kids(r.dn, ['rtctrlRsCtxPToSubjP']).map(d => MIT.a(d).tnRtctrlSubjPName).join(', '))],
+  },
+  rtctrlRsCtxPToSubjP: { label: 'Associated Matched Rule', fields: [relNameSelf('tnRtctrlSubjPName', 'Match Rule', 'rtctrlSubjP')],
+    cols: [col('Match Rule', r => r.tnRtctrlSubjPName), col('State', relState)] },
+  rtctrlSubjP: {
+    label: 'Match Rule', fields: [NAME, DESCR],
+    wizard: {
+      title: 'Create Match Rule',
+      steps: [{ l: 'Match Rule', fields: [NAME, DESCR, { k: '_p', l: 'Match Prefix', t: 'rows', start: true, cols: [{ k: 'ip', l: 'IP', ph: '8.8.8.0/24', req: true },
+        { k: 'aggregate', l: 'Aggregate', t: 'select', o: [['no', 'False'], ['yes', 'True']], def: 'no' }, { k: 'fromPfxLen', l: 'Greater Than Mask', ph: '0', w: '80px' }, { k: 'toPfxLen', l: 'Less Than Mask', ph: '0', w: '80px' }] }] }],
+      build: (v, parent) => ({ dn: parent + '/subj-' + v.name, body: mo('rtctrlSubjP', { name: v.name, descr: v.descr },
+        (v._p || []).filter(x => x.ip).map(x => mo('rtctrlMatchRtDest', { ip: x.ip, aggregate: x.aggregate || 'no', fromPfxLen: x.fromPfxLen || '0', toPfxLen: x.toPfxLen || '0' }))) }),
+    },
+    cols: [ac('name'), col('Prefixes', r => MIT.kids(r.dn, ['rtctrlMatchRtDest']).map(d => MIT.a(d).ip + (MIT.a(d).aggregate === 'yes' ? ' (agg)' : '')).join(', ')), ac('descr')],
+  },
+  rtctrlMatchRtDest: {
+    label: 'Match Prefix',
+    fields: [{ k: 'ip', l: 'IP', create: true, req: true, ph: '8.8.8.0/24' }, { k: 'aggregate', l: 'Aggregate', t: 'yesno' },
+      { k: 'fromPfxLen', l: 'Greater Than Mask', ph: '0', show: v => v.aggregate === 'yes' }, { k: 'toPfxLen', l: 'Less Than Mask', ph: '0', show: v => v.aggregate === 'yes' }],
+    cols: [col('IP', r => r.ip), col('Aggregate', r => r.aggregate), col('From', r => r.fromPfxLen), col('To', r => r.toPfxLen)],
+  },
+});
+
 /* Contract in einen anderen Tenant exportieren: legt dort ein vzCPIf (Imported Contract) an */
 async function exportContract(dn) {
   const tenants = (await API.cls('fvTenant')).map(r => r.fvTenant.attributes.name).filter(n => 'uni/tn-' + n !== tenantOf(dn));
@@ -764,7 +807,7 @@ const TREE = {
     PH('IP Address Pools'),
     { l: 'Contracts', sub: [{ l: 'Standard', cls: ['vzBrCP'] }, { l: 'Taboos', cls: ['vzTaboo'] }, { l: 'Imported', cls: ['vzCPIf'] }, { l: 'Filters', cls: ['vzFilter'] }, PH('Out-Of-Band Contracts')] },
     { l: 'Policies', sub: [{ l: 'Protocol', sub: [PH('BFD'), PH('BGP'), PH('Custom QoS'), PH('DHCP'), PH('EIGRP'), PH('End Point Retention'), PH('IGMP Snoop'), PH('ND RA Prefix'),
-      { l: 'OSPF Interface', cls: ['ospfIfPol'] }, PH('OSPF Timers'), PH('Route Maps for Route Control')] }, PH('Troubleshoot'), PH('Monitoring'), PH('NetFlow')] },
+      { l: 'OSPF Interface', cls: ['ospfIfPol'] }, PH('OSPF Timers'), PH('Route Maps for Route Control'), { l: 'Match Rules', cls: ['rtctrlSubjP'] }, PH('Set Rules')] }, PH('Troubleshoot'), PH('Monitoring'), PH('NetFlow')] },
     { l: 'Services', sub: [PH('L4-L7', 'Service Graphs, Devices und PBR sind in Datacenter Prep nicht nachgebildet.')] },
   ],
   fvAp: [{ l: 'Application EPGs', cls: ['fvAEPg'] }, PH('uSeg EPGs'), PH('Endpoint Security Groups')],
@@ -778,7 +821,10 @@ const TREE = {
   vzTaboo: [{ l: 'Subjects', cls: ['vzTSubj'] }],
   vzTSubj: [{ l: 'Filters', cls: ['vzRsDenyRule'], flat: 1 }],
   vzFilter: [{ l: 'Entries', cls: ['vzEntry'], flat: 1 }],
-  l3extOut: [{ l: 'Routing Protocols', cls: ['ospfExtP', 'bgpExtP'], flat: 1, max: 2 }, { l: 'Logical Node Profiles', cls: ['l3extLNodeP'] }, { l: 'External EPGs', cls: ['l3extInstP'] }, PH('Route Map for import and export route control')],
+  l3extOut: [{ l: 'Routing Protocols', cls: ['ospfExtP', 'bgpExtP'], flat: 1, max: 2 }, { l: 'Logical Node Profiles', cls: ['l3extLNodeP'] }, { l: 'External EPGs', cls: ['l3extInstP'] }, { l: 'Route Map for import and export route control', cls: ['rtctrlProfile'] }],
+  rtctrlProfile: [{ l: 'Contexts', cls: ['rtctrlCtxP'] }],
+  rtctrlCtxP: [{ l: 'Associated Matched Rules', cls: ['rtctrlRsCtxPToSubjP'], flat: 1 }],
+  rtctrlSubjP: [{ l: 'Match Prefix', cls: ['rtctrlMatchRtDest'], flat: 1 }],
   l3extLNodeP: [{ l: 'Configured Nodes', cls: ['l3extRsNodeL3OutAtt'] }, { l: 'Logical Interface Profiles', cls: ['l3extLIfP'] }, { l: 'BGP Peer Connectivity Profiles (Loopback)', cls: ['bgpPeerP'], flat: 1 }],
   l3extRsNodeL3OutAtt: [{ l: 'Static Routes', cls: ['ipRouteP'] }],
   ipRouteP: [{ l: 'Next Hop Addresses', cls: ['ipNexthopP'], flat: 1 }],
@@ -855,6 +901,6 @@ const ICON = {
   infraNodeP: 'SW', infraAccPortP: 'IF', infraAccPortGrp: 'PG', infraAccBndlGrp: 'PC', infraAttEntityP: 'AE', physDomP: 'PD',
   l3extDomP: 'L3D', fvnsVlanInstP: 'VL', infraHPortS: 'S', infraLeafS: 'S', fabricExplicitGEp: 'vPC', ospfIfPol: 'O',
   cdpIfPol: 'P', lldpIfPol: 'P', lacpLagPol: 'P', fabricHIfPol: 'P', mcpIfPol: 'P', stpIfPol: 'P', fabricProtPol: 'vPC',
-  fabricPodPGrp: 'PG', fabricPodP: 'PP', datetimePol: 'NTP', mgmtOoB: 'OOB',
+  fabricPodPGrp: 'PG', fabricPodP: 'PP', datetimePol: 'NTP', mgmtOoB: 'OOB', rtctrlProfile: 'RM', rtctrlCtxP: 'C', rtctrlSubjP: 'MR',
   vmmDomP: 'VDS', vmmCtrlrP: 'VC', l2extOut: 'L2', l2extInstP: 'EX', l2extDomP: 'L2D', vzCPIf: 'IC', l2extLNodeP: 'NP', l2extLIfP: 'IP',
 };

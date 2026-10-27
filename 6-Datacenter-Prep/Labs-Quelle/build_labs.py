@@ -740,6 +740,80 @@ lab(id='14-l2out-migration', title='14 L2Out und Migration: stille Hosts und ARP
 
 
 # ----------------------------------------------------------------------------
+# Lab 15 - Transit Routing und Route Control
+# ----------------------------------------------------------------------------
+WAN15 = router('wan1', L103, 'eth1/48', '172.16.0.2/30', 'ospf', networks=('8.8.8.0/24', '1.1.1.0/24'),
+               advertise=('8.8.8.0/24', '1.1.1.0/24'))
+PARTNER15 = router('partner1', L104, 'eth1/47', '172.16.1.2/30', 'bgp', vlan=301, rid='100.64.0.1',
+                   networks=('192.168.50.0/24', '10.66.0.0/16'), advertise=('192.168.50.0/24', '10.66.0.0/16'))
+ACC15 = [access('VLAN-Pool-WAN', 300, 399, 'L3Dom-WAN', 'AAEP-WAN', 'IPG-WAN', 'IntProf-Leaf103', 'wan', 48, 48,
+                'SwProf-Leaf103', 103, 103, l3=True),
+         access('VLAN-Pool-ISP', 300, 310, 'L3Dom-ISP', 'AAEP-ISP', 'IPG-ISP', 'IntProf-Leaf104', 'isp', 47, 47,
+                'SwProf-Leaf104', 104, 104, l3=True),
+         mo('polUni', {}, mo('fabricInst', {}, mo('bgpInstPol', {'name': 'default'}, mo('bgpAsP', {'asn': '65001'}),
+                                                    mo('bgpRRP', {}, mo('bgpRRNodePEp', {'id': '201'}), mo('bgpRRNodePEp', {'id': '202'})))))]
+TEN15 = mo('fvTenant', {'name': 'Shop'},
+           filt('https', {'name': 'https', 'etherT': 'ip', 'prot': 'tcp', 'dFromPort': 'https', 'dToPort': 'https'}),
+           contract('web-to-internet', ['icmp', 'https']),
+           bd('BD-Web', 'Prod', '10.10.10.1/24', 'public', 'WAN'),
+           mo('fvAp', {'name': 'Webshop'}, mo('fvAEPg', {'name': 'Web'}, mo('fvRsCons', {'tnVzBrCPName': 'web-to-internet'}))),
+           mo('l3extOut', {'name': 'WAN'}, mo('l3extRsEctx', {'tnFvCtxName': 'Prod'}),
+              mo('l3extRsL3DomAtt', {'tDn': 'uni/l3dom-L3Dom-WAN'}), mo('ospfExtP', {'areaId': '0.0.0.1'}),
+              mo('l3extLNodeP', {'name': 'border'}, mo('l3extRsNodeL3OutAtt', {'tDn': 'topology/pod-1/node-103', 'rtrId': '1.1.1.103'}),
+                 mo('l3extLIfP', {'name': 'eth48'}, mo('ospfIfP', {}),
+                    mo('l3extRsPathL3OutAtt', {'tDn': path(103, 'eth1/48'), 'ifInstT': 'l3-port', 'addr': '172.16.0.1/30', 'mtu': '1500'}))),
+              mo('l3extInstP', {'name': 'Internet'}, mo('l3extSubnet', {'ip': '0.0.0.0/0'}), mo('fvRsProv', {'tnVzBrCPName': 'web-to-internet'}))),
+           mo('l3extOut', {'name': 'Partner'}, mo('l3extRsEctx', {'tnFvCtxName': 'Prod'}),
+              mo('l3extRsL3DomAtt', {'tDn': 'uni/l3dom-L3Dom-ISP'}), mo('bgpExtP', {}),
+              mo('l3extLNodeP', {'name': 'border'}, mo('l3extRsNodeL3OutAtt', {'tDn': 'topology/pod-1/node-104', 'rtrId': '1.1.1.104'}),
+                 mo('l3extLIfP', {'name': 'eth47'},
+                    mo('l3extRsPathL3OutAtt', {'tDn': path(104, 'eth1/47'), 'ifInstT': 'sub-interface', 'encap': 'vlan-301', 'addr': '172.16.1.1/30'},
+                       mo('bgpPeerP', {'addr': '172.16.1.2'}, mo('bgpAsP', {'asn': '65100'}))))),
+              mo('l3extInstP', {'name': 'PartnerNet'}, mo('l3extSubnet', {'ip': '192.168.50.0/24'}))))
+SOL15 = mo('fvTenant', {'name': 'Shop'},
+           contract('transit', ['default']),
+           mo('l3extOut', {'name': 'WAN'}, mo('l3extInstP', {'name': 'Internet'},
+              mo('l3extSubnet', {'ip': '192.168.50.0/24', 'scope': 'export-rtctrl'}), mo('fvRsProv', {'tnVzBrCPName': 'transit'}))),
+           mo('l3extOut', {'name': 'Partner', 'enforceRtctrl': 'export,import'}, mo('l3extInstP', {'name': 'PartnerNet'},
+              mo('l3extSubnet', {'ip': '192.168.50.0/24', 'scope': 'import-security,import-rtctrl'}),
+              mo('l3extSubnet', {'ip': '8.8.8.0/24', 'scope': 'export-rtctrl'}), mo('fvRsCons', {'tnVzBrCPName': 'transit'}))))
+lab(id='15-transit-route-control', title='15 Transit Routing und Route Control', topic='L3Out / Routing', level='Fortgeschritten',
+    duration='40 min', fabric='discovered',
+    goals=['Routen von einem L3Out zum anderen weitergeben (Transit Routing)', 'Export und Import Route Control Subnets einsetzen',
+           'Den Unterschied zwischen exaktem Match und Aggregate verstehen'],
+    intro='Der Webshop hat zwei L3Outs im VRF Prod: **WAN** (OSPF zu **wan1** auf leaf103, Netze 8.8.8.0/24 und 1.1.1.0/24) '
+          'und **Partner** (eBGP zu **partner1** auf leaf104, Netze 192.168.50.0/24 und 10.66.0.0/16). Beide Nachbarschaften laufen.\n\n'
+          '**Anforderung:** Das Partnernetz **192.168.50.0/24** soll über die ACI nur **8.8.8.0/24** erreichen. Das interne Partnernetz '
+          '**10.66.0.0/16** darf nicht in die ACI gelangen, und der Partner darf **1.1.1.0/24** nicht sehen.\n\n'
+          'Standardmäßig gibt die ACI gelernte Routen nicht an andere L3Outs weiter – das muss man explizit mit Export Route Control erlauben.',
+    config=[SERVER_ACCESS] + ACC15 + [shop_tenant(), TEN15], hosts=[WEB1], routers=[WAN15, PARTNER15],
+    tasks=[
+        task('Ausgangslage prüfen', 'Auf leaf104: `show ip route vrf Shop:Prod` – 8.8.8.0/24 kommt per MP-BGP von leaf103. '
+             'Wird es an partner1 weitergegeben? `show bgp ipv4 unicast vrf Shop:Prod`. Traffic-Test von **192.168.50.10** zu **8.8.8.8**.'),
+        task('Export Richtung WAN', 'Am External EPG **Internet** (L3Out WAN) das Subnetz **192.168.50.0/24** nur mit '
+             '**Export Route Control Subnet** anlegen.', 'Ohne "External Subnets for the External EPG" – sonst würde das Partnernetz '
+             'auf der WAN-Seite klassifiziert.'),
+        task('Export Richtung Partner', 'Am External EPG **PartnerNet** (L3Out Partner) **8.8.8.0/24** mit Export Route Control Subnet.',
+             'Exakter Match: Nur genau dieses Präfix wird exportiert. Mit 0.0.0.0/0 und *Aggregate Export* ginge alles raus – auch 1.1.1.0/24.'),
+        task('Contract', 'Contract **transit** mit dem Filter **default** (common): **Internet** provided, **PartnerNet** consumed.'),
+        task('Import Route Control', 'Am L3Out **Partner** unter *Route Control Enforcement* zusätzlich **Import** aktivieren und am '
+             'Subnetz 192.168.50.0/24 von PartnerNet **Import Route Control Subnet** setzen.',
+             'Mit Import-Enforcement übernimmt die ACI nur noch Präfixe, die ein Import Route Control Subnet erlaubt.'),
+        task('Verifizieren', 'leaf104: `show ip route vrf Shop:Prod` (10.66.0.0/16 ist weg), `show bgp ipv4 unicast vrf Shop:Prod`. '
+             'Traffic-Test 192.168.50.10 → 8.8.8.8 und 192.168.50.10 → 1.1.1.1.'),
+    ],
+    checks=[check('Transit: 192.168.50.10 → 8.8.8.8', 'traffic', src='192.168.50.10', dst='8.8.8.8', proto='icmp', expect=True),
+            check('wan1 lernt 192.168.50.0/24', 'learned', router='wan1', prefix='192.168.50.0/24'),
+            check('partner1 lernt 8.8.8.0/24', 'learned', router='partner1', prefix='8.8.8.0/24'),
+            check('partner1 lernt 1.1.1.0/24 nicht', 'learned', router='partner1', prefix='1.1.1.0/24', expect=False),
+            check('10.66.0.0/16 nicht in der ACI (leaf104)', 'route', node=104, vrf='Shop:Prod', prefix='10.66.0.0/16', expect=False),
+            check('web1 → 8.8.8.8 funktioniert weiter', 'traffic', src='web1', dst='8.8.8.8', proto='icmp', expect=True)],
+    solution='`' + json.dumps(SOL15) + '`\\n\\nExport Route Control Subnets steuern, welche Routen ein L3Out an seinen Nachbarn '
+             'gibt; Import Route Control Subnets (nur mit Enforcement *Import*) steuern, was die ACI übernimmt. '
+             'Klassifiziert wird weiterhin nur über *External Subnets for the External EPG*.')
+
+
+# ----------------------------------------------------------------------------
 # Maschinenlesbare Musterloesungen (fuer die Tests: [URL-DN, Body])
 # ----------------------------------------------------------------------------
 BGP_RR = ['uni/fabric/bgpInstP-default', mo('bgpInstPol', {}, mo('bgpAsP', {'asn': '65001'}),
@@ -826,6 +900,7 @@ SOLUTIONS = {
                            ['uni/tn-Shop', mo('fvTenant', {}, mo('vzCPIf', {'name': 'dns'}, mo('vzRsIf', {'tDn': 'uni/tn-Shared/brc-dns'})),
                                               mo('fvBD', {'name': 'BD-Web'}, mo('fvSubnet', {'ip': '10.10.10.1/24', 'scope': 'private,shared'})),
                                               mo('fvAp', {'name': 'Webshop'}, mo('fvAEPg', {'name': 'Web'}, mo('fvRsConsIf', {'tnVzCPIfName': 'dns'}))))]],
+    '15-transit-route-control': [['uni', SOL15]],
     '14-l2out-migration': [['uni', L2ACC14], ['uni', L2OUT14], ['uni/tn-Shop/BD-BD-Migration', mo('fvBD', {'arpFlood': 'yes'})]],
 }
 

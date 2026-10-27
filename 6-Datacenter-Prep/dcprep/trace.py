@@ -223,6 +223,11 @@ def run(eng, sim, src, dst, proto='icmp', port=0):
         return {'ok': False, 'summary': 'Fuer TCP/UDP bitte einen Ziel-Port angeben.', 'steps': []}
     S = _resolve(eng, sim, src)
     D = _resolve(eng, sim, dst)
+    if S is not None and S['kind'] == 'ext':
+        r_ = next((x for x in sim.get('routers', []) if any(S['ip'] in ipaddress.ip_network(n, strict=False)
+                                                             for n in x.get('networks', []))), None)
+        if r_:
+            S = {'kind': 'router', 'r': r_, 'ip': S['ip']}
     if S is None or S['kind'] not in ('host', 'router'):
         return {'ok': False, 'summary': 'Quelle muss ein simulierter Host oder externer Router sein.', 'steps': []}
     if D is None:
@@ -397,8 +402,10 @@ def _from_router(eng, sim, t, S, D, proto, port):
     vrf = eng.outs[iface['out']]['vrf']
     t.step(True, 'Router %s verbunden' % r['name'], '%s via %s, Nachbarschaft: %s' % (
         eng.nodes[iface['nid']]['name'], eng.if_name(iface), rs.get('adj')))
+    if D['kind'] in ('router', 'ext'):
+        return _transit(eng, sim, t, r, rs, iface, vrf, D, proto, port, S['ip'])
     if D['kind'] != 'host':
-        t.step(False, 'Ziel', 'Vom externen Router aus kann nur ein simulierter Host getestet werden')
+        t.step(False, 'Ziel', 'Vom externen Router aus kann ein Host, ein anderer Router oder ein Netz hinter einem Router getestet werden')
         return t.result()
     dhs_c = _host_checks(eng, t, D, 'Ziel')
     if not dhs_c:
@@ -432,4 +439,69 @@ def _from_router(eng, sim, t, S, D, proto, port):
             src_ip, '' if eng.mpbgp_ok else ' (MP-BGP Route Reflector fehlt?)'))
         return t.result()
     t.step(True, 'Rueckweg auf %s' % eng.nodes[leaf]['name'], '%s via %s (%s)' % (rt['prefix'], rt['nh'], rt['proto']))
+    return t.result()
+
+
+def _transit(eng, sim, t, r, rs, iface, vrf, D, proto, port, src_ip):
+    """Transit Routing: externer Router -> ACI -> anderes L3Out."""
+    dip = D['ip']
+    known = [p for p in rs.get('learned', []) if dip in ipaddress.ip_network(p, strict=False)]
+    if not known:
+        t.step(False, 'Routing auf %s' % r['name'], 'Router %s hat keine Route zu %s. Fuer Transit Routing muss die ACI '
+               'das Netz exportieren: Subnetz mit "Export Route Control Subnet" am External EPG des L3Outs %s'
+               % (r['name'], dip, eng.short(iface['out'])))
+        return t.result()
+    t.step(True, 'Routing auf %s' % r['name'], '%s via ACI (Export Route Control)' % known[0])
+    nid = iface['nid']
+    rt = _lpm(eng.routes.get((vrf, nid), []), dip)
+    if not rt or rt.get('router') == r['name']:
+        t.step(False, 'Routing auf %s' % eng.nodes[nid]['name'], 'Keine Route zu %s in VRF %s' % (dip, eng.short(vrf)))
+        return t.result()
+    bl, brt = nid, rt
+    if rt.get('border'):
+        bl = rt['border']
+        brt = _lpm([x for x in eng.routes.get((vrf, bl), []) if not x.get('border')], dip)
+        t.step(True, 'Route auf %s' % eng.nodes[nid]['name'], '%s via Border Leaf %s (MP-BGP)' % (rt['prefix'], eng.nodes[bl]['name']))
+    if not brt:
+        t.step(False, 'Route auf Border Leaf', 'Border Leaf hat keine Route mehr')
+        return t.result()
+    rname = brt.get('router') or next((x['name'] for x in sim.get('routers', []) if ip_of(x['ip']) == dip), None)
+    t.step(True, 'Route auf Border Leaf %s' % eng.nodes[bl]['name'], '%s via %s %s (%s)' % (brt['prefix'], brt['nh'], brt['via'], brt['proto']))
+    s_out, d_rs = iface['out'], eng.routers.get(rname, {})
+    d_out = (d_rs.get('iface') or {}).get('out')
+
+    def classify(ip, prefer_out):
+        cands = [(n, inst) for n, inst in eng.ext_class.get(vrf, []) if ip in n]
+        if not cands:
+            return None
+        best = max(n.prefixlen for n, _ in cands)
+        top = [(n, i) for n, i in cands if n.prefixlen == best]
+        return next(((n, i) for n, i in top if eng.cls[i].get('out') == prefer_out), top[0])
+    sc_ = classify(src_ip, s_out)
+    dc_ = classify(dip, d_out)
+    if not sc_:
+        t.step(False, 'Klassifizierung', 'Quell-IP %s passt zu keinem External EPG Subnetz' % src_ip)
+        return t.result()
+    if not dc_:
+        t.step(False, 'Klassifizierung', 'Ziel-IP %s passt zu keinem External EPG Subnetz ("External Subnets for the External EPG")' % dip)
+        return t.result()
+    t.step(True, 'Klassifizierung', 'Quelle %s -> External EPG %s, Ziel %s -> External EPG %s' % (
+        src_ip, eng.short(sc_[1]), dip, eng.short(dc_[1])))
+    if sc_[1] == dc_[1]:
+        t.step(False, 'Policy', 'Quelle und Ziel landen im selben External EPG %s. Fuer Transit Routing braucht jedes L3Out '
+               'eigene, spezifische External Subnets (nicht 0.0.0.0/0 auf beiden Seiten) und einen Contract dazwischen'
+               % eng.short(sc_[1]))
+        return t.result()
+    if not _policy(eng, t, eng.cls[sc_[1]], eng.cls[dc_[1]], proto, port, r['name'], str(dip)):
+        return t.result()
+    dr = _router(sim, rname)
+    if D['kind'] == 'ext' and not any(dip in ipaddress.ip_network(n, strict=False) for n in (dr or {}).get('networks', [])):
+        t.step(False, 'Externer Router %s' % rname, 'Der Router kennt das Ziel %s nicht' % dip)
+        return t.result()
+    back = [p for p in d_rs.get('learned', []) if src_ip in ipaddress.ip_network(p, strict=False)]
+    if not back:
+        t.step(False, 'Rueckweg ueber %s' % rname, 'Router %s hat keine Route zurueck zu %s - die ACI exportiert sie ihm nicht '
+               '(Export Route Control Subnet am External EPG von %s fehlt)' % (rname, src_ip, eng.short(d_out) if d_out else '?'))
+        return t.result()
+    t.step(True, 'Rueckweg ueber %s' % rname, 'Router kennt %s' % back[0])
     return t.result()

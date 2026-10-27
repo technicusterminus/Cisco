@@ -1131,7 +1131,8 @@ class Engine:
                 self.fault(out, 'S0956', 'minor', 'L3Out %s is not associated with a valid VRF' % a['name'],
                            'ctx-not-present')
             o = {'dn': out, 'name': a['name'], 'vrf': vrf, 'dom': dom, 'ospf': self.A(out + '/ospfExtP'),
-                 'bgp': self.has(out + '/bgpExtP'), 'nodes': {}, 'ifs': []}
+                 'bgp': self.has(out + '/bgpExtP'), 'nodes': {}, 'ifs': [],
+                 'enforce': set((a.get('enforceRtctrl') or 'export').split(',')) | {'export'}}
             self.outs[out] = o
             for np in self.kids(out, 'l3extLNodeP'):
                 for rn in self.kids(np, 'l3extRsNodeL3OutAtt'):
@@ -1185,6 +1186,98 @@ class Engine:
                         self.routes.setdefault((vrf, leaf), []).append(
                             {'prefix': rt['prefix'], 'nh': self.nodes[nid]['tep'], 'proto': 'bgp',
                              'via': 'overlay-1', 'border': nid, 'router': rt.get('router'), 'pref': 200})
+        self._exports()
+
+    # ------------------------------------------------------------------
+    # Route Control: Import/Export Route Control Subnets und Route-Profile
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _pfx_in(prefix, net, agg, lo=None, hi=None):
+        try:
+            p = ipaddress.ip_network(prefix, strict=False)
+        except ValueError:
+            return False
+        if not agg:
+            return p == net
+        if p.version != net.version or not p.subnet_of(net):
+            return False
+        lo = lo if lo else net.prefixlen
+        hi = hi if hi else 32
+        return lo <= p.prefixlen <= hi
+
+    def rt_permit(self, o, direction, prefix):
+        """(erlaubt, Begruendung) fuer eine Route und Richtung import/export am L3Out o."""
+        key = direction + '-rtctrl'
+        for inst in self.kids(o['dn'], 'l3extInstP'):
+            for sub in self.kids(inst, 'l3extSubnet'):
+                a = self.A(sub)
+                n = net_of(a['ip'])
+                if n and key in a['scope'].split(',') and self._pfx_in(prefix, n, key in (a.get('aggregate') or '').split(',')):
+                    return True, '%s Route Control Subnet %s am External EPG %s' % (
+                        direction.capitalize(), a['ip'], self.A(inst)['name'])
+        prof = o['dn'] + '/prof-default-' + direction
+        if self.has(prof):
+            for ctx in sorted(self.kids(prof, 'rtctrlCtxP'), key=lambda c: int(self.A(c)['order'] or 0)):
+                ca = self.A(ctx)
+                for rs_ in self.kids(ctx, 'rtctrlRsCtxPToSubjP'):
+                    ra = self.A(rs_)
+                    if ra.get('state') != 'formed':
+                        continue
+                    for d in self.kids(ra['tDn'], 'rtctrlMatchRtDest'):
+                        da = self.A(d)
+                        n = net_of(da['ip'])
+                        lo, hi = int(da.get('fromPfxLen') or 0), int(da.get('toPfxLen') or 0)
+                        if n and self._pfx_in(prefix, n, da['aggregate'] == 'yes', lo, hi):
+                            return ca['action'] == 'permit', 'Route-Profile default-%s, Context %s (%s), Match Rule %s' % (
+                                direction, ca['name'], ca['action'], self.A(ra['tDn'])['name'])
+        return False, None
+
+    def _import(self, o, rs, routes):
+        if 'import' not in o['enforce']:
+            return routes
+        ok = []
+        for p, pr in routes:
+            if self.rt_permit(o, 'import', p)[0]:
+                ok.append((p, pr))
+            else:
+                rs.setdefault('rejected', []).append(p)
+        if rs.get('rejected'):
+            rs['reasons'].append('Import Route Control (enforced) blockiert: %s' % ', '.join(rs['rejected']))
+        return ok
+
+    def _exports(self):
+        """Was die ACI jedem dynamischen Nachbarn ankuendigt (BD-Subnetze und Transit-Routen)."""
+        for r in self.sim.get('routers', []):
+            rs = self.routers.get(r['name'], {})
+            if not rs.get('_exp'):
+                continue
+            out, nid = rs.pop('_exp')
+            o = self.outs[out]
+            learned = self.exported_subnets(out, nid)
+            transit = []
+            for rt in self.routes.get((o['vrf'], nid), []):
+                if rt['proto'] not in ('ospf', 'bgp', 'static') or rt.get('router') == r['name']:
+                    continue
+                if rt['prefix'] in learned or rt['prefix'] in transit:
+                    continue
+                if self.rt_permit(o, 'export', rt['prefix'])[0]:
+                    transit.append(rt['prefix'])
+            # BD-Subnetze, die nur ein default-export Route-Profile freigibt
+            for bd in self.store.by_class('fvBD'):
+                if (self.A(bd + '/rsctx') or {}).get('tDn') != o['vrf']:
+                    continue
+                for x in self.bd_subnets(bd):
+                    p = str(x['net'])
+                    if p not in learned and 'public' in x['scope'].split(',') and self.has(out + '/prof-default-export') \
+                            and self.rt_permit(o, 'export', p)[0]:
+                        learned.append(p)
+            rs['learned'] = learned + transit
+            rs['transit'] = transit
+            for p in r.get('staticBack', []):
+                if p not in rs['learned']:
+                    rs['learned'].append(p)
+            if not learned and not transit:
+                rs['reasons'].append('ACI kuendigt dem Router nichts an (keine BD-Subnetze, keine Transit-Routen)')
 
     def _l3if(self, o, np, lif, ri, ospf_if, pol):
         ia = self.A(ri)
@@ -1374,20 +1467,16 @@ class Engine:
             if why:
                 rs['reasons'].append(why)
             if st_ == 'FULL' and not why:
-                installed = [(p, 'ospf') for p in r.get('advertise', [])]
-                rs['learned'] = self.exported_subnets(o['dn'], nid)
-                if not rs['learned']:
-                    rs['reasons'].append('ACI kuendigt dem Router keine BD-Subnetze an')
+                installed = self._import(o, rs, [(p, 'ospf') for p in r.get('advertise', [])])
+                rs['_exp'] = (o['dn'], nid)
         elif proto == 'bgp':
             st_, why = self._bgp_state(r, iface, o)
             rs['adj'] = st_
             if why:
                 rs['reasons'].append(why)
             if st_ == 'Established':
-                installed = [(p, 'bgp') for p in r.get('advertise', [])]
-                rs['learned'] = self.exported_subnets(o['dn'], nid)
-                if not rs['learned']:
-                    rs['reasons'].append('ACI kuendigt dem Router keine BD-Subnetze an')
+                installed = self._import(o, rs, [(p, 'bgp') for p in r.get('advertise', [])])
+                rs['_exp'] = (o['dn'], nid)
         else:
             rs['adj'] = 'static'
         for p in r.get('staticBack', []):

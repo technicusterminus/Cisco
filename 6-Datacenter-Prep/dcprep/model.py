@@ -592,6 +592,17 @@ mo('vmmRsVswitchOverrideCdpIfPol', 'rsvswitchOverrideCdpIfPol', ('vmmVSwitchPoli
 mo('vmmRsVswitchOverrideLacpPol', 'rsvswitchOverrideLacpPol', ('vmmVSwitchPolicyCont',), {'tDn': ''},
    rel=('dn', 'tDn', ('lacpLagPol',)), label='Port Channel Policy')
 
+# ---------------------------- Route Control --------------------------------
+mo('rtctrlProfile', 'prof-{name}', ('l3extOut', 'fvTenant'), {'type': 'combinable'},
+   enums={'type': ('combinable', 'global')}, label='Route Map for Import and Export Route Control')
+mo('rtctrlCtxP', 'ctx-{name}', ('rtctrlProfile',), {'order': '0', 'action': 'permit'},
+   enums={'action': ('permit', 'deny')}, label='Context')
+mo('rtctrlRsCtxPToSubjP', 'rsctxPToSubjP-{tnRtctrlSubjPName}', ('rtctrlCtxP',), {},
+   rel=('name', 'tnRtctrlSubjPName', 'rtctrlSubjP', 'tenant'), label='Associated Matched Rule')
+mo('rtctrlSubjP', 'subj-{name}', ('fvTenant',), {}, label='Match Rule')
+mo('rtctrlMatchRtDest', 'dest-[{ip}]', ('rtctrlSubjP',), {'aggregate': 'no', 'fromPfxLen': '0', 'toPfxLen': '0'},
+   enums={'aggregate': ('yes', 'no')}, label='Match Prefix')
+
 # ---------------------------- Imported Contracts ---------------------------
 mo('vzCPIf', 'cif-{name}', ('fvTenant',), {}, label='Imported Contract')
 mo('vzRsIf', 'rsif', ('vzCPIf',), {'tDn': '', 'prio': 'unspecified'}, rel=('dn', 'tDn', ('vzBrCP',)), label='Exported Contract')

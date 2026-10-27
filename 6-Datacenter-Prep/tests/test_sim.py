@@ -376,7 +376,7 @@ class TestLabs(Base):
     def test_all_labs_solvable(self):
         self.S.sim['settings']['discoverySeconds'] = 0
         labs = self.S.labs()
-        self.assertGreaterEqual(len(labs), 15)
+        self.assertGreaterEqual(len(labs), 16)
         for lab in labs:
             with self.subTest(lab=lab['id']):
                 self.S.load_lab(lab['id'])
@@ -527,3 +527,35 @@ class TestNewFeatures(Base):
         r = self.traffic('web1', 'old1', 'tcp', 80)
         self.assertTrue(r['ok'], r)
         self.assertIn('old1', r['woken'])
+
+
+class TestRouteControl(Base):
+    def test_transit_and_profiles(self):
+        self.S.sim['settings']['discoverySeconds'] = 0
+        self.S.load_lab('15-transit-route-control')
+        sol = self.S.lab('15-transit-route-control')['solutionConfig'][0][1]
+        post(self.S.store, 'uni', sol)
+        self.S.changed()
+        e = self.S.engine
+        self.assertTrue(trace.run(e, self.S.sim, '192.168.50.10', '8.8.8.8')['ok'])
+        self.assertNotIn('1.1.1.0/24', e.routers['partner1']['learned'])
+        # Route-Profile default-export gibt zusaetzlich 1.1.1.0/24 frei
+        post(self.S.store, 'uni/tn-Shop', {"fvTenant": {"attributes": {}, "children": [
+            {"rtctrlSubjP": {"attributes": {"name": "one"}, "children": [
+                {"rtctrlMatchRtDest": {"attributes": {"ip": "1.1.0.0/16", "aggregate": "yes"}}}]}},
+            {"l3extOut": {"attributes": {"name": "Partner"}, "children": [
+                {"rtctrlProfile": {"attributes": {"name": "default-export"}, "children": [
+                    {"rtctrlCtxP": {"attributes": {"name": "c1", "order": "0", "action": "permit"}, "children": [
+                        {"rtctrlRsCtxPToSubjP": {"attributes": {"tnRtctrlSubjPName": "one"}}}]}}]}}]}}]}})
+        self.S.changed()
+        e = self.S.engine
+        self.assertIn('1.1.1.0/24', e.routers['partner1']['learned'])
+        # deny-Context hebt es wieder auf
+        post(self.S.store, 'uni/tn-Shop/out-Partner/prof-default-export/ctx-c1', {"rtctrlCtxP": {"attributes": {"action": "deny"}}})
+        self.S.changed()
+        self.assertNotIn('1.1.1.0/24', self.S.engine.routers['partner1']['learned'])
+        # Import Enforcement ohne Import-Subnetz blockiert alles vom Partner
+        post(self.S.store, 'uni/tn-Shop/out-Partner/instP-PartnerNet/extsubnet-[192.168.50.0/24]',
+             {"l3extSubnet": {"attributes": {"scope": "import-security"}}})
+        self.S.changed()
+        self.assertFalse(any(r['prefix'] == '192.168.50.0/24' for r in self.S.engine.routes.get(('uni/tn-Shop/ctx-Prod', 104), [])))
