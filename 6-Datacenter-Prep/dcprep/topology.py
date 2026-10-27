@@ -1,0 +1,87 @@
+"""Physische Standard-Topologie und Grundkonfiguration eines frischen APIC."""
+from .model import create_obj, now_ts
+
+LEAF_MODEL = 'N9K-C93180YC-FX'
+SPINE_MODEL = 'N9K-C9332C'
+
+
+def default_topology():
+    """1 APIC, 2 Spines, 4 Leafs. Uplinks: eth1/49 -> spine201, eth1/50 -> spine202.
+    Der APIC haengt an leaf101 und leaf102 jeweils auf eth1/48."""
+    nodes = [
+        {'serial': 'SAL1931LA01', 'model': LEAF_MODEL, 'role': 'leaf', 'ports': 54, 'hint': 'leaf101'},
+        {'serial': 'SAL1931LA02', 'model': LEAF_MODEL, 'role': 'leaf', 'ports': 54, 'hint': 'leaf102'},
+        {'serial': 'SAL1931LA03', 'model': LEAF_MODEL, 'role': 'leaf', 'ports': 54, 'hint': 'leaf103'},
+        {'serial': 'SAL1931LA04', 'model': LEAF_MODEL, 'role': 'leaf', 'ports': 54, 'hint': 'leaf104'},
+        {'serial': 'FDO2219SP01', 'model': SPINE_MODEL, 'role': 'spine', 'ports': 32, 'hint': 'spine201'},
+        {'serial': 'FDO2219SP02', 'model': SPINE_MODEL, 'role': 'spine', 'ports': 32, 'hint': 'spine202'},
+    ]
+    links = []
+    for i, leaf in enumerate(['SAL1931LA01', 'SAL1931LA02', 'SAL1931LA03', 'SAL1931LA04']):
+        links.append([leaf, 'eth1/49', 'FDO2219SP01', 'eth1/%d' % (i + 1)])
+        links.append([leaf, 'eth1/50', 'FDO2219SP02', 'eth1/%d' % (i + 1)])
+    links.append(['APIC1', 'eth2-1', 'SAL1931LA01', 'eth1/48'])
+    links.append(['APIC1', 'eth2-2', 'SAL1931LA02', 'eth1/48'])
+    return {'pod': 1, 'apic': {'serial': 'APIC1', 'name': 'apic1', 'id': 1, 'model': 'APIC-SERVER-M3'},
+            'nodes': nodes, 'links': links}
+
+
+def discovered_members():
+    """fabricNodeIdentP-Eintraege fuer eine fertig registrierte Fabric."""
+    ids = {'SAL1931LA01': (101, 'leaf101'), 'SAL1931LA02': (102, 'leaf102'),
+           'SAL1931LA03': (103, 'leaf103'), 'SAL1931LA04': (104, 'leaf104'),
+           'FDO2219SP01': (201, 'spine201'), 'FDO2219SP02': (202, 'spine202')}
+    return [{'fabricNodeIdentP': {'attributes': {'serial': s, 'nodeId': str(i), 'name': n, 'podId': '1'}}}
+            for s, (i, n) in ids.items()]
+
+
+def base_config(store, admin_pwd):
+    ts = now_ts()
+    store.objs.clear(); store.kids.clear(); store.idx.clear()
+    store.counters.update({'vnid': 0, 'seg': 0, 'pctag': 0})
+    store.add('', 'topRoot', {})
+    for dn, cls in [('uni', 'polUni'), ('uni/infra', 'infraInfra'), ('uni/infra/funcprof', 'infraFuncP'),
+                    ('uni/fabric', 'fabricInst'), ('uni/fabric/protpol', 'fabricProtPol'),
+                    ('uni/controller', 'ctrlrInst'), ('uni/controller/nodeidentpol', 'fabricNodeIdentPol'),
+                    ('uni/userext', 'aaaUserEp')]:
+        create_obj(store, dn, cls, {}, ts)
+    create_obj(store, 'uni/userext/user-admin', 'aaaUser', {'name': 'admin', 'pwd': admin_pwd}, ts)
+
+    for t in ('common', 'infra', 'mgmt'):
+        create_obj(store, 'uni/tn-%s' % t, 'fvTenant', {'name': t}, ts)
+    c = 'uni/tn-common'
+    create_obj(store, c + '/ctx-default', 'fvCtx', {'name': 'default'}, ts)
+    create_obj(store, c + '/BD-default', 'fvBD', {'name': 'default'}, ts)
+    for name, entry in [('default', {'etherT': 'unspecified'}),
+                        ('arp', {'etherT': 'arp', 'arpOpc': 'unspecified'}),
+                        ('icmp', {'etherT': 'ip', 'prot': 'icmp'}),
+                        ('est', {'etherT': 'ip', 'prot': 'tcp', 'tcpRules': 'est'})]:
+        create_obj(store, c + '/flt-' + name, 'vzFilter', {'name': name}, ts)
+        e = {'name': name}
+        e.update(entry)
+        create_obj(store, c + '/flt-%s/e-%s' % (name, name), 'vzEntry', e, ts)
+    create_obj(store, c + '/brc-default', 'vzBrCP', {'name': 'default'}, ts)
+    create_obj(store, c + '/brc-default/subj-default', 'vzSubj', {'name': 'default'}, ts)
+    create_obj(store, c + '/brc-default/subj-default/rssubjFiltAtt-default', 'vzRsSubjFiltAtt',
+               {'tnVzFilterName': 'default'}, ts)
+    create_obj(store, c + '/ospfIfPol-default', 'ospfIfPol', {'name': 'default'}, ts)
+    create_obj(store, 'uni/tn-mgmt/ctx-oob', 'fvCtx', {'name': 'oob'}, ts)
+    create_obj(store, 'uni/tn-mgmt/ctx-inb', 'fvCtx', {'name': 'inb'}, ts)
+    create_obj(store, 'uni/tn-infra/ctx-overlay-1', 'fvCtx', {'name': 'overlay-1'}, ts)
+
+    i = 'uni/infra'
+    create_obj(store, i + '/cdpIfP-default', 'cdpIfPol', {'name': 'default', 'adminSt': 'disabled'}, ts)
+    create_obj(store, i + '/lldpIfP-default', 'lldpIfPol', {'name': 'default'}, ts)
+    create_obj(store, i + '/lacplagp-default', 'lacpLagPol', {'name': 'default'}, ts)
+    create_obj(store, i + '/hintfpol-default', 'fabricHIfPol', {'name': 'default'}, ts)
+    create_obj(store, 'uni/fabric/bgpInstP-default', 'bgpInstPol', {'name': 'default'}, ts)
+    create_obj(store, 'uni/fabric/bgpInstP-default/rr', 'bgpRRP', {}, ts)
+    f = 'uni/fabric'
+    create_obj(store, f + '/outofsvc', 'fabricOOServicePol', {}, ts)
+    create_obj(store, f + '/funcprof', 'fabricFuncP', {}, ts)
+    create_obj(store, f + '/time-default', 'datetimePol', {'name': 'default'}, ts)
+    create_obj(store, f + '/podprof-default', 'fabricPodP', {'name': 'default'}, ts)
+    create_obj(store, f + '/podprof-default/pods-default-typ-ALL', 'fabricPodS', {'name': 'default', 'type': 'ALL'}, ts)
+    create_obj(store, f + '/podprof-default/pods-default-typ-ALL/rspodPGrp', 'fabricRsPodPGrp', {'tDn': ''}, ts)
+    create_obj(store, 'uni/tn-mgmt/mgmtp-default', 'mgmtMgmtP', {'name': 'default'}, ts)
+    create_obj(store, 'uni/tn-mgmt/mgmtp-default/oob-default', 'mgmtOoB', {'name': 'default'}, ts)
