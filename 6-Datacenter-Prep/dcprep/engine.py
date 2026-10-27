@@ -636,6 +636,16 @@ class Engine:
                 for brc in c[k]:
                     self.contracts.setdefault(brc, {'prov': set(), 'cons': set(), 'prov_any': set(),
                                                     'cons_any': set()})[k].add(dn)
+        # Shared Services: Provider-EPG bekommt einen globalen pcTag (< 16384)
+        for brc, rel in self.contracts.items():
+            if (self.A(brc) or {}).get('scope') not in ('tenant', 'global'):
+                continue
+            for p in rel['prov']:
+                pc = self.cls.get(p)
+                if pc and pc['kind'] == 'epg' and pc['pcTag'].isdigit() and int(pc['pcTag']) >= 16384 and any(
+                        self.cls.get(c, {}).get('vrf') not in (None, '', pc['vrf']) for c in rel['cons']):
+                    pc['localTag'] = pc['pcTag']
+                    pc['pcTag'] = str(10000 + int(pc['pcTag']) % 6000)
         for vrf in self.store.by_class('fvCtx'):
             anyd = vrf + '/any'
             if not self.has(anyd):
@@ -1269,6 +1279,37 @@ class Engine:
                 continue
             res.extend(str(s['net']) for s in subs)
         return res
+
+    def leaked_routes(self):
+        """Shared Services: geleakte Subnetze je VRF -> [(Netz, Quell-VRF, Objekt)]."""
+        out = {}
+        for brc, rel in self.contracts.items():
+            sc = (self.A(brc) or {}).get('scope')
+            if sc not in ('tenant', 'global'):
+                continue
+            for p in rel['prov']:
+                for c in rel['cons']:
+                    pc, cc = self.cls.get(p), self.cls.get(c)
+                    if not pc or not cc or not pc['vrf'] or not cc['vrf'] or pc['vrf'] == cc['vrf']:
+                        continue
+                    if sc == 'tenant' and pc['tenant'] != cc['tenant']:
+                        continue
+                    if pc['kind'] == 'epg':
+                        for x in self.epg_subnets(p):
+                            if 'shared' in x['scope'].split(','):
+                                out.setdefault(cc['vrf'], []).append((x['net'], pc['vrf'], p))
+                    if cc['kind'] == 'epg':
+                        for x in self.bd_subnets(cc['bd']) + self.epg_subnets(c):
+                            if 'shared' in x['scope'].split(','):
+                                out.setdefault(pc['vrf'], []).append((x['net'], cc['vrf'], c))
+        for v in out:
+            seen, uniq = set(), []
+            for r in out[v]:
+                if r[0] not in seen:
+                    seen.add(r[0])
+                    uniq.append(r)
+            out[v] = uniq
+        return out
 
     def _related(self, a, b):
         for brc, rel in self.contracts.items():

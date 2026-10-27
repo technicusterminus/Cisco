@@ -18,6 +18,10 @@ APIC_HELP = """Verfuegbare Befehle auf dem APIC:
   acidiag avread                      Zustand des APIC-Clusters
   cat /data/data_admin/sam_exported.config   Werte aus dem Setup-Dialog
   acidiag touch clean | acidiag reboot       Konfiguration loeschen und neu starten (Werkszustand)
+  show faults [detail]                aktive Faults der Fabric
+  show endpoints [ip <a.b.c.d>]       Endpoints der ganzen Fabric
+  show bridge-domain | show epg       BDs und EPGs mit Zustand
+  show vmware domain name <Domain>    VMM Domain mit vCenter, Port Groups, Hosts
   ssh <leaf>                          zur Leaf-/Spine-CLI wechseln (z. B. ssh leaf101)
   Filter-Beispiel: moquery -c fvAEPg -f 'fv.AEPg.name=="Web"'"""
 
@@ -35,6 +39,19 @@ LEAF_HELP = """Verfuegbare Befehle auf Leaf/Spine:
   show vpc brief
   show port-channel summary
   show ntp peer-status | show clock
+  show interface eth1/<n>             Details eines Ports (Status, Grund, VLANs, Policy Group)
+  show cdp neighbors
+  show mac address-table [vlan <id>]
+  show ip interface brief vrf <Tenant:VRF | overlay-1>
+  show ip arp vrf <Tenant:VRF>
+  show system internal epm endpoint ip <a.b.c.d> | mac <mac>
+  show zoning-filter [filter <id>]
+  contract_parser.py [--vrf <Tenant:VRF>]
+  show bgp ipv4 unicast vrf <Tenant:VRF>
+  show ip ospf interface brief vrf <Tenant:VRF>
+  iping -V <Tenant:VRF> <a.b.c.d>          Ping vom Leaf (Quelle: BD-Gateway)
+  Underlay: show ip route vrf overlay-1 | show isis adjacency vrf overlay-1
+            show bgp vpnv4 unicast summary vrf overlay-1 | show coop internal info ip-db (Spine)
   exit                                zurueck zum APIC"""
 
 
@@ -167,6 +184,9 @@ class Cli:
                         'Rebooting ... Die Konfiguration ist geloescht. Der APIC startet mit dem Setup-Dialog.')
             return ('This command will restart this device, Proceed? [y/N] y\n'
                     'Rebooting ... Der APIC ist wieder da (Konfiguration unveraendert).')
+        r = self.apic_extra(cmd)
+        if r is not None:
+            return r
         if cmd == 'show tenant':
             rows = [e.A(d)['name'] for d in e.store.by_class('fvTenant')]
             return ' Tenant\n ' + '-' * 30 + '\n' + '\n'.join(' ' + r for r in sorted(rows))
@@ -327,7 +347,7 @@ class Cli:
                 out.append(' %-34s %6d Up      --' % (self._vname(v), 5 + i))
             return '\n'.join(out)
         m = re.match(r'^show ip route vrf (\S+)$', c)
-        if m:
+        if m and m.group(1) != 'overlay-1':
             return self.route(nid, m.group(1))
         m = re.match(r'^show zoning-rule(?: scope (\d+))?$', c)
         if m:
@@ -357,6 +377,9 @@ class Cli:
             return self.vpc(nid)
         if c in ('show port-channel summary', 'show port-channel sum'):
             return self.pc(nid)
+        extra = dispatch_extra(self, nid, c)
+        if extra is not None:
+            return extra
         if c.startswith('show ip route') or c.startswith('show ip ospf') or c.startswith('show bgp'):
             return '% Bitte VRF angeben, z. B. "show ip route vrf Tenant:VRF"'
         return '% Invalid command. "help" zeigt die verfuegbaren Befehle.'
@@ -404,7 +427,7 @@ class Cli:
         e = self.e
         vrf = self._vrf_by_name(vname)
         if not vrf or vrf not in e.dep_vrf.get(nid, set()):
-            return '% VRF %s ist auf diesem Switch nicht deployed' % vname
+            return '%% VRF %s ist auf diesem Switch nicht deployed' % vname
         out = ['IP Route Table for VRF "%s"' % vname, "'*' denotes best ucast next-hop",
                "'**' denotes best mcast next-hop", "'[x/y]' denotes [preference/metric]",
                "'%<string>' in via output denotes VRF <string>", '']
@@ -436,6 +459,12 @@ class Cli:
                                                  if r['name'] == rt.get('router')), ''))}[rt['proto']]
                 entries.append((n, ['%s, ubest/mbest: 1/0' % n,
                                     '    *via %s, %s, [%d/0], 00:05:11, %s' % (rt['nh'], rt['via'], rt['pref'], tag)]))
+        for net, svrf, obj in e.leaked_routes().get(vrf, []):
+            entries.append((net, ['%s, ubest/mbest: 1/0, attached, direct, pervasive' % net,
+                                  '    *via 10.0.0.66%%overlay-1, [1/0], 00:02:11, static, tag 4294967294, rwVnid: vxlan-%s'
+                                  % e.A(svrf)['scope'],
+                                  '         recursive next hop: 10.0.0.66/32%%overlay-1 (geleakt aus VRF %s, %s)'
+                                  % (self._vname(svrf), e.short(obj))]))
         for _, lines in sorted(entries, key=lambda x: (int(x[0].network_address), x[0].prefixlen)):
             out.extend(lines)
         return '\n'.join(out)
@@ -443,7 +472,7 @@ class Cli:
     def zoning(self, nid, scope):
         e = self.e
         rows = []
-        fid = {}
+        fid = self._filters()
         rid = 4096
         for vrf in sorted(e.dep_vrf.get(nid, set())):
             va = e.A(vrf)
@@ -459,6 +488,9 @@ class Cli:
                 members = lambda k: [e.cls[d]['pcTag'] for d in rel[k] if d in e.cls and e.cls[d]['vrf'] == vrf] + \
                     (['0'] if vrf in rel[k + '_any'] else [])
                 cons, prov = members('cons'), members('prov')
+                if prov and e.A(brc)['scope'] in ('tenant', 'global'):
+                    # Shared Services: Regeln liegen im VRF des Providers
+                    cons += [e.cls[d]['pcTag'] for d in rel['cons'] if d in e.cls and e.cls[d]['vrf'] and e.cls[d]['vrf'] != vrf]
                 if not cons or not prov:
                     continue
                 for subj in e.kids(brc, 'vzSubj'):
@@ -466,7 +498,7 @@ class Cli:
                         rfa = e.A(rf)
                         if rfa['state'] != 'formed':
                             continue
-                        f = fid.setdefault(rfa['tDn'], 4 + len(fid) + 1)
+                        f = fid[rfa['tDn']]
                         for cpt in cons:
                             for ppt in prov:
                                 if cpt == ppt:
@@ -589,3 +621,610 @@ class Cli:
             out.append('%-5d %-11s %-8s %-9s %s' % (idx, 'Po%d(%s)' % (idx, 'SU' if anyup else 'SD'), 'Eth', proto,
                                                     ' '.join(mem)))
         return '\n'.join(out)
+
+
+# ----------------------------------------------------------------------------
+# Verification-Befehle (Leaf, Spine, APIC)
+# ----------------------------------------------------------------------------
+BD_MAC = '0022.bdf8.19ff'
+
+
+def _verify_methods():
+    """Erweitert Cli um weitere show-Befehle (siehe dispatch_extra)."""
+
+    def bd_svis(self, nid, vrf=None):
+        """[(vlanId, bd, gw/len, vrf)] der BD-SVIs auf einem Leaf."""
+        e = self.e
+        res = []
+        for vid, name, encap, ports, bd, d in self._pivlans(nid):
+            if d is not None:
+                continue
+            bvrf = (e.A(bd + '/rsctx') or {}).get('tDn')
+            if vrf and bvrf != vrf:
+                continue
+            if e.A(bd)['unicastRoute'] != 'yes':
+                res.append((vid, bd, None, bvrf))
+                continue
+            subs = e.bd_subnets(bd) + [x for d2 in e.deploys if d2['bd'] == bd for x in e.epg_subnets(d2['epg'])]
+            if not subs:
+                res.append((vid, bd, None, bvrf))
+            for x in subs:
+                res.append((vid, bd, x['ip'], bvrf))
+        return res
+
+    def ip_int_brief(self, nid, vname):
+        e = self.e
+        vrf = self._vrf_by_name(vname)
+        if vname == 'overlay-1':
+            n = e.nodes[nid]
+            out = ['IP Interface Status for VRF "overlay-1"(4)', 'Interface            Address              Interface Status']
+            for lp, dev, rp, cap, ser in sorted(e.lldp.get(nid, []), key=lambda r: pnum(r[0]) or 0):
+                if cap == 'BR':
+                    out.append('%-20s %-20s %s' % ('eth%s.%d' % (lp[3:], 7 + (pnum(lp) or 0) % 50), 'unnumbered', 'protocol-up/link-up/admin-up'))
+            out.append('%-20s %-20s %s' % ('lo0', n['tep'] + '/32', 'protocol-up/link-up/admin-up'))
+            out.append('%-20s %-20s %s' % ('lo1023', e.apic_tep.rsplit('.', 1)[0] + '.32/32', 'protocol-up/link-up/admin-up'))
+            return '\n'.join(out)
+        if not vrf or vrf not in e.dep_vrf.get(nid, set()):
+            return '%% VRF %s ist auf diesem Switch nicht deployed' % vname
+        out = ['IP Interface Status for VRF "%s"(%s)' % (vname, 5), 'Interface            Address              Interface Status']
+        for vid, bd, gw, _ in self.bd_svis(nid, vrf):
+            out.append('%-20s %-20s %s' % ('vlan%d' % vid, gw or 'unassigned', 'protocol-up/link-up/admin-up'))
+        for i in e.l3if:
+            if i['nid'] == nid and i['vrf'] == vrf:
+                out.append('%-20s %-20s %s' % (e.if_name(i), i['addr'], 'protocol-up/link-up/admin-up'))
+        for o in e.outs.values():
+            if o['vrf'] == vrf and nid in o['nodes'] and o['nodes'][nid]['rtrId']:
+                ra = e.A(o['nodes'][nid]['dn'])
+                if ra.get('rtrIdLoopBack', 'yes') == 'yes':
+                    out.append('%-20s %-20s %s' % ('lo%d' % (3 + list(e.outs).index(o['dn'])), ra['rtrId'] + '/32',
+                                                   'protocol-up/link-up/admin-up'))
+        return '\n'.join(out)
+
+    def arp(self, nid, vname):
+        e = self.e
+        vrf = self._vrf_by_name(vname)
+        if not vrf or vrf not in e.dep_vrf.get(nid, set()):
+            return '%% VRF %s ist auf diesem Switch nicht deployed' % vname
+        piv = {d['epg']: vid for vid, _, _, _, _, d in self._pivlans(nid) if d}
+        bdv = {bd: vid for vid, _, _, _, bd, d in self._pivlans(nid) if d is None}
+        rows = []
+        for h in e.all_hosts():
+            hs = e.hosts.get(h['name'])
+            if hs and hs['learned'] and hs['ipLearned'] and hs['vrf'] == vrf and nid in hs['nodes']:
+                p = e.paths[hs['path']]
+                intf = p['name'] if p['type'] == 'port' else 'po%d' % self._po_ids(nid).get(hs['path'], 1)
+                rows.append((str(ip_of(h['ip'])), '00:01:12', _mac(h['mac']), 'vlan%s' % bdv.get(hs['bd'], '?'), intf))
+        for r in self.sim.get('routers', []):
+            rs = e.routers.get(r['name'], {})
+            i = rs.get('iface')
+            if rs.get('link') and i and i['nid'] == nid and i['vrf'] == vrf:
+                rows.append((str(ip_of(r['ip'])), '00:03:41', _mac(r.get('mac') or '00:00:5e:00:53:%02x' % (len(rows) + 1)),
+                             e.if_name(i), e.if_name(i)))
+        out = ['Flags: * - Adjacencies learnt on non-active FHRP router', '       + - Adjacencies synced via CFSoE',
+               '       # - Adjacencies Throttled for Glean', '       D - Static Adjacencies attached to down interface', '',
+               'IP ARP Table for context %s' % vname, 'Total number of entries: %d' % len(rows),
+               'Address         Age       MAC Address     Interface       Physical Interface']
+        for r in rows:
+            out.append('%-15s %-9s %-15s %-15s %s' % r)
+        return '\n'.join(out)
+
+    def mac_table(self, nid, vlan=None):
+        e = self.e
+        piv = {(d['epg'], d['vlan']): vid for vid, _, _, _, _, d in self._pivlans(nid) if d}
+        out = ['Legend:', '        * - primary entry, G - Gateway MAC, (R) - Routed MAC, O - Overlay MAC',
+               '        age - seconds since last seen,+ - primary entry using vPC Peer-Link,',
+               '        (T) - True, (F) - False, C - ControlPlane MAC', '   VLAN     MAC Address      Type      age     Secure NTFY Ports',
+               '---------+-----------------+--------+---------+------+----+------------------']
+        n = 0
+        for h in e.all_hosts():
+            hs = e.hosts.get(h['name'])
+            if not hs or not hs['learned'] or nid not in hs['nodes']:
+                continue
+            vid = piv.get((hs['epg'], vlan_num(hs['encap'])), '?')
+            if vlan and str(vid) != str(vlan):
+                continue
+            p = e.paths[hs['path']]
+            intf = p['name'].capitalize() if p['type'] == 'port' else 'Po%d' % self._po_ids(nid).get(hs['path'], 1)
+            out.append('* %-7s %-16s %-8s %-9s %-6s %-4s %s' % (vid, _mac(h['mac']), 'dynamic', '-', 'F', 'F', intf))
+            n += 1
+        for vid, bd, gw, _ in self.bd_svis(nid):
+            if gw and (not vlan or str(vlan) == str(vid)):
+                out.append('G %-7s %-16s %-8s %-9s %-6s %-4s %s' % (vid, BD_MAC, 'static', '-', 'F', 'F', 'sup-eth1(R)'))
+        return '\n'.join(out)
+
+    def epm(self, nid, kind, val):
+        e = self.e
+        for h in e.all_hosts():
+            hs = e.hosts.get(h['name'])
+            if not hs or not hs['learned']:
+                continue
+            if kind == 'ip' and (not hs['ipLearned'] or str(ip_of(h['ip'])) != val):
+                continue
+            if kind == 'mac' and _mac(h['mac']) != _mac(val.replace('.', '').replace(':', '')
+                                                          if len(val.replace('.', '').replace(':', '')) == 12 else val):
+                continue
+            local = nid in hs['nodes']
+            p = e.paths[hs['path']]
+            intf = p['name'] if p['type'] == 'port' else 'po%d' % self._po_ids(nid).get(hs['path'], 1)
+            other = [x for x in hs['nodes'] if x != nid]
+            tunnel = 'tunnel%d' % (10 + (other[0] if other else hs['nodes'][0]) % 90)
+            ep = e.cls.get(hs['epg'], {})
+            out = ['MAC : %s ::: Num IPs : %d' % (_mac(h['mac']), 1 if hs['ipLearned'] else 0),
+                   'IP# 0 : %s ::: IP# 0 flags : %s' % (str(ip_of(h['ip'])) if hs['ipLearned'] else '-',
+                                                        'local' if local else ''),
+                   'Vlan id : %s ::: Vlan vnid : %s ::: VRF name : %s' % (
+                       vlan_num(hs['encap']) if local else 0, 8192 + (vlan_num(hs['encap']) or 0), self._vname(hs['vrf'])),
+                   'BD vnid : %s ::: VRF vnid : %s' % (e.A(hs['bd'])['seg'], e.A(hs['vrf'])['scope']),
+                   'Phy If : %s ::: Tunnel If : %s' % (intf if local else '0', '0' if local else tunnel),
+                   'Interface : %s' % (intf.capitalize() if local else tunnel.capitalize()),
+                   'Flags : 0x80004c04 ::: sclass : %s ::: Ref count : 5' % ep.get('pcTag', ''),
+                   'EP Create Timestamp : 10/27/2026 09:12:01.123456',
+                   'EP Update Timestamp : 10/27/2026 09:12:01.123456',
+                   'EP Flags : %s' % ('local|IP|MAC|sclass|timer|' if local else 'IP|MAC|sclass|timer|'),
+                   '::::']
+            if not local and not e.mpbgp_ok and False:
+                pass
+            return '\n'.join(out)
+        return 'Keinen Endpoint zu %s %s gefunden.' % (kind, val)
+
+    def show_interface(self, nid, port):
+        e = self.e
+        port = port.lower().replace('ethernet', 'eth')
+        if not port.startswith('eth'):
+            port = 'eth' + port
+        pi = e.ports.get((nid, port))
+        if not pi:
+            return '%% Invalid interface %s' % port
+        n = e.nodes[nid]
+        up = pi['oper'] == 'up'
+        qual = pi['qual']
+        reason = {'link-up': 'none', 'link-not-connected': 'Link not connected', 'admin-down': 'Administratively down',
+                  'suspended': 'suspended(no LACP PDUs)', 'suspended-due-to-no-lacp-pdus': 'suspended(no LACP PDUs)'}.get(qual, qual)
+        mtu = 9216 if pi['fabric'] or pi['layer'] == 'Layer3' else 9000
+        peer = pi.get('peer')
+        out = ['%s is %s' % (port.capitalize(), 'up' if up else ('down (%s)' % reason)),
+               'admin state is %s, Dedicated Interface' % ('down' if qual == 'admin-down' else 'up'),
+               '  Hardware: 1000/10000/25000/auto Ethernet, address: 00de.fb%02x.%04x (bia 00de.fb%02x.%04x)' % (
+                   nid % 100, pnum(port) or 0, nid % 100, pnum(port) or 0),
+               '  Description: %s' % ('%s %s' % (peer[1], peer[2]) if peer else ''),
+               '  MTU %d bytes, BW %s Kbit, DLY 1 usec' % (mtu, '100000000' if pi['speed'] == '100G' else '25000000'),
+               '  reliability 255/255, txload 1/255, rxload 1/255',
+               '  Encapsulation ARPA, medium is broadcast',
+               '  Port mode is %s' % ('routed' if pi['layer'] == 'Layer3' else 'trunk'),
+               '  full-duplex, %s' % (pi['speed'].replace('G', ' Gb/s') if up else 'auto-speed'),
+               '  Usage: %s' % (', '.join(sorted(pi['usage'])) or 'discovery'),
+               '  Allowed VLANs (encap): %s' % (', '.join('vlan-%d' % v for v in sorted(pi['vlans'])) or 'none'),
+               '  Last link flapped 01:02:03',
+               '  %s' % ('Policy Group: %s' % pi['pg'].split('/')[-1] if pi.get('pg') else 'Keine Access Policy (kein Interface Selector)')]
+        return '\n'.join(out)
+
+    def cdp(self, nid):
+        e = self.e
+        out = ['Capability Codes: R - Router, T - Trans-Bridge, B - Source-Route-Bridge',
+               '                  S - Switch, H - Host, I - IGMP, r - Repeater,', '                  V - VoIP-Phone, D - Remotely-Managed-Device,',
+               '                  s - Supports-STP-Dispute', '', 'Device-ID          Local Intrfce  Hldtme Capability  Platform      Port ID']
+        n = 0
+        for (k, port), peer in sorted(e.cabled.items(), key=lambda x: pnum(x[0][1]) or 0):
+            if k != nid:
+                continue
+            pg = e.ports[(k, port)]['pg']
+            if not pg or e._pg_info(pg)['cdp'] != 'enabled':
+                continue
+            out.append('%-18s %-14s %-6s %-11s %-13s %s' % (peer[1][:18], port.capitalize(), '163',
+                                                            'H' if peer[0] == 'host' else 'R S I', 'Linux' if peer[0] == 'host' else 'ISR4331', 'eth0' if peer[0] == 'host' else 'Gig0/0/0'))
+            n += 1
+        for vc in self.sim.get('vcenters', []):
+            for esx in vc.get('hosts', []):
+                for s_, p_ in esx.get('links', []):
+                    if e.serial_active.get(s_) == nid:
+                        pg = e.ports.get((nid, p_), {}).get('pg')
+                        if pg and e._pg_info(pg)['cdp'] == 'enabled':
+                            out.append('%-18s %-14s %-6s %-11s %-13s %s' % (esx['name'], p_.capitalize(), '163', 'S', 'VMware ESXi', 'vmnic%d' % esx['links'].index([s_, p_])))
+                            n += 1
+        out.append('')
+        out.append('Total entries displayed: %d' % n)
+        return '\n'.join(out)
+
+    def _filters(self):
+        """Filter-IDs wie in show zoning-rule (gleiche Nummerierung)."""
+        e = self.e
+        fid = {}
+        for brc, rel in sorted(e.contracts.items()):
+            for subj in e.kids(brc, 'vzSubj'):
+                for rf in e.kids(subj, 'vzRsSubjFiltAtt'):
+                    rfa = e.A(rf)
+                    if rfa['state'] == 'formed':
+                        fid.setdefault(rfa['tDn'], 4 + len(fid) + 1)
+        return fid
+
+    def zoning_filter(self, nid, which):
+        e = self.e
+        rows = [(2, 'implarp', 'arp', 'unspecified', 'unspecified', 'unspecified', 'unspecified', 'no'),
+                (4, 'implicit', 'unspecified', 'unspecified', 'unspecified', 'unspecified', 'unspecified', 'no')]
+        for flt, i in sorted(self._filters().items(), key=lambda x: x[1]):
+            for en in e.kids(flt, 'vzEntry'):
+                a = e.A(en)
+                rows.append((i, '%s_%s' % (i, a['name']), a['etherT'], a.get('prot', 'unspecified'),
+                             '%s-%s' % (a.get('sFromPort', 'unspecified'), a.get('sToPort', 'unspecified')),
+                             '%s-%s' % (a.get('dFromPort', 'unspecified'), a.get('dToPort', 'unspecified')),
+                             a.get('tcpRules') or 'unspecified', a.get('stateful', 'no')))
+        if which:
+            rows = [r for r in rows if str(r[0]) == which]
+        return _table(['FilterId', 'Name', 'EtherT', 'Prot', 'SFromPort-SToPort', 'DFromPort-DToPort', 'TcpRules', 'Stateful'], rows)
+
+    def contract_parser(self, nid, vname):
+        e = self.e
+        vrf = self._vrf_by_name(vname) if vname else None
+        names = {c['pcTag']: (c['dn'], c) for c in e.cls.values()}
+        fnames = {i: f for f, i in self._filters().items()}
+        out = []
+        z = self.zoning(nid, e.A(vrf)['scope'] if vrf else None)
+        if z.startswith('Keine'):
+            return z
+        for line in z.split('\n')[3:-1]:
+            cells = [c.strip() for c in line.strip('|').split('|')]
+            rid, src, dst, fid, dirn, _, scope, name, action, prio = cells
+            if fid in ('implicit', 'implarp'):
+                continue
+            def label(tag):
+                if tag == '0':
+                    return 'any'
+                dn, c = names.get(tag, (None, None))
+                return ('epg:%s' % e.short(dn)) if dn else tag
+            flt = fnames.get(int(fid)) if fid.isdigit() else None
+            desc = []
+            for en in e.kids(flt, 'vzEntry') if flt else []:
+                a = e.A(en)
+                port = a.get('dFromPort', 'unspecified')
+                if dirn == 'uni-dir-ignore':
+                    port = a.get('dFromPort', 'unspecified')
+                    desc.append('%s %s%s' % (a['etherT'], a.get('prot', ''), '' if port == 'unspecified' else ' sport %s' % port))
+                else:
+                    desc.append('%s %s%s' % (a['etherT'], a.get('prot', ''), '' if port == 'unspecified' else ' eq %s' % port))
+            vrfname = next((self._vname(v) for v in e.dep_vrf.get(nid, set()) if e.A(v)['scope'] == scope), scope)
+            out.append('[%s:%s] [vrf:%s] %s %s %s %s [contract:%s] [hit=0]' % (
+                rid, prio.split('(')[-1].rstrip(')'), vrfname, action, ', '.join(desc) or 'ip', label(src), label(dst),
+                name or '-'))
+        return '\n'.join(out) if out else 'Keine Contract-Regeln auf diesem Switch.'
+
+    def bgp_table(self, nid, vname):
+        e = self.e
+        vrf = self._vrf_by_name(vname)
+        if not e.fabric_asn():
+            return '% BGP ist nicht aktiv (kein Fabric-AS in der BGP Route Reflector Policy)'
+        if not vrf or vrf not in e.dep_vrf.get(nid, set()):
+            return '%% VRF %s ist auf diesem Switch nicht deployed' % vname
+        out = ['BGP routing table information for VRF %s, address family IPv4 Unicast' % vname,
+               'BGP table version is 42, Local Router ID is %s' % next((o['nodes'][nid]['rtrId'] for o in e.outs.values()
+                                                                        if o['vrf'] == vrf and nid in o['nodes']), e.nodes[nid]['tep']),
+               'Status: s-suppressed, x-deleted, S-stale, d-dampened, h-history, *-valid, >-best',
+               'Path type: i-internal, e-external, c-confed, l-local, a-aggregate, r-redist, I-injected',
+               'Origin codes: i - IGP, e - EGP, ? - incomplete, | - multipath, & - backup', '',
+               '   Network            Next Hop            Metric     LocPrf     Weight Path']
+        for rt in sorted(e.routes.get((vrf, nid), []), key=lambda r: ipaddress.ip_network(r['prefix'], strict=False)):
+            if rt['proto'] == 'bgp' and rt.get('border'):
+                out.append('*>i%-18s %-19s %-10s %-10s %-6s %s' % (rt['prefix'], rt['nh'], '0', '100', '0', '?'))
+            elif rt['proto'] in ('bgp', 'ospf', 'static'):
+                asn = next((r.get('bgp', {}).get('asn') for r in self.sim.get('routers', []) if r['name'] == rt.get('router')), '')
+                out.append('*>%s%-18s %-19s %-10s %-10s %-6s %s' % ('e' if rt['proto'] == 'bgp' else 'r', rt['prefix'], rt['nh'], '0', '100',
+                                                                    '0', ('%s i' % asn) if rt['proto'] == 'bgp' else '?'))
+        for o in e.outs.values():
+            if o['vrf'] == vrf and nid in o['nodes']:
+                for net in e.exported_subnets(o['dn'], nid):
+                    out.append('*>r%-18s %-19s %-10s %-10s %-6s %s' % (net, '0.0.0.0', '0', '100', '32768', '?'))
+        return '\n'.join(out)
+
+    def ospf_if(self, nid, vname):
+        e = self.e
+        vrf = self._vrf_by_name(vname)
+        out = [' OSPF Process ID default VRF %s' % vname, ' Total number of interface: %d' % sum(
+            1 for i in e.l3if if i['nid'] == nid and i['vrf'] == vrf and i['ospf']),
+               ' Interface               ID     Area            Cost   State    Neighbors Status']
+        for k, i in enumerate([i for i in e.l3if if i['nid'] == nid and i['vrf'] == vrf and i['ospf']]):
+            o = e.outs[i['out']]
+            area = (o['ospf'] or {}).get('areaId', 'backbone')
+            area = '0.0.0.0' if area in ('backbone', '0') else area
+            nb = sum(1 for r in self.sim.get('routers', []) if (e.routers.get(r['name'], {}).get('iface') or {}).get('dn') == i['dn']
+                     and e.routers[r['name']].get('adj') == 'FULL')
+            nwt = (i['pol'] or {}).get('nwT', 'bcast')
+            out.append(' %-23s %-6d %-15s %-6d %-8s %-9d %s' % (e.if_name(i), k + 7, area, 4, 'P2P' if nwt == 'p2p' else 'BDR',
+                                                               nb, 'up'))
+        return '\n'.join(out)
+
+    def iping(self, nid, vname, dst):
+        from . import trace
+        e = self.e
+        vrf = self._vrf_by_name(vname)
+        if not vrf or vrf not in e.dep_vrf.get(nid, set()):
+            return '%% VRF %s ist auf diesem Switch nicht deployed' % vname
+        try:
+            dip = ipaddress.ip_address(dst)
+        except ValueError:
+            return '% Invalid IP address'
+        svis = [x for x in self.bd_svis(nid, vrf) if x[2]]
+        src = next((x for x in svis if dip in ipaddress.ip_interface(x[2]).network), svis[0] if svis else None)
+        ok = False
+        why = 'Request timed out'
+        if any(str(ip_of(x[2])) == dst for x in svis):
+            ok = True
+        else:
+            host = next((h for h in e.all_hosts() if str(ip_of(h['ip'])) == dst), None)
+            if host:
+                hs = e.hosts.get(host['name'], {})
+                if hs.get('vrf') == vrf or (hs.get('quiet') and hs.get('dep') and hs['dep']['vrf'] == vrf):
+                    bd = hs.get('bd') or (hs.get('dep') or {}).get('bd')
+                    if hs.get('learned'):
+                        ok = True
+                    elif hs.get('quiet') and bd and e.A(bd)['unicastRoute'] == 'yes' and any(
+                            dip in x['net'] for x in e.bd_subnets(bd)):
+                        ok = True
+                        self.sim.setdefault('woken', []).append(host['name'])
+                        self.request = self.request or 'changed'
+                        why = None
+                    else:
+                        why = 'Ziel nicht gelernt (%s)' % '; '.join(hs.get('reasons', [])[:1])
+                else:
+                    why = 'Ziel liegt nicht in VRF %s' % vname
+            else:
+                rts = [r for r in e.routes.get((vrf, nid), []) if dip in ipaddress.ip_network(r['prefix'], strict=False)]
+                if not rts:
+                    why = 'Keine Route zu %s in VRF %s' % (dst, vname)
+                else:
+                    if not src:
+                        li = next((i for i in e.l3if if i['nid'] == nid and i['vrf'] == vrf), None)
+                        src = (0, None, li['addr'], vrf) if li else None
+                    sip = ipaddress.ip_address(src[2].split('/')[0]) if src else None
+                    rtr = next((r for r in self.sim.get('routers', []) if (e.routers.get(r['name'], {}).get('iface') or {}).get('vrf') == vrf
+                                and (str(ip_of(r['ip'])) == dst or any(dip in ipaddress.ip_network(n, strict=False) for n in r.get('networks', [])))), None)
+                    if not rtr:
+                        why = 'Request timed out (der externe Router kennt %s nicht)' % dst
+                    else:
+                        rs = e.routers[rtr['name']]
+                        back = sip and (ipaddress.ip_network(rtr['ip'], strict=False).overlaps(ipaddress.ip_network(str(sip) + '/32'))
+                                        or any(sip in ipaddress.ip_network(n, strict=False) for n in rs.get('learned', []) + rtr.get('staticBack', [])))
+                        ok = bool(back)
+                        if not ok:
+                            why = 'Request timed out (Router %s hat keine Route zurueck zu %s)' % (rtr['name'], sip)
+        lines = ['PING %s (%s) from %s: 56 data bytes' % (dst, dst, src[2].split('/')[0] if src else '0.0.0.0')]
+        for i in range(5):
+            lines.append('64 bytes from %s: icmp_seq=%d ttl=63 time=%.3f ms' % (dst, i, 0.3 + i * 0.05) if ok else 'Request %d timed out' % i)
+        lines += ['', '--- %s ping statistics ---' % dst,
+                  '5 packets transmitted, %d packets received, %s packet loss' % (5 if ok else 0, '0.00%' if ok else '100.00%')]
+        if ok:
+            lines.append('round-trip min/avg/max = 0.300/0.400/0.500 ms')
+        elif why and why != 'Request timed out':
+            if why.startswith('Request timed out ('):
+                why = why[len('Request timed out ('):-1]
+            lines.append('Hinweis (Datacenter Prep): %s' % why)
+        return '\n'.join(lines)
+
+    def overlay_routes(self, nid):
+        e = self.e
+        out = ['IP Route Table for VRF "overlay-1"', "'*' denotes best ucast next-hop", '']
+        me = e.nodes[nid]
+        uplinks = [lp for lp, dev, rp, cap, ser in e.lldp.get(nid, []) if cap == 'BR']
+        tgts = [(me['tep'], None)] + [(n['tep'], n) for k, n in sorted(e.nodes.items()) if k != nid and n['state'] == 'active']
+        for tep, n in sorted(tgts, key=lambda x: ipaddress.ip_address(x[0])):
+            if n is None:
+                out += ['%s/32, ubest/mbest: 2/0, attached' % tep, '    *via %s, lo0, [0/0], 01:02:03, local, local' % tep]
+                continue
+            out.append('%s/32, ubest/mbest: %d/0' % (tep, max(1, len(uplinks) if n['role'] == 'leaf' and me['role'] == 'leaf' else 1)))
+            via = uplinks if n['role'] == 'leaf' and me['role'] == 'leaf' else \
+                [lp for lp, dev, rp, cap, ser in e.lldp.get(nid, []) if dev == n['name']]
+            for lp in via or uplinks[:1]:
+                out.append('    *via 10.0.0.%d, eth%s.%d, [115/%d], 01:02:03, isis-isis_infra, isis-l1-int' % (
+                    30 + (pnum(lp) or 0), lp[3:], 7 + (pnum(lp) or 0) % 50, 3 if me['role'] == n['role'] else 2))
+        return '\n'.join(out)
+
+    def isis(self, nid):
+        e = self.e
+        out = ['IS-IS process: isis_infra VRF:overlay-1', 'IS-IS adjacency database:',
+               'System ID               SNPA            Level  State  Hold Time  Interface']
+        for lp, dev, rp, cap, ser in sorted(e.lldp.get(nid, []), key=lambda r: pnum(r[0]) or 0):
+            if cap != 'BR':
+                continue
+            pid = e.serial_active.get(ser)
+            if pid is None:
+                continue
+            out.append('%-23s %-15s %-6s %-6s %-10s %s' % ('%s' % e.nodes[pid]['tep'], 'N/A', '1', 'UP', '00:01:04',
+                                                          'Ethernet%s.%d' % (lp[3:], 7 + (pnum(lp) or 0) % 50)))
+        return '\n'.join(out)
+
+    def vpnv4(self, nid):
+        e = self.e
+        ok, asn, rr = e.mpbgp()
+        me = e.nodes[nid]
+        if not asn:
+            return '% BGP ist nicht aktiv: In der BGP Route Reflector Policy fehlt das Fabric-AS.'
+        out = ['BGP summary information for VRF overlay-1, address family VPNv4 Unicast',
+               'BGP router identifier %s, local AS number %s' % (me['tep'], asn), '',
+               'Neighbor        V    AS MsgRcvd MsgSent   TblVer  InQ OutQ Up/Down  State/PfxRcd']
+        rr_ids = [int(x) for x in (rr or [])]
+        if me['role'] == 'spine':
+            if nid not in rr_ids:
+                return '% Dieser Spine ist kein Route Reflector (System > System Settings > BGP Route Reflector)'
+            peers = [n for k, n in sorted(e.nodes.items()) if n['role'] == 'leaf' and n['state'] == 'active']
+        else:
+            peers = [e.nodes[k] for k in rr_ids if k in e.nodes and e.nodes[k]['state'] == 'active']
+        if not peers:
+            out.append('(keine Peers - kein aktiver Spine als Route Reflector)')
+        for n in peers:
+            pfx = sum(1 for (v, x), rts in e.routes.items() if x == n['id'] for r in rts if r['proto'] in ('ospf', 'bgp', 'static') and not r.get('border'))
+            out.append('%-15s 4 %5s %7d %7d %8d %4d %4d %8s %s' % (n['tep'], asn, 120, 118, 33, 0, 0, '01:02:03', pfx))
+        return '\n'.join(out)
+
+    def coop(self, nid):
+        e = self.e
+        if e.nodes[nid]['role'] != 'spine':
+            return '% COOP-Datenbank gibt es nur auf Spines'
+        out = ['IP DB entries:']
+        n = 0
+        for h in e.all_hosts():
+            hs = e.hosts.get(h['name'])
+            if not hs or not hs['learned'] or not hs['ipLearned']:
+                continue
+            n += 1
+            pub = e.nodes[hs['nodes'][0]]
+            out += ['', 'Global epoc: 0', 'VRF vnid: %s' % e.A(hs['vrf'])['scope'], 'IP: %s' % ip_of(h['ip']),
+                    'MAC: %s' % h['mac'].upper(), 'BD vnid: %s' % e.A(hs['bd'])['seg'],
+                    'Publisher Id: %s' % pub['tep'], 'Record timestamp: 10 27 2026 09:12:01 123456789',
+                    'Tunnel nh: %s' % (pub['tep'] if len(hs['nodes']) == 1 else '10.0.%d.%d (vPC Anycast)' % (64, hs['nodes'][0] % 250)),
+                    'Num of repositories: %d' % len(hs['nodes'])]
+        out.insert(1, 'Total entries: %d' % n)
+        return '\n'.join(out)
+
+    for f in (bd_svis, ip_int_brief, arp, mac_table, epm, show_interface, cdp, _filters, zoning_filter, contract_parser,
+              bgp_table, ospf_if, iping, overlay_routes, isis, vpnv4, coop):
+        setattr(Cli, f.__name__, f)
+
+
+_verify_methods()
+
+
+def dispatch_extra(self, nid, c):
+    """Weitere Leaf-/Spine-Befehle. Rueckgabe None = unbekannt."""
+    m = re.match(r'^show ip int(?:erface)? br(?:ief)? vrf (\S+)$', c)
+    if m:
+        return self.ip_int_brief(nid, m.group(1))
+    m = re.match(r'^show ip arp vrf (\S+)$', c)
+    if m:
+        return self.arp(nid, m.group(1))
+    m = re.match(r'^show mac address-table(?: vlan (\d+))?$', c)
+    if m:
+        return self.mac_table(nid, m.group(1))
+    m = re.match(r'^show system internal epm endpoint (ip|mac) (\S+)$', c)
+    if m:
+        return self.epm(nid, m.group(1), m.group(2))
+    m = re.match(r'^show int(?:erface)? (e(?:th(?:ernet)?)?\s?\d+/\d+)$', c)
+    if m:
+        return self.show_interface(nid, re.sub(r'^e(?:th(?:ernet)?)?\s?', 'eth', m.group(1)))
+    if c in ('show cdp neighbors', 'show cdp neighbor', 'show cdp nei'):
+        return self.cdp(nid)
+    m = re.match(r'^show zoning-filter(?: filter (\d+))?$', c)
+    if m:
+        return self.zoning_filter(nid, m.group(1))
+    m = re.match(r'^contract_parser(?:\.py)?(?: --vrf (\S+))?$', c)
+    if m:
+        return self.contract_parser(nid, m.group(1))
+    m = re.match(r'^show bgp ipv4 unicast vrf (\S+)$', c)
+    if m:
+        return self.bgp_table(nid, m.group(1))
+    m = re.match(r'^show ip ospf int(?:erface)? br(?:ief)? vrf (\S+)$', c)
+    if m:
+        return self.ospf_if(nid, m.group(1))
+    m = re.match(r'^iping (?:-V|vrf) (\S+) (\S+)$', c)
+    if m:
+        return self.iping(nid, m.group(1), m.group(2))
+    if c == 'show ip route vrf overlay-1':
+        return self.overlay_routes(nid)
+    if re.match(r'^show isis adjacency(?: detail)? vrf overlay-1$', c):
+        return self.isis(nid)
+    if re.match(r'^show bgp vpnv4 unicast summary vrf overlay-1$', c):
+        return self.vpnv4(nid)
+    if c in ('show coop internal info ip-db', 'show coop internal info repo ep'):
+        return self.coop(nid)
+    if c in ('show vlan', 'show vlan brief'):
+        return self.switch(self.e.nodes[nid], 'show vlan extended')
+    return None
+
+
+def apic_extra(self, cmd):
+    e = self.e
+    c = re.sub(r'\s+', ' ', cmd.strip())
+    m = re.match(r'^show faults?( detail)?$', c)
+    if m:
+        st = e.store
+        rows = sorted((st.attrs(d) for d in st.by_class('faultInst')),
+                      key=lambda a: (['critical', 'major', 'minor', 'warning'].index(a['severity'])
+                                     if a['severity'] in ('critical', 'major', 'minor', 'warning') else 9, a['code']))
+        if not rows:
+            return 'Keine aktiven Faults.'
+        out = []
+        if m.group(1):
+            for a in rows:
+                out += [' Code         : %s' % a['code'], ' Severity     : %s' % a['severity'], ' Cause        : %s' % a['cause'],
+                        ' Affected     : %s' % a['dn'].rsplit('/fault-', 1)[0], ' Description  : %s' % a['descr'],
+                        ' Created      : %s' % a.get('created', ''), '']
+            return '\n'.join(out)
+        out = [' Code   Severity Affected Object' + ' ' * 41 + 'Cause', ' ------ -------- ' + '-' * 56 + ' ' + '-' * 24]
+        for a in rows:
+            out.append(' %-6s %-8s %-56s %s' % (a['code'], a['severity'], a['dn'].rsplit('/fault-', 1)[0][:56], a['cause']))
+        out.append('\n Total: %d' % len(rows))
+        return '\n'.join(out)
+    m = re.match(r'^show endpoints?(?: ip (\S+))?$', c)
+    if m:
+        out = [' Dynamic Endpoints:', ' Tenant      : Application : AEPg  MAC                IP               Node        Interface          Encap',
+               ' ' + '-' * 112]
+        for h in e.all_hosts():
+            hs = e.hosts.get(h['name'])
+            if not hs or not hs['learned']:
+                continue
+            ip = str(ip_of(h['ip'])) if hs['ipLearned'] else '---'
+            if m.group(1) and ip != m.group(1):
+                continue
+            p = split_dn(hs['epg'])
+            p_ = e.paths[hs['path']]
+            out.append(' %-38s %-18s %-16s %-11s %-18s %s' % (
+                ':'.join(x.split('-', 1)[1] for x in p[1:4]), h['mac'].upper(), ip,
+                ','.join(str(n) for n in hs['nodes']), p_['name'] if p_['type'] == 'port' else p_['name'], hs['encap']))
+        out.append('\n Total Dynamic Endpoints: %d' % (len(out) - 3))
+        return '\n'.join(out)
+    if c in ('show bridge-domain', 'show bd'):
+        out = [' Tenant           Bridge Domain          VRF                Unicast  ARP Flood  L2 Unk Ucast  Subnets',
+               ' ' + '-' * 106]
+        for bd in sorted(e.store.by_class('fvBD')):
+            a = e.A(bd)
+            vrf = (e.A(bd + '/rsctx') or {}).get('tDn', '')
+            out.append(' %-16s %-22s %-18s %-8s %-10s %-13s %s' % (split_dn(bd)[1][3:], a['name'], vrf.split('ctx-')[-1] if vrf else '-',
+                                                                    a['unicastRoute'], a['arpFlood'], a['unkMacUcastAct'],
+                                                                    ', '.join(x['ip'] for x in e.bd_subnets(bd)) or '-'))
+        return '\n'.join(out)
+    if c == 'show epg':
+        out = [' Tenant           AP               EPG              BD               pcTag  Endpoints  Health',
+               ' ' + '-' * 96]
+        for d, cl in sorted(e.cls.items()):
+            if cl['kind'] != 'epg':
+                continue
+            p = split_dn(d)
+            n = sum(1 for hs in e.hosts.values() if hs.get('learned') and hs.get('epg') == d)
+            out.append(' %-16s %-16s %-16s %-16s %-6s %-10d %s' % (p[1][3:], p[2][3:], p[3][4:], e.A(cl['bd'])['name'] if cl['bd'] else '-',
+                                                                cl['pcTag'], n, e.score(d)))
+        return '\n'.join(out)
+    m = re.match(r'^show vmware domain(?: name (\S+))?$', c)
+    if m:
+        doms = [v for v in getattr(e, 'vmm', {}).values() if not m.group(1) or v['name'] == m.group(1)]
+        if not doms:
+            return '%% VMM Domain %s nicht gefunden' % (m.group(1) or '')
+        out = []
+        for v in doms:
+            vc = next((x for x in self.sim.get('vcenters', []) if x['name'] == v['vc']), None)
+            ctrl = e.kids(v['dn'], 'vmmCtrlrP')
+            ca = e.A(ctrl[0]) if ctrl else {}
+            out += ['Domain Name                    : %s' % v['name'], 'Virtual Switch Mode            : VMware Distributed Switch',
+                    'Vlan Domain                    : %s' % ((e.A(v['dn'] + '/rsvlanNs') or {}).get('tDn', '-').split('[')[-1].split(']')[0]),
+                    'Physical Interfaces            : %s' % ', '.join(sorted({'%s %s' % (e.nodes[l[0]]['name'], l[1]) for x in v['hosts'] for l in x['legs']})),
+                    'Number of EPGs                 : %d' % len(v['pgs']), 'Faults by Severity             : 0, 0, 0, 0',
+                    'LLDP override                  : %s' % ('LLDP' if v['discovery'] == 'lldp' else 'no'),
+                    'CDP override                   : %s' % ('CDP' if v['discovery'] == 'cdp' else 'no'),
+                    '', 'vCenters:', 'Faults: Grouped by severity (Critical, Major, Minor, Warning)',
+                    'vCenter                Type        Datacenter   Status    ESXs  VMs   Faults',
+                    '---------------------  ----------  -----------  --------  ----  ----  -------',
+                    '%-22s %-11s %-12s %-9s %-5s %-5s %s' % (ca.get('hostOrIp', '-'), 'vCenter', ca.get('rootContName', '-'),
+                                                             v['state'], len(v['hosts']),
+                                                             sum(len(x.get('vms', [])) for x in (vc or {}).get('hosts', [])
+                                                                 if v['name'] in x.get('dvs', [])), '0,%d,0,0' % (1 if v['state'] != 'online' else 0))]
+            if v['reasons']:
+                out.append('Grund: %s' % '; '.join(v['reasons']))
+            out += ['', 'Hypervisor          Uplinks                     Status', '------------------  --------------------------  ------']
+            for x in v['hosts']:
+                out.append('%-19s %-27s %s' % (x['name'], ', '.join('%s %s' % (e.nodes[l[0]]['name'], l[1]) for l in x['legs']),
+                                               'up' if x['ok'] else 'down: ' + '; '.join(x['reasons'])))
+            out += ['', 'DVS Port Group                       VLAN       EPG', '-----------------------------------  ---------  ---------------------']
+            for epg, g in sorted(v['pgs'].items()):
+                out.append('%-36s %-10s %s' % (g['name'], 'vlan-%d' % g['vlan'], e.short(epg)))
+            out.append('')
+        return '\n'.join(out)
+    return None
+
+
+Cli.apic_extra = apic_extra

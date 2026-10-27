@@ -786,7 +786,9 @@ def make_handler(S):
                         S.reset('factory', keep_sim=True)
                         S.save()
                         return self.send(200, {'output': out, 'reboot': True})
-                    if S.sim.get('touch_clean'):
+                    if cli.request == 'changed':
+                        S.changed()
+                    elif S.sim.get('touch_clean'):
                         S.save()
                     return self.send(200, {'output': out})
                 if rest == 'hosts':
