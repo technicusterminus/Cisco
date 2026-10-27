@@ -1,0 +1,896 @@
+{
+ "id": "16-service-graph-pbr",
+ "title": "16 Service Graph mit Policy-Based Redirect",
+ "topic": "L4-L7 Services",
+ "level": "Fortgeschritten",
+ "duration": "45 min",
+ "fabric": "discovered",
+ "goals": [
+  "Ein L4-L7 Device (Firewall, Go-To, physisch) anlegen",
+  "Einen Service Graph mit PBR auf einen Contract anwenden",
+  "Shadow-EPGs, Redirect-Regeln und Faults verstehen"
+ ],
+ "intro": "Der Verkehr von **Web** zu **App** (Contract **web-to-app**: tcp/8080 und ICMP) soll künftig durch die Firewall **fw1** – ohne dass die Server ihr Gateway ändern. Dafür nutzt die ACI **Policy-Based Redirect (PBR)**.\n\nfw1 hängt an **leaf102 eth1/20** (Port-Policy vorhanden) mit zwei 802.1Q-Interfaces:\n- **outside** vlan-401, 192.168.100.10/24, MAC 00:50:56:FA:01:01\n- **inside** vlan-402, 192.168.101.10/24, MAC 00:50:56:FA:01:02\n\nDas Regelwerk der Firewall erlaubt nur **tcp/8080** (siehe Simulation > L4-L7 Geräte).",
+ "config": [
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "infraInfra": {
+       "attributes": {},
+       "children": [
+        {
+         "fvnsVlanInstP": {
+          "attributes": {
+           "name": "VLAN-Pool-Server",
+           "allocMode": "static"
+          },
+          "children": [
+           {
+            "fvnsEncapBlk": {
+             "attributes": {
+              "from": "vlan-100",
+              "to": "vlan-199"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAttEntityP": {
+          "attributes": {
+           "name": "AAEP-Server"
+          },
+          "children": [
+           {
+            "infraRsDomP": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraFuncP": {
+          "attributes": {},
+          "children": [
+           {
+            "infraAccPortGrp": {
+             "attributes": {
+              "name": "IPG-Server-Access"
+             },
+             "children": [
+              {
+               "infraRsAttEntP": {
+                "attributes": {
+                 "tDn": "uni/infra/attentp-AAEP-Server"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAccPortP": {
+          "attributes": {
+           "name": "IntProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraHPortS": {
+             "attributes": {
+              "name": "Server-Ports",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraPortBlk": {
+                "attributes": {
+                 "name": "block2",
+                 "fromPort": "1",
+                 "toPort": "10"
+                }
+               }
+              },
+              {
+               "infraRsAccBaseGrp": {
+                "attributes": {
+                 "tDn": "uni/infra/funcprof/accportgrp-IPG-Server-Access"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraNodeP": {
+          "attributes": {
+           "name": "SwProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraLeafS": {
+             "attributes": {
+              "name": "101-102",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraNodeBlk": {
+                "attributes": {
+                 "name": "blk",
+                 "from_": "101",
+                 "to_": "102"
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "infraRsAccPortP": {
+             "attributes": {
+              "tDn": "uni/infra/accportprof-IntProf-Leaf101-102"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "physDomP": {
+       "attributes": {
+        "name": "PhysDom-Server"
+       },
+       "children": [
+        {
+         "infraRsVlanNs": {
+          "attributes": {
+           "tDn": "uni/infra/vlanns-[VLAN-Pool-Server]-static"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "infraInfra": {
+       "attributes": {},
+       "children": [
+        {
+         "infraAccPortP": {
+          "attributes": {
+           "name": "IntProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraHPortS": {
+             "attributes": {
+              "name": "FW-Ports",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraPortBlk": {
+                "attributes": {
+                 "name": "block2",
+                 "fromPort": "20",
+                 "toPort": "20"
+                }
+               }
+              },
+              {
+               "infraRsAccBaseGrp": {
+                "attributes": {
+                 "tDn": "uni/infra/funcprof/accportgrp-IPG-Server-Access"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Shop"
+    },
+    "children": [
+     {
+      "fvCtx": {
+       "attributes": {
+        "name": "Prod"
+       }
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Web"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.10.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-App"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.20.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Webshop"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Web"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Web"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/1]",
+              "encap": "vlan-110",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsCons": {
+             "attributes": {
+              "tnVzBrCPName": "web-to-app"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "App"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-App"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/2]",
+              "encap": "vlan-120",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsProv": {
+             "attributes": {
+              "tnVzBrCPName": "web-to-app"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzFilter": {
+       "attributes": {
+        "name": "tcp-8080"
+       },
+       "children": [
+        {
+         "vzEntry": {
+          "attributes": {
+           "name": "tcp-8080",
+           "etherT": "ip",
+           "prot": "tcp",
+           "dFromPort": "8080",
+           "dToPort": "8080"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzBrCP": {
+       "attributes": {
+        "name": "web-to-app",
+        "scope": "context"
+       },
+       "children": [
+        {
+         "vzSubj": {
+          "attributes": {
+           "name": "subj",
+           "revFltPorts": "yes"
+          },
+          "children": [
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "tcp-8080"
+             }
+            }
+           },
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "icmp"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "hosts": [
+  {
+   "name": "web1",
+   "mac": "00:50:56:10:10:11",
+   "ip": "10.10.10.11/24",
+   "gw": "10.10.10.1",
+   "vlan": 110,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/1"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Webserver"
+  },
+  {
+   "name": "app1",
+   "mac": "00:50:56:10:20:11",
+   "ip": "10.10.20.11/24",
+   "gw": "10.10.20.1",
+   "vlan": 120,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/2"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Applikationsserver"
+  }
+ ],
+ "devices": [
+  {
+   "name": "fw1",
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/20"
+    ]
+   ],
+   "allow": [
+    "tcp/8080"
+   ],
+   "ifs": [
+    {
+     "name": "outside",
+     "vlan": 401,
+     "ip": "192.168.100.10/24",
+     "mac": "00:50:56:FA:01:01"
+    },
+    {
+     "name": "inside",
+     "vlan": 402,
+     "ip": "192.168.101.10/24",
+     "mac": "00:50:56:FA:01:02"
+    }
+   ]
+  }
+ ],
+ "tasks": [
+  {
+   "title": "VLANs für die Firewall",
+   "text": "Der VLAN Pool **VLAN-Pool-Server** braucht einen Encap Block **vlan-400 bis vlan-410**.",
+   "hint": "Die Encaps der Cluster Interfaces müssen im VLAN Pool der Domain des L4-L7 Devices liegen."
+  },
+  {
+   "title": "Service-BDs",
+   "text": "Zwei BDs im VRF Prod: **BD-FW-Ext** (192.168.100.1/24) und **BD-FW-Int** (192.168.101.1/24)."
+  },
+  {
+   "title": "L4-L7 Device",
+   "text": "**Services > L4-L7 > Devices > Create L4-L7 Devices**: Name **FW1**, Firewall, Physical, Domain PhysDom-Server, Function Type **GoTo**. Concrete Device **fw1** mit den Interfaces outside und inside auf leaf102 eth1/20, Cluster Interfaces **consumer** (vlan-401, outside) und **provider** (vlan-402, inside)."
+  },
+  {
+   "title": "PBR Policies",
+   "text": "**Policies > Protocol > L4-L7 Policy-Based Redirect**: **PBR-Ext** mit Ziel 192.168.100.10 / 00:50:56:FA:01:01 und **PBR-Int** mit Ziel 192.168.101.10 / 00:50:56:FA:01:02."
+  },
+  {
+   "title": "Service Graph Template",
+   "text": "**Service Graph Templates > Create**: **FW-Graph** mit FW1, Node **N1**, Route Redirect aktiv."
+  },
+  {
+   "title": "Graph anwenden",
+   "text": "Rechtsklick auf FW-Graph > **Apply L4-L7 Service Graph Template**: Consumer Web, Provider App, bestehender Contract web-to-app. Consumer-Connector BD-FW-Ext + PBR-Ext + Cluster Interface consumer, Provider-Connector BD-FW-Int + PBR-Int + provider."
+  },
+  {
+   "title": "Verifizieren",
+   "text": "**Deployed Graph Instances** zeigt *applied*. Traffic-Test web1 → app1 tcp/8080 läuft über fw1. Warum ist Ping jetzt blockiert, obwohl der Contract ICMP erlaubt? Auf leaf101: `show zoning-rule` (Action redir) und `show service redir info`."
+  }
+ ],
+ "checks": [
+  {
+   "desc": "Graph-Instanz applied",
+   "type": "graph",
+   "contract": "uni/tn-Shop/brc-web-to-app"
+  },
+  {
+   "desc": "fw1 outside im Service-BD gelernt",
+   "type": "endpoint",
+   "host": "fw1:outside"
+  },
+  {
+   "desc": "web1 → app1 tcp/8080 über die Firewall",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "app1",
+   "proto": "tcp",
+   "port": 8080,
+   "expect": true,
+   "via": "fw1"
+  },
+  {
+   "desc": "web1 → app1 Ping von der Firewall blockiert",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "app1",
+   "proto": "icmp",
+   "expect": false
+  }
+ ],
+ "solution": "Wichtig sind die drei Teile: **L4-L7 Device** (Concrete Device mit Paths, Cluster Interfaces mit Encap), **Service Graph Template** (Node N1, Redirect) und die **Device Selection Policy** (Contract/Graph/Node, je Connector BD, Cluster Interface und PBR Policy). Am Subject des Contracts hängt `vzRsSubjGraphAtt tnVnsAbsGraphName=FW-Graph`. Die PBR-Ziele brauchen die richtige MAC der Firewall-Interfaces.",
+ "routers": [],
+ "vcenters": [],
+ "solutionConfig": [
+  [
+   "uni/infra/vlanns-[VLAN-Pool-Server]-static",
+   {
+    "fvnsVlanInstP": {
+     "attributes": {},
+     "children": [
+      {
+       "fvnsEncapBlk": {
+        "attributes": {
+         "from": "vlan-400",
+         "to": "vlan-410"
+        }
+       }
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "uni",
+   {
+    "fvTenant": {
+     "attributes": {
+      "name": "Shop"
+     },
+     "children": [
+      {
+       "fvBD": {
+        "attributes": {
+         "name": "BD-FW-Ext"
+        },
+        "children": [
+         {
+          "fvRsCtx": {
+           "attributes": {
+            "tnFvCtxName": "Prod"
+           }
+          }
+         },
+         {
+          "fvSubnet": {
+           "attributes": {
+            "ip": "192.168.100.1/24",
+            "scope": "private"
+           }
+          }
+         }
+        ]
+       }
+      },
+      {
+       "fvBD": {
+        "attributes": {
+         "name": "BD-FW-Int"
+        },
+        "children": [
+         {
+          "fvRsCtx": {
+           "attributes": {
+            "tnFvCtxName": "Prod"
+           }
+          }
+         },
+         {
+          "fvSubnet": {
+           "attributes": {
+            "ip": "192.168.101.1/24",
+            "scope": "private"
+           }
+          }
+         }
+        ]
+       }
+      },
+      {
+       "vnsLDevVip": {
+        "attributes": {
+         "name": "FW1",
+         "svcType": "FW",
+         "devtype": "PHYSICAL",
+         "funcType": "GoTo"
+        },
+        "children": [
+         {
+          "vnsRsALDevToPhysDomP": {
+           "attributes": {
+            "tDn": "uni/phys-PhysDom-Server"
+           }
+          }
+         },
+         {
+          "vnsCDev": {
+           "attributes": {
+            "name": "fw1"
+           },
+           "children": [
+            {
+             "vnsCIf": {
+              "attributes": {
+               "name": "outside"
+              },
+              "children": [
+               {
+                "vnsRsCIfPathAtt": {
+                 "attributes": {
+                  "tDn": "topology/pod-1/paths-102/pathep-[eth1/20]"
+                 }
+                }
+               }
+              ]
+             }
+            },
+            {
+             "vnsCIf": {
+              "attributes": {
+               "name": "inside"
+              },
+              "children": [
+               {
+                "vnsRsCIfPathAtt": {
+                 "attributes": {
+                  "tDn": "topology/pod-1/paths-102/pathep-[eth1/20]"
+                 }
+                }
+               }
+              ]
+             }
+            }
+           ]
+          }
+         },
+         {
+          "vnsLIf": {
+           "attributes": {
+            "name": "consumer",
+            "encap": "vlan-401"
+           },
+           "children": [
+            {
+             "vnsRsCIfAttN": {
+              "attributes": {
+               "tDn": "uni/tn-Shop/lDevVip-FW1/cDev-fw1/cIf-[outside]"
+              }
+             }
+            }
+           ]
+          }
+         },
+         {
+          "vnsLIf": {
+           "attributes": {
+            "name": "provider",
+            "encap": "vlan-402"
+           },
+           "children": [
+            {
+             "vnsRsCIfAttN": {
+              "attributes": {
+               "tDn": "uni/tn-Shop/lDevVip-FW1/cDev-fw1/cIf-[inside]"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      },
+      {
+       "vnsSvcCont": {
+        "attributes": {},
+        "children": [
+         {
+          "vnsSvcRedirectPol": {
+           "attributes": {
+            "name": "PBR-Ext"
+           },
+           "children": [
+            {
+             "vnsRedirectDest": {
+              "attributes": {
+               "ip": "192.168.100.10",
+               "mac": "00:50:56:FA:01:01"
+              }
+             }
+            }
+           ]
+          }
+         },
+         {
+          "vnsSvcRedirectPol": {
+           "attributes": {
+            "name": "PBR-Int"
+           },
+           "children": [
+            {
+             "vnsRedirectDest": {
+              "attributes": {
+               "ip": "192.168.101.10",
+               "mac": "00:50:56:FA:01:02"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      },
+      {
+       "vnsAbsGraph": {
+        "attributes": {
+         "name": "FW-Graph"
+        },
+        "children": [
+         {
+          "vnsAbsNode": {
+           "attributes": {
+            "name": "N1",
+            "funcType": "GoTo",
+            "routingMode": "Redirect"
+           },
+           "children": [
+            {
+             "vnsRsNodeToLDev": {
+              "attributes": {
+               "tDn": "uni/tn-Shop/lDevVip-FW1"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      },
+      {
+       "vnsLDevCtx": {
+        "attributes": {
+         "ctrctNameOrLbl": "web-to-app",
+         "graphNameOrLbl": "FW-Graph",
+         "nodeNameOrLbl": "N1"
+        },
+        "children": [
+         {
+          "vnsRsLDevCtxToLDev": {
+           "attributes": {
+            "tDn": "uni/tn-Shop/lDevVip-FW1"
+           }
+          }
+         },
+         {
+          "vnsLIfCtx": {
+           "attributes": {
+            "connNameOrLbl": "consumer"
+           },
+           "children": [
+            {
+             "vnsRsLIfCtxToBD": {
+              "attributes": {
+               "tDn": "uni/tn-Shop/BD-BD-FW-Ext"
+              }
+             }
+            },
+            {
+             "vnsRsLIfCtxToLIf": {
+              "attributes": {
+               "tDn": "uni/tn-Shop/lDevVip-FW1/lIf-consumer"
+              }
+             }
+            },
+            {
+             "vnsRsLIfCtxToSvcRedirectPol": {
+              "attributes": {
+               "tDn": "uni/tn-Shop/svcCont/svcRedirectPol-PBR-Ext"
+              }
+             }
+            }
+           ]
+          }
+         },
+         {
+          "vnsLIfCtx": {
+           "attributes": {
+            "connNameOrLbl": "provider"
+           },
+           "children": [
+            {
+             "vnsRsLIfCtxToBD": {
+              "attributes": {
+               "tDn": "uni/tn-Shop/BD-BD-FW-Int"
+              }
+             }
+            },
+            {
+             "vnsRsLIfCtxToLIf": {
+              "attributes": {
+               "tDn": "uni/tn-Shop/lDevVip-FW1/lIf-provider"
+              }
+             }
+            },
+            {
+             "vnsRsLIfCtxToSvcRedirectPol": {
+              "attributes": {
+               "tDn": "uni/tn-Shop/svcCont/svcRedirectPol-PBR-Int"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      },
+      {
+       "vzBrCP": {
+        "attributes": {
+         "name": "web-to-app"
+        },
+        "children": [
+         {
+          "vzSubj": {
+           "attributes": {
+            "name": "subj"
+           },
+           "children": [
+            {
+             "vzRsSubjGraphAtt": {
+              "attributes": {
+               "tnVnsAbsGraphName": "FW-Graph"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  ]
+ ]
+}

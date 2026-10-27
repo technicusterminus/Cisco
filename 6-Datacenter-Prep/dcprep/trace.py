@@ -208,11 +208,85 @@ def _policy(eng, t, s, d, proto, port, label_s, label_d):
                                                             '/%d' % port if dport else ''), why)
     if act != 'permit':
         return False
+    hit = getattr(eng, 'last_hit', None)
+    g = getattr(eng, 'graphs', {}).get(hit[0]) if hit else None
+    if g is not None and not _service(eng, t, g, hit[1], proto, port):
+        return False
     act, why = eng.packet(d, s, proto, dport, EPHEMERAL if dport else None, 'ack')
     eng.count(d['dn'], 'txPkts')
     eng.count(s['dn'], 'rxPkts' if act == 'permit' else 'dropPkts')
     t.step(act == 'permit', 'Policy Antwort %s -> %s' % (label_d, label_s), why)
     return act == 'permit'
+
+
+def _fw_allows(dev, proto, port):
+    rules = [r.strip().lower() for r in dev.get('allow', ['any'])]
+    if 'any' in rules:
+        return True
+    return proto in rules or ('%s/%s' % (proto, port)) in rules
+
+
+def _service(eng, t, g, direction, proto, port):
+    """Service Graph am Contract-Subject: Redirect zur Firewall und zurueck."""
+    gname = eng.A(g['graph'])['name']
+    if g['state'] != 'applied':
+        t.step(False, 'Service Graph %s' % gname, 'Graph ist nicht gerendert: %s' % '; '.join(g['reasons']))
+        return False
+    if not g['redirect']:
+        t.step(False, 'Service Graph %s' % gname, 'Function Node ohne Routing Mode "Redirect": Ohne PBR muessten die Hosts die '
+               'Firewall als Gateway nutzen - Datacenter Prep simuliert Service Graphs mit PBR')
+        return False
+    legs = ('consumer', 'provider') if direction == 'c2p' else ('provider', 'consumer')
+    first = g['conns'][legs[0]]
+    dev = None
+    for d in first['dests']:
+        ep = next((h for h in eng.fw_hosts if str(ip_of(h['ip'])) == d['ip']), None)
+        hs = eng.hosts.get(ep['name'], {}) if ep else {}
+        if not ep:
+            t.step(False, 'PBR %s' % eng.short(first['pol']), 'Redirect-Ziel %s gehoert zu keinem L4-L7-Geraet' % d['ip'])
+            return False
+        if not hs.get('learned') or hs.get('epg') != first['shadow']:
+            t.step(False, 'PBR %s' % eng.short(first['pol']), 'Redirect-Ziel %s (%s) ist im Service-BD %s nicht gelernt: %s' % (
+                d['ip'], ep['name'], eng.short(first['bd']), '; '.join(hs.get('reasons', [])) or 'Encap/Path des Cluster Interfaces pruefen'))
+            return False
+        if d['mac'] and d['mac'] != ep['mac'].upper():
+            t.step(False, 'PBR %s' % eng.short(first['pol']), 'Redirect-Ziel %s: MAC in der PBR Policy (%s) passt nicht zur MAC der '
+                   'Firewall (%s) - die ACI schreibt die falsche Ziel-MAC um, das Paket wird verworfen' % (d['ip'], d['mac'], ep['mac'].upper()))
+            return False
+        if not d['mac']:
+            t.step(False, 'PBR %s' % eng.short(first['pol']), 'Redirect-Ziel %s hat keine MAC-Adresse (ohne IP-SLA-Tracking Pflicht)' % d['ip'])
+            return False
+        dev = next((x for x in eng.sim.get('devices', []) if x['name'] == ep['dev']), None)
+        t.step(True, 'Redirect (%s -> %s)' % legs, 'PBR %s leitet zu %s (%s %s) um, Service-BD %s, vlan-%d' % (
+            eng.short(first['pol']), ep['dev'], ep['devif'], d['ip'], eng.short(first['bd']), first['vlan']))
+        break
+    if dev is None:
+        return False
+    if not _fw_allows(dev, proto, port):
+        t.step(False, 'Firewall %s' % dev['name'], 'Regelwerk der Firewall erlaubt %s%s nicht (erlaubt: %s)' % (
+            proto, '/%s' % port if port else '', ', '.join(dev.get('allow', []))))
+        return False
+    t.step(True, 'Firewall %s' % dev['name'], 'Regel erlaubt %s%s, weiter ueber das %s-Interface' % (
+        proto, '/%s' % port if port else '', legs[1]))
+    second = g['conns'][legs[1]]
+    out = next((h for h in eng.fw_hosts if h['dev'] == dev['name'] and eng.hosts.get(h['name'], {}).get('epg') == second['shadow']), None)
+    if not out:
+        t.step(False, 'Firewall %s' % dev['name'], 'Das %s-Interface der Firewall ist im Service-BD %s nicht gelernt' % (
+            legs[1], eng.short(second['bd'])))
+        return False
+    back = next((d for d in second['dests'] if d['ip'] == str(ip_of(out['ip']))), None)
+    if not back:
+        t.step(False, 'Rueckweg per PBR', 'Die PBR Policy %s am %s-Connector zeigt nicht auf das %s-Interface der Firewall (%s) - '
+               'die Antwort liefe an der Firewall vorbei (asymmetrisch) und wuerde verworfen' % (
+                   eng.short(second['pol']), legs[1], legs[1], ip_of(out['ip'])))
+        return False
+    if back['mac'] != out['mac'].upper():
+        t.step(False, 'Rueckweg per PBR', 'MAC in der PBR Policy %s (%s) passt nicht zur Firewall (%s)' % (
+            eng.short(second['pol']), back['mac'] or '(leer)', out['mac'].upper()))
+        return False
+    t.step(True, 'Rueckweg per PBR', 'Antwort wird ueber %s (%s) zur Firewall umgeleitet - symmetrisch' % (
+        eng.short(second['pol']), back['ip']))
+    return True
 
 
 def run(eng, sim, src, dst, proto='icmp', port=0):

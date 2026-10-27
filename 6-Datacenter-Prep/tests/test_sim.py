@@ -376,7 +376,7 @@ class TestLabs(Base):
     def test_all_labs_solvable(self):
         self.S.sim['settings']['discoverySeconds'] = 0
         labs = self.S.labs()
-        self.assertGreaterEqual(len(labs), 16)
+        self.assertGreaterEqual(len(labs), 17)
         for lab in labs:
             with self.subTest(lab=lab['id']):
                 self.S.load_lab(lab['id'])
@@ -559,3 +559,36 @@ class TestRouteControl(Base):
              {"l3extSubnet": {"attributes": {"scope": "import-security"}}})
         self.S.changed()
         self.assertFalse(any(r['prefix'] == '192.168.50.0/24' for r in self.S.engine.routes.get(('uni/tn-Shop/ctx-Prod', 104), [])))
+
+
+class TestServiceGraph(Base):
+    def test_pbr(self):
+        self.S.sim['settings']['discoverySeconds'] = 0
+        self.S.load_lab('16-service-graph-pbr')
+        for url, body in self.S.lab('16-service-graph-pbr')['solutionConfig']:
+            post(self.S.store, url, body)
+        self.S.changed()
+        e = self.S.engine
+        g = next(iter(e.graphs.values()))
+        self.assertEqual(g['state'], 'applied', g['reasons'])
+        r = trace.run(e, self.S.sim, 'web1', 'app1', 'tcp', 8080)
+        self.assertTrue(r['ok'], r)
+        self.assertTrue(any('fw1' in s['detail'] for s in r['steps']))
+        self.assertFalse(trace.run(e, self.S.sim, 'web1', 'app1', 'icmp', 0)['ok'])
+        out = Cli(e, self.S.sim).run('leaf101', 'show zoning-rule')
+        self.assertIn('redir(destgrp-1)', out)
+        # falsche MAC im PBR-Ziel
+        post(self.S.store, 'uni/tn-Shop/svcCont/svcRedirectPol-PBR-Ext/RedirectDest_ip-[192.168.100.10]',
+             {"vnsRedirectDest": {"attributes": {"mac": "00:50:56:FA:01:99"}}})
+        self.S.changed()
+        r = trace.run(self.S.engine, self.S.sim, 'web1', 'app1', 'tcp', 8080)
+        self.assertFalse(r['ok'])
+        self.assertIn('MAC', ' '.join(s['detail'] for s in r['steps'] if s['ok'] is False))
+        # ohne Device Selection Policy: Graph nicht gerendert, Fault S1690
+        self.S.store and post(self.S.store, 'uni/tn-Shop', {"fvTenant": {"attributes": {}, "children": [
+            {"vnsLDevCtx": {"attributes": {"ctrctNameOrLbl": "web-to-app", "graphNameOrLbl": "FW-Graph", "nodeNameOrLbl": "N1",
+                                           "status": "deleted"}}}]}})
+        self.S.changed()
+        g = next(iter(self.S.engine.graphs.values()))
+        self.assertEqual(g['state'], 'failed')
+        self.assertTrue(any(self.S.store.attrs(d)['code'] == 'S1690' for d in self.S.store.by_class('faultInst')))

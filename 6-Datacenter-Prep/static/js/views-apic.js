@@ -546,6 +546,62 @@ Object.assign(Views, {
     }]);
   },
 
+  /* ================================================================ L4-L7 */
+  async graphInstances(w, tn) {
+    const st = App.state;
+    const rows = (st.graphs || []).filter(g => g.dn.startsWith(tn + '/'));
+    w.appendChild(paneHead('Deployed Graph Instances', tn));
+    w.appendChild(table([{ l: 'Service Graph', f: r => nameOfDn(r.graph) }, { l: 'Contract', f: r => nameOfDn(r.brc) }, { l: 'Node', f: r => r.node || '—' },
+      { l: 'Device', f: r => r.dev ? nameOfDn(r.dev) : '—' }, { l: 'State', f: r => stateBadge(r.state === 'applied' ? 'applied' : 'failed') },
+      { l: 'Fehler', f: r => (r.reasons || []).join('; ') }], rows, { empty: 'Keine Service Graphs angewendet. Rechtsklick auf ein Service Graph Template > Apply L4-L7 Service Graph Template.' }));
+  },
+
+  async 'sim/devices'(w) {
+    const draw = () => {
+      clear(w);
+      const st = App.state;
+      w.appendChild(paneHead('Simulation – L4-L7 Geräte', 'Firewalls und andere Service-Appliances an Leaf-Ports',
+        [h('button', { class: 'btn primary small', onclick: () => Views.deviceDialog() }, '+ Gerät')]));
+      w.appendChild(h('div', { class: 'card note' }, 'Ein Gerät hat 802.1Q-Interfaces (VLAN, IP, MAC) und ein einfaches Regelwerk (z. B. "tcp/8080, icmp" oder "any"). '
+        + 'Die ACI lernt die Interfaces, sobald ein Service Graph sie über Cluster Interfaces und Device Selection Policy einbindet.'));
+      (st.devices || []).forEach(d => {
+        w.appendChild(h('div', { class: 'card' },
+          h('div', { class: 'card-h' }, h('b', null, d.name), ' · ', d.links.map(l => nodeName(l[0]) + ' ' + l[1]).join(' + '), ' · Regeln: ', d.allow.join(', '),
+            h('span', { class: 'grow' }), h('button', { class: 'btn small', onclick: () => Views.deviceDialog(d) }, 'Bearbeiten'),
+            iconBtn('🗑', 'Löschen', () => confirmBox('Gerät ' + d.name + ' entfernen?', async () => { await API.sim('devices', { op: 'delete', name: d.name }); await App.refreshState(); draw(); }), 'danger')),
+          table([{ l: 'Interface', f: r => r.name }, { l: 'VLAN', f: r => r.vlan ? 'vlan-' + r.vlan : 'untagged' }, { l: 'IP', f: r => r.ip }, { l: 'MAC', f: r => r.mac },
+            { l: 'Status', f: r => { const x = d.status[r.name] || {}; return x.learned ? h('span', null, stateBadge('learned'), ' Service-EPG') : stateBadge('down'); } },
+            { l: 'Hinweis', f: r => ((d.status[r.name] || {}).reasons || []).join('; ') }], d.ifs)));
+      });
+      if (!(st.devices || []).length) w.appendChild(h('div', { class: 'card' }, 'Noch keine Geräte.'));
+    };
+    draw();
+    App.view = { auto: draw };
+  },
+
+  deviceDialog(x) {
+    const st = App.state;
+    const leafOpts = leafNodes().map(n => [n.serial, (n.name || n.serial) + (n.id ? ' – Node ' + n.id : '')]);
+    const f = buildForm([{ k: 'name', l: 'Name', req: true, ph: 'fw1' },
+      { k: 'leaf', l: 'Leaf', t: 'select', o: leafOpts }, { k: 'port', l: 'Port', ph: 'eth1/20', req: true },
+      { k: 'allow', l: 'Regelwerk', ph: 'tcp/8080, icmp  oder  any', help: 'Was die Firewall durchlässt' },
+      { k: '_ifs', l: 'Interfaces', t: 'rows', start: true, cols: [{ k: 'name', l: 'Name', ph: 'outside', req: true }, { k: 'vlan', l: 'VLAN', ph: '401', w: '70px' },
+        { k: 'ip', l: 'IP/Maske', ph: '192.168.100.10/24', req: true }, { k: 'mac', l: 'MAC', ph: '00:50:56:FA:01:01', req: true }] }],
+    x ? { name: x.name, leaf: x.links[0][0], port: x.links[0][1], allow: x.allow.join(', '), _ifs: x.ifs.map(i => Object.assign({}, i, { vlan: String(i.vlan) })) }
+      : { leaf: (leafOpts[0] || [''])[0], allow: 'any', _ifs: [{ mac: randMac() }] }, {}, 'create');
+    modal(x ? 'Gerät ' + x.name : 'L4-L7 Gerät hinzufügen', f.el, [{ l: 'Abbrechen' }, {
+      l: 'Speichern', primary: true, fn: async () => {
+        const v = f.get();
+        const obj = { name: v.name, links: [[v.leaf, v.port]], allow: String(v.allow || 'any').split(',').map(z => z.trim()).filter(Boolean),
+          ifs: (v._ifs || []).filter(i => i.name).map(i => ({ name: i.name, vlan: Number(i.vlan || 0), ip: i.ip, mac: i.mac })) };
+        await API.sim('devices', { op: 'set', obj, old: x ? x.name : null });
+        toast('Gerät ' + v.name + ' gespeichert');
+        await App.refreshState();
+        if (App.view && App.view.auto) App.view.auto();
+      },
+    }], { wide: true });
+  },
+
   /* ================================================================ Operations */
   async 'ops/capacity'(w) {
     const c = await API.sim('capacity');

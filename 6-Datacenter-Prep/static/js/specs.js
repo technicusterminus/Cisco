@@ -771,6 +771,151 @@ Object.assign(SPEC, {
   },
 });
 
+/* ---------------- L4-L7 Service Graph / PBR ---------------- */
+function nestDn(dn, child) {
+  const CLS = { 'tn-': 'fvTenant', 'ap-': 'fvAp', 'epg-': 'fvAEPg', 'out-': 'l3extOut', 'instP-': 'l3extInstP', 'l2out-': 'l2extOut' };
+  const parts = splitDn(dn).slice(1);
+  let body = child;
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const rn = parts[i];
+    const pre = Object.keys(CLS).find(k => rn.startsWith(k));
+    body = mo(CLS[pre], { name: rn.slice(pre.length) }, body);
+  }
+  return body;
+}
+
+Object.assign(SPEC, {
+  vnsLDevVip: {
+    label: 'L4-L7 Device', menu: 'Create L4-L7 Devices',
+    fields: [NAME, { k: 'svcType', l: 'Service Type', t: 'select', o: [['FW', 'Firewall'], ['ADC', 'ADC'], ['OTHERS', 'Other']] },
+      { k: 'devtype', l: 'Device Type', t: 'radio', o: [['PHYSICAL', 'Physical'], ['VIRTUAL', 'Virtual']] },
+      relDn('vnsRsALDevToPhysDomP', 'Physical Domain', 'physDomP'),
+      { k: 'funcType', l: 'Function Type', t: 'radio', o: [['GoThrough', 'GoThrough'], ['GoTo', 'GoTo'], ['L1', 'L1'], ['L2', 'L2']] }, DESCR],
+    cols: [ac('name'), col('Service Type', r => r.svcType), col('Function Type', r => r.funcType), col('Domain', r => nameOfDn(relOf(r.dn, 'vnsRsALDevToPhysDomP', 'tDn'))),
+      col('Concrete Devices', r => MIT.kids(r.dn, ['vnsCDev']).map(d => MIT.a(d).name).join(', '))],
+    wizard: {
+      title: 'Create L4-L7 Devices',
+      steps: [
+        { l: 'General', fields: [NAME, { k: 'svcType', l: 'Service Type', t: 'select', o: [['FW', 'Firewall'], ['ADC', 'ADC'], ['OTHERS', 'Other']], def: 'FW' },
+          { k: 'devtype', l: 'Device Type', t: 'radio', o: [['PHYSICAL', 'Physical'], ['VIRTUAL', 'Virtual']], def: 'PHYSICAL' },
+          relDn('vnsRsALDevToPhysDomP', 'Physical Domain', 'physDomP', { req: true }),
+          { k: 'funcType', l: 'Function Type', t: 'radio', o: [['GoThrough', 'GoThrough (transparent)'], ['GoTo', 'GoTo (routed)'], ['L1', 'L1'], ['L2', 'L2']], def: 'GoTo' }] },
+        { l: 'Devices', fields: [{ k: '_cdev', l: 'Concrete Device Name', req: true, ph: 'fw1' },
+          { k: '_cifs', l: 'Concrete Interfaces', t: 'rows', start: true, cols: [{ k: 'name', l: 'Name', ph: 'outside', req: true }, { k: 'tDn', l: 'Path', t: 'path' }] }] },
+        { l: 'Cluster Interfaces', fields: [{ k: '_lifs', l: 'Cluster Interfaces', t: 'rows', start: true, cols: [{ k: 'name', l: 'Name', ph: 'consumer', req: true },
+          { k: 'encap', l: 'Encap', ph: 'vlan-401', req: true, w: '100px' }, { k: 'cif', l: 'Concrete Interface', ph: 'outside', req: true }] }] }],
+      build: (v, parent) => {
+        const dn = parent + '/lDevVip-' + v.name;
+        return { dn, body: mo('vnsLDevVip', { name: v.name, svcType: v.svcType, devtype: v.devtype, funcType: v.funcType, managed: 'no' },
+          mo('vnsRsALDevToPhysDomP', { tDn: v['vnsRsALDevToPhysDomP.tDn'] }),
+          mo('vnsCDev', { name: v._cdev }, (v._cifs || []).map(c => mo('vnsCIf', { name: c.name }, c.tDn ? mo('vnsRsCIfPathAtt', { tDn: c.tDn }) : null))),
+          (v._lifs || []).map(l => mo('vnsLIf', { name: l.name, encap: vlanify(l.encap) }, mo('vnsRsCIfAttN', { tDn: dn + '/cDev-' + v._cdev + '/cIf-[' + l.cif + ']' })))) };
+      },
+    },
+  },
+  vnsCDev: { label: 'Concrete Device', fields: [NAME], cols: [ac('name'), col('Interfaces', r => MIT.kids(r.dn, ['vnsCIf']).map(d => MIT.a(d).name).join(', '))] },
+  vnsCIf: { label: 'Concrete Interface', fields: [NAME, relDn('vnsRsCIfPathAtt', 'Path', 'fabricPathEp', { t: 'path' })],
+    cols: [ac('name'), col('Path', r => pathLabel(relOf(r.dn, 'vnsRsCIfPathAtt', 'tDn')))] },
+  vnsLIf: { label: 'Cluster Interface', fields: [NAME, { k: 'encap', l: 'Encap', ph: 'vlan-401', req: true }],
+    normalize: v => { v.encap = vlanify(v.encap); return v; },
+    cols: [ac('name'), col('Encap', r => r.encap), col('Concrete Interfaces', r => MIT.kids(r.dn, ['vnsRsCIfAttN']).map(d => rnOf(MIT.a(d).tDn).replace(/^cIf-\[|\]$/g, '')).join(', '))] },
+  vnsSvcRedirectPol: {
+    label: 'L4-L7 Policy-Based Redirect', menu: 'Create L4-L7 Policy-Based Redirect',
+    fields: [NAME, { k: 'hashingAlgorithm', l: 'Hashing Algorithm', t: 'select', o: [['sip-dip-prototype', 'Source IP, Destination IP and Protocol number'], ['sip', 'Source IP'], ['dip', 'Destination IP']] }, DESCR],
+    cols: [ac('name'), col('Destinations', r => MIT.kids(r.dn, ['vnsRedirectDest']).map(d => MIT.a(d).ip + ' / ' + MIT.a(d).mac).join(', '))],
+    wizard: {
+      title: 'Create L4-L7 Policy-Based Redirect',
+      steps: [{ l: 'Policy', fields: [NAME, DESCR, { k: '_d', l: 'L3 Destinations', t: 'rows', start: true, cols: [{ k: 'ip', l: 'IP', ph: '192.168.100.10', req: true }, { k: 'mac', l: 'MAC', ph: '00:50:56:FA:01:01' }] }] }],
+      build: (v, parent) => {
+        const tn = parent.replace(/\/svcCont$/, '');
+        return { url: tn, dn: tn + '/svcCont/svcRedirectPol-' + v.name, body: mo('vnsSvcCont', {}, mo('vnsSvcRedirectPol', { name: v.name, descr: v.descr },
+          (v._d || []).filter(d => d.ip).map(d => mo('vnsRedirectDest', { ip: d.ip, mac: (d.mac || '').toUpperCase() })))) };
+      },
+    },
+  },
+  vnsRedirectDest: { label: 'Redirect Destination', fields: [{ k: 'ip', l: 'IP', create: true, req: true }, { k: 'mac', l: 'MAC' }, { k: 'destName', l: 'Destination Name' }],
+    normalize: v => { v.mac = (v.mac || '').toUpperCase(); return v; },
+    cols: [col('IP', r => r.ip), col('MAC', r => r.mac)] },
+  vnsAbsGraph: {
+    label: 'L4-L7 Service Graph Template', menu: 'Create L4-L7 Service Graph Template',
+    fields: [NAME, DESCR],
+    cols: [ac('name'), col('Nodes', r => MIT.kids(r.dn, ['vnsAbsNode']).map(d => MIT.a(d).name + ' (' + nameOfDn(relOf(d, 'vnsRsNodeToLDev', 'tDn')) + ', ' + MIT.a(d).routingMode + ')').join(', ')),
+      col('State', r => { const g = ((App.state || {}).graphs || []).filter(x => x.graph === r.dn); return g.length ? g.map(x => stateBadge(x.state === 'applied' ? 'formed' : 'missing-target')) : '—'; })],
+    wizard: {
+      title: 'Create L4-L7 Service Graph Template',
+      steps: [{ l: 'Graph', fields: [{ k: 'name', l: 'Graph Name', create: true, req: true, ph: 'FW-Graph' },
+        { k: '_dev', l: 'Device (Drag & Drop)', t: 'tdn', target: ['vnsLDevVip'], tenantScope: true, req: true },
+        { k: '_node', l: 'Node Name', def: 'N1', req: true },
+        { k: '_ftype', l: 'Firewall', t: 'radio', o: [['GoTo', 'Routed'], ['GoThrough', 'Transparent']], def: 'GoTo' },
+        { k: '_redir', l: 'Route Redirect', t: 'yesno', def: 'yes', help: 'Policy-Based Redirect: die ACI leitet den Verkehr zur Firewall um, die Hosts behalten ihr Gateway' }] }],
+      build: (v, parent) => ({ dn: parent + '/AbsGraph-' + v.name, body: mo('vnsAbsGraph', { name: v.name },
+        mo('vnsAbsTermNodeCon', { name: 'T1' }), mo('vnsAbsTermNodeProv', { name: 'T2' }),
+        mo('vnsAbsNode', { name: v._node || 'N1', funcType: v._ftype, routingMode: v._redir === 'yes' ? 'Redirect' : 'unspecified', funcTemplateType: v._ftype === 'GoTo' ? 'FW_ROUTED' : 'FW_TRANS' },
+          mo('vnsRsNodeToLDev', { tDn: v._dev }))) }),
+    },
+    actions: [['Apply L4-L7 Service Graph Template', dn => applyGraph(dn)]],
+  },
+  vnsAbsNode: { label: 'Function Node', fields: [NAME, { k: 'routingMode', l: 'Routing Mode', t: 'radio', o: [['Redirect', 'Redirect'], ['unspecified', 'unspecified']] },
+    relDn('vnsRsNodeToLDev', 'L4-L7 Device', 'vnsLDevVip')],
+    cols: [ac('name'), col('Device', r => nameOfDn(relOf(r.dn, 'vnsRsNodeToLDev', 'tDn'))), col('Routing Mode', r => r.routingMode)] },
+  vnsLDevCtx: {
+    label: 'Device Selection Policy',
+    fields: [{ k: 'ctrctNameOrLbl', l: 'Contract Name', create: true, req: true }, { k: 'graphNameOrLbl', l: 'Graph Name', create: true, req: true },
+      { k: 'nodeNameOrLbl', l: 'Node Name', create: true, req: true, def: 'N1' }, relDn('vnsRsLDevCtxToLDev', 'L4-L7 Device', 'vnsLDevVip')],
+    cols: [col('Contract', r => r.ctrctNameOrLbl), col('Graph', r => r.graphNameOrLbl), col('Node', r => r.nodeNameOrLbl), col('Device', r => nameOfDn(relOf(r.dn, 'vnsRsLDevCtxToLDev', 'tDn')))],
+  },
+  vnsLIfCtx: { label: 'Logical Interface Context', fields: [{ k: 'connNameOrLbl', l: 'Connector Name', t: 'select', o: [['consumer', 'consumer'], ['provider', 'provider']], create: true, req: true },
+    relDn('vnsRsLIfCtxToBD', 'Bridge Domain', 'fvBD', { tenantScope: true }), relDn('vnsRsLIfCtxToLIf', 'Cluster Interface', 'vnsLIf', { tenantScope: true }),
+    relDn('vnsRsLIfCtxToSvcRedirectPol', 'L4-L7 Policy-Based Redirect', 'vnsSvcRedirectPol', { tenantScope: true })],
+    cols: [col('Connector', r => r.connNameOrLbl), col('BD', r => nameOfDn(relOf(r.dn, 'vnsRsLIfCtxToBD', 'tDn'))), col('Cluster Interface', r => nameOfDn(relOf(r.dn, 'vnsRsLIfCtxToLIf', 'tDn'))),
+      col('PBR', r => nameOfDn(relOf(r.dn, 'vnsRsLIfCtxToSvcRedirectPol', 'tDn')))] },
+});
+
+/* Apply L4-L7 Service Graph Template: Contract, EPG-Zuordnung und Device Selection Policy in einem Schritt */
+function applyGraph(gdn) {
+  const tn = tenantOf(gdn);
+  const gname = MIT.a(gdn).name;
+  const node = MIT.kids(gdn, ['vnsAbsNode'])[0];
+  const nname = node ? MIT.a(node).name : 'N1';
+  const ldev = node ? relOf(node, 'vnsRsNodeToLDev', 'tDn') : '';
+  const epg = { t: 'tdn', target: ['fvAEPg', 'l3extInstP'], tenantScope: true, req: true };
+  const conn = c => [{ k: '_' + c + 'bd', l: 'BD', t: 'tdn', target: ['fvBD'], tenantScope: true, req: true },
+    { k: '_' + c + 'pbr', l: 'Redirect Policy', t: 'tdn', target: ['vnsSvcRedirectPol'], tenantScope: true },
+    { k: '_' + c + 'lif', l: 'Cluster Interface', t: 'tdn', target: ['vnsLIf'], under: ldev + '/', req: true }];
+  const steps = [
+    { l: 'Contract', fields: [Object.assign({ k: '_cons', l: 'Consumer EPG / External Network' }, epg), Object.assign({ k: '_prov', l: 'Provider EPG / Internal Network' }, epg),
+      { k: '_mode', l: 'Contract', t: 'radio', o: [['new', 'Create A New Contract'], ['old', 'Choose An Existing Contract Subject']], def: 'old' },
+      { k: '_brc', l: 'Contract Name', t: 'tname', target: 'vzBrCP', show: v => v._mode === 'old' },
+      { k: '_newname', l: 'Contract Name', ph: 'web-to-app', show: v => v._mode === 'new' },
+      { k: '_flt', l: 'Filter', t: 'tname', target: 'vzFilter', empty: 'default (permit all)', show: v => v._mode === 'new' }] },
+    { l: 'Graph Template', fields: [{ k: '_info', l: 'Graph', ro: true, def: gname + ' · Node ' + nname + ' · Device ' + nameOfDn(ldev) },
+      { k: '_h1', l: 'Consumer Connector', ro: true, def: 'Type General, L3 Destination (VIP) ja' }].concat(conn('c'),
+      [{ k: '_h2', l: 'Provider Connector', ro: true, def: 'Type General, L3 Destination (VIP) ja' }], conn('p')) },
+  ];
+  wizard('Apply L4-L7 Service Graph Template To EPGs', steps, { tenant: tn, cls: 'vnsAbsGraph', dn: gdn }, async v => {
+    const cname = v._mode === 'new' ? v._newname : v._brc;
+    if (!cname) throw new ApiError('Eingabe', 'Contract angeben');
+    const kids = [];
+    if (v._mode === 'new') {
+      kids.push(mo('vzBrCP', { name: cname }, mo('vzSubj', { name: 'Subject', revFltPorts: 'yes' }, mo('vzRsSubjFiltAtt', { tnVzFilterName: v._flt || 'default' }),
+        mo('vzRsSubjGraphAtt', { tnVnsAbsGraphName: gname }))));
+    } else {
+      const b = tn + '/brc-' + cname;
+      await MIT.load(b);
+      const subj = MIT.kids(b, ['vzSubj'])[0];
+      if (!subj) throw new ApiError('Eingabe', 'Der Contract ' + cname + ' hat kein Subject');
+      kids.push(mo('vzBrCP', { name: cname }, mo('vzSubj', { name: MIT.a(subj).name }, mo('vzRsSubjGraphAtt', { tnVnsAbsGraphName: gname }))));
+    }
+    const lic = c => mo('vnsLIfCtx', { connNameOrLbl: c === 'c' ? 'consumer' : 'provider' }, mo('vnsRsLIfCtxToBD', { tDn: v['_' + c + 'bd'] }),
+      mo('vnsRsLIfCtxToLIf', { tDn: v['_' + c + 'lif'] }), v['_' + c + 'pbr'] ? mo('vnsRsLIfCtxToSvcRedirectPol', { tDn: v['_' + c + 'pbr'] }) : null);
+    kids.push(mo('vnsLDevCtx', { ctrctNameOrLbl: cname, graphNameOrLbl: gname, nodeNameOrLbl: nname }, mo('vnsRsLDevCtxToLDev', { tDn: ldev }), lic('c'), lic('p')));
+    await API.postMo(tn, mo('fvTenant', {}, kids));
+    for (const [d, rel] of [[v._cons, 'fvRsCons'], [v._prov, 'fvRsProv']]) await API.postMo('uni', nestDn(d, mo(rel, { tnVzBrCPName: cname })));
+    toast('Service Graph ' + gname + ' auf Contract ' + cname + ' angewendet');
+    App.reload();
+  });
+}
+
 /* Contract in einen anderen Tenant exportieren: legt dort ein vzCPIf (Imported Contract) an */
 async function exportContract(dn) {
   const tenants = (await API.cls('fvTenant')).map(r => r.fvTenant.attributes.name).filter(n => 'uni/tn-' + n !== tenantOf(dn));
@@ -807,8 +952,11 @@ const TREE = {
     PH('IP Address Pools'),
     { l: 'Contracts', sub: [{ l: 'Standard', cls: ['vzBrCP'] }, { l: 'Taboos', cls: ['vzTaboo'] }, { l: 'Imported', cls: ['vzCPIf'] }, { l: 'Filters', cls: ['vzFilter'] }, PH('Out-Of-Band Contracts')] },
     { l: 'Policies', sub: [{ l: 'Protocol', sub: [PH('BFD'), PH('BGP'), PH('Custom QoS'), PH('DHCP'), PH('EIGRP'), PH('End Point Retention'), PH('IGMP Snoop'), PH('ND RA Prefix'),
-      { l: 'OSPF Interface', cls: ['ospfIfPol'] }, PH('OSPF Timers'), PH('Route Maps for Route Control'), { l: 'Match Rules', cls: ['rtctrlSubjP'] }, PH('Set Rules')] }, PH('Troubleshoot'), PH('Monitoring'), PH('NetFlow')] },
-    { l: 'Services', sub: [PH('L4-L7', 'Service Graphs, Devices und PBR sind in Datacenter Prep nicht nachgebildet.')] },
+      { l: 'OSPF Interface', cls: ['ospfIfPol'] }, PH('OSPF Timers'), PH('Route Maps for Route Control'), { l: 'Match Rules', cls: ['rtctrlSubjP'] }, PH('Set Rules'),
+      { l: 'L4-L7 Policy-Based Redirect', cls: ['vnsSvcRedirectPol'], under: 'svcCont' }, PH('L4-L7 Redirect Health Groups'), PH('IP SLA')] }, PH('Troubleshoot'), PH('Monitoring'), PH('NetFlow')] },
+    { l: 'Services', sub: [{ l: 'L4-L7', sub: [{ l: 'Service Graph Templates', cls: ['vnsAbsGraph'] }, PH('Router configurations'), PH('Function Profiles'),
+      { l: 'Devices', cls: ['vnsLDevVip'] }, PH('Imported Devices'), { l: 'Devices Selection Policies', cls: ['vnsLDevCtx'] },
+      { l: 'Deployed Graph Instances', view: (w, tn) => Views.graphInstances(w, tn) }, PH('Deployed Devices'), PH('Inband Management Configuration for L4-L7 devices')] }] },
   ],
   fvAp: [{ l: 'Application EPGs', cls: ['fvAEPg'] }, PH('uSeg EPGs'), PH('Endpoint Security Groups')],
   fvAEPg: [{ l: 'Domains (VMs and Bare-Metals)', cls: ['fvRsDomAtt'], flat: 1 }, PH('EPG Members'), { l: 'Static Ports', cls: ['fvRsPathAtt'], flat: 1 },
@@ -823,6 +971,11 @@ const TREE = {
   vzFilter: [{ l: 'Entries', cls: ['vzEntry'], flat: 1 }],
   l3extOut: [{ l: 'Routing Protocols', cls: ['ospfExtP', 'bgpExtP'], flat: 1, max: 2 }, { l: 'Logical Node Profiles', cls: ['l3extLNodeP'] }, { l: 'External EPGs', cls: ['l3extInstP'] }, { l: 'Route Map for import and export route control', cls: ['rtctrlProfile'] }],
   rtctrlProfile: [{ l: 'Contexts', cls: ['rtctrlCtxP'] }],
+  vnsLDevVip: [{ l: 'Concrete Devices', cls: ['vnsCDev'] }, { l: 'Cluster Interfaces', cls: ['vnsLIf'], flat: 1 }],
+  vnsCDev: [{ l: 'Interfaces', cls: ['vnsCIf'], flat: 1 }],
+  vnsAbsGraph: [{ l: 'Function Nodes', cls: ['vnsAbsNode'], flat: 1 }],
+  vnsLDevCtx: [{ l: 'Logical Interface Contexts', cls: ['vnsLIfCtx'], flat: 1 }],
+  vnsSvcRedirectPol: [{ l: 'Destinations', cls: ['vnsRedirectDest'], flat: 1 }],
   rtctrlCtxP: [{ l: 'Associated Matched Rules', cls: ['rtctrlRsCtxPToSubjP'], flat: 1 }],
   rtctrlSubjP: [{ l: 'Match Prefix', cls: ['rtctrlMatchRtDest'], flat: 1 }],
   l3extLNodeP: [{ l: 'Configured Nodes', cls: ['l3extRsNodeL3OutAtt'] }, { l: 'Logical Interface Profiles', cls: ['l3extLIfP'] }, { l: 'BGP Peer Connectivity Profiles (Loopback)', cls: ['bgpPeerP'], flat: 1 }],
@@ -901,6 +1054,6 @@ const ICON = {
   infraNodeP: 'SW', infraAccPortP: 'IF', infraAccPortGrp: 'PG', infraAccBndlGrp: 'PC', infraAttEntityP: 'AE', physDomP: 'PD',
   l3extDomP: 'L3D', fvnsVlanInstP: 'VL', infraHPortS: 'S', infraLeafS: 'S', fabricExplicitGEp: 'vPC', ospfIfPol: 'O',
   cdpIfPol: 'P', lldpIfPol: 'P', lacpLagPol: 'P', fabricHIfPol: 'P', mcpIfPol: 'P', stpIfPol: 'P', fabricProtPol: 'vPC',
-  fabricPodPGrp: 'PG', fabricPodP: 'PP', datetimePol: 'NTP', mgmtOoB: 'OOB', rtctrlProfile: 'RM', rtctrlCtxP: 'C', rtctrlSubjP: 'MR',
+  fabricPodPGrp: 'PG', fabricPodP: 'PP', datetimePol: 'NTP', mgmtOoB: 'OOB', rtctrlProfile: 'RM', rtctrlCtxP: 'C', rtctrlSubjP: 'MR', vnsLDevVip: 'FW', vnsAbsGraph: 'SG', vnsLDevCtx: 'DS', vnsSvcRedirectPol: 'PBR', vnsCDev: 'CD',
   vmmDomP: 'VDS', vmmCtrlrP: 'VC', l2extOut: 'L2', l2extInstP: 'EX', l2extDomP: 'L2D', vzCPIf: 'IC', l2extLNodeP: 'NP', l2extLIfP: 'IP',
 };

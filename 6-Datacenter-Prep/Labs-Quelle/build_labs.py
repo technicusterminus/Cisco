@@ -814,6 +814,78 @@ lab(id='15-transit-route-control', title='15 Transit Routing und Route Control',
 
 
 # ----------------------------------------------------------------------------
+# Lab 16 - Service Graph mit Policy-Based Redirect (Firewall)
+# ----------------------------------------------------------------------------
+FW16 = {'name': 'fw1', 'links': [[L102, 'eth1/20']], 'allow': ['tcp/8080'],
+        'ifs': [{'name': 'outside', 'vlan': 401, 'ip': '192.168.100.10/24', 'mac': '00:50:56:FA:01:01'},
+                {'name': 'inside', 'vlan': 402, 'ip': '192.168.101.10/24', 'mac': '00:50:56:FA:01:02'}]}
+FWPORT16 = mo('polUni', {}, mo('infraInfra', {}, mo('infraAccPortP', {'name': 'IntProf-Leaf101-102'},
+    mo('infraHPortS', {'name': 'FW-Ports', 'type': 'range'}, mo('infraPortBlk', {'name': 'block2', 'fromPort': '20', 'toPort': '20'}),
+       mo('infraRsAccBaseGrp', {'tDn': 'uni/infra/funcprof/accportgrp-IPG-Server-Access'})))))
+LDEV16 = 'uni/tn-Shop/lDevVip-FW1'
+SOL16 = [
+    ['uni/infra/vlanns-[VLAN-Pool-Server]-static', mo('fvnsVlanInstP', {}, mo('fvnsEncapBlk', {'from': 'vlan-400', 'to': 'vlan-410'}))],
+    ['uni', mo('fvTenant', {'name': 'Shop'},
+               bd('BD-FW-Ext', 'Prod', '192.168.100.1/24'), bd('BD-FW-Int', 'Prod', '192.168.101.1/24'),
+               mo('vnsLDevVip', {'name': 'FW1', 'svcType': 'FW', 'devtype': 'PHYSICAL', 'funcType': 'GoTo'},
+                  mo('vnsRsALDevToPhysDomP', {'tDn': 'uni/phys-PhysDom-Server'}),
+                  mo('vnsCDev', {'name': 'fw1'},
+                     mo('vnsCIf', {'name': 'outside'}, mo('vnsRsCIfPathAtt', {'tDn': path(102, 'eth1/20')})),
+                     mo('vnsCIf', {'name': 'inside'}, mo('vnsRsCIfPathAtt', {'tDn': path(102, 'eth1/20')}))),
+                  mo('vnsLIf', {'name': 'consumer', 'encap': 'vlan-401'}, mo('vnsRsCIfAttN', {'tDn': LDEV16 + '/cDev-fw1/cIf-[outside]'})),
+                  mo('vnsLIf', {'name': 'provider', 'encap': 'vlan-402'}, mo('vnsRsCIfAttN', {'tDn': LDEV16 + '/cDev-fw1/cIf-[inside]'}))),
+               mo('vnsSvcCont', {},
+                  mo('vnsSvcRedirectPol', {'name': 'PBR-Ext'}, mo('vnsRedirectDest', {'ip': '192.168.100.10', 'mac': '00:50:56:FA:01:01'})),
+                  mo('vnsSvcRedirectPol', {'name': 'PBR-Int'}, mo('vnsRedirectDest', {'ip': '192.168.101.10', 'mac': '00:50:56:FA:01:02'}))),
+               mo('vnsAbsGraph', {'name': 'FW-Graph'}, mo('vnsAbsNode', {'name': 'N1', 'funcType': 'GoTo', 'routingMode': 'Redirect'},
+                                                           mo('vnsRsNodeToLDev', {'tDn': LDEV16}))),
+               mo('vnsLDevCtx', {'ctrctNameOrLbl': 'web-to-app', 'graphNameOrLbl': 'FW-Graph', 'nodeNameOrLbl': 'N1'},
+                  mo('vnsRsLDevCtxToLDev', {'tDn': LDEV16}),
+                  mo('vnsLIfCtx', {'connNameOrLbl': 'consumer'}, mo('vnsRsLIfCtxToBD', {'tDn': 'uni/tn-Shop/BD-BD-FW-Ext'}),
+                     mo('vnsRsLIfCtxToLIf', {'tDn': LDEV16 + '/lIf-consumer'}),
+                     mo('vnsRsLIfCtxToSvcRedirectPol', {'tDn': 'uni/tn-Shop/svcCont/svcRedirectPol-PBR-Ext'})),
+                  mo('vnsLIfCtx', {'connNameOrLbl': 'provider'}, mo('vnsRsLIfCtxToBD', {'tDn': 'uni/tn-Shop/BD-BD-FW-Int'}),
+                     mo('vnsRsLIfCtxToLIf', {'tDn': LDEV16 + '/lIf-provider'}),
+                     mo('vnsRsLIfCtxToSvcRedirectPol', {'tDn': 'uni/tn-Shop/svcCont/svcRedirectPol-PBR-Int'}))),
+               mo('vzBrCP', {'name': 'web-to-app'}, mo('vzSubj', {'name': 'subj'}, mo('vzRsSubjGraphAtt', {'tnVnsAbsGraphName': 'FW-Graph'}))))]]
+lab(id='16-service-graph-pbr', title='16 Service Graph mit Policy-Based Redirect', topic='L4-L7 Services', level='Fortgeschritten',
+    duration='45 min', fabric='discovered',
+    goals=['Ein L4-L7 Device (Firewall, Go-To, physisch) anlegen', 'Einen Service Graph mit PBR auf einen Contract anwenden',
+           'Shadow-EPGs, Redirect-Regeln und Faults verstehen'],
+    intro='Der Verkehr von **Web** zu **App** (Contract **web-to-app**: tcp/8080 und ICMP) soll künftig durch die Firewall **fw1** '
+          '– ohne dass die Server ihr Gateway ändern. Dafür nutzt die ACI **Policy-Based Redirect (PBR)**.\n\n'
+          'fw1 hängt an **leaf102 eth1/20** (Port-Policy vorhanden) mit zwei 802.1Q-Interfaces:\n'
+          '- **outside** vlan-401, 192.168.100.10/24, MAC 00:50:56:FA:01:01\n- **inside** vlan-402, 192.168.101.10/24, MAC 00:50:56:FA:01:02\n\n'
+          'Das Regelwerk der Firewall erlaubt nur **tcp/8080** (siehe Simulation > L4-L7 Geräte).',
+    config=[SERVER_ACCESS, FWPORT16, shop_tenant(with_contracts=True)], hosts=[WEB1, APP1], devices=[FW16],
+    tasks=[
+        task('VLANs für die Firewall', 'Der VLAN Pool **VLAN-Pool-Server** braucht einen Encap Block **vlan-400 bis vlan-410**.',
+             'Die Encaps der Cluster Interfaces müssen im VLAN Pool der Domain des L4-L7 Devices liegen.'),
+        task('Service-BDs', 'Zwei BDs im VRF Prod: **BD-FW-Ext** (192.168.100.1/24) und **BD-FW-Int** (192.168.101.1/24).'),
+        task('L4-L7 Device', '**Services > L4-L7 > Devices > Create L4-L7 Devices**: Name **FW1**, Firewall, Physical, Domain '
+             'PhysDom-Server, Function Type **GoTo**. Concrete Device **fw1** mit den Interfaces outside und inside auf leaf102 eth1/20, '
+             'Cluster Interfaces **consumer** (vlan-401, outside) und **provider** (vlan-402, inside).'),
+        task('PBR Policies', '**Policies > Protocol > L4-L7 Policy-Based Redirect**: **PBR-Ext** mit Ziel 192.168.100.10 / 00:50:56:FA:01:01 '
+             'und **PBR-Int** mit Ziel 192.168.101.10 / 00:50:56:FA:01:02.'),
+        task('Service Graph Template', '**Service Graph Templates > Create**: **FW-Graph** mit FW1, Node **N1**, Route Redirect aktiv.'),
+        task('Graph anwenden', 'Rechtsklick auf FW-Graph > **Apply L4-L7 Service Graph Template**: Consumer Web, Provider App, '
+             'bestehender Contract web-to-app. Consumer-Connector BD-FW-Ext + PBR-Ext + Cluster Interface consumer, '
+             'Provider-Connector BD-FW-Int + PBR-Int + provider.'),
+        task('Verifizieren', '**Deployed Graph Instances** zeigt *applied*. Traffic-Test web1 → app1 tcp/8080 läuft über fw1. '
+             'Warum ist Ping jetzt blockiert, obwohl der Contract ICMP erlaubt? Auf leaf101: `show zoning-rule` (Action redir) und '
+             '`show service redir info`.'),
+    ],
+    checks=[check('Graph-Instanz applied', 'graph', contract='uni/tn-Shop/brc-web-to-app'),
+            check('fw1 outside im Service-BD gelernt', 'endpoint', host='fw1:outside'),
+            check('web1 → app1 tcp/8080 über die Firewall', 'traffic', src='web1', dst='app1', proto='tcp', port=8080, expect=True, via='fw1'),
+            check('web1 → app1 Ping von der Firewall blockiert', 'traffic', src='web1', dst='app1', proto='icmp', expect=False)],
+    solution='Wichtig sind die drei Teile: **L4-L7 Device** (Concrete Device mit Paths, Cluster Interfaces mit Encap), **Service Graph '
+             'Template** (Node N1, Redirect) und die **Device Selection Policy** (Contract/Graph/Node, je Connector BD, Cluster Interface '
+             'und PBR Policy). Am Subject des Contracts hängt `vzRsSubjGraphAtt tnVnsAbsGraphName=FW-Graph`. Die PBR-Ziele brauchen die '
+             'richtige MAC der Firewall-Interfaces.')
+
+
+# ----------------------------------------------------------------------------
 # Maschinenlesbare Musterloesungen (fuer die Tests: [URL-DN, Body])
 # ----------------------------------------------------------------------------
 BGP_RR = ['uni/fabric/bgpInstP-default', mo('bgpInstPol', {}, mo('bgpAsP', {'asn': '65001'}),
@@ -901,6 +973,7 @@ SOLUTIONS = {
                                               mo('fvBD', {'name': 'BD-Web'}, mo('fvSubnet', {'ip': '10.10.10.1/24', 'scope': 'private,shared'})),
                                               mo('fvAp', {'name': 'Webshop'}, mo('fvAEPg', {'name': 'Web'}, mo('fvRsConsIf', {'tnVzCPIfName': 'dns'}))))]],
     '15-transit-route-control': [['uni', SOL15]],
+    '16-service-graph-pbr': SOL16,
     '14-l2out-migration': [['uni', L2ACC14], ['uni', L2OUT14], ['uni/tn-Shop/BD-BD-Migration', mo('fvBD', {'arpFlood': 'yes'})]],
 }
 
@@ -915,6 +988,7 @@ def main():
         l.setdefault('hosts', [])
         l.setdefault('routers', [])
         l.setdefault('vcenters', [])
+        l.setdefault('devices', [])
         l['solutionConfig'] = SOLUTIONS[l['id']]
         with open(os.path.join(OUT, l['id'] + '.json'), 'w', encoding='utf-8') as f:
             json.dump(l, f, ensure_ascii=False, indent=1)

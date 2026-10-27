@@ -108,6 +108,7 @@ class Engine:
         self._classes()
         self._epgs()
         self._vmm()
+        self._services()
         self._endpoints()
         self._l3outs()
         self._ntp()
@@ -874,7 +875,142 @@ class Engine:
                                               'vmreason': 'Port Group %s gibt es im vCenter %s nicht' % (vm.get('network') or '(keine)', vc['name'])})
 
     def all_hosts(self):
-        return list(self.sim.get('hosts', [])) + list(getattr(self, 'vm_hosts', []))
+        return list(self.sim.get('hosts', [])) + list(getattr(self, 'vm_hosts', [])) + list(getattr(self, 'fw_hosts', []))
+
+    # ------------------------------------------------------------------
+    # L4-L7: Service Graph mit Policy-Based Redirect
+    # ------------------------------------------------------------------
+    def _services(self):
+        self.graphs = {}
+        self.fw_hosts = []
+        for dev in self.sim.get('devices', []):
+            for i in dev.get('ifs', []):
+                self.fw_hosts.append({'name': '%s:%s' % (dev['name'], i['name']), 'mac': i['mac'], 'ip': i['ip'], 'gw': '',
+                                      'vlan': int(i.get('vlan') or 0), 'links': dev.get('links', []), 'bond': 'none',
+                                      'dev': dev['name'], 'devif': i['name']})
+        tag = 49153
+        for rs in sorted(self.store.by_class('vzRsSubjGraphAtt')):
+            ra = self.A(rs)
+            subj = parent_dn(rs)
+            brc = parent_dn(subj)
+            tn = tenant_of(brc)
+            if ra['state'] != 'formed':
+                continue
+            graph = ra['tDn']
+            rel = self.contracts.get(brc, {'prov': set(), 'cons': set()})
+            cons = sorted(rel['cons'])
+            prov = sorted(rel['prov'])
+            vrf = next((self.cls[x]['vrf'] for x in cons + prov if x in self.cls and self.cls[x]['vrf']), '')
+            gi = '%s/GraphInst_C-[%s]-G-[%s]-S-[%s]' % (tn, brc, graph, vrf)
+            info = {'dn': gi, 'subj': subj, 'brc': brc, 'graph': graph, 'state': 'failed', 'reasons': [], 'conns': {},
+                    'node': None, 'dev': None, 'redirect': False, 'vrf': vrf}
+            self.graphs[subj] = info
+            self.store.add(gi, 'vnsGraphInst', {'ctrctDn': brc, 'graphDn': graph, 'scopeDn': vrf, 'configSt': 'failed-to-apply'}, True)
+
+            def fail(why, code='S1690'):
+                info['reasons'].append(why)
+                self.fault(gi, code, 'major', 'Graph %s for contract %s could not be rendered: %s' % (
+                    self.A(graph)['name'], self.A(brc)['name'], why), 'graph-rendering-failure')
+            if not cons or not prov:
+                fail('Contract hat keinen Consumer oder keinen Provider')
+                continue
+            nodes = self.kids(graph, 'vnsAbsNode')
+            if not nodes:
+                fail('Service Graph Template enthaelt keinen Function Node')
+                continue
+            node = nodes[0]
+            na = self.A(node)
+            info['node'] = na['name']
+            info['redirect'] = na['routingMode'] == 'Redirect'
+            cname, gname = self.A(brc)['name'], self.A(graph)['name']
+            ctx = next((d for d in self.kids(tn, 'vnsLDevCtx')
+                        if self.A(d)['ctrctNameOrLbl'] in (cname, 'any') and self.A(d)['graphNameOrLbl'] in (gname, 'any')
+                        and self.A(d)['nodeNameOrLbl'] in (na['name'], 'any')), None)
+            if not ctx:
+                fail('Keine Device Selection Policy fuer Contract %s, Graph %s, Node %s (Apply L4-L7 Service Graph Template '
+                     'ausfuehren)' % (cname, gname, na['name']))
+                continue
+            ldev = (self.A(ctx + '/rsLDevCtxToLDev') or {})
+            if ldev.get('state') != 'formed':
+                fail('Device Selection Policy verweist auf kein gueltiges L4-L7 Device')
+                continue
+            ldev = ldev['tDn']
+            info['dev'] = ldev
+            domrs = self.A(ldev + '/rsALDevToPhysDomP') or {}
+            if domrs.get('state') != 'formed':
+                fail('L4-L7 Device %s hat keine gueltige Physical Domain' % self.A(ldev)['name'])
+                continue
+            dom = domrs['tDn']
+            ok = True
+            for conn in ('consumer', 'provider'):
+                lic = ctx + '/lIfCtx-c-' + conn
+                if not self.has(lic):
+                    fail('Logical Interface Context %s fehlt in der Device Selection Policy' % conn)
+                    ok = False
+                    break
+                bdrs = self.A(lic + '/rsLIfCtxToBD') or {}
+                lifrs = self.A(lic + '/rsLIfCtxToLIf') or {}
+                pbrrs = self.A(lic + '/rsLIfCtxToSvcRedirectPol') or {}
+                if bdrs.get('state') != 'formed':
+                    fail('%s-Connector: keine gueltige Bridge Domain' % conn)
+                    ok = False
+                    break
+                if lifrs.get('state') != 'formed':
+                    fail('%s-Connector: kein gueltiges Cluster Interface' % conn)
+                    ok = False
+                    break
+                bd = bdrs['tDn']
+                bvrf = (self.A(bd + '/rsctx') or {}).get('tDn')
+                if bvrf != vrf:
+                    fail('%s-Connector: BD %s liegt in VRF %s, der Contract in VRF %s' % (conn, self.short(bd), self.short(bvrf), self.short(vrf)))
+                    ok = False
+                    break
+                lif = lifrs['tDn']
+                vlan = vlan_num(self.A(lif)['encap'])
+                cifs = [self.A(r)['tDn'] for r in self.kids(lif, 'vnsRsCIfAttN') if self.A(r)['state'] == 'formed']
+                if vlan is None or not cifs:
+                    fail('Cluster Interface %s: Encap oder Concrete Interface fehlt' % self.A(lif)['name'])
+                    ok = False
+                    break
+                prs = self.A(cifs[0] + '/rsCIfPathAtt') or {}
+                path = self.paths.get(prs.get('tDn', ''))
+                if not path:
+                    fail('Concrete Interface %s: Path fehlt oder existiert nicht' % self.A(cifs[0])['name'], 'F0467')
+                    ok = False
+                    break
+                if not self.vlan_in_domain(dom, vlan):
+                    fail('vlan-%d des Cluster Interfaces %s ist nicht im VLAN Pool der Domain %s (invalid-vlan)'
+                         % (vlan, self.A(lif)['name'], self.short(dom)), 'F0467')
+                    ok = False
+                    break
+                pgdoms = self._pg_info(path['pg'])['domains'] if path['pg'] else []
+                if dom not in pgdoms:
+                    fail('%s: Die Access Policy des Ports enthaelt die Domain %s nicht (invalid-path)' % (path['name'], self.short(dom)), 'F0467')
+                    ok = False
+                    break
+                pol = pbrrs.get('tDn') if pbrrs.get('state') == 'formed' else None
+                if info['redirect'] and not pol:
+                    fail('%s-Connector: Routing Mode Redirect braucht eine L4-L7 Policy-Based Redirect Policy' % conn)
+                    ok = False
+                    break
+                dests = [{'ip': self.A(d)['ip'], 'mac': (self.A(d)['mac'] or '').upper()} for d in self.kids(pol, 'vnsRedirectDest')] if pol else []
+                if pol and not dests:
+                    fail('PBR Policy %s hat keine Destination' % self.short(pol))
+                    ok = False
+                    break
+                sh = gi + '/EPpInfo-' + conn
+                tag += 1
+                c = {'dn': sh, 'kind': 'svc', 'name': '%s-%s' % (self.A(ldev)['name'], conn), 'tenant': tn, 'ap': None,
+                     'vname': '%s:%sctx%s:%s' % (tn[7:], self.A(ldev)['name'], vrf.split('/ctx-')[-1], conn),
+                     'bd': bd, 'vrf': vrf, 'pcTag': str(tag), 'prov': [], 'cons': [], 'pref': False, 'isolation': False}
+                self.store.add(sh, 'vnsEPpInfo', {'name': conn, 'pcTag': str(tag), 'bdDn': bd, 'encap': 'vlan-%d' % vlan}, True)
+                self.cls[sh] = c
+                self._deploy(sh, c, prs['tDn'], path, vlan, 'regular')
+                info['conns'][conn] = {'bd': bd, 'vlan': vlan, 'path': prs['tDn'], 'pol': pol, 'dests': dests,
+                                       'lif': lif, 'shadow': sh, 'pcTag': str(tag)}
+            if ok:
+                info['state'] = 'applied'
+                self.A(gi)['configSt'] = 'applied'
 
     def _node_bind(self, rs, dn, c, doms):
         """Static Leaf: EPG auf allen Ports des Leafs, deren Access Policy die Domain enthaelt."""
@@ -1657,6 +1793,7 @@ class Engine:
 
     def packet(self, s, d, proto, sport, dport, flags):
         """Entscheidet ein einzelnes Paket von Klasse s nach Klasse d."""
+        self.last_hit = None
         vrf = s['vrf']
         va = self.A(vrf) or {}
         if va.get('pcEnfPref') == 'unenforced':
@@ -1705,14 +1842,18 @@ class Engine:
                         where = '%s / %s / %s / %s' % (self.short(brc), sa['name'], self.A(rfa['tDn'])['name'],
                                                        ea['name'])
                         if fwd and self._entry_match(ea, proto, sport, dport, flags, False):
-                            hits.append((rfa['action'], where + ' (Consumer -> Provider)'))
+                            hits.append((rfa['action'], where + ' (Consumer -> Provider)', subj, 'c2p'))
                         if rev and self._entry_match(ea, proto, sport, dport, flags, sa['revFltPorts'] == 'yes'):
                             hits.append((rfa['action'], where + ' (Provider -> Consumer%s)'
-                                         % (', Ports getauscht' if sa['revFltPorts'] == 'yes' else '')))
+                                         % (', Ports getauscht' if sa['revFltPorts'] == 'yes' else ''), subj, 'p2c'))
         deny = [h for h in hits if h[0] == 'deny']
         if deny:
             return 'deny', 'Deny-Filter: ' + deny[0][1]
         if hits:
-            return 'permit', 'Contract: ' + hits[0][1]
+            # gleiche Prioritaet: Deny vor Redirect vor Permit
+            redir = [h for h in hits if (getattr(self, 'graphs', {}).get(h[2]) or {}).get('state') == 'applied']
+            h0 = redir[0] if redir else hits[0]
+            self.last_hit = (h0[2], h0[3])
+            return 'permit', 'Contract: ' + h0[1]
         return 'deny', 'Implicit Deny: kein Contract mit passendem Filter zwischen %s und %s' % (
             self.short(s['dn']), self.short(d['dn']))

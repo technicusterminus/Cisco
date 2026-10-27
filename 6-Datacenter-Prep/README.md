@@ -25,7 +25,7 @@ Dann im Browser **http://localhost:8080** öffnen und mit **admin / admin** anme
 
 Mit Docker: `docker build -t dcprep .` und `docker run -d -p 8080:8080 -v dcprep-data:/app/data dcprep`.
 
-Der Zustand bleibt beim Beenden erhalten. Beim ersten Start ist die Fabric fertig registriert und leer konfiguriert. Unter *Simulation > Einstellungen* lässt sie sich zurücksetzen, auch auf „Fabric leer“ zum Üben der Discovery.
+Der Zustand bleibt beim Beenden erhalten. Beim ersten Start ist die Fabric fertig registriert und leer konfiguriert. Unter *Simulation > Einstellungen* lässt sie sich zurücksetzen: auf „Fabric leer“ zum Üben der Discovery oder auf den **Werkszustand (Day 0)**. Dann startet der APIC mit dem Setup-Dialog an der Konsole (Fabric-Name, Controller-Anzahl, Pod-ID, TEP-Pool, Infra-VLAN, GIPo, OOB, Admin-Passwort), und GUI und REST-API sind erst danach erreichbar. Dasselbe erreichst du in der APIC-CLI mit `acidiag touch clean` und `acidiag reboot`. Lab 00 führt durch diesen Ablauf.
 
 ## Was simuliert wird
 
@@ -46,6 +46,8 @@ Der Zustand bleibt beim Beenden erhalten. Beim ersten Start ist die Fabric ferti
 | VMM (vCenter) | Simuliertes vCenter mit ESXi-Hosts und VMs (Menü *Simulation > vCenter*). Die VMM Domain verbindet sich nur mit richtiger IP, Datacenter und Credentials. Der APIC legt je EPG eine Port Group `Tenant|AP|EPG` mit einem VLAN aus dem dynamischen Pool an. LLDP oder CDP zwischen ESXi und Leaf, Resolution Immediacy (Pre-provision, Immediate, On Demand). VMs werden als Endpoint mit Learning Source *learned,vmm* gelernt. |
 | Shared Services | Route Leaking zwischen VRFs und Tenants: Contract mit Scope Tenant oder Global, exportierter Contract (Imported Contract, *Consumed Contract Interface*), Provider-Subnetz an der EPG und Consumer-Subnetz mit *Shared between VRFs*. Shared L3Out über External-EPG-Subnetze mit *Shared Route Control* und *Shared Security Import*. |
 | L2Out und stille Hosts | External Bridged Domain, L2Out mit Encap, Paths und External EPG an einer Bridge Domain. Stille Hosts (*Stiller Host* im Host-Dialog) lernt die ACI erst, wenn sie per ARP Flooding oder ARP Glean (Unicast Routing mit BD-Subnetz) gefragt werden. |
+| Route Control und Transit Routing | Export und Import Route Control Subnets am External EPG (exakt oder *Aggregate*), Route Control Enforcement *Import* am L3Out, Route-Profile `default-export` und `default-import` mit Contexts und Match Rules. Routen eines L3Outs gehen nur mit Export Route Control an ein anderes L3Out (Transit Routing). |
+| Service Graph mit PBR | L4-L7 Device (Concrete Device, Cluster Interfaces mit Encap), Service Graph Template mit Function Node (Routing Mode Redirect), Device Selection Policy und PBR Policies. Die ACI legt Shadow-EPGs auf den Firewall-Ports an, lernt die Firewall-Interfaces und leitet den Verkehr um. Die simulierte Firewall (*Simulation > L4-L7 Geräte*) hat ein eigenes Regelwerk. Falsche MAC, fehlendes VLAN oder fehlende Device Selection Policy führen zu nachvollziehbaren Fehlern. Bei gleicher Priorität gewinnt Redirect vor Permit. |
 | Disabled Interfaces | Deaktivierte Ports gehen admin-down, Endpoints und Nachbarschaften dahinter fallen weg. |
 | Faults, Events, Audit Log | Faults mit Code, Severity und Beschreibung am Objekt, Health Scores. Events bei Zustandswechseln (Switch aktiv, Endpoint gelernt, Nachbarschaft, Fault ausgelöst oder behoben). Jede Änderung im Audit Log mit Benutzer, altem und neuem Wert. |
 
@@ -56,17 +58,17 @@ Menüs und Untermenüs wie beim APIC:
 | Menü | Inhalt |
 |---|---|
 | System | QuickStart, Dashboard, Controllers, System Settings (BGP Route Reflector), Faults, Events, Audit Log, Active Sessions |
-| Tenants | ALL TENANTS, Add Tenant, Tenant Search und je Tenant der Baum: Application Profiles (EPGs mit Domains, Static Ports, Static Leafs, Contracts, Subnets), Networking (Bridge Domains, VRFs, L2Outs, L3Outs), Contracts (Standard, Taboos, Imported, Filters), Policies (OSPF Interface), im Tenant mgmt die Node Management Addresses |
+| Tenants | ALL TENANTS, Add Tenant, Tenant Search und je Tenant der Baum: Application Profiles (EPGs mit Domains, Static Ports, Static Leafs, Contracts, Subnets), Networking (Bridge Domains, VRFs, L2Outs, L3Outs mit Route Maps), Contracts (Standard, Taboos, Imported, Filters), Policies (OSPF Interface, Match Rules, L4-L7 Policy-Based Redirect), Services > L4-L7 (Service Graph Templates, Devices, Device Selection Policies, Deployed Graph Instances), im Tenant mgmt die Node Management Addresses |
 | Fabric | Inventory (Topologie, Pod 1 mit jedem Switch: Physical/PC/VPC Interfaces, LLDP, OSPF, BGP, NTP; Fabric Membership; Disabled Interfaces), Fabric Policies (Pods, Date and Time), Access Policies (Quick Start, Interface Configuration, Switches, Interfaces, Policies, Pools, Physical, External Bridged und L3 Domains) |
 | Virtual Networking | VMM Domains > VMware: vCenter Domain mit Controllern, Credentials und vSwitch Policy; Operational zeigt Verbindung, Port Groups und Hypervisors |
 | Admin | AAA, Firmware, Config Rollbacks, Import/Export |
 | Operations | Visibility & Troubleshooting (Traffic-Test), Capacity Dashboard, EP Tracker |
-| **Simulation** | gibt es nur hier: Topologie und simulierte Hosts, externe Router, vCenter (ESXi-Hosts und VMs), Labs, Einstellungen |
+| **Simulation** | gibt es nur hier: Topologie und simulierte Hosts, externe Router, vCenter (ESXi-Hosts und VMs), L4-L7 Geräte (Firewalls), Labs, Einstellungen |
 
 Wie beim APIC:
 - **Tabs im Arbeitsbereich:** Summary, Policy (mit Untertabs, z. B. beim BD *General*, *L3 Configurations*, *Advanced/Troubleshooting*), Operational (Client End-Points, Deployed Leaves, Contracts, Neighbors, Routes), Stats, Health, Faults, History (Events und Audit Log).
 - **Rechtsklick im Baum** und **Actions-Menü** (⚙): *Create Bridge Domain*, *Deploy Static EPG on PC, VPC, or Interface*, *Add Consumed Contract*, *Delete*, *Save as …*, *Post …*, *Open In Object Store Browser* usw.
-- **Wizards:** Create Tenant (mit VRFs), Create VRF (optional mit BD), Create Bridge Domain (3 Schritte, Subnetz-Tabelle), Create Application EPG (Domains, Static Paths und Static Leafs), Create Filter (Entries-Tabelle), Create Contract (Subjects mit Filtern), Create L3Out (Identity, Nodes and Interfaces, Protocols, External EPG), Create L2Out, Create vCenter Domain, *Export Contract*, Create VLAN Pool, Leaf Profile, Interface Profile und *Configure Interface, PC, and VPC*.
+- **Wizards:** Create Tenant (mit VRFs), Create VRF (optional mit BD), Create Bridge Domain (3 Schritte, Subnetz-Tabelle), Create Application EPG (Domains, Static Paths und Static Leafs), Create Filter (Entries-Tabelle), Create Contract (Subjects mit Filtern), Create L3Out (Identity, Nodes and Interfaces, Protocols, External EPG), Create L2Out, Create vCenter Domain, *Export Contract*, Create L4-L7 Devices, Create L4-L7 Service Graph Template, *Apply L4-L7 Service Graph Template*, Create Match Rule, Create VLAN Pool, Leaf Profile, Interface Profile und *Configure Interface, PC, and VPC*.
 - **Interfaces deaktivieren** und wieder aktivieren (Inventory > Switch > Interfaces > Physical Interfaces).
 
 Oben rechts: Fault-Zähler, **CLI** (APIC und alle Switches), **API Inspector** (zeigt jeden REST-Aufruf der GUI mit Payload und Antwort) und **Visore** (Object Store Browser).
@@ -79,6 +81,7 @@ Unter *Simulation > Labs* laden. Jedes Lab setzt die Konfiguration auf einen Sta
 
 | Lab | Thema | Dauer |
 |---|---|---|
+| 00 | Day 0: APIC-Ersteinrichtung mit Setup-Dialog | 20 min |
 | 01 | Fabric Discovery und BGP Route Reflector | 20 min |
 | 02 | Access Policies: vom VLAN-Pool zum Switch-Profil, Fault F0467 | 30 min |
 | 03 | Tenant, VRF, Bridge Domains und EPGs | 30 min |
@@ -93,6 +96,8 @@ Unter *Simulation > Labs* laden. Jedes Lab setzt die Konfiguration auf einen Sta
 | 12 | VMM-Integration mit VMware vCenter | 40 min |
 | 13 | Shared Services: Route Leaking zwischen Tenants | 35 min |
 | 14 | L2Out und Migration: stille Hosts und ARP Flooding | 40 min |
+| 15 | Transit Routing und Route Control | 40 min |
+| 16 | Service Graph mit Policy-Based Redirect (Firewall) | 45 min |
 
 Die Lab-Dateien entstehen aus `Labs-Quelle/build_labs.py` (`python3 Labs-Quelle/build_labs.py`). Die Tests prüfen für jedes Lab, dass es ohne Lösung nicht bestanden und mit Musterlösung vollständig bestanden ist.
 
@@ -125,10 +130,13 @@ Für Ansible: `use_ssl: false` und `port: 8080` setzen, siehe `beispiele/ansible
 
 | APIC | Leaf/Spine |
 |---|---|
-| `acidiag fnvread` | `show version`, `show lldp neighbors`, `show interface status` |
-| `moquery -c fvBD`, `moquery -c fvAEPg -f 'fv.AEPg.name=="Web"'`, `moquery -d uni/tn-common` | `show vlan extended`, `show endpoint [vrf T:V] [ip x]`, `show vrf` |
-| `show switch`, `show controller`, `show tenant`, `show version` | `show ip route vrf T:V`, `show zoning-rule [scope N]` |
-| | `show ip ospf neighbors vrf T:V`, `show bgp ipv4 unicast summary vrf T:V`, `show vpc brief`, `show port-channel summary`, `show ntp peer-status`, `show clock` |
+| `acidiag fnvread`, `acidiag avread`, `cat /data/data_admin/sam_exported.config` | `show version`, `show lldp neighbors`, `show cdp neighbors`, `show interface status`, `show interface eth1/x` |
+| `show controller`, `show switch`, `show fabric membership`, `show version` | `show vlan extended`, `show mac address-table`, `show endpoint [vrf T:V] [ip x]`, `show system internal epm endpoint ip x` |
+| `moquery -c fvBD`, `moquery -c fvAEPg -f 'fv.AEPg.name=="Web"'`, `moquery -d uni/tn-common` | `show vrf`, `show ip interface brief vrf T:V`, `show ip arp vrf T:V`, `show ip route vrf T:V` (inklusive geleakter Routen) |
+| `show tenant`, `show bridge-domain`, `show epg`, `show endpoints [ip x]`, `show faults [detail]` | `show zoning-rule`, `show zoning-filter`, `contract_parser.py`, `show service redir info` |
+| `show vmware domain name <Domain>` | `show ip ospf neighbors vrf T:V`, `show ip ospf interface brief vrf T:V`, `show bgp ipv4 unicast [summary] vrf T:V` |
+| `acidiag touch clean`, `acidiag reboot` (Werkszustand) | `iping -V T:V <ip>` (Ping vom Leaf, weckt stille Hosts per Glean), `show vpc brief`, `show port-channel summary`, `show ntp peer-status` |
+| | Underlay: `show ip route vrf overlay-1`, `show isis adjacency vrf overlay-1`, `show bgp vpnv4 unicast summary vrf overlay-1`, auf Spines `show coop internal info ip-db` |
 
 ## Faults
 
@@ -136,6 +144,7 @@ Für Ansible: `use_ssl: false` und `port: 8080` setzen, siehe `beispiele/ansible
 
 | Code | Bedeutung |
 |---|---|
+| S0101 | Cluster-Größe aus dem Setup passt nicht zur Anzahl der APICs (nicht Fully Fit) |
 | S0134 | Node ID doppelt vergeben |
 | S0468 | L3Out-Interface unvollständig (Node fehlt im Node Profile, keine IP) |
 | S0475, S0476 | vPC Protection Group unvollständig oder Node doppelt |
@@ -146,6 +155,7 @@ Für Ansible: `use_ssl: false` und `port: 8080` setzen, siehe `beispiele/ansible
 | S0841 | Port in mehreren Interface Selectors mit verschiedenen Policy Groups |
 | S0956 | BD oder L3Out ohne gültiges VRF |
 | S1123 | Relation lässt sich nicht auflösen (Ziel fehlt) |
+| S1690 | Service Graph nicht gerendert (Device Selection Policy, Connector, PBR Policy oder Cluster Interface fehlerhaft) |
 | S3089 | Router ID am L3Out-Node fehlt |
 
 ## In EVE-NG oder CML
@@ -159,7 +169,7 @@ Die externen Router, Hosts und Pakete sind simuliert. Ein echter Router aus CML 
 
 ## Grenzen
 
-Nicht simuliert: VMM für Kubernetes, Microsoft und OpenStack, Multi-Pod und Multi-Site, Service Graphs und PBR, uSeg-EPGs, Route-Maps und Import/Export Route Control, Multicast, QoS, SNMP und Syslog, Monitoring-Policies, Firmware-Upgrades. Die Pakete fließen nicht wirklich: Der Traffic-Test berechnet anhand von Konfiguration und Zustand, ob ein Paket und seine Antwort ankommen würden, und begründet jeden Schritt.
+Nicht simuliert: VMM für Kubernetes, Microsoft und OpenStack, Multi-Pod und Multi-Site, Service Graphs ohne PBR (Firewall als Gateway), Managed Devices (Device Packages), Set Rules und Route-Profile mit Community/Tag, uSeg-EPGs, Multicast, QoS, SNMP und Syslog, Monitoring-Policies, Firmware-Upgrades. Die Pakete fließen nicht wirklich: Der Traffic-Test berechnet anhand von Konfiguration und Zustand, ob ein Paket und seine Antwort ankommen würden, und begründet jeden Schritt.
 
 ## Aufbau des Ordners
 

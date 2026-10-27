@@ -277,6 +277,7 @@
  "solution": "Tenant-JSON:\n\n`{\"fvTenant\": {\"attributes\": {\"name\": \"Shop\"}, \"children\": [{\"fvCtx\": {\"attributes\": {\"name\": \"Prod\"}}}, {\"fvBD\": {\"attributes\": {\"name\": \"BD-Web\"}, \"children\": [{\"fvRsCtx\": {\"attributes\": {\"tnFvCtxName\": \"Prod\"}}}, {\"fvSubnet\": {\"attributes\": {\"ip\": \"10.10.10.1/24\", \"scope\": \"private\"}}}]}}, {\"fvBD\": {\"attributes\": {\"name\": \"BD-App\"}, \"children\": [{\"fvRsCtx\": {\"attributes\": {\"tnFvCtxName\": \"Prod\"}}}, {\"fvSubnet\": {\"attributes\": {\"ip\": \"10.10.20.1/24\", \"scope\": \"private\"}}}]}}, {\"fvAp\": {\"attributes\": {\"name\": \"Webshop\"}, \"children\": [{\"fvAEPg\": {\"attributes\": {\"name\": \"Web\"}, \"children\": [{\"fvRsBd\": {\"attributes\": {\"tnFvBDName\": \"BD-Web\"}}}, {\"fvRsDomAtt\": {\"attributes\": {\"tDn\": \"uni/phys-PhysDom-Server\"}}}, {\"fvRsPathAtt\": {\"attributes\": {\"tDn\": \"topology/pod-1/paths-101/pathep-[eth1/1]\", \"encap\": \"vlan-110\", \"mode\": \"regular\"}}}]}}, {\"fvAEPg\": {\"attributes\": {\"name\": \"App\"}, \"children\": [{\"fvRsBd\": {\"attributes\": {\"tnFvBDName\": \"BD-App\"}}}, {\"fvRsDomAtt\": {\"attributes\": {\"tDn\": \"uni/phys-PhysDom-Server\"}}}, {\"fvRsPathAtt\": {\"attributes\": {\"tDn\": \"topology/pod-1/paths-102/pathep-[eth1/2]\", \"encap\": \"vlan-120\", \"mode\": \"regular\"}}}]}}]}}]}}`\n\nOhne Contract greift im VRF der Implicit Deny (Zoning-Rule `any_any_any(21)` mit `deny,log`).",
  "routers": [],
  "vcenters": [],
+ "devices": [],
  "solutionConfig": [
   [
    "uni",

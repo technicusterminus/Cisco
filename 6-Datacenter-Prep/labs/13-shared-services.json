@@ -564,6 +564,7 @@
  "solution": "Tenant Shared: `vzBrCP dns scope=global` mit Filter udp/53, an der EPG DNS `fvRsProv` und `fvSubnet ip=10.99.0.1/24 scope=private,shared`. Export: `vzCPIf name=dns` im Tenant Shop mit `vzRsIf tDn=uni/tn-Shared/brc-dns`. Consumer: `fvRsConsIf tnVzCPIfName=dns` an der EPG Web und `fvSubnet 10.10.10.1/24 scope=private,shared` am BD-Web.",
  "routers": [],
  "vcenters": [],
+ "devices": [],
  "solutionConfig": [
   [
    "uni/tn-Shared",

@@ -12,7 +12,7 @@ const TABS = [
   { id: 'ops', l: 'Operations', subs: [['vis', 'Visibility & Troubleshooting'], ['capacity', 'Capacity Dashboard'], ['ep', 'EP Tracker'], ['viz', 'Visualization']] },
   { id: 'apps', l: 'Apps', subs: [['apps', 'Installed Apps'], ['appfaults', 'Faults']] },
   { id: 'integrations', l: 'Integrations', subs: [['integrations', 'Integrations']] },
-  { id: 'sim', l: 'Simulation', subs: [['topo', 'Topologie & Hosts'], ['routers', 'Externe Router'], ['vcenter', 'vCenter'], ['labs', 'Labs'], ['simset', 'Einstellungen']], special: true },
+  { id: 'sim', l: 'Simulation', subs: [['topo', 'Topologie & Hosts'], ['routers', 'Externe Router'], ['vcenter', 'vCenter'], ['devices', 'L4-L7 Geräte'], ['labs', 'Labs'], ['simset', 'Einstellungen']], special: true },
 ];
 
 const App = {
@@ -411,7 +411,8 @@ function folderKey(p, spec) { return 'f:' + p + '#' + spec.l + '#' + (spec.cls |
 function folderNode(parent, spec) {
   if (spec.ph) return { key: 'ph:' + parent + '#' + spec.l, label: spec.l, kind: 'folder', ph: spec.ph, dn: null, spec };
   if (spec.mo) return MIT.get(spec.mo) ? Object.assign(moNode(spec.mo), { label: spec.l }) : { key: 'x:' + spec.mo, label: spec.l, kind: 'view', view: w => w.appendChild(h('p', null, 'nicht vorhanden')) };
-  const p = spec.parent !== undefined ? spec.parent : parent;
+  if (spec.view) return { key: 'v:' + parent + '#' + spec.l, label: spec.l, icon: spec.icon || '≡', kind: 'view', view: w => spec.view(w, parent) };
+  const p = spec.parent !== undefined ? spec.parent : (spec.under ? parent + '/' + spec.under : parent);
   return {
     key: folderKey(p, spec), kind: 'folder', label: spec.l, parent: p, spec, dn: null,
     kids: () => spec.sub ? spec.sub.map(s => folderNode(p, s)) : (spec.flat ? [] : folderRows(p, spec).map(moNode)),

@@ -81,7 +81,7 @@ class Sim:
             if k in old:
                 self.sim[k] = old[k]
         if keep_sim:
-            for k in ('hosts', 'routers', 'vcenters'):
+            for k in ('hosts', 'routers', 'vcenters', 'devices'):
                 if k in old:
                     self.sim[k] = old[k]
         if mode == 'factory':
@@ -247,6 +247,7 @@ class Sim:
         self.sim['hosts'] = json.loads(json.dumps(lab.get('hosts', [])))
         self.sim['routers'] = json.loads(json.dumps(lab.get('routers', [])))
         self.sim['vcenters'] = json.loads(json.dumps(lab.get('vcenters', [])))
+        self.sim['devices'] = json.loads(json.dumps(lab.get('devices', [])))
         self.sim['lab'] = lid
         self.changed()
         return lab
@@ -278,6 +279,8 @@ class Sim:
                 elif t == 'traffic':
                     r = trace.run(e, self.sim, c['src'], c['dst'], c.get('proto', 'icmp'), c.get('port', 0))
                     ok = r['ok'] == c.get('expect', True)
+                    if ok and c.get('via'):
+                        ok = any(c['via'] in (s_['title'] + ' ' + s_['detail']) for s_ in r['steps'])
                     bad = next((s for s in r['steps'] if s['ok'] is False), None)
                     info = 'Ergebnis: %s%s' % ('erreichbar' if r['ok'] else 'blockiert',
                                                ' - ' + bad['title'] if bad else '')
@@ -294,6 +297,10 @@ class Sim:
                     bad = {e.nodes[n]['name']: why for n, why in e.ntp['nodes'].items() if why}
                     ok = not bad and len(e.ntp['nodes']) >= c.get('min', 1)
                     info = '; '.join('%s: %s' % kv for kv in sorted(bad.items())) or '%d Switches synchron' % len(e.ntp['nodes'])
+                elif t == 'graph':
+                    g = next((g for g in getattr(e, 'graphs', {}).values() if g['brc'] == c['contract']), None)
+                    ok = bool(g) and g['state'] == 'applied'
+                    info = ('Zustand: %s%s' % (g['state'], ' - ' + '; '.join(g['reasons']) if g['reasons'] else '')) if g else 'kein Service Graph am Contract'
                 elif t == 'learned':
                     rs = e.routers.get(c['router'], {})
                     has = c['prefix'] in rs.get('learned', [])
@@ -369,6 +376,10 @@ class Sim:
         for r in self.sim['routers']:
             if r['name'] != skip:
                 used[(r['serial'], r['port'])] = 'Router ' + r['name']
+        for d in self.sim.get('devices', []):
+            if d['name'] != skip:
+                for s_, p_ in d.get('links', []):
+                    used[(s_, p_)] = 'L4-L7 ' + d['name']
         for vc in self.sim.get('vcenters', []):
             for esx in vc.get('hosts', []):
                 if esx['name'] != skip:
@@ -451,6 +462,38 @@ class Sim:
         b = r.get('bgp') or {}
         clean['bgp'] = {'asn': str(b.get('asn', '65100')), 'peerAs': str(b.get('peerAs', '65001'))}
         self.sim['routers'] = [x for x in self.sim['routers'] if x['name'] != (old or r['name'])] + [clean]
+
+    def device_op(self, b):
+        """Simulierte L4-L7-Geraete (Firewalls) verwalten."""
+        devs = self.sim.setdefault('devices', [])
+        if b.get('op') == 'delete':
+            self.sim['devices'] = [d for d in devs if d['name'] != b.get('name')]
+            return
+        o = b.get('obj') or {}
+        if not NAME_RE.match(o.get('name', '')):
+            raise AciError(400, 'Name ungueltig')
+        old = b.get('old') or o['name']
+        links = o.get('links') or []
+        if not 1 <= len(links) <= 2:
+            raise AciError(400, 'Ein Geraet braucht 1 oder 2 Links')
+        used = self.used_ports(skip=old)
+        for s_, p_ in links:
+            self._check_port(s_, p_, used)
+        ifs = []
+        for i in o.get('ifs') or []:
+            if not NAME_RE.match(i.get('name', '')) or not MAC_RE.match(i.get('mac', '')):
+                raise AciError(400, 'Interface: Name oder MAC ungueltig')
+            try:
+                ipaddress.ip_interface(i['ip'])
+                assert '/' in i['ip']
+                vlan = int(i.get('vlan') or 0)
+                assert 0 <= vlan <= 4094
+            except (ValueError, KeyError, AssertionError):
+                raise AciError(400, 'Interface %s: IP mit Maske und VLAN 0-4094 angeben' % i.get('name'))
+            ifs.append({'name': i['name'], 'vlan': vlan, 'ip': i['ip'], 'mac': i['mac'].upper().replace('-', ':')})
+        allow = [a.strip().lower() for a in (o.get('allow') or ['any']) if a.strip()]
+        clean = {'name': o['name'], 'links': [[s_, p_] for s_, p_ in links], 'ifs': ifs, 'allow': allow or ['any']}
+        self.sim['devices'] = [d for d in devs if d['name'] != old] + [clean]
 
     def vcenter_op(self, b):
         """Verwaltung des simulierten vCenters: vCenter, ESXi-Hosts, VMs."""
@@ -552,6 +595,11 @@ class Sim:
                 'pending': e.pending, 'hosts': hosts, 'routers': routers, 'settings': self.sim['settings'],
                 'faults': sev, 'vpc': e.vpc_groups, 'mpbgp': e.mpbgp_ok,
                 'vcenters': [dict(v, pwd='***') for v in self.sim.get('vcenters', [])], 'vmm': vmm, 'vms': vms,
+                'devices': [dict(d, status={i['name']: {k: e.hosts.get('%s:%s' % (d['name'], i['name']), {}).get(k)
+                                                        for k in ('learned', 'epg', 'reasons')} for i in d.get('ifs', [])})
+                            for d in self.sim.get('devices', [])],
+                'graphs': [{k: g[k] for k in ('dn', 'brc', 'graph', 'state', 'reasons', 'node', 'dev')}
+                           for g in getattr(e, 'graphs', {}).values()],
                 'lab': {k: lab.get(k) for k in ('id', 'title', 'intro', 'tasks', 'goals', 'solution')} if lab else None,
                 'nextEvent': e.next_event}
 
@@ -806,6 +854,10 @@ def make_handler(S):
                         S.sim['hosts'] = [h for h in S.sim['hosts'] if h['name'] != b.get('name')]
                     else:
                         S.set_host(b.get('host') or {}, b.get('old'))
+                    S.changed()
+                    return self.send(200, {'ok': True})
+                if rest == 'devices':
+                    S.device_op(b)
                     S.changed()
                     return self.send(200, {'ok': True})
                 if rest == 'vcenters':

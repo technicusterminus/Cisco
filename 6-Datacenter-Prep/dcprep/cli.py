@@ -49,6 +49,7 @@ LEAF_HELP = """Verfuegbare Befehle auf Leaf/Spine:
   contract_parser.py [--vrf <Tenant:VRF>]
   show bgp ipv4 unicast vrf <Tenant:VRF>
   show ip ospf interface brief vrf <Tenant:VRF>
+  show service redir info                  PBR Destination Groups
   iping -V <Tenant:VRF> <a.b.c.d>          Ping vom Leaf (Quelle: BD-Gateway)
   Underlay: show ip route vrf overlay-1 | show isis adjacency vrf overlay-1
             show bgp vpnv4 unicast summary vrf overlay-1 | show coop internal info ip-db (Spine)
@@ -270,7 +271,9 @@ class Cli:
                 vid += 1
                 p = split_dn(d['epg'])
                 ports = sorted({l[1] for l in d['legs'] if l[0] == nid}, key=pnum)
-                res.append((vid, '%s:%s:%s' % (p[1][3:], p[2][3:], p[3][4:]), 'vlan-%d' % d['vlan'], ports, bd, d))
+                c = e.cls.get(d['epg'], {})
+                name = c.get('vname') or ('%s:%s:%s' % (p[1][3:], p[2].split('-', 1)[-1], p[3].split('-', 1)[-1]))
+                res.append((vid, name, 'vlan-%d' % d['vlan'], ports, bd, d))
         return res
 
     def _po_ids(self, nid):
@@ -494,20 +497,30 @@ class Cli:
                 if not cons or not prov:
                     continue
                 for subj in e.kids(brc, 'vzSubj'):
+                    g = getattr(e, 'graphs', {}).get(subj)
+                    g = g if g and g['state'] == 'applied' and g['redirect'] else None
                     for rf in e.kids(subj, 'vzRsSubjFiltAtt'):
                         rfa = e.A(rf)
                         if rfa['state'] != 'formed':
                             continue
                         f = fid[rfa['tDn']]
+                        a1 = a2 = rfa['action']
+                        if g:
+                            a1 = 'redir(destgrp-%d)' % self._destgrp(g, 'consumer')
+                            a2 = 'redir(destgrp-%d)' % self._destgrp(g, 'provider')
                         for cpt in cons:
                             for ppt in prov:
                                 if cpt == ppt:
                                     continue
                                 pr = 'fully_qual(7)' if cpt != '0' and ppt != '0' else 'any_dest_filter(14)'
                                 rows.append((rid, cpt, ppt, f, 'bi-dir', 'enabled', vn, e.A(brc)['name'],
-                                             rfa['action'], pr)); rid += 1
+                                             a1, pr)); rid += 1
                                 rows.append((rid, ppt, cpt, f, 'uni-dir-ignore', 'enabled', vn, e.A(brc)['name'],
-                                             rfa['action'], pr)); rid += 1
+                                             a2, pr)); rid += 1
+                                if g:
+                                    sc_, sp_ = g['conns']['consumer']['pcTag'], g['conns']['provider']['pcTag']
+                                    rows.append((rid, sp_, ppt, f, 'bi-dir', 'enabled', vn, e.A(brc)['name'], 'permit', pr)); rid += 1
+                                    rows.append((rid, sc_, cpt, f, 'uni-dir-ignore', 'enabled', vn, e.A(brc)['name'], 'permit', pr)); rid += 1
         if not rows:
             return 'Keine Zoning-Rules (kein VRF auf diesem Switch deployed).'
         return _table(['Rule ID', 'SrcEPG', 'DstEPG', 'FilterID', 'Dir', 'operSt', 'Scope', 'Name', 'Action',
@@ -870,6 +883,8 @@ def _verify_methods():
                 if tag == '0':
                     return 'any'
                 dn, c = names.get(tag, (None, None))
+                if c and c.get('vname'):
+                    return 'epg:%s' % c['vname']
                 return ('epg:%s' % e.short(dn)) if dn else tag
             flt = fnames.get(int(fid)) if fid.isdigit() else None
             desc = []
@@ -1081,8 +1096,58 @@ def _verify_methods():
 _verify_methods()
 
 
+def _destgrp(self, g, conn):
+    """Fortlaufende Destination-Group-Nummer je PBR Policy (wie in show service redir info)."""
+    pols = []
+    for gg in sorted(getattr(self.e, 'graphs', {}).values(), key=lambda x: x['dn']):
+        for c_ in ('consumer', 'provider'):
+            p_ = gg['conns'].get(c_, {}).get('pol')
+            if p_ and p_ not in pols:
+                pols.append(p_)
+    pol = g['conns'][conn]['pol']
+    return pols.index(pol) + 1 if pol in pols else 0
+
+
+def redir_info(self, nid):
+    e = self.e
+    groups = []
+    for g in sorted(getattr(e, 'graphs', {}).values(), key=lambda x: x['dn']):
+        if g['state'] != 'applied' or g['vrf'] not in e.dep_vrf.get(nid, set()):
+            continue
+        for conn in ('consumer', 'provider'):
+            c_ = g['conns'][conn]
+            n = self._destgrp(g, conn)
+            if n and n not in [x[0] for x in groups]:
+                groups.append((n, c_, g['vrf']))
+    out = ['=' * 100, 'LEGEND', 'TL: Threshold(Low)  | TH: Threshold(High) | HP: HashProfile | HG: HealthGrp | BAC: Backup-Dest',
+           '=' * 100, 'List of Dest Groups',
+           'GrpID Name                destination                                    HG-name       BAC  operSt   operStQual   HP',
+           '===== ====                ===========                                    =======       ===  ======   ==========   ==']
+    dests = []
+    for n, c_, vrf in sorted(groups, key=lambda x: x[0]):
+        vn = e.A(vrf)['scope']
+        for d in c_['dests']:
+            name = 'dest-[%s]-[vxlan-%s]' % (d['ip'], vn)
+            out.append('%-5d %-19s %-46s %-13s %-4s %-8s %-12s %s' % (n, 'destgrp-%d' % n, name, 'Not attached', 'N', 'enabled',
+                                                                     'no-oper-grp', 'sym'))
+            dests.append((name, 'vxlan-%s' % e.A(c_['bd'])['seg'], d['mac'] or '00:00:00:00:00:00', self._vname(vrf)))
+    out += ['', 'List of destinations', 'Name                                      bdVnid          vMac                vrf                  operSt   HG-name',
+            '====                                      ======          ====                ===                  ======   =======']
+    for name, bdv, mac, vrfn in dests:
+        out.append('%-41s %-15s %-19s %-20s %-8s %s' % (name, bdv, mac, vrfn, 'enabled', 'Not attached'))
+    if not groups:
+        out.append('(keine PBR-Ziele auf diesem Switch - kein angewendeter Service Graph mit Redirect im VRF)')
+    return '\n'.join(out)
+
+
+Cli._destgrp = _destgrp
+Cli.redir_info = redir_info
+
+
 def dispatch_extra(self, nid, c):
     """Weitere Leaf-/Spine-Befehle. Rueckgabe None = unbekannt."""
+    if c in ('show service redir info', 'show service redir info group'):
+        return self.redir_info(nid)
     m = re.match(r'^show ip int(?:erface)? br(?:ief)? vrf (\S+)$', c)
     if m:
         return self.ip_int_brief(nid, m.group(1))

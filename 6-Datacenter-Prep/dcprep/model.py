@@ -244,7 +244,7 @@ mo('fvRsCons', 'rscons-{tnVzBrCPName}', ('fvAEPg', 'l3extInstP', 'l2extInstP'), 
    rel=('name', 'tnVzBrCPName', 'vzBrCP', 'tenant'), label='Consumed Contract')
 
 # Operative Endpunkte (vom Simulator gelernt)
-mo('fvCEp', 'cep-{mac}', ('fvAEPg', 'l3extInstP', 'l2extInstP'),
+mo('fvCEp', 'cep-{mac}', ('fvAEPg', 'l3extInstP', 'l2extInstP', 'vnsEPpInfo'),
    {'ip': '0.0.0.0', 'encap': '', 'lcC': 'learned', 'fabricPathDn': '', 'id': '0',
     'name': '', 'mcastAddr': 'not-applicable', 'contName': '', 'baseEpgDn': ''},
    config=False, label='Client Endpoint')
@@ -474,7 +474,15 @@ PASSIVE = [
                 'fvCrtrn:crtrn', 'fvRsEPgToCollectionStatsPol:rsEPgToCollectionStatsPol']),
     ('fvAp', ['fvRsApMonPol:rsApMonPol']),
     ('vzBrCP', ['vzRsGraphAtt:rsGraphAtt']),
-    ('vzSubj', ['vzRsSubjGraphAtt:rsSubjGraphAtt', 'vzInTerm:intmnl', 'vzOutTerm:outtmnl', 'vzRsSdwanPol:rssdwanPol']),
+    ('vzSubj', ['vzInTerm:intmnl', 'vzOutTerm:outtmnl', 'vzRsSdwanPol:rssdwanPol']),
+    ('vnsAbsGraph', ['vnsAbsTermNodeCon:AbsTermNodeCon-{name}', 'vnsAbsTermNodeProv:AbsTermNodeProv-{name}',
+                     'vnsAbsConnection:AbsConnection-{name}']),
+    ('vnsAbsNode', ['vnsAbsFuncConn:AbsFConn-{name}', 'vnsRsNodeToAbsFuncProf:rsNodeToAbsFuncProf']),
+    ('vnsAbsTermNodeCon', ['vnsAbsTermConn:AbsTConn', 'vnsInTerm:intmnl', 'vnsOutTerm:outtmnl']),
+    ('vnsAbsTermNodeProv', ['vnsAbsTermConn:AbsTConn', 'vnsInTerm:intmnl', 'vnsOutTerm:outtmnl']),
+    ('vnsAbsConnection', ['vnsRsAbsConnectionConns:rsabsConnectionConns-[{tDn}]']),
+    ('vnsSvcRedirectPol', ['vnsRsIPSLAMonitoringPol:rsIPSLAMonitoringPol']),
+    ('vnsLDevVip', ['vnsRsALDevToDomP:rsALDevToDomP']),
     ('l3extOut', ['l3extRsInterleakPol:rsinterleakPol', 'l3extRsDampeningPol:rsdampeningPol-[{tnRtctrlProfileName}]-{af}',
                   'l3extRsOutToBDPublicSubnetHolder:rsoutToBDPublicSubnetHolder-[{tDn}]', 'pimExtP:pimextp',
                   'l3extRsRedistributePol:rsredistributePol-[{tnRtctrlProfileName}]-{src}']),
@@ -602,6 +610,41 @@ mo('rtctrlRsCtxPToSubjP', 'rsctxPToSubjP-{tnRtctrlSubjPName}', ('rtctrlCtxP',), 
 mo('rtctrlSubjP', 'subj-{name}', ('fvTenant',), {}, label='Match Rule')
 mo('rtctrlMatchRtDest', 'dest-[{ip}]', ('rtctrlSubjP',), {'aggregate': 'no', 'fromPfxLen': '0', 'toPfxLen': '0'},
    enums={'aggregate': ('yes', 'no')}, label='Match Prefix')
+
+# ---------------------------- L4-L7 Service Graph / PBR ----------------------
+mo('vnsLDevVip', 'lDevVip-{name}', ('fvTenant',), {'devtype': 'PHYSICAL', 'funcType': 'GoTo', 'managed': 'no', 'svcType': 'FW',
+                                                 'isCopy': 'no', 'contextAware': 'single-Context', 'trunking': 'no', 'mode': 'legacy-Mode'},
+   enums={'devtype': ('PHYSICAL', 'VIRTUAL', 'CLOUD'), 'funcType': ('GoTo', 'GoThrough', 'L1', 'L2', 'None'),
+          'svcType': ('FW', 'ADC', 'OTHERS', 'COPY', 'NATIVELB')}, label='L4-L7 Device')
+mo('vnsRsALDevToPhysDomP', 'rsALDevToPhysDomP', ('vnsLDevVip',), {'tDn': ''}, rel=('dn', 'tDn', ('physDomP',)), label='Physical Domain')
+mo('vnsCDev', 'cDev-{name}', ('vnsLDevVip',), {}, label='Concrete Device')
+mo('vnsCIf', 'cIf-[{name}]', ('vnsCDev',), {}, label='Concrete Interface')
+mo('vnsRsCIfPathAtt', 'rsCIfPathAtt', ('vnsCIf',), {'tDn': ''}, rel=('dn', 'tDn', ('fabricPathEp',)), label='Path')
+mo('vnsLIf', 'lIf-{name}', ('vnsLDevVip',), {'encap': 'unknown'}, checks={'encap': _vlan}, label='Cluster Interface')
+mo('vnsRsCIfAttN', 'rscIfAttN-[{tDn}]', ('vnsLIf',), {}, rel=('dn', 'tDn', ('vnsCIf',)), label='Concrete Interface')
+mo('vnsAbsGraph', 'AbsGraph-{name}', ('fvTenant',), {'type': 'legacy', 'uiTemplateType': 'UNSPECIFIED'}, label='L4-L7 Service Graph Template')
+mo('vnsAbsNode', 'AbsNode-{name}', ('vnsAbsGraph',), {'funcTemplateType': 'FW_ROUTED', 'funcType': 'GoTo', 'routingMode': 'Redirect',
+                                                     'managed': 'no', 'sequenceNumber': '0', 'isCopy': 'no', 'shareEncap': 'no'},
+   enums={'routingMode': ('Redirect', 'unspecified'), 'funcType': ('GoTo', 'GoThrough', 'L1', 'L2', 'None')}, label='Function Node')
+mo('vnsRsNodeToLDev', 'rsNodeToLDev', ('vnsAbsNode',), {'tDn': ''}, rel=('dn', 'tDn', ('vnsLDevVip',)), label='L4-L7 Device')
+mo('vzRsSubjGraphAtt', 'rsSubjGraphAtt', ('vzSubj',), {'directives': ''},
+   rel=('name', 'tnVnsAbsGraphName', 'vnsAbsGraph', 'tenant'), label='L4-L7 Service Graph')
+mo('vnsLDevCtx', 'ldevCtx-c-{ctrctNameOrLbl}-g-{graphNameOrLbl}-n-{nodeNameOrLbl}', ('fvTenant',), {'context': ''},
+   label='Device Selection Policy')
+mo('vnsRsLDevCtxToLDev', 'rsLDevCtxToLDev', ('vnsLDevCtx',), {'tDn': ''}, rel=('dn', 'tDn', ('vnsLDevVip',)), label='L4-L7 Device')
+mo('vnsLIfCtx', 'lIfCtx-c-{connNameOrLbl}', ('vnsLDevCtx',), {'l3Dest': 'yes', 'permitLog': 'no'}, label='Logical Interface Context')
+mo('vnsRsLIfCtxToBD', 'rsLIfCtxToBD', ('vnsLIfCtx',), {'tDn': ''}, rel=('dn', 'tDn', ('fvBD',)), label='Bridge Domain')
+mo('vnsRsLIfCtxToLIf', 'rsLIfCtxToLIf', ('vnsLIfCtx',), {'tDn': ''}, rel=('dn', 'tDn', ('vnsLIf',)), label='Cluster Interface')
+mo('vnsRsLIfCtxToSvcRedirectPol', 'rsLIfCtxToSvcRedirectPol', ('vnsLIfCtx',), {'tDn': ''},
+   rel=('dn', 'tDn', ('vnsSvcRedirectPol',)), label='L4-L7 Policy-Based Redirect')
+mo('vnsSvcCont', 'svcCont', ('fvTenant',), {}, label='Service Container')
+mo('vnsSvcRedirectPol', 'svcRedirectPol-{name}', ('vnsSvcCont',), {'hashingAlgorithm': 'sip-dip-prototype', 'thresholdEnable': 'no',
+                                                                  'destType': 'L3', 'anycastEnabled': 'no'},
+   label='L4-L7 Policy-Based Redirect')
+mo('vnsRedirectDest', 'RedirectDest_ip-[{ip}]', ('vnsSvcRedirectPol',), {'mac': '', 'destName': ''}, label='Redirect Destination')
+mo('vnsGraphInst', 'GraphInst_C-[{ctrctDn}]-G-[{graphDn}]-S-[{scopeDn}]', ('fvTenant',),
+   {'configSt': 'applied', 'descr': ''}, config=False, label='Deployed Graph Instance')
+mo('vnsEPpInfo', 'EPpInfo-{name}', ('vnsGraphInst',), {'pcTag': '', 'bdDn': '', 'encap': ''}, config=False, label='Service EPG (Shadow EPG)')
 
 # ---------------------------- Imported Contracts ---------------------------
 mo('vzCPIf', 'cif-{name}', ('fvTenant',), {}, label='Imported Contract')
