@@ -18,10 +18,11 @@ from .query import run_query
 from .engine import Engine, ip_of
 from . import setup as apic_setup
 from . import aaa
-from .topology import default_topology, discovered_members, base_config, ensure_base
+from .topology import default_topology, multipod_topology, default_ipn, discovered_members, base_config, ensure_base
 from .cli import Cli
 from . import trace
 from . import ops
+from . import msite
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATIC = os.path.join(BASE, 'static')
@@ -95,6 +96,8 @@ class Sim:
         self.engine = Engine(self.store, self.sim)
         if mode != 'factory':
             su = self.sim['setup']
+            mit_post(self.store, 'uni/controller/setuppol', {'fabricSetupPol': {'attributes': {}, 'children': [
+                {'fabricSetupP': {'attributes': {'podId': str(int(su['podId'])), 'tepPool': su['tepPool']}}}]}})
             mit_post(self.store, 'uni/tn-mgmt/mgmtp-default/oob-default', {'mgmtOoB': {'attributes': {}, 'children': [
                 {'mgmtRsOoBStNode': {'attributes': {'tDn': 'topology/pod-%d/node-1' % int(su['podId']), 'addr': su['oobIp'],
                                                     'gw': su['oobGw']}}}]}})
@@ -150,7 +153,7 @@ class Sim:
         n0 = len(self.sim.get('events', []))
         for nid, (name, state) in after['nodes'].items():
             if before['nodes'].get(nid, (None, None))[1] != state:
-                self._event('topology/pod-%d/node-%d' % (self.engine.pod, nid), 'Node %s (%d) changed state to %s' % (name, nid, state),
+                self._event('%s/node-%d' % (self.engine.pdn(nid), nid), 'Node %s (%d) changed state to %s' % (name, nid, state),
                             code='E4204979')
         for name, (learned, epg, path) in after['hosts'].items():
             ob = before['hosts'].get(name, (False, None, None))
@@ -270,6 +273,13 @@ class Sim:
             raise AciError(404, 'Lab %s nicht gefunden' % lid)
         self.autosave_lab()
         self.reset(lab.get('fabric', 'discovered'))
+        if lab.get('topology') == 'multipod':
+            self.sim['topology'] = multipod_topology()
+            self.sim['ipn'] = json.loads(json.dumps(lab.get('ipn') or default_ipn()))
+        if lab.get('topology') == 'multisite':
+            self.sim['topology'] = msite.multisite_topology()
+            self.sim['ipn'] = json.loads(json.dumps(lab.get('ipn') or msite.default_isn()))
+            self.sim['ndo'] = msite.default_ndo()
         for tree in lab.get('config', []):
             mit_post(self.store, 'uni', tree)
         self.sim['hosts'] = json.loads(json.dumps(lab.get('hosts', [])))
@@ -393,6 +403,15 @@ class Sim:
                     l = next((x for x in getattr(e, 'loops', []) if x['name'] == c['switch']), {})
                     ok = bool(l) and (not l.get('loop') or l.get('action') == c.get('action', 'mcp'))
                     info = l.get('text', 'Switch nicht vorhanden')
+                elif t == 'msite':
+                    why = e.msite_state()
+                    ok = why is None
+                    info = why or 'Infra zwischen den Sites ok'
+                elif t == 'ipnadj':
+                    adj = [x for x in getattr(e, 'mp', {}).get('adj', []) if x['serial'] in c['serials']]
+                    bad = [x for x in adj if x['state'] != 'FULL']
+                    ok = len(adj) == len(c['serials']) and not bad
+                    info = '; '.join('%s: %s' % (x['serial'], x['why'] or x['state']) for x in bad) or 'alle FULL'
                 elif t == 'inb':
                     ok = all(n in getattr(e, 'inb', {}) for n in c['nodes'])
                     info = 'In-Band aktiv auf: %s' % (', '.join(str(n) for n in sorted(getattr(e, 'inb', {}))) or 'keinem Node')
@@ -788,6 +807,30 @@ class Sim:
                  'descr': o.get('descr', '')}
         self.sim['switches'] = [x for x in sws if x['name'] != (old or o['name'])] + [clean]
 
+    def ipn_op(self, b):
+        """IPN- und WAN-Router der Multi-Pod-Topologie bearbeiten."""
+        cfg = self.sim.setdefault('ipn', default_ipn())
+        o = b.get('router') or {}
+        r = next((x for x in cfg['routers'] if x['name'] == o.get('name')), None)
+        if not r:
+            raise AciError(400, 'Router %s gibt es nicht' % o.get('name'))
+        try:
+            mtu = int(o.get('mtu', r['mtu']))
+            assert 576 <= mtu <= 9216
+            relay = [str(ipaddress.ip_address(x.strip())) for x in re.split(r'[,\s]+', str(o.get('relay', ''))) if x.strip()] \
+                if isinstance(o.get('relay', ''), str) else [str(ipaddress.ip_address(x)) for x in o.get('relay', [])]
+            if o.get('rp'):
+                ipaddress.ip_address(o['rp'])
+            ifs = []
+            for i in o.get('ifs', r['ifs']):
+                if i.get('ip'):
+                    ipaddress.ip_interface(i['ip'])
+                ifs.append({'serial': i['serial'], 'port': i['port'], 'vlan': int(i.get('vlan') or 0), 'ip': i.get('ip', '')})
+        except (ValueError, AssertionError):
+            raise AciError(400, 'Ungueltige Eingabe (MTU 576-9216, IP-Adressen mit Maske, Relay als IP-Liste)')
+        r.update({'mtu': mtu, 'area': o.get('area', r['area']) or '0.0.0.0', 'pim': bool(o.get('pim', r['pim'])), 'rp': o.get('rp', r['rp']),
+                  'relay': relay if 'relay' in o else r['relay'], 'down': bool(o.get('down', r['down'])), 'ifs': ifs})
+
     def monitor_op(self, b):
         mons = self.sim.setdefault('monitors', [])
         op = b.get('op')
@@ -918,6 +961,8 @@ class Sim:
                           'state': info.get('state') or ('pending' if any(p['serial'] == n['serial']
                                                                          for p in e.pending) else 'undiscovered'),
                           'since': info.get('since'), 'upgrading': bool(info.get('upgrading')),
+                          'pod': n.get('pod', topo.get('pod', 1)), 'remote': bool(n.get('remote')),
+                          'why': getattr(e, 'mp', {}).get('reasons', {}).get(n['serial']),
                           'version': ops.plain(e.node_version(n['serial']))})
         hosts = []
         for h in self.sim['hosts']:
@@ -947,6 +992,7 @@ class Sim:
             sev[s] = sev.get(s, 0) + 1
         lab = self.lab(self.sim.get('lab')) if self.sim.get('lab') else None
         return {'now': time.time(), 'apic': topo['apic'], 'pod': topo.get('pod', 1), 'setup': self.sim.get('setup'), 'nodes': nodes, 'links': topo['links'],
+                'ipnlinks': topo.get('ipnlinks', []), 'multipod': bool(topo.get('ipnlinks')),
                 'pending': e.pending, 'hosts': hosts, 'routers': routers, 'settings': self.sim['settings'],
                 'faults': sev, 'vpc': e.vpc_groups, 'mpbgp': e.mpbgp_ok,
                 'vcenters': [dict(v, pwd='***') for v in self.sim.get('vcenters', [])], 'vmm': vmm, 'vms': vms,
@@ -1263,6 +1309,27 @@ def make_handler(S):
                     S.device_op(b)
                     S.changed()
                     return self.send(200, {'ok': True})
+                if rest == 'ipn':
+                    if method == 'POST':
+                        S.ipn_op(b)
+                        S.changed()
+                    mp = getattr(e, 'mp', {})
+                    return self.send(200, {'config': S.sim.get('ipn'), 'active': mp.get('active', False),
+                                           'adj': [{k: v for k, v in a.items()} for a in mp.get('adj', [])],
+                                           'reasons': mp.get('reasons', {}), 'ipnOk': {str(k): v for k, v in mp.get('ipn_ok', {}).items()},
+                                           'pools': {str(k): v for k, v in mp.get('pools', {}).items()},
+                                           'remote': {str(k): v for k, v in mp.get('remote', {}).items()},
+                                           'apicTep': e.apic_tep, 'links': S.sim['topology'].get('ipnlinks', []),
+                                           'interpod': e.interpod(1, 2) if mp.get('active') else None})
+                if rest == 'ndo':
+                    if method == 'POST':
+                        try:
+                            msite.ndo_op(S, b)
+                        finally:
+                            S.changed()
+                    n = S.sim.get('ndo')
+                    return self.send(200, {'ndo': n, 'state': e.msite_state() if n else None,
+                                           'isn': [a for a in getattr(e, 'mp', {}).get('adj', []) if a['kind'] == 'isn']})
                 if rest == 'switches':
                     S.switch_op(b)
                     S.changed()

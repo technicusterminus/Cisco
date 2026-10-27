@@ -58,6 +58,9 @@ Der Zustand bleibt beim Beenden erhalten. Beim ersten Start ist die Fabric ferti
 | DHCP Relay | DHCP Relay Policy (Tenant oder infra) mit Provider-EPG und Server-Adresse, DHCP Relay Label am BD. Hosts mit *IP per DHCP* bekommen eine Adresse aus dem Scope des simulierten DHCP-Servers, mit dem BD-Gateway als giaddr. |
 | MCP und Loop Protection | Legacy-Switches mit mehreren Links (*Simulation > Legacy-Switches*) bilden Schleifen: Broadcast-Storm und Endpoint-Flapping im BD. MCP (global mit Key, *PDU per VLAN*, MCP Interface Policy) error-disabled einen Port, Endpoint Loop Protection schaltet Port oder BD-Learning ab. |
 | QoS-Klassen | QOS Class Policies level1–level6 mit MTU und Scheduling, Zuordnung über die QoS Class der EPG (`show qos classes`). Die Klassen beeinflussen den Traffic-Test nicht. |
+| Multi-Pod | Topologie mit Pod 2 (spine203/204, leaf105/106) und IPN-Routern (Lab 29). Pod Fabric Setup Policy mit TEP Pool je Pod, Infra-L3Out im Tenant infra (VRF overlay-1, Sub-Interfaces vlan-4, OSPF, BGP), Fabric External Connection Policy mit Data Plane TEP. Die Pod-2-Spines erscheinen erst, wenn ihr DHCP Discover per Relay im IPN beim APIC ankommt, die Pod-2-Leafs erst mit OSPF zwischen Pod-2-Spines und IPN. MTU-Mismatch lässt OSPF in EXSTART, IPN-MTU unter 9150 verwirft VXLAN, ohne PIM Bidir fehlt BUM zwischen den Pods. Wizard *Fabric > Inventory > Quick Start > Add Pod*, Simulation unter *IPN & WAN*. |
+| Remote Leaf | Remote Leaf hinter einem WAN-Router (Lab 30): Remote Pool, External TEP Pool, Registrierung als *remote-leaf-wan* mit Remote Pool ID, Uplink im Infra-L3Out, DHCP Relay am WAN-Router, WAN-MTU für VXLAN. Wizard *Add Remote Leaf*. |
+| Multi-Site | Vereinfachter Nexus Dashboard Orchestrator mit simulierter zweiter Site DC-HAM (Lab 31, *Simulation > Multi-Site (NDO)*): Site onboarden (APIC-Login, Site ID), Infra Configuration (ISN-Interfaces der Spines, OSPF, BGP-EVPN Router-ID, Overlay Unicast TEP) und Templates mit VRF, BD (L2 Stretch, Intersite BUM), EPGs und Contracts. Der NDO legt im APIC das L3Out *intersite*, die Site ID und die Template-Objekte mit `annotation: orchestrator:msc` an. Der Traffic-Test prüft ISN, Stretch und Contracts bis zum Host in DC-HAM. |
 | Disabled Interfaces | Deaktivierte Ports gehen admin-down, Endpoints und Nachbarschaften dahinter fallen weg. |
 | Faults, Events, Audit Log | Faults mit Code, Severity und Beschreibung am Objekt, Health Scores. Events bei Zustandswechseln (Switch aktiv, Endpoint gelernt, Nachbarschaft, Fault ausgelöst oder behoben). Jede Änderung im Audit Log mit Benutzer, altem und neuem Wert. |
 
@@ -128,6 +131,9 @@ Unter *Simulation > Labs* laden. Jedes Lab setzt die Konfiguration auf einen Sta
 | 26 | Monitoring: SNMP, Syslog und Callhome | 40 min |
 | 27 | DHCP Relay | 25 min |
 | 28 | Loop Protection mit MCP und QoS-Klassen | 30 min |
+| 29 | Multi-Pod mit Inter-Pod Network | 50 min |
+| 30 | Remote Leaf in der Filiale | 40 min |
+| 31 | Multi-Site mit dem Nexus Dashboard Orchestrator | 45 min |
 
 Die Lab-Dateien entstehen aus `Labs-Quelle/build_labs.py` (`python3 Labs-Quelle/build_labs.py`). Die Tests prüfen für jedes Lab, dass es ohne Lösung nicht bestanden und mit Musterlösung vollständig bestanden ist.
 
@@ -169,6 +175,7 @@ Für Ansible: `use_ssl: false` und `port: 8080` setzen, siehe `beispiele/ansible
 | `acidiag touch clean`, `acidiag reboot` (Werkszustand) | `iping -V T:V <ip>` (Ping vom Leaf, weckt stille Hosts per Glean), `show vpc brief`, `show port-channel summary`, `show ntp peer-status` |
 | `show firmware upgrade status`, `show firmware repository` | `show mcp internal info interface all`, `show interface status err-disabled` |
 | `show snmp`, `show logging server`, `show snapshot` (Export-/Import-Jobs) | `show ip dhcp relay`, `show qos classes` |
+| | Spine/Remote Leaf: `show ip ospf neighbors vrf overlay-1` (OSPF zum IPN, ISN oder WAN) |
 | | Underlay: `show ip route vrf overlay-1`, `show isis adjacency vrf overlay-1`, `show bgp vpnv4 unicast summary vrf overlay-1`, auf Spines `show coop internal info ip-db` |
 
 ## Faults
@@ -179,6 +186,8 @@ Für Ansible: `use_ssl: false` und `port: 8080` setzen, siehe `beispiele/ansible
 |---|---|
 | S0101 | Cluster-Größe aus dem Setup passt nicht zur Anzahl der APICs (nicht Fully Fit) |
 | S0134 | Node ID doppelt vergeben |
+| S0135 | Registrierte Pod ID passt nicht zum Pod, in dem der Switch hängt |
+| S0136 | Remote Leaf nicht als remote-leaf-wan mit Remote Pool registriert |
 | S0211 | In-Band-VLAN nicht auf den APIC-Ports erlaubt (Access Policy fehlt) |
 | S0468 | L3Out-Interface unvollständig (Node fehlt im Node Profile, keine IP) |
 | S0475, S0476 | vPC Protection Group unvollständig oder Node doppelt |
@@ -210,7 +219,7 @@ Die externen Router, Hosts und Pakete sind simuliert. Ein echter Router aus CML 
 
 ## Grenzen
 
-Nicht simuliert: VMM für Kubernetes, Microsoft und OpenStack, Multi-Pod und Multi-Site, Service Graphs ohne PBR (Firewall als Gateway), Managed Devices (Device Packages), Set Rules und Route-Profile mit Community/Tag, Multicast, Custom QoS Policies und die Wirkung von QoS auf den Datenverkehr, SNMPv3, Scheduler für Exporte und Upgrades, DHCP über L3Out. Die Pakete fließen nicht wirklich: Der Traffic-Test berechnet anhand von Konfiguration und Zustand, ob ein Paket und seine Antwort ankommen würden, und begründet jeden Schritt.
+Nicht simuliert: VMM für Kubernetes, Microsoft und OpenStack, vPC über Pods hinweg, Remote-Leaf-vPC, Stretched Fabric, GOLF und SR-MPLS, die vollständige NDO-Oberfläche (der NDO ist vereinfacht, die zweite Site hat nur feste Endpoints), Service Graphs ohne PBR (Firewall als Gateway), Managed Devices (Device Packages), Set Rules und Route-Profile mit Community/Tag, Multicast, Custom QoS Policies und die Wirkung von QoS auf den Datenverkehr, SNMPv3, Scheduler für Exporte und Upgrades, DHCP über L3Out. Die Pakete fließen nicht wirklich: Der Traffic-Test berechnet anhand von Konfiguration und Zustand, ob ein Paket und seine Antwort ankommen würden, und begründet jeden Schritt.
 
 ## Aufbau des Ordners
 
@@ -218,6 +227,8 @@ Nicht simuliert: VMM für Kubernetes, Microsoft und OpenStack, Multi-Pod und Mul
 |---|---|
 | `dcprep/model.py` | Klassenmodell (Management Information Tree), DN-Logik, Validierung, atomarer POST |
 | `dcprep/query.py` | Abfragen und Filter im APIC-Format |
+| `dcprep/multipod.py` | Multi-Pod und Remote Leaf: IPN/WAN-Adjacencies, Discovery über DHCP Relay, Datenpfad zwischen Pods |
+| `dcprep/msite.py` | Multi-Site: vereinfachter NDO, zweite Site, Infra- und Template-Deployment |
 | `dcprep/ops.py` | Betriebsthemen: Firmware-Upgrade, MCP und Schleifen, DHCP Relay, Monitoring, Config Export/Import |
 | `dcprep/engine.py` | Policy-Engine: Discovery, Access Policies, Deployment, Endpoints, L3Out, Contracts, Faults |
 | `dcprep/trace.py` | Traffic-Test |

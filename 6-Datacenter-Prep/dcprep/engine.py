@@ -14,6 +14,8 @@ import time
 
 from .model import CLASSES, split_dn, parent_dn, rn_of, tenant_of, now_ts
 from .ops import OpsMixin, plain
+from .multipod import PodMixin
+from .msite import SiteMixin
 
 SEV_PEN = {'critical': 40, 'major': 15, 'minor': 5, 'warning': 1}
 EPHEMERAL = 49152
@@ -68,7 +70,7 @@ def port_val(v):
     return int(v) if str(v).isdigit() else None
 
 
-class Engine(OpsMixin):
+class Engine(OpsMixin, PodMixin, SiteMixin):
     def __init__(self, store, sim):
         self.store = store
         self.sim = sim
@@ -104,6 +106,7 @@ class Engine(OpsMixin):
         self.faults = {}
         self._fabric(now)
         self._access()
+        self._ipn_paths()
         self._oos()
         self._resolve()
         self._fw_groups()
@@ -192,7 +195,7 @@ class Engine(OpsMixin):
                 info['nodes'][nid] = why
                 if not why:
                     self.inb[nid] = ra['addr']
-                    sysdn = '%s/node-%d/sys' % (self.poddn, nid)
+                    sysdn = '%s/node-%d/sys' % (self.pdn(nid), nid)
                     if self.has(sysdn):
                         self.A(sysdn)['inbMgmtAddr'] = str(ip_of(ra['addr']))
 
@@ -266,6 +269,15 @@ class Engine(OpsMixin):
             if s not in nodes:
                 continue
             nid = int(a['nodeId'] or 0)
+            npod = nodes[s].get('pod', pod)
+            if int(a.get('podId') or 1) != npod:
+                self.fault(dn, 'S0135', 'major', 'Node %s is registered with Pod ID %s but is connected in pod %d'
+                           % (s, a.get('podId'), npod), 'pod-id-mismatch', domain='infra')
+                continue
+            if nodes[s].get('remote') and a.get('nodeType') != 'remote-leaf-wan':
+                self.fault(dn, 'S0136', 'major', 'Node %s is a remote leaf and must be registered with node type '
+                           'remote-leaf-wan and its Remote Pool ID' % s, 'remote-leaf-type-missing', domain='infra')
+                continue
             if nid in seen:
                 self.fault(dn, 'S0134', 'major', 'Node ID %d is already in use by node with serial %s'
                            % (nid, seen[nid]), 'node-id-conflict', domain='infra')
@@ -276,6 +288,9 @@ class Engine(OpsMixin):
         for l in topo['links']:
             adj.setdefault(l[0], set()).add(l[2])
             adj.setdefault(l[2], set()).add(l[0])
+        self.apic_tep = apic_setup.apic_tep(self.tep_pool)
+        self._mp_eval(nodes, valid, ident)
+        adj = self.mp_adj_filter(adj, apic['serial'])
         speed = float(self.sim.get('settings', {}).get('discoverySeconds', 20))
         inf = float('inf')
         act = {apic['serial']: 0.0} if self.apic_up else {}
@@ -293,6 +308,7 @@ class Engine(OpsMixin):
         self.next_event = min([t for t in act.values() if t > now] + ([fw_next] if fw_next else []), default=None)
 
         self.nodes = {}            # nid -> info
+        self.pod_of = {1: pod}
         self.serial_node = {}      # serial -> nid (registriert)
         self.serial_active = {}    # serial -> nid (aktiv)
         self.pending = []
@@ -309,9 +325,18 @@ class Engine(OpsMixin):
                 state = 'inactive'
             if s in self.fw_reload:
                 state = 'inactive'
+            if state == 'active' and not self.mp_gate(s):
+                state = 'discovering'
+            npod = n.get('pod', pod)
+            if n.get('remote'):
+                rp = self.mp['remote'].get(int(a.get('extPoolId') or 0)) or {}
+                tep = apic_setup.tep_of(rp.get('pool') or self.tep_pool, npod, nid)
+            else:
+                tep = apic_setup.tep_of(self.mp['pools'].get(npod, self.tep_pool), npod, nid)
+            self.pod_of[nid] = npod
             info = {'id': nid, 'serial': s, 'name': a['name'] or 'node-%d' % nid, 'role': n['role'],
                     'model': n['model'], 'state': state, 'ports': n['ports'],
-                    'tep': apic_setup.tep_of(self.tep_pool, pod, nid),
+                    'tep': tep, 'pod': npod, 'remote': bool(n.get('remote')),
                     'since': act.get(s), 'regdn': dn, 'upgrading': self.fw_reload.get(s)}
             self.nodes[nid] = info
             self.serial_node[s] = nid
@@ -324,7 +349,8 @@ class Engine(OpsMixin):
                 continue
             nbt = min((act.get(x, inf) for x in adj.get(s, ())), default=inf)
             if nbt <= now:
-                self.pending.append({'serial': s, 'model': n['model'], 'role': n['role']})
+                self.pending.append({'serial': s, 'model': n['model'], 'role': n['role'], 'pod': n.get('pod', pod),
+                                     'remote': bool(n.get('remote'))})
 
         self.oob = {}
         for r in self.store.by_class('mgmtRsOoBStNode'):
@@ -354,17 +380,19 @@ class Engine(OpsMixin):
                        domain='infra')
         for p in self.pending:
             st.add(adn + '/sys/client-[%s]' % p['serial'], 'dhcpClient',
-                   {'id': p['serial'], 'model': p['model'], 'nodeRole': p['role'], 'podId': str(pod),
+                   {'id': p['serial'], 'model': p['model'], 'nodeRole': 'remote-leaf-wan' if p.get('remote') else p['role'], 'podId': str(p.get('pod', pod)),
                     'fabricId': '1', 'clientEvent': 'pending', 'nodeId': '0', 'name': '',
                     'ip': '0.0.0.0', 'supported': 'yes', 'decomissioned': 'no'}, True)
 
+        for pd in sorted(set(self.pod_of.values())):
+            st.add('topology/pod-%d' % pd, 'fabricPod', {'id': str(pd), 'podType': 'physical'}, True)
         for nid, n in self.nodes.items():
-            ndn = '%s/node-%d' % (self.poddn, nid)
+            ndn = '%s/node-%d' % (self.pdn(nid), nid)
             st.add(ndn, 'fabricNode', {'id': str(nid), 'name': n['name'], 'role': n['role'],
                                        'serial': n['serial'], 'model': n['model'],
                                        'fabricSt': n['state'], 'address': n['tep'] if n['state'] == 'active' else '0.0.0.0',
                                        'version': self.node_version(n['serial']) if n['state'] == 'active' else '',
-                                       'adSt': 'on', 'nodeType': 'unspecified',
+                                       'adSt': 'on', 'nodeType': 'remote-leaf-wan' if n.get('remote') else 'unspecified',
                                        'vendor': 'Cisco Systems, Inc', 'lastStateModTs': now_ts(n['since'])
                                        if n['since'] and n['since'] != inf else 'never'}, True)
             if n['state'] != 'active':
@@ -372,7 +400,7 @@ class Engine(OpsMixin):
             up = int(now - n['since'])
             st.add(ndn + '/sys', 'topSystem', {
                 'address': n['tep'], 'id': str(nid), 'name': n['name'], 'role': n['role'],
-                'serial': n['serial'], 'state': 'in-service', 'podId': str(pod),
+                'serial': n['serial'], 'state': 'in-service', 'podId': str(n['pod']),
                 'oobMgmtAddr': str(ip_of(self.oob[nid])) if self.oob.get(nid) else '0.0.0.0', 'inbMgmtAddr': '0.0.0.0',
                 'version': self.node_version(n['serial']), 'fabricMAC': '00:22:BD:F8:19:FF', 'tepPool': self.tep_pool, 'fabricDomain': self.fabric_name,
                 'systemUpTime': '%02d:%02d:%02d:%02d.000' % (up // 86400, up % 86400 // 3600, up % 3600 // 60, up % 60)}, True)
@@ -410,12 +438,20 @@ class Engine(OpsMixin):
                 yid = id_of.get(ys)
                 if ys in self.serial_active and xid != 1 and (xid, yid) not in lnk:
                     lnk.add((xid, yid))
-                    cdn = '%s/lnkcnt-%d' % (self.poddn, yid)
+                    cdn = '%s/lnkcnt-%d' % (self.pdn(xid), yid)
                     st.add(cdn, 'fabricLinkCont', {'id': str(yid)}, True)
                     st.add(cdn + '/lnk-%d-1-%s-to-%d-1-%s' % (xid, xp.split('/')[-1], yid, yp.split('/')[-1]),
                            'fabricLink', {'n1': str(xid), 's1': '1', 'p1': xp.split('/')[-1],
                                           'n2': str(yid), 's2': '1', 'p2': yp.split('/')[-1],
                                           'linkState': 'ok', 'wiringIssues': ''}, True)
+        for s_, p_, rname, rport in topo.get('ipnlinks', []):
+            xid = self.serial_active.get(s_)
+            pi = self.ports.get((xid, p_)) if xid else None
+            r = next((x for x in (self.sim.get('ipn') or {}).get('routers', []) if x['name'] == rname), None)
+            if pi is not None and r and not r.get('down'):
+                pi.update({'oper': 'up', 'qual': 'link-up', 'fabric': True, 'layer': 'Layer3', 'peer': ('ipn', rname, rport)})
+                pi['usage'].add('infra')
+                self.lldp.setdefault(xid, []).append((p_, rname, rport, 'R', rname))
         # Hosts/Router verkabeln
         self.cabled = {}
         for h in self.sim.get('hosts', []):
@@ -532,7 +568,7 @@ class Engine(OpsMixin):
         for (nid, port), pi in self.ports.items():
             if pi['fabric'] or self.nodes[nid]['role'] != 'leaf':
                 continue
-            dn = '%s/paths-%d/pathep-[%s]' % (self.poddn, nid, port)
+            dn = '%s/paths-%d/pathep-[%s]' % (self.pdn(nid), nid, port)
             self.paths[dn] = {'type': 'port', 'legs': [(nid, port)], 'pg': pi['pg'], 'nodes': [nid],
                               'name': port}
         bundles = {}
@@ -544,7 +580,7 @@ class Engine(OpsMixin):
             legs_all = [(n, p) for n, ps in bynode.items() for p in sorted(ps, key=pnum)]
             if info['lagT'] == 'link':
                 for nid, ps in bynode.items():
-                    dn = '%s/paths-%d/pathep-[%s]' % (self.poddn, nid, info['name'])
+                    dn = '%s/paths-%d/pathep-[%s]' % (self.pdn(nid), nid, info['name'])
                     self.paths[dn] = {'type': 'pc', 'legs': [(nid, p) for p in ps], 'pg': pg,
                                       'nodes': [nid], 'name': info['name']}
             else:
@@ -560,7 +596,7 @@ class Engine(OpsMixin):
                     a, b = sorted([n, peer])
                     done |= {a, b}
                     legs = [(x, p) for x in (a, b) for p in sorted(bynode.get(x, []), key=pnum)]
-                    dn = '%s/protpaths-%d-%d/pathep-[%s]' % (self.poddn, a, b, info['name'])
+                    dn = '%s/protpaths-%d-%d/pathep-[%s]' % (self.pdn(a), a, b, info['name'])
                     self.paths[dn] = {'type': 'vpc', 'legs': legs, 'pg': pg, 'nodes': [a, b], 'name': info['name']}
                 if alone:
                     self.fault(pg, 'S0477', 'minor',
@@ -568,7 +604,7 @@ class Engine(OpsMixin):
                                '(no explicit vPC protection group)' % ','.join(map(str, alone)),
                                'vpc-domain-missing', domain='access')
             for leg in legs_all:
-                pdn = '%s/paths-%d/pathep-[%s]' % (self.poddn, leg[0], leg[1])
+                pdn = '%s/paths-%d/pathep-[%s]' % (self.pdn(leg[0]), leg[0], leg[1])
                 if pdn in self.paths:
                     self.paths[pdn]['member_of'] = info['name']
         for dn, p in self.paths.items():
@@ -583,6 +619,16 @@ class Engine(OpsMixin):
             self.store.add(dn, 'fabricPathEp', {'name': p['name'], 'pathT': 'leaf',
                                                 'lagT': {'port': 'not-aggregated', 'pc': 'link',
                                                          'vpc': 'node'}[p['type']]}, True)
+
+    def _ipn_paths(self):
+        """Pfade der Spine- und Remote-Leaf-Ports zum IPN/WAN (fuer das Infra-L3Out)."""
+        for s_, p_, _, _ in self.sim['topology'].get('ipnlinks', []):
+            nid = self.serial_active.get(s_)
+            if nid is None:
+                continue
+            cdn = '%s/paths-%d' % (self.pdn(nid), nid)
+            self.store.add(cdn, 'fabricPathEpCont', {'nodeId': str(nid)}, True)
+            self.store.add(cdn + '/pathep-[%s]' % p_, 'fabricPathEp', {'name': p_, 'pathT': 'leaf', 'lagT': 'not-aggregated'}, True)
 
     def _oos(self):
         self.oos = set()
@@ -930,7 +976,7 @@ class Engine(OpsMixin):
                                 continue
                         targets.update(hinfo['ok'])
                 for leg in sorted(targets):
-                    pdn = '%s/paths-%d/pathep-[%s]' % (self.poddn, leg[0], leg[1])
+                    pdn = '%s/paths-%d/pathep-[%s]' % (self.pdn(leg[0]), leg[0], leg[1])
                     if pdn in self.paths:
                         self._deploy(epg, c, pdn, self.paths[pdn], pgi['vlan'], 'regular')
             # VMs als Endpoints
@@ -1252,7 +1298,7 @@ class Engine(OpsMixin):
                     up = getattr(self, 'fw_reload', {}).get(s)
                     hs['reasons'].append('Switch %s laedt gerade neu (Firmware-Upgrade auf %s, Upgrade Group %s)'
                                          % (self.node_label(s), plain(up['version']), up.get('grp')) if up else
-                                         'Switch %s ist nicht aktiv (nicht registriert oder noch in Discovery)' % self.node_label(s))
+                                         'Switch %s ist nicht aktiv (%s)' % (self.node_label(s), self.mp['reasons'].get(s) or 'nicht registriert oder noch in Discovery'))
                     continue
                 if self.ports.get((nid, p), {}).get('qual') == 'error-disabled':
                     hs['reasons'].append('%s %s ist error-disabled (%s)' % (self.nodes[nid]['name'], p, self.ports[(nid, p)].get('errdis')))
@@ -1291,7 +1337,7 @@ class Engine(OpsMixin):
                 if bond in ('lacp-active', 'lacp-passive'):
                     down_reason = ('suspended', 'LACP: Host erwartet einen Port-Channel, die ACI-Ports haben aber '
                                    'keine PC/vPC-Policy-Gruppe')
-                path = '%s/paths-%d/pathep-[%s]' % (self.poddn, legs[0][0], legs[0][1])
+                path = '%s/paths-%d/pathep-[%s]' % (self.pdn(legs[0][0]), legs[0][0], legs[0][1])
             if down_reason:
                 for l in legs:
                     if l in self.ports:
@@ -1395,6 +1441,8 @@ class Engine(OpsMixin):
         self.ext_class = {}    # vrf -> [(net, instP)]
         self.routers = {}
         for out in self.store.by_class('l3extOut'):
+            if out.startswith('uni/tn-infra/'):
+                continue
             a = self.A(out)
             vrf = self.A(out + '/rsectx')['tDn'] if self.has(out + '/rsectx') else ''
             drs = out + '/rsl3DomAtt'
@@ -2059,7 +2107,7 @@ class Engine(OpsMixin):
     def _emit_ports(self):
         for (nid, port), pi in sorted(self.ports.items(), key=lambda x: (x[0][0], pnum(x[0][1]) or 0)):
             n = self.nodes[nid]
-            base = '%s/node-%d/sys/phys-[%s]' % (self.poddn, nid, port)
+            base = '%s/node-%d/sys/phys-[%s]' % (self.pdn(nid), nid, port)
             usage = ','.join(sorted(pi['usage'])) or 'discovery'
             self.store.add(base, 'l1PhysIf', {'id': port, 'adminSt': pi.get('admin', 'up'), 'usage': usage, 'mtu': '9000',
                                               'speed': 'inherit', 'layer': pi['layer'],

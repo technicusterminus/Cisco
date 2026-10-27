@@ -135,7 +135,7 @@ class OpsMixin:
             for s in up['serials']:
                 jobs[s] = up
         for nid, n in list(self.nodes.items()) + [(1, {'serial': self.sim['topology']['apic']['serial'], 'state': 'active'})]:
-            sysdn = '%s/node-%d/sys' % (self.poddn, nid)
+            sysdn = '%s/node-%d/sys' % (self.pdn(nid), nid)
             s = n['serial']
             ver = ('apic-' + self.apic_version) if nid == 1 else self.node_version(s)
             if not self.has(sysdn):
@@ -246,7 +246,7 @@ class OpsMixin:
                            % (self.short(bd), sw['name'], names), 'l2-loop', domain='tenant')
 
     def _pdn(self, leg):
-        return '%s/paths-%d/pathep-[%s]' % (self.poddn, leg[0], leg[1])
+        return '%s/paths-%d/pathep-[%s]' % (self.pdn(leg[0]), leg[0], leg[1])
 
     def _errdisable(self, leg, why):
         pi = self.ports[leg]

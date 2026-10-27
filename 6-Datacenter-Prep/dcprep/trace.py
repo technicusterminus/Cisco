@@ -43,6 +43,9 @@ def _resolve(eng, sim, x):
     r = _router(sim, x)
     if r:
         return {'kind': 'router', 'r': r, 'ip': ip_of(r['ip'])}
+    rh = eng.remote_host(x) if hasattr(eng, 'remote_host') else None
+    if rh:
+        return {'kind': 'site', 'rh': rh, 'ip': ip_of(rh['ip'])}
     try:
         ip = ipaddress.ip_address(x)
     except ValueError:
@@ -296,17 +299,36 @@ def _service(eng, t, g, direction, proto, port):
     return True
 
 
-def _spines(eng, t, a, b):
-    """Zwischen zwei Leafs braucht es mindestens einen aktiven Spine."""
+def _spines(eng, t, a, b, flood=False):
+    """Zwischen zwei Leafs braucht es einen aktiven Spine; zwischen Pods das IPN, zum Remote Leaf das WAN."""
     if set(a) & set(b):
         return True
-    if any(n['role'] == 'spine' and n['state'] == 'active' for n in eng.nodes.values()):
-        return True
-    ups = [n['name'] for n in eng.nodes.values() if n['role'] == 'spine' and n.get('upgrading')]
-    t.step(False, 'Fabric', 'Kein Spine ist aktiv%s - zwischen %s und %s gibt es keinen VXLAN-Pfad' % (
-        ' (%s laden nach dem Firmware-Upgrade neu)' % ', '.join(ups) if ups else '',
-        '/'.join(eng.nodes[n]['name'] for n in a), '/'.join(eng.nodes[n]['name'] for n in b)))
-    return False
+    pods = lambda ns: {eng.pod_of.get(n, eng.pod) for n in ns}
+    pa, pb = pods(a), pods(b)
+    remote = [n for n in list(a) + list(b) if eng.nodes.get(n, {}).get('remote')]
+    for n in remote:
+        why = eng.remote_path(eng.nodes[n]['serial'])
+        if why:
+            t.step(False, 'Remote Leaf %s' % eng.nodes[n]['name'], why)
+            return False
+    if pa & pb:
+        if any(n['role'] == 'spine' and n['state'] == 'active' and eng.pod_of.get(i, eng.pod) in pa & pb for i, n in eng.nodes.items()):
+            if remote:
+                t.step(True, 'Remote Leaf', 'VXLAN ueber das WAN zum Anycast-TEP der Spines in Pod %d' % sorted(pa & pb)[0])
+            return True
+        ups = [n['name'] for n in eng.nodes.values() if n['role'] == 'spine' and n.get('upgrading')]
+        t.step(False, 'Fabric', 'Kein Spine ist aktiv%s - zwischen %s und %s gibt es keinen VXLAN-Pfad' % (
+            ' (%s laden nach dem Firmware-Upgrade neu)' % ', '.join(ups) if ups else '',
+            '/'.join(eng.nodes[n]['name'] for n in a), '/'.join(eng.nodes[n]['name'] for n in b)))
+        return False
+    p1, p2 = sorted(pa)[0], sorted(pb)[0]
+    why = eng.interpod(p1, p2, flood)
+    if why:
+        t.step(False, 'Multi-Pod: Pod %d -> Pod %d' % (p1, p2), why)
+        return False
+    t.step(True, 'Multi-Pod: Pod %d -> Pod %d' % (p1, p2), 'VXLAN ueber das IPN (Spine -> IPN -> Spine), Endpoint per MP-BGP EVPN '
+           'zwischen den Spines bekannt%s' % (', BUM ueber PIM Bidir' if flood else ''))
+    return True
 
 
 def run(eng, sim, src, dst, proto='icmp', port=0):
@@ -366,7 +388,7 @@ def run(eng, sim, src, dst, proto='icmp', port=0):
                 return t.result()
             t.step(True, 'ARP aufgeloest', 'ARP Flooding' if bd['arpFlood'] == 'yes' else
                    'ARP gezielt an den bekannten Endpoint (kein Flooding)')
-            if not _spines(eng, t, shs['nodes'], dhs['nodes']):
+            if not _spines(eng, t, shs['nodes'], dhs['nodes'], bd['arpFlood'] == 'yes'):
                 return t.result()
             fwd = 'lokal auf %s' % '/'.join(eng.nodes[n]['name'] for n in shs['nodes']) \
                 if set(shs['nodes']) & set(dhs['nodes']) else \
@@ -394,6 +416,12 @@ def run(eng, sim, src, dst, proto='icmp', port=0):
                 return t.result()
         if not _policy(eng, t, sc, dc, proto, port, sh['name'], dh['name']):
             return t.result()
+        return t.result()
+
+    if D['kind'] == 'site':
+        if D['ip'] not in snet and not _gw_ok(eng, t, sh, shs, 'Quelle'):
+            return t.result()
+        eng.site_path(t, shs, sh, D['rh'], proto, port)
         return t.result()
 
     if D['kind'] == 'gw':

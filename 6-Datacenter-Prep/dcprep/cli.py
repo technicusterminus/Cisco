@@ -126,7 +126,7 @@ class Cli:
             for nid in sorted(e.nodes):
                 n = e.nodes[nid]
                 rows.append('%8d %8d %18s %15s %20s/%-5s %8s %10s %s' % (
-                    nid, e.pod, n['name'], n['serial'], n['tep'] if n['state'] == 'active' else '0.0.0.0', '32',
+                    nid, n.get('pod', e.pod), n['name'], n['serial'], n['tep'] if n['state'] == 'active' else '0.0.0.0', '32',
                     n['role'], '0', n['state']))
             return ('      ID   Pod ID                 Name    Serial Number         IP Address    Role        '
                     'State   LastUpdMsgId\n' + '-' * 100 + '\n' + '\n'.join(rows) +
@@ -154,7 +154,7 @@ class Cli:
                 if cmd == 'show switch' and n['state'] != 'active':
                     continue
                 out.append(' %-5d %-4d %-16s %-13s %-16s %-16s %-6s %-14s %s' % (
-                    nid, e.pod, n['tep'] if n['state'] == 'active' else '0.0.0.0', '0.0.0.0',
+                    nid, n.get('pod', e.pod), n['tep'] if n['state'] == 'active' else '0.0.0.0', '0.0.0.0',
                     str(ip_of(e.oob[nid])) if e.oob.get(nid) else '0.0.0.0',
                     'n9000-16.0(5h)' if n['state'] == 'active' else '', 'aliv' if n['state'] == 'active' else '-',
                     n['serial'], n['name']))
@@ -208,7 +208,7 @@ class Cli:
                    ' controller  %-4d 1     %-9s %s' % (e.pod, self.sim['topology']['apic']['name'], e.apic_version)]
             for nid, n in sorted(e.nodes.items()):
                 if n['state'] == 'active':
-                    out.append(' %-11s %-4d %-5d %-9s %s' % (n['role'], e.pod, nid, n['name'], e.node_version(n['serial'])))
+                    out.append(' %-11s %-4d %-5d %-9s %s' % (n['role'], n.get('pod', e.pod), nid, n['name'], e.node_version(n['serial'])))
             return '\n'.join(out)
         return '%% Unbekannter Befehl. "help" zeigt die verfuegbaren Befehle.'
 
@@ -557,6 +557,8 @@ class Cli:
 
     def ospf(self, nid, vname):
         e = self.e
+        if vname == 'overlay-1':
+            return self.infra_ospf(nid)
         vrf = self._vrf_by_name(vname)
         out = [' OSPF Process ID default VRF %s' % vname]
         rows = []
@@ -1484,7 +1486,7 @@ def ops_apic(self, c):
                                                              ('upgrading' if not a.get('done') else 'completeok') if a else 'notscheduled'))
         for nid, n in sorted(e.nodes.items()):
             u = ups.get(n['serial'])
-            out.append(' %-4d %-5d %-11s %-19s %-19s %s' % (e.pod, nid, n['role'], e.node_version(n['serial']), u['version'] if u else '-',
+            out.append(' %-4d %-5d %-11s %-19s %-19s %s' % (n.get('pod', e.pod), nid, n['role'], e.node_version(n['serial']), u['version'] if u else '-',
                                                             ('upgrading (reload)' if not u.get('done') else 'completeok') if u else 'notscheduled'))
         for g in getattr(e, 'fw_groups', []):
             out.append('\nUpgrade Group %s: Nodes %s, Policy %s%s' % (g['name'], ','.join(map(str, g['nodes'])) or '-',
@@ -1528,3 +1530,28 @@ def ops_apic(self, c):
 
 Cli.ops_leaf = ops_leaf
 Cli.ops_apic = ops_apic
+
+
+def infra_ospf(self, nid):
+    """OSPF im Infra-L3Out (Spines zum IPN, Remote Leaf zum WAN-Router)."""
+    e = self.e
+    mp = getattr(e, 'mp', {})
+    rows = []
+    for a in mp.get('adj', []):
+        if a['nid'] != nid or a['state'] == 'down':
+            continue
+        r = next((x for x in (self.sim.get('ipn') or {}).get('routers', []) if x['name'] == a['router']), {})
+        ri = next((x for x in r.get('ifs', []) if x['serial'] == a['serial'] and x['port'] == a['port']), {})
+        rows.append(' %-15s %3d %-16s %8s %-15s %s.4' % (a['router'], 1, a['state'] + '/ -', '00:42:17',
+                                                       (ri.get('ip') or '').split('/')[0], a['port'].capitalize()))
+    out = [' OSPF Process ID default VRF overlay-1', ' Total number of neighbors: %d' % len(rows),
+           ' Neighbor ID     Pri State            Up Time  Address         Interface'] + rows
+    for a in mp.get('adj', []):
+        if a['nid'] == nid and a['why']:
+            out.append(' %% %s %s -> %s: %s' % (a['port'], a['router'], a['state'], a['why']))
+    if not mp.get('active'):
+        out.append(' (keine IPN-/WAN-Anbindung in dieser Topologie)')
+    return '\n'.join(out)
+
+
+Cli.infra_ospf = infra_ospf

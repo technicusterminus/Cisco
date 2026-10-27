@@ -14,6 +14,7 @@ from dcprep.server import Sim, serve  # noqa: E402
 from dcprep.model import post, AciError  # noqa: E402
 from dcprep import trace  # noqa: E402
 from dcprep import ops  # noqa: E402
+from dcprep import msite  # noqa: E402
 from dcprep.cli import Cli  # noqa: E402
 
 ACCESS = {"polUni": {"attributes": {}, "children": [
@@ -428,6 +429,14 @@ class TestLabs(Base):
                     if url == '#setup':
                         self.S.setup_apply(body)
                         continue
+                    if url == '#ndo':
+                        msite.ndo_op(self.S, body)
+                        self.S.changed()
+                        continue
+                    if url == '#ipn':
+                        self.S.ipn_op({'router': body})
+                        self.S.changed()
+                        continue
                     if url == '#monitor-test':
                         self.S.monitor_op(dict(body, op='test'))
                         self.S.changed()
@@ -820,3 +829,27 @@ class TestOps(Base):
         self.assertTrue(self.traffic('web1', 'cli1')['ok'])
         out = Cli(self.e, self.S.sim).run('leaf102', 'show interface status err-disabled')
         self.assertIn('mcp-loop', out)
+
+
+class TestMultiPod(Base):
+    def test_ipn_mtu_and_relay(self):
+        S = self.S
+        S.sim['settings']['discoverySeconds'] = 0
+        S.load_lab('29-multipod')
+        for url, body in S.lab('29-multipod')['solutionConfig'][:3]:
+            post(S.store, url, body)
+        S.changed()
+        self.assertIn('DHCP Relay', S.engine.mp['reasons']['FDO2219SP03'])
+        S.ipn_op({'router': {'name': 'ipn2', 'relay': '10.0.0.1'}})
+        S.ipn_op({'router': {'name': 'ipn1', 'relay': '10.0.0.1'}})
+        S.changed()
+        self.assertIn('FDO2219SP03', [p['serial'] for p in S.engine.pending])
+        post(S.store, 'uni/controller/nodeidentpol', {'fabricNodeIdentP': {'attributes': {'serial': 'FDO2219SP03', 'nodeId': '203', 'name': 'spine203', 'podId': '1'}}})
+        S.changed()
+        self.assertIn('S0135', [c for _, c, _ in self.faults('uni/controller')])
+        post(S.store, 'uni/controller/nodeidentpol/nodep-FDO2219SP03', {'fabricNodeIdentP': {'attributes': {'podId': '2'}}})
+        S.changed()
+        adj = next(a for a in S.engine.mp['adj'] if a['serial'] == 'FDO2219SP03')
+        self.assertEqual(adj['state'], 'EXSTART')
+        out = Cli(S.engine, S.sim).run('spine203', 'show ip ospf neighbors vrf overlay-1')
+        self.assertIn('EXSTART', out)

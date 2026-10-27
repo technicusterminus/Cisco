@@ -1,0 +1,1008 @@
+{
+ "id": "30-remote-leaf",
+ "title": "30 Remote Leaf in der Filiale",
+ "topic": "Fabric-Architektur",
+ "level": "Experte",
+ "duration": "40 min",
+ "fabric": "discovered",
+ "topology": "multipod",
+ "ipn": {
+  "routers": [
+   {
+    "name": "ipn1",
+    "pod": 1,
+    "kind": "ipn",
+    "mtu": 9150,
+    "area": "0.0.0.0",
+    "pim": true,
+    "rp": "192.168.100.1",
+    "relay": [
+     "10.0.0.1"
+    ],
+    "down": false,
+    "ifs": [
+     {
+      "serial": "FDO2219SP01",
+      "port": "eth1/32",
+      "vlan": 4,
+      "ip": "192.168.1.2/30"
+     },
+     {
+      "serial": "FDO2219SP02",
+      "port": "eth1/32",
+      "vlan": 4,
+      "ip": "192.168.1.6/30"
+     }
+    ]
+   },
+   {
+    "name": "ipn2",
+    "pod": 2,
+    "kind": "ipn",
+    "mtu": 9150,
+    "area": "0.0.0.0",
+    "pim": true,
+    "rp": "192.168.100.1",
+    "relay": [
+     "10.0.0.1"
+    ],
+    "down": false,
+    "ifs": [
+     {
+      "serial": "FDO2219SP03",
+      "port": "eth1/32",
+      "vlan": 4,
+      "ip": "192.168.2.2/30"
+     },
+     {
+      "serial": "FDO2219SP04",
+      "port": "eth1/32",
+      "vlan": 4,
+      "ip": "192.168.2.6/30"
+     }
+    ]
+   },
+   {
+    "name": "wan-rl",
+    "pod": 1,
+    "kind": "wan",
+    "mtu": 1500,
+    "area": "0.0.0.0",
+    "pim": false,
+    "rp": "",
+    "relay": [],
+    "down": false,
+    "ifs": [
+     {
+      "serial": "SAL1931RL01",
+      "port": "eth1/54",
+      "vlan": 4,
+      "ip": "192.168.3.2/30"
+     }
+    ]
+   }
+  ]
+ },
+ "goals": [
+  "Ein Remote Leaf über ein WAN an Pod 1 anbinden",
+  "Remote Pool, External TEP Pool und Registrierung als remote-leaf-wan",
+  "Uplink des Remote Leafs im Infra-L3Out und die Anforderungen an den WAN-Router"
+ ],
+ "intro": "In der Filiale steht **leaf301** (Serial SAL1931RL01), sein Uplink eth1/54 hängt am WAN-Router **wan-rl** (192.168.3.2/30, vlan-4). Pod 1 ist bereits über das Infra-L3Out **multipod** mit dem IPN verbunden.\n\n**Design:** Remote ID **11**, Remote Pool **10.11.0.0/20**, External TEP Pool **172.16.10.0/24**, Uplink leaf301 **192.168.3.1/30**, Router ID 30.30.30.30. Das Kassensystem **store1** (10.10.10.31, vlan-110 an leaf301 eth1/1) soll in der EPG **Web** landen.",
+ "config": [
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "infraInfra": {
+       "attributes": {},
+       "children": [
+        {
+         "fvnsVlanInstP": {
+          "attributes": {
+           "name": "VLAN-Pool-Server",
+           "allocMode": "static"
+          },
+          "children": [
+           {
+            "fvnsEncapBlk": {
+             "attributes": {
+              "from": "vlan-100",
+              "to": "vlan-199"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAttEntityP": {
+          "attributes": {
+           "name": "AAEP-Server"
+          },
+          "children": [
+           {
+            "infraRsDomP": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraFuncP": {
+          "attributes": {},
+          "children": [
+           {
+            "infraAccPortGrp": {
+             "attributes": {
+              "name": "IPG-Server-Access"
+             },
+             "children": [
+              {
+               "infraRsAttEntP": {
+                "attributes": {
+                 "tDn": "uni/infra/attentp-AAEP-Server"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAccPortP": {
+          "attributes": {
+           "name": "IntProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraHPortS": {
+             "attributes": {
+              "name": "Server-Ports",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraPortBlk": {
+                "attributes": {
+                 "name": "block2",
+                 "fromPort": "1",
+                 "toPort": "10"
+                }
+               }
+              },
+              {
+               "infraRsAccBaseGrp": {
+                "attributes": {
+                 "tDn": "uni/infra/funcprof/accportgrp-IPG-Server-Access"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraNodeP": {
+          "attributes": {
+           "name": "SwProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraLeafS": {
+             "attributes": {
+              "name": "101-102",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraNodeBlk": {
+                "attributes": {
+                 "name": "blk",
+                 "from_": "101",
+                 "to_": "102"
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "infraRsAccPortP": {
+             "attributes": {
+              "tDn": "uni/infra/accportprof-IntProf-Leaf101-102"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "physDomP": {
+       "attributes": {
+        "name": "PhysDom-Server"
+       },
+       "children": [
+        {
+         "infraRsVlanNs": {
+          "attributes": {
+           "tDn": "uni/infra/vlanns-[VLAN-Pool-Server]-static"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Shop"
+    },
+    "children": [
+     {
+      "fvCtx": {
+       "attributes": {
+        "name": "Prod"
+       }
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Web"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.10.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-App"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.20.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Webshop"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Web"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Web"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/1]",
+              "encap": "vlan-110",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsCons": {
+             "attributes": {
+              "tnVzBrCPName": "web-to-app"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "App"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-App"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/2]",
+              "encap": "vlan-120",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsProv": {
+             "attributes": {
+              "tnVzBrCPName": "web-to-app"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzFilter": {
+       "attributes": {
+        "name": "tcp-8080"
+       },
+       "children": [
+        {
+         "vzEntry": {
+          "attributes": {
+           "name": "tcp-8080",
+           "etherT": "ip",
+           "prot": "tcp",
+           "dFromPort": "8080",
+           "dToPort": "8080"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzBrCP": {
+       "attributes": {
+        "name": "web-to-app",
+        "scope": "context"
+       },
+       "children": [
+        {
+         "vzSubj": {
+          "attributes": {
+           "name": "subj",
+           "revFltPorts": "yes"
+          },
+          "children": [
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "tcp-8080"
+             }
+            }
+           },
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "icmp"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "infra"
+    },
+    "children": [
+     {
+      "l3extOut": {
+       "attributes": {
+        "name": "multipod"
+       },
+       "children": [
+        {
+         "l3extRsEctx": {
+          "attributes": {
+           "tnFvCtxName": "overlay-1"
+          }
+         }
+        },
+        {
+         "ospfExtP": {
+          "attributes": {
+           "areaId": "0.0.0.0"
+          }
+         }
+        },
+        {
+         "bgpExtP": {
+          "attributes": {}
+         }
+        },
+        {
+         "l3extLNodeP": {
+          "attributes": {
+           "name": "spines"
+          },
+          "children": [
+           {
+            "l3extRsNodeL3OutAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/node-201",
+              "rtrId": "201.201.201.201"
+             }
+            }
+           },
+           {
+            "l3extRsNodeL3OutAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/node-202",
+              "rtrId": "202.202.202.202"
+             }
+            }
+           },
+           {
+            "l3extLIfP": {
+             "attributes": {
+              "name": "ipn-201"
+             },
+             "children": [
+              {
+               "ospfIfP": {
+                "attributes": {}
+               }
+              },
+              {
+               "l3extRsPathL3OutAtt": {
+                "attributes": {
+                 "tDn": "topology/pod-1/paths-201/pathep-[eth1/32]",
+                 "ifInstT": "sub-interface",
+                 "encap": "vlan-4",
+                 "addr": "192.168.1.1/30"
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "l3extLIfP": {
+             "attributes": {
+              "name": "ipn-202"
+             },
+             "children": [
+              {
+               "ospfIfP": {
+                "attributes": {}
+               }
+              },
+              {
+               "l3extRsPathL3OutAtt": {
+                "attributes": {
+                 "tDn": "topology/pod-1/paths-202/pathep-[eth1/32]",
+                 "ifInstT": "sub-interface",
+                 "encap": "vlan-4",
+                 "addr": "192.168.1.5/30"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "infra"
+    },
+    "children": [
+     {
+      "fabricExtConnP": {
+       "attributes": {
+        "id": "1",
+        "name": "Multipod"
+       },
+       "children": [
+        {
+         "fabricPodConnP": {
+          "attributes": {
+           "id": "1"
+          },
+          "children": [
+           {
+            "fabricIp": {
+             "attributes": {
+              "addr": "172.16.1.1/32"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "hosts": [
+  {
+   "name": "web1",
+   "mac": "00:50:56:10:10:11",
+   "ip": "10.10.10.11/24",
+   "gw": "10.10.10.1",
+   "vlan": 110,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/1"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Webserver"
+  },
+  {
+   "name": "app1",
+   "mac": "00:50:56:10:20:11",
+   "ip": "10.10.20.11/24",
+   "gw": "10.10.20.1",
+   "vlan": 120,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/2"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Applikationsserver"
+  },
+  {
+   "name": "store1",
+   "mac": "00:50:56:30:01:11",
+   "ip": "10.10.10.31/24",
+   "gw": "10.10.10.1",
+   "vlan": 110,
+   "links": [
+    [
+     "SAL1931RL01",
+     "eth1/1"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Kassensystem in der Filiale"
+  }
+ ],
+ "tasks": [
+  {
+   "title": "Remote Pool und External TEP",
+   "text": "**Fabric > Inventory > Quick Start > Add Remote Leaf** oder von Hand: Remote Pool 11 / 10.11.0.0/20 in der Pod Fabric Setup Policy, External TEP Pool 172.16.10.0/24 im Pod Connection Profile 1 der Fabric External Connection Policy."
+  },
+  {
+   "title": "WAN-Router",
+   "text": "Simulation > IPN & WAN: auf **wan-rl** das DHCP Relay zum APIC (10.0.0.1) eintragen."
+  },
+  {
+   "title": "Registrieren",
+   "text": "leaf301 als **Remote Leaf** (Node Type remote-leaf-wan, Remote Pool ID 11, Node ID 301) registrieren."
+  },
+  {
+   "title": "Uplink",
+   "text": "Im Infra-L3Out **multipod** ein Node Profile für Node 301 mit Sub-Interface eth1/54, vlan-4, 192.168.3.1/30 und OSPF.",
+   "hint": "Ohne OSPF zum WAN-Router bleibt der Remote Leaf in Discovery."
+  },
+  {
+   "title": "Access Policies und EPG",
+   "text": "Access Policies für leaf301 Port 1/1 (vlan-110, eigene Domain PhysDom-Store) und einen Static Port in der EPG Web."
+  },
+  {
+   "title": "Verkehr",
+   "text": "store1 → app1 tcp/8080. Klappt es nicht, die Meldung im Traffic-Test lesen und den WAN-Router prüfen.",
+   "hint": "VXLAN braucht mehr als 1500 Byte MTU im WAN."
+  }
+ ],
+ "checks": [
+  {
+   "desc": "leaf301 als Remote Leaf aktiv",
+   "type": "node",
+   "serial": "SAL1931RL01",
+   "id": 301
+  },
+  {
+   "desc": "OSPF FULL zum WAN-Router",
+   "type": "ipnadj",
+   "serials": [
+    "SAL1931RL01"
+   ]
+  },
+  {
+   "desc": "store1 in EPG Web gelernt",
+   "type": "endpoint",
+   "host": "store1",
+   "epg": "uni/tn-Shop/ap-Webshop/epg-Web"
+  },
+  {
+   "desc": "store1 → app1 tcp/8080",
+   "type": "traffic",
+   "src": "store1",
+   "dst": "app1",
+   "proto": "tcp",
+   "port": 8080,
+   "expect": true
+  }
+ ],
+ "solution": "Siehe Add-Remote-Leaf-Wizard; Objekte: fabricExtSetupP remoteId=11 tepPool=10.11.0.0/20, fabricExtRoutablePodSubnet 172.16.10.0/24, fabricNodeIdentP nodeType=remote-leaf-wan extPoolId=11, Node Profile mit `{\"l3extLIfP\": {\"attributes\": {\"name\": \"ipn-301\"}, \"children\": [{\"ospfIfP\": {\"attributes\": {}}}, {\"l3extRsPathL3OutAtt\": {\"attributes\": {\"tDn\": \"topology/pod-1/paths-301/pathep-[eth1/54]\", \"ifInstT\": \"sub-interface\", \"encap\": \"vlan-4\", \"addr\": \"192.168.3.1/30\"}}}]}}`. Auf wan-rl: Relay 10.0.0.1 und MTU 9150.",
+ "routers": [],
+ "vcenters": [],
+ "devices": [],
+ "aaa": [],
+ "switches": [],
+ "solutionConfig": [
+  [
+   "uni/controller/setuppol/setupp-1",
+   {
+    "fabricSetupP": {
+     "attributes": {},
+     "children": [
+      {
+       "fabricExtSetupP": {
+        "attributes": {
+         "remoteId": "11",
+         "tepPool": "10.11.0.0/20"
+        }
+       }
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "uni/tn-infra/fabricExtConnP-1/podConnP-1",
+   {
+    "fabricPodConnP": {
+     "attributes": {},
+     "children": [
+      {
+       "fabricExtRoutablePodSubnet": {
+        "attributes": {
+         "pool": "172.16.10.0/24"
+        }
+       }
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "#ipn",
+   {
+    "name": "wan-rl",
+    "mtu": 9150,
+    "relay": "10.0.0.1"
+   }
+  ],
+  [
+   "uni/controller/nodeidentpol",
+   {
+    "fabricNodeIdentP": {
+     "attributes": {
+      "serial": "SAL1931RL01",
+      "nodeId": "301",
+      "name": "leaf301",
+      "podId": "1",
+      "nodeType": "remote-leaf-wan",
+      "extPoolId": "11"
+     }
+    }
+   }
+  ],
+  [
+   "uni/tn-infra/out-multipod",
+   {
+    "l3extOut": {
+     "attributes": {},
+     "children": [
+      {
+       "l3extLNodeP": {
+        "attributes": {
+         "name": "remote-leaf-301"
+        },
+        "children": [
+         {
+          "l3extRsNodeL3OutAtt": {
+           "attributes": {
+            "tDn": "topology/pod-1/node-301",
+            "rtrId": "30.30.30.30"
+           }
+          }
+         },
+         {
+          "l3extLIfP": {
+           "attributes": {
+            "name": "ipn-301"
+           },
+           "children": [
+            {
+             "ospfIfP": {
+              "attributes": {}
+             }
+            },
+            {
+             "l3extRsPathL3OutAtt": {
+              "attributes": {
+               "tDn": "topology/pod-1/paths-301/pathep-[eth1/54]",
+               "ifInstT": "sub-interface",
+               "encap": "vlan-4",
+               "addr": "192.168.3.1/30"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "uni",
+   {
+    "polUni": {
+     "attributes": {},
+     "children": [
+      {
+       "infraInfra": {
+        "attributes": {},
+        "children": [
+         {
+          "fvnsVlanInstP": {
+           "attributes": {
+            "name": "VLAN-Pool-Store",
+            "allocMode": "static"
+           },
+           "children": [
+            {
+             "fvnsEncapBlk": {
+              "attributes": {
+               "from": "vlan-110",
+               "to": "vlan-110"
+              }
+             }
+            }
+           ]
+          }
+         },
+         {
+          "infraAttEntityP": {
+           "attributes": {
+            "name": "AAEP-Store"
+           },
+           "children": [
+            {
+             "infraRsDomP": {
+              "attributes": {
+               "tDn": "uni/phys-PhysDom-Store"
+              }
+             }
+            }
+           ]
+          }
+         },
+         {
+          "infraFuncP": {
+           "attributes": {},
+           "children": [
+            {
+             "infraAccPortGrp": {
+              "attributes": {
+               "name": "IPG-Store"
+              },
+              "children": [
+               {
+                "infraRsAttEntP": {
+                 "attributes": {
+                  "tDn": "uni/infra/attentp-AAEP-Store"
+                 }
+                }
+               }
+              ]
+             }
+            }
+           ]
+          }
+         },
+         {
+          "infraAccPortP": {
+           "attributes": {
+            "name": "IntProf-Leaf301"
+           },
+           "children": [
+            {
+             "infraHPortS": {
+              "attributes": {
+               "name": "Store-Ports",
+               "type": "range"
+              },
+              "children": [
+               {
+                "infraPortBlk": {
+                 "attributes": {
+                  "name": "block2",
+                  "fromPort": "1",
+                  "toPort": "10"
+                 }
+                }
+               },
+               {
+                "infraRsAccBaseGrp": {
+                 "attributes": {
+                  "tDn": "uni/infra/funcprof/accportgrp-IPG-Store"
+                 }
+                }
+               }
+              ]
+             }
+            }
+           ]
+          }
+         },
+         {
+          "infraNodeP": {
+           "attributes": {
+            "name": "SwProf-Leaf301"
+           },
+           "children": [
+            {
+             "infraLeafS": {
+              "attributes": {
+               "name": "301-301",
+               "type": "range"
+              },
+              "children": [
+               {
+                "infraNodeBlk": {
+                 "attributes": {
+                  "name": "blk",
+                  "from_": "301",
+                  "to_": "301"
+                 }
+                }
+               }
+              ]
+             }
+            },
+            {
+             "infraRsAccPortP": {
+              "attributes": {
+               "tDn": "uni/infra/accportprof-IntProf-Leaf301"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      },
+      {
+       "physDomP": {
+        "attributes": {
+         "name": "PhysDom-Store"
+        },
+        "children": [
+         {
+          "infraRsVlanNs": {
+           "attributes": {
+            "tDn": "uni/infra/vlanns-[VLAN-Pool-Store]-static"
+           }
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "uni/tn-Shop/ap-Webshop/epg-Web",
+   {
+    "fvAEPg": {
+     "attributes": {},
+     "children": [
+      {
+       "fvRsDomAtt": {
+        "attributes": {
+         "tDn": "uni/phys-PhysDom-Store"
+        }
+       }
+      },
+      {
+       "fvRsPathAtt": {
+        "attributes": {
+         "tDn": "topology/pod-1/paths-301/pathep-[eth1/1]",
+         "encap": "vlan-110"
+        }
+       }
+      }
+     ]
+    }
+   }
+  ]
+ ]
+}

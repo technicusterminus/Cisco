@@ -1489,6 +1489,173 @@ lab(id='28-mcp-loop-qos', title='28 Loop Protection mit MCP und QoS-Klassen', to
 
 
 # ----------------------------------------------------------------------------
+# Lab 29 - Multi-Pod
+# ----------------------------------------------------------------------------
+POD2_ACC = access('VLAN-Pool-Server', 100, 199, 'PhysDom-Server', 'AAEP-Server', 'IPG-Server-Access',
+                  'IntProf-Leaf105-106', 'Server-Ports-Pod2', 1, 10, 'SwProf-Leaf105-106', 105, 106)
+APP2 = host('app1', '00:50:56:10:20:11', '10.10.20.11/24', '10.10.20.1', 120, [['SAL1931LA05', 'eth1/2']], descr='Applikationsserver in Pod 2')
+SHOP29 = shop_tenant(with_contracts=True)
+SHOP29['fvTenant']['children'][-3]['fvAp']['children'][1]['fvAEPg']['children'][2] = mo('fvRsPathAtt', {'tDn': 'topology/pod-2/paths-105/pathep-[eth1/2]', 'encap': 'vlan-120'})
+
+
+def ipn_router(name, pod, kind, ifs, mtu=9150, relay=(), pim=True):
+    return {'name': name, 'pod': pod, 'kind': kind, 'mtu': mtu, 'area': '0.0.0.0', 'pim': pim, 'rp': '192.168.100.1' if pim else '', 'relay': list(relay),
+            'down': False, 'ifs': [{'serial': s_, 'port': p_, 'vlan': 4, 'ip': ip} for s_, p_, ip in ifs]}
+
+
+IPN_IFS1 = [('FDO2219SP01', 'eth1/32', '192.168.1.2/30'), ('FDO2219SP02', 'eth1/32', '192.168.1.6/30')]
+IPN_IFS2 = [('FDO2219SP03', 'eth1/32', '192.168.2.2/30'), ('FDO2219SP04', 'eth1/32', '192.168.2.6/30')]
+WAN_IFS = [('SAL1931RL01', 'eth1/54', '192.168.3.2/30')]
+
+
+def mp_lif(nid, pod, port, ip):
+    return mo('l3extLIfP', {'name': 'ipn-%d' % nid}, mo('ospfIfP', {}),
+              mo('l3extRsPathL3OutAtt', {'tDn': 'topology/pod-%d/paths-%d/pathep-[%s]' % (pod, nid, port), 'ifInstT': 'sub-interface',
+                                         'encap': 'vlan-4', 'addr': ip}))
+
+
+def mp_l3out(spines):
+    return mo('fvTenant', {'name': 'infra'}, mo('l3extOut', {'name': 'multipod'}, mo('l3extRsEctx', {'tnFvCtxName': 'overlay-1'}),
+                                                mo('ospfExtP', {'areaId': '0.0.0.0'}), mo('bgpExtP', {}),
+                                                mo('l3extLNodeP', {'name': 'spines'},
+                                                   *[mo('l3extRsNodeL3OutAtt', {'tDn': 'topology/pod-%d/node-%d' % (pod, n), 'rtrId': '%d.%d.%d.%d' % (n, n, n, n)})
+                                                     for n, pod, _ in spines],
+                                                   *[mp_lif(n, pod, 'eth1/32', ip) for n, pod, ip in spines])))
+
+
+EXT29 = mo('fvTenant', {'name': 'infra'}, mo('fabricExtConnP', {'id': '1', 'name': 'Multipod'}, mo('fabricPeeringP', {'type': 'automatic_with_full_mesh'}),
+                                             mo('fabricPodConnP', {'id': '1'}, mo('fabricIp', {'addr': '172.16.1.1/32'})),
+                                             mo('fabricPodConnP', {'id': '2'}, mo('fabricIp', {'addr': '172.16.2.1/32'}))))
+SPINES29 = [(201, 1, '192.168.1.1/30'), (202, 1, '192.168.1.5/30'), (203, 2, '192.168.2.1/30'), (204, 2, '192.168.2.5/30')]
+lab(id='29-multipod', title='29 Multi-Pod mit Inter-Pod Network', topic='Fabric-Architektur', level='Experte', duration='50 min',
+    fabric='discovered', topology='multipod',
+    ipn={'routers': [ipn_router('ipn1', 1, 'ipn', IPN_IFS1), ipn_router('ipn2', 2, 'ipn', IPN_IFS2, mtu=1500),
+                     ipn_router('wan-rl', 1, 'wan', WAN_IFS, pim=False)]},
+    goals=['Einen zweiten Pod über ein IPN an die Fabric anbinden', 'Die Anforderungen an das IPN kennen: vlan-4, OSPF, MTU, PIM Bidir, DHCP Relay',
+           'Infra-L3Out, Pod TEP Pool und Fabric External Connection Policy einrichten', 'Pod-2-Switches registrieren und Verkehr zwischen den Pods prüfen'],
+    intro='Das zweite Rechenzentrum wird als **Pod 2** angebunden: spine203/204 und leaf105/106 hängen am IPN-Router **ipn2**, Pod 1 (spine201/202) an '
+          '**ipn1**. Die Spines nutzen jeweils **eth1/32** zum IPN.\n\n**Design:** TEP Pool Pod 2 **10.1.0.0/16**, OSPF Area 0, Sub-Interfaces vlan-4: '
+          'spine201 192.168.1.1/30, spine202 192.168.1.5/30, spine203 192.168.2.1/30, spine204 192.168.2.5/30 (die IPN-Seite hat jeweils .2/.6). '
+          'Data Plane TEP Pod 1 **172.16.1.1/32**, Pod 2 **172.16.2.1/32**.\n\napp1 steht jetzt in Pod 2 an leaf105 eth1/2 (EPG App, vlan-120).',
+    config=[SERVER_ACCESS, POD2_ACC, SHOP29], hosts=[WEB1, APP2],
+    tasks=[
+        task('Infra-L3Out', 'Im Tenant **infra** ein L3Out **multipod** (VRF overlay-1, OSPF Area 0, BGP) mit allen vier Spines und ihren Sub-Interfaces '
+             'anlegen – am schnellsten über **Fabric > Inventory > Quick Start > Add Pod**. Unter Simulation > IPN & WAN wird ipn1 FULL.'),
+        task('Pod TEP Pool', '**Pod Fabric Setup Policy**: Pod 2 mit 10.1.0.0/16 (macht der Add-Pod-Wizard mit).'),
+        task('DHCP Relay im IPN', 'Simulation > IPN & WAN: auf **ipn1 und ipn2** das DHCP Relay auf die TEP-Adresse des APIC setzen. Danach erscheinen '
+             'spine203/204 unter *Nodes Pending Registration*.', 'Ohne Relay kommt der DHCP Discover der Pod-2-Spines nie beim APIC an.'),
+        task('Registrieren', 'spine203 (203), spine204 (204), leaf105 (105), leaf106 (106) – jeweils **Pod ID 2**.'),
+        task('IPN-Fehler finden', 'Die Pod-2-Spines kommen nicht auf FULL. `show ip ospf neighbors vrf overlay-1` auf spine203 und die Simulation zeigen '
+             'warum. Auf ipn2 die richtige MTU (9150) setzen.', 'Erst danach sind leaf105/106 vom APIC aus erreichbar.'),
+        task('Data Plane TEP', 'Fabric External Connection Policy (Tenant infra) mit Pod Connection Profiles für Pod 1 und 2 prüfen.'),
+        task('Verkehr', 'Traffic-Test web1 (Pod 1) → app1 (Pod 2) tcp/8080.'),
+    ],
+    checks=[check('spine203 aktiv', 'node', serial='FDO2219SP03', id=203), check('spine204 aktiv', 'node', serial='FDO2219SP04', id=204),
+            check('leaf105 aktiv', 'node', serial='SAL1931LA05', id=105), check('leaf106 aktiv', 'node', serial='SAL1931LA06', id=106),
+            check('Alle Spines mit OSPF FULL zum IPN', 'ipnadj', serials=['FDO2219SP01', 'FDO2219SP02', 'FDO2219SP03', 'FDO2219SP04']),
+            check('web1 → app1 tcp/8080 über das IPN', 'traffic', src='web1', dst='app1', proto='tcp', port=8080, expect=True, via='Multi-Pod')],
+    solution='Infra (uni): `' + json.dumps(mp_l3out(SPINES29)) + '` und `' + json.dumps(EXT29) + '`, `uni/controller/setuppol` mit '
+             '`fabricSetupP podId=2 tepPool=10.1.0.0/16`. Im IPN: Relay 10.0.0.1 auf ipn1/ipn2, MTU von ipn2 auf 9150. Registrierung mit podId=2.')
+
+# ----------------------------------------------------------------------------
+# Lab 30 - Remote Leaf
+# ----------------------------------------------------------------------------
+RL_ACC = access('VLAN-Pool-Store', 110, 110, 'PhysDom-Store', 'AAEP-Store', 'IPG-Store', 'IntProf-Leaf301', 'Store-Ports', 1, 10,
+                'SwProf-Leaf301', 301, 301)
+STORE1 = host('store1', '00:50:56:30:01:11', '10.10.10.31/24', '10.10.10.1', 110, [['SAL1931RL01', 'eth1/1']], descr='Kassensystem in der Filiale')
+SPINES30 = [(201, 1, '192.168.1.1/30'), (202, 1, '192.168.1.5/30')]
+EXT30 = mo('fvTenant', {'name': 'infra'}, mo('fabricExtConnP', {'id': '1', 'name': 'Multipod'},
+                                             mo('fabricPodConnP', {'id': '1'}, mo('fabricIp', {'addr': '172.16.1.1/32'}))))
+RLSOL30 = [['uni/controller/setuppol/setupp-1', mo('fabricSetupP', {}, mo('fabricExtSetupP', {'remoteId': '11', 'tepPool': '10.11.0.0/20'}))],
+           ['uni/tn-infra/fabricExtConnP-1/podConnP-1', mo('fabricPodConnP', {}, mo('fabricExtRoutablePodSubnet', {'pool': '172.16.10.0/24'}))],
+           ['#ipn', {'name': 'wan-rl', 'mtu': 9150, 'relay': '10.0.0.1'}],
+           ['uni/controller/nodeidentpol', mo('fabricNodeIdentP', {'serial': 'SAL1931RL01', 'nodeId': '301', 'name': 'leaf301', 'podId': '1',
+                                                                    'nodeType': 'remote-leaf-wan', 'extPoolId': '11'})],
+           ['uni/tn-infra/out-multipod', mo('l3extOut', {}, mo('l3extLNodeP', {'name': 'remote-leaf-301'},
+                                                                mo('l3extRsNodeL3OutAtt', {'tDn': 'topology/pod-1/node-301', 'rtrId': '30.30.30.30'}),
+                                                                mp_lif(301, 1, 'eth1/54', '192.168.3.1/30')))],
+           ['uni', RL_ACC],
+           ['uni/tn-Shop/ap-Webshop/epg-Web', mo('fvAEPg', {}, mo('fvRsDomAtt', {'tDn': 'uni/phys-PhysDom-Store'}),
+                                                   mo('fvRsPathAtt', {'tDn': 'topology/pod-1/paths-301/pathep-[eth1/1]', 'encap': 'vlan-110'}))]]
+lab(id='30-remote-leaf', title='30 Remote Leaf in der Filiale', topic='Fabric-Architektur', level='Experte', duration='40 min',
+    fabric='discovered', topology='multipod',
+    ipn={'routers': [ipn_router('ipn1', 1, 'ipn', IPN_IFS1, relay=['10.0.0.1']), ipn_router('ipn2', 2, 'ipn', IPN_IFS2, relay=['10.0.0.1']),
+                     ipn_router('wan-rl', 1, 'wan', WAN_IFS, mtu=1500, pim=False)]},
+    goals=['Ein Remote Leaf über ein WAN an Pod 1 anbinden', 'Remote Pool, External TEP Pool und Registrierung als remote-leaf-wan',
+           'Uplink des Remote Leafs im Infra-L3Out und die Anforderungen an den WAN-Router'],
+    intro='In der Filiale steht **leaf301** (Serial SAL1931RL01), sein Uplink eth1/54 hängt am WAN-Router **wan-rl** (192.168.3.2/30, vlan-4). '
+          'Pod 1 ist bereits über das Infra-L3Out **multipod** mit dem IPN verbunden.\n\n**Design:** Remote ID **11**, Remote Pool **10.11.0.0/20**, '
+          'External TEP Pool **172.16.10.0/24**, Uplink leaf301 **192.168.3.1/30**, Router ID 30.30.30.30. Das Kassensystem **store1** '
+          '(10.10.10.31, vlan-110 an leaf301 eth1/1) soll in der EPG **Web** landen.',
+    config=[SERVER_ACCESS, shop_tenant(with_contracts=True), mp_l3out(SPINES30), EXT30], hosts=[WEB1, APP1, STORE1],
+    tasks=[
+        task('Remote Pool und External TEP', '**Fabric > Inventory > Quick Start > Add Remote Leaf** oder von Hand: Remote Pool 11 / 10.11.0.0/20 in der Pod '
+             'Fabric Setup Policy, External TEP Pool 172.16.10.0/24 im Pod Connection Profile 1 der Fabric External Connection Policy.'),
+        task('WAN-Router', 'Simulation > IPN & WAN: auf **wan-rl** das DHCP Relay zum APIC (10.0.0.1) eintragen.'),
+        task('Registrieren', 'leaf301 als **Remote Leaf** (Node Type remote-leaf-wan, Remote Pool ID 11, Node ID 301) registrieren.'),
+        task('Uplink', 'Im Infra-L3Out **multipod** ein Node Profile für Node 301 mit Sub-Interface eth1/54, vlan-4, 192.168.3.1/30 und OSPF.',
+             'Ohne OSPF zum WAN-Router bleibt der Remote Leaf in Discovery.'),
+        task('Access Policies und EPG', 'Access Policies für leaf301 Port 1/1 (vlan-110, eigene Domain PhysDom-Store) und einen Static Port in der EPG Web.'),
+        task('Verkehr', 'store1 → app1 tcp/8080. Klappt es nicht, die Meldung im Traffic-Test lesen und den WAN-Router prüfen.',
+             'VXLAN braucht mehr als 1500 Byte MTU im WAN.'),
+    ],
+    checks=[check('leaf301 als Remote Leaf aktiv', 'node', serial='SAL1931RL01', id=301),
+            check('OSPF FULL zum WAN-Router', 'ipnadj', serials=['SAL1931RL01']),
+            check('store1 in EPG Web gelernt', 'endpoint', host='store1', epg='uni/tn-Shop/ap-Webshop/epg-Web'),
+            check('store1 → app1 tcp/8080', 'traffic', src='store1', dst='app1', proto='tcp', port=8080, expect=True)],
+    solution='Siehe Add-Remote-Leaf-Wizard; Objekte: fabricExtSetupP remoteId=11 tepPool=10.11.0.0/20, fabricExtRoutablePodSubnet 172.16.10.0/24, '
+             'fabricNodeIdentP nodeType=remote-leaf-wan extPoolId=11, Node Profile mit `' + json.dumps(mp_lif(301, 1, 'eth1/54', '192.168.3.1/30')) +
+             '`. Auf wan-rl: Relay 10.0.0.1 und MTU 9150.')
+
+
+# ----------------------------------------------------------------------------
+# Lab 31 - Multi-Site mit dem Nexus Dashboard Orchestrator
+# ----------------------------------------------------------------------------
+TPL31A = {'name': 'Shop-Stretched', 'tenant': 'Shop', 'sites': ['local', 'DC-HAM'], 'vrfs': ['Prod'],
+          'bds': [{'name': 'BD-Web', 'vrf': 'Prod', 'subnet': '10.10.10.1/24', 'l2stretch': True, 'bum': False}],
+          'aps': [{'name': 'Webshop', 'epgs': [{'name': 'Web', 'bd': 'BD-Web', 'cons': ['web-to-ham'], 'prov': []}]}],
+          'contracts': [{'name': 'web-to-ham', 'filter': 'tcp/8080,icmp'}]}
+TPL31B = {'name': 'HAM-Local', 'tenant': 'Shop', 'sites': ['DC-HAM'], 'vrfs': [],
+          'bds': [{'name': 'BD-HAM-App', 'vrf': 'Prod', 'subnet': '10.20.20.1/24', 'l2stretch': False, 'bum': False}],
+          'aps': [{'name': 'Webshop', 'epgs': [{'name': 'App-HAM', 'bd': 'BD-HAM-App', 'cons': [], 'prov': ['web-to-ham']}]}],
+          'contracts': []}
+INFRA31 = {'area': '0.0.0.0', 'ucastTep': '172.16.100.1/32', 'peering': 'full-mesh',
+           'spines': [{'node': 201, 'port': 'eth1/31', 'ip': '10.255.1.1/30', 'evpnRid': '10.255.255.201'},
+                      {'node': 202, 'port': 'eth1/31', 'ip': '10.255.1.5/30', 'evpnRid': '10.255.255.202'}]}
+ISN31 = {'routers': [{'name': 'isn1', 'pod': 1, 'kind': 'isn', 'mtu': 1500, 'area': '0.0.0.0', 'pim': False, 'rp': '', 'relay': [], 'down': False,
+                      'ifs': [{'serial': 'FDO2219SP01', 'port': 'eth1/31', 'vlan': 4, 'ip': '10.255.1.2/30'},
+                              {'serial': 'FDO2219SP02', 'port': 'eth1/31', 'vlan': 4, 'ip': '10.255.1.6/30'}]}]}
+lab(id='31-multisite-ndo', title='31 Multi-Site mit dem Nexus Dashboard Orchestrator', topic='Fabric-Architektur', level='Experte', duration='45 min',
+    fabric='discovered', topology='multisite', ipn=ISN31,
+    goals=['Den lokalen APIC im NDO onboarden und eine Site ID vergeben', 'Die Infra zwischen den Sites einrichten: ISN, OSPF, BGP EVPN, Overlay Unicast TEP',
+           'Objekte über Templates zwischen den Sites strecken und site-lokal deployen', 'Verstehen, was der NDO im APIC anlegt (annotation orchestrator:msc)'],
+    intro='Die Fabric in Frankfurt (dieser APIC) wird mit der Fabric **DC-HAM** (Site ID 2, schon im NDO) zu einer Multi-Site-Umgebung. Die Spines hängen mit '
+          '**eth1/31** am Intersite Network **isn1** (10.255.1.2 und .6, vlan-4). Der NDO steht unter **Simulation > Multi-Site (NDO)**.\n\n'
+          '**Design:** Site ID **1**, OSPF Area 0, spine201 **10.255.1.1/30** (BGP-EVPN Router-ID 10.255.255.201), spine202 **10.255.1.5/30** '
+          '(10.255.255.202), Overlay Unicast TEP **172.16.100.1/32**.\n\nIn DC-HAM laufen **ham-web1** (10.10.10.51, EPG Web) und **ham-app1** '
+          '(10.20.20.51, EPG App-HAM).',
+    config=[SERVER_ACCESS, shop_tenant(with_contracts=True)], hosts=[WEB1, APP1],
+    tasks=[
+        task('Site onboarden', 'Im NDO den lokalen APIC mit admin und dem APIC-Passwort hinzufügen, Site ID **1**.'),
+        task('Infra', 'Infra Configuration: OSPF Area, Spine-Interfaces zum ISN mit IP und BGP-EVPN Router-ID, Overlay Unicast TEP. **Deploy**. '
+             'Danach im APIC: Tenant infra > L3Out **intersite** und die Site ID in der Fabric External Connection Policy.'),
+        task('ISN', 'Die Spines kommen nicht auf OSPF FULL zum ISN. Ursache unter Simulation > IPN & WAN bzw. `show ip ospf neighbors vrf overlay-1` '
+             'auf spine201 finden und am ISN beheben.', 'VXLAN zwischen den Sites braucht Jumbo Frames.'),
+        task('Template Shop-Stretched', 'Schema mit Template **Shop-Stretched** (Tenant Shop, Sites lokal und DC-HAM): VRF Prod, BD-Web 10.10.10.1/24 mit '
+             '**L2 Stretch**, AP Webshop mit EPG Web (konsumiert web-to-ham), Contract **web-to-ham** (tcp/8080, icmp). Deployen.'),
+        task('Template HAM-Local', 'Template **HAM-Local** nur für DC-HAM: BD-HAM-App 10.20.20.1/24 (VRF Prod), EPG App-HAM stellt web-to-ham bereit. Deployen.'),
+        task('Prüfen', 'Traffic-Test web1 → ham-web1 (gleiches Subnetz, L2 über das ISN) und web1 → ham-app1 tcp/8080. Im APIC sind Tenant, BD und EPG jetzt '
+             'mit annotation orchestrator:msc markiert.'),
+    ],
+    checks=[check('Infra zwischen den Sites ok', 'msite'),
+            check('web1 → ham-web1 (L2 gestreckt)', 'traffic', src='web1', dst='ham-web1', expect=True, via='ISN'),
+            check('web1 → ham-app1 tcp/8080', 'traffic', src='web1', dst='ham-app1', proto='tcp', port=8080, expect=True, via='ISN'),
+            check('web1 → ham-app1 tcp/22 blockiert', 'traffic', src='web1', dst='ham-app1', proto='tcp', port=22, expect=False)],
+    solution='NDO: onboard (Site ID 1), Infra `' + json.dumps(INFRA31) + '`, Deploy Infra; ISN-MTU auf 9150; Templates `' + json.dumps(TPL31A) +
+             '` und `' + json.dumps(TPL31B) + '` deployen.')
+
+
+# ----------------------------------------------------------------------------
 # Maschinenlesbare Musterloesungen (fuer die Tests: [URL-DN, Body])
 # ----------------------------------------------------------------------------
 BGP_RR = ['uni/fabric/bgpInstP-default', mo('bgpInstPol', {}, mo('bgpAsP', {'asn': '65001'}),
@@ -1602,6 +1769,17 @@ SOLUTIONS = {
     '27-dhcp-relay': [['uni', RELAY27]],
     '28-mcp-loop-qos': [['uni/infra/mcpInstP-default', MCP28], ['uni/infra/epLoopProtectP-default', mo('epLoopProtectP', {'adminSt': 'enabled'})],
                         ['uni/tn-Shop/ap-Webshop/epg-App', mo('fvAEPg', {'prio': 'level2'})]],
+    '29-multipod': [['uni', mp_l3out(SPINES29)], ['uni', EXT29],
+                    ['uni/controller/setuppol', mo('fabricSetupPol', {}, mo('fabricSetupP', {'podId': '2', 'tepPool': '10.1.0.0/16'}))],
+                    ['#ipn', {'name': 'ipn1', 'relay': '10.0.0.1'}], ['#ipn', {'name': 'ipn2', 'relay': '10.0.0.1', 'mtu': 9150}]] +
+                   [['uni/controller/nodeidentpol', mo('fabricNodeIdentP', {'serial': s_, 'nodeId': str(i), 'name': n, 'podId': '2'})]
+                    for s_, i, n in [('FDO2219SP03', 203, 'spine203'), ('FDO2219SP04', 204, 'spine204'), ('SAL1931LA05', 105, 'leaf105'),
+                                     ('SAL1931LA06', 106, 'leaf106')]],
+    '30-remote-leaf': RLSOL30,
+    '31-multisite-ndo': [['#ndo', {'op': 'onboard', 'user': 'admin', 'pwd': 'admin', 'siteId': '1'}], ['#ndo', {'op': 'infra', 'infra': INFRA31}],
+                         ['#ndo', {'op': 'deployInfra'}], ['#ipn', {'name': 'isn1', 'mtu': 9150}],
+                         ['#ndo', {'op': 'template', 'template': TPL31A}], ['#ndo', {'op': 'deploy', 'name': 'Shop-Stretched'}],
+                         ['#ndo', {'op': 'template', 'template': TPL31B}], ['#ndo', {'op': 'deploy', 'name': 'HAM-Local'}]],
     '14-l2out-migration': [['uni', L2ACC14], ['uni', L2OUT14], ['uni/tn-Shop/BD-BD-Migration', mo('fvBD', {'arpFlood': 'yes'})]],
 }
 

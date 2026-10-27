@@ -882,6 +882,22 @@ mo('epLoopProtectP', 'epLoopProtectP-{name}', ('infraInfra',), {'adminSt': 'disa
    enums={'adminSt': ED}, sets={'action': ('', 'port-disable', 'bd-learn-disable')}, label='EP Loop Protection Policy')
 
 
+# ---------------------------- Multi-Pod und Remote Leaf -------------------
+mo('fabricSetupPol', 'setuppol', ('ctrlrInst',), {}, fixed=True, label='Pod Fabric Setup Policy')
+mo('fabricSetupP', 'setupp-{podId}', ('fabricSetupPol',), {'tepPool': '', 'podType': 'physical'},
+   enums={'podType': ('physical', 'virtual')}, checks={'podId': lambda v: v.isdigit() and 1 <= int(v) <= 254, 'tepPool': _ipmask},
+   label='Pod TEP Pool')
+mo('fabricExtSetupP', 'extsetupp-{remoteId}', ('fabricSetupP',), {'tepPool': '', 'podId': ''},
+   checks={'remoteId': lambda v: v.isdigit() and 1 <= int(v) <= 255, 'tepPool': _ipmask}, label='Remote Pool')
+mo('fabricExtConnP', 'fabricExtConnP-{id}', ('fvTenant',), {'rt': 'extended:as2-nn4:5:16', 'siteId': '0', 'name': ''},
+   label='Fabric External Connection Policy')
+mo('fabricPodConnP', 'podConnP-{id}', ('fabricExtConnP',), {}, checks={'id': _num}, label='Pod Connection Profile')
+mo('fabricIp', 'ip-[{addr}]', ('fabricPodConnP',), {}, checks={'addr': _ipmask}, label='Data Plane TEP')
+mo('fabricExtRoutablePodSubnet', 'extrtpodsubnet-[{pool}]', ('fabricPodConnP',), {'reachable': 'yes', 'state': 'active'},
+   checks={'pool': _ipmask}, label='External TEP Pool')
+mo('fabricPeeringP', 'peeringP', ('fabricExtConnP',), {'type': 'automatic_with_full_mesh', 'password': ''},
+   enums={'type': ('automatic_with_full_mesh', 'automatic_with_rr')}, label='Fabric Peering Profile')
+
 def check_attr(meta, k, v, dn):
     if not isinstance(v, str):
         raise AciError(801, "property %s of %s failed validation for value '%s'" % (k, dn, v))

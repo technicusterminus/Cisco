@@ -26,6 +26,41 @@ def default_topology():
             'nodes': nodes, 'links': links}
 
 
+def multipod_topology():
+    """Zwei Pods ueber ein IPN plus ein Remote Leaf hinter einem WAN-Router.
+    Pod 2: spine203/204 (eth1/1-2 zu leaf105/106), IPN an Spine-Port eth1/32.
+    Remote Leaf leaf301 haengt mit eth1/54 am WAN-Router wan-rl."""
+    t = default_topology()
+    t['nodes'] += [
+        {'serial': 'SAL1931LA05', 'model': LEAF_MODEL, 'role': 'leaf', 'ports': 54, 'hint': 'leaf105', 'pod': 2},
+        {'serial': 'SAL1931LA06', 'model': LEAF_MODEL, 'role': 'leaf', 'ports': 54, 'hint': 'leaf106', 'pod': 2},
+        {'serial': 'FDO2219SP03', 'model': SPINE_MODEL, 'role': 'spine', 'ports': 32, 'hint': 'spine203', 'pod': 2},
+        {'serial': 'FDO2219SP04', 'model': SPINE_MODEL, 'role': 'spine', 'ports': 32, 'hint': 'spine204', 'pod': 2},
+        {'serial': 'SAL1931RL01', 'model': LEAF_MODEL, 'role': 'leaf', 'ports': 54, 'hint': 'leaf301', 'pod': 1, 'remote': True},
+    ]
+    for i, leaf in enumerate(['SAL1931LA05', 'SAL1931LA06']):
+        t['links'].append([leaf, 'eth1/49', 'FDO2219SP03', 'eth1/%d' % (i + 1)])
+        t['links'].append([leaf, 'eth1/50', 'FDO2219SP04', 'eth1/%d' % (i + 1)])
+    t['ipnlinks'] = [['FDO2219SP01', 'eth1/32', 'ipn1', 'Eth1/1'], ['FDO2219SP02', 'eth1/32', 'ipn1', 'Eth1/2'],
+                     ['FDO2219SP03', 'eth1/32', 'ipn2', 'Eth1/1'], ['FDO2219SP04', 'eth1/32', 'ipn2', 'Eth1/2'],
+                     ['SAL1931RL01', 'eth1/54', 'wan-rl', 'Gi0/1']]
+    t['kind'] = 'multipod'
+    return t
+
+
+def default_ipn():
+    """Startkonfiguration der IPN- und WAN-Router (Simulation > IPN & WAN)."""
+    return {'routers': [
+        {'name': 'ipn1', 'pod': 1, 'kind': 'ipn', 'mtu': 9150, 'area': '0.0.0.0', 'pim': True, 'rp': '192.168.100.1', 'relay': [],
+         'down': False, 'ifs': [{'serial': 'FDO2219SP01', 'port': 'eth1/32', 'vlan': 4, 'ip': '192.168.1.2/30'},
+                                {'serial': 'FDO2219SP02', 'port': 'eth1/32', 'vlan': 4, 'ip': '192.168.1.6/30'}]},
+        {'name': 'ipn2', 'pod': 2, 'kind': 'ipn', 'mtu': 9150, 'area': '0.0.0.0', 'pim': True, 'rp': '192.168.100.1', 'relay': [],
+         'down': False, 'ifs': [{'serial': 'FDO2219SP03', 'port': 'eth1/32', 'vlan': 4, 'ip': '192.168.2.2/30'},
+                                {'serial': 'FDO2219SP04', 'port': 'eth1/32', 'vlan': 4, 'ip': '192.168.2.6/30'}]},
+        {'name': 'wan-rl', 'pod': 1, 'kind': 'wan', 'mtu': 9150, 'area': '0.0.0.0', 'pim': False, 'rp': '', 'relay': [],
+         'down': False, 'ifs': [{'serial': 'SAL1931RL01', 'port': 'eth1/54', 'vlan': 4, 'ip': '192.168.3.2/30'}]}]}
+
+
 def discovered_members():
     """fabricNodeIdentP-Eintraege fuer eine fertig registrierte Fabric."""
     ids = {'SAL1931LA01': (101, 'leaf101'), 'SAL1931LA02': (102, 'leaf102'),
@@ -112,6 +147,8 @@ AAA_BASE = [
 
 
 OPS_BASE = [
+    ('uni/controller/setuppol', 'fabricSetupPol', {}),
+    ('uni/controller/setuppol/setupp-1', 'fabricSetupP', {'podId': '1', 'tepPool': '10.0.0.0/16'}),
     ('uni/fabric/fwrepop', 'firmwareRepoP', {}),
     ('uni/controller/ctrlrfwpol', 'firmwareCtrlrFwP', {}),
     ('uni/controller/ctrlrmaintpol', 'maintCtrlrMaintP', {}),

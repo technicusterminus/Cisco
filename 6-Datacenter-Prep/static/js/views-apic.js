@@ -187,17 +187,14 @@ Object.assign(Views, {
         kids: () => [['lldp', 'LLDP'], ['ospf', 'OSPF'], ['bgp', 'BGP'], ['ntp', 'NTP']].map(([k, l]) => ({ key: 'node:' + n.id + ':p:' + k, label: l, kind: 'view', icon: '≡', view: w => Views.nodeProto(w, n.id, k) })) },
     ];
     return [
-      { key: 'inv-qs', label: 'Quick Start', icon: '?', kind: 'view', view: w => Views.placeholder(w, 'Inventory – Quick Start', 'Neue Switches registrierst du unter **Fabric Membership**. Die Topologie zeigt den Zustand der Fabric.') },
+      { key: 'inv-qs', label: 'Quick Start', icon: '?', kind: 'view', view: w => Views.invQuickStart(w) },
       { key: 'topology', label: 'Topology', icon: '⌗', kind: 'view', view: w => Views.topologyPage(w, false) },
-      {
-        key: 'pod1', label: 'Pod 1', icon: 'P', kind: 'view', view: w => Views.podView(w),
-        kids: () => (st.nodes || []).filter(n => n.id && ['active', 'discovering', 'inactive'].includes(n.state)).sort((a, b) => a.id - b.id)
-          .map(n => ({ key: 'node:' + n.id, label: n.name + ' (Node-' + n.id + ')', icon: n.role === 'spine' ? 'SP' : 'LF', kind: 'view', view: w2 => Views.nodeView(w2, n.id), kids: n.state === 'active' ? () => nodeKids(n) : null })),
-      },
-      { key: 'podsetup', label: 'Pod Fabric Setup Policy', icon: 'P', kind: 'view', view: w => {
-        w.appendChild(paneHead('Pod Fabric Setup Policy', ''));
-        w.appendChild(table([{ l: 'Pod ID', f: () => '1' }, { l: 'TEP Pool', f: () => '10.0.0.0/16' }, { l: 'Remote ID', f: () => '—' }], [1]));
-      } },
+      ...[...new Set((st.nodes || []).filter(n => n.id).map(n => n.pod || 1).concat([1]))].sort().map(pod => ({
+        key: 'pod' + pod, label: 'Pod ' + pod, icon: 'P', kind: 'view', view: w => Views.podView(w, pod),
+        kids: () => (st.nodes || []).filter(n => n.id && (n.pod || 1) === pod && ['active', 'discovering', 'inactive'].includes(n.state)).sort((a, b) => a.id - b.id)
+          .map(n => ({ key: 'node:' + n.id, label: n.name + ' (Node-' + n.id + ')' + (n.remote ? ' – Remote Leaf' : ''), icon: n.role === 'spine' ? 'SP' : n.remote ? 'RL' : 'LF', kind: 'view', view: w2 => Views.nodeView(w2, n.id), kids: n.state === 'active' ? () => nodeKids(n) : null })),
+      })),
+      { key: 'podsetup', label: 'Pod Fabric Setup Policy', icon: 'P', kind: 'view', view: w => Views.podSetup(w) },
       { key: 'membership', label: 'Fabric Membership', icon: 'FM', kind: 'view', view: w => Views.membership(w) },
       { key: 'ph:dupip', label: 'Duplicate IP Usage', kind: 'folder', ph: 'Keine doppelten IP-Adressen gefunden.' },
       { key: 'disabled', label: 'Disabled Interfaces and Decommissioned Switches', icon: '⊘', kind: 'view', view: w => Views.disabledIfs(w) },
@@ -208,10 +205,10 @@ Object.assign(Views, {
     const info = await API.sim('nodeinfo?id=' + id);
     const name = info.node.name;
     if (kind === 'phys') {
-      const rows = await API.cls('topology/pod-' + POD() + '/node-' + id + '/l1PhysIf', 'rsp-subtree=children');
+      const rows = await API.cls('topology/pod-' + POD(id) + '/node-' + id + '/l1PhysIf', 'rsp-subtree=children');
       const data = rows.map(r => { const a = r.l1PhysIf.attributes; const c = (r.l1PhysIf.children || [])[0]; return Object.assign({}, a, { oper: c ? c.ethpmPhysIf.attributes : {} }); })
         .sort((a, b) => portNum(a.id) - portNum(b.id));
-      w.appendChild(paneHead('Physical Interfaces – ' + name, 'topology/pod-' + POD() + '/node-' + id + '/sys'));
+      w.appendChild(paneHead('Physical Interfaces – ' + name, 'topology/pod-' + POD(id) + '/node-' + id + '/sys'));
       w.appendChild(table([{ l: 'Interface', f: r => r.id }, { l: 'Admin State', f: r => r.adminSt }, { l: 'Oper State', f: r => stateBadge(r.oper.operSt) }, { l: 'Oper State Reason', f: r => r.oper.operStQual },
         { l: 'Usage', f: r => r.usage }, { l: 'Layer', f: r => r.layer }, { l: 'Oper Speed', f: r => r.oper.operSpeed }, { l: 'VLANs', f: r => r.oper.operVlans }], data, {
         actions: r => r.portT === 'fab' ? [] : [h('button', { class: 'btn small', onclick: () => Views.toggleIf(id, r.id, r.adminSt === 'up', () => { clear(w); Views.nodeIfs(w, id, kind); }) }, r.adminSt === 'up' ? 'Disable' : 'Enable')],
@@ -226,7 +223,7 @@ Object.assign(Views, {
   },
 
   toggleIf(id, port, disable, after) {
-    const tdn = 'topology/pod-' + POD() + '/paths-' + id + '/pathep-[' + port + ']';
+    const tdn = 'topology/pod-' + POD(id) + '/paths-' + id + '/pathep-[' + port + ']';
     confirmBox((disable ? 'Interface ' + port + ' auf Node ' + id + ' deaktivieren?' : 'Interface ' + port + ' wieder aktivieren?'), async () => {
       await API.postMo('uni/fabric/outofsvc', { fabricOOServicePol: { attributes: {}, children: [{ fabricRsOosPath: { attributes: disable ? { tDn: tdn, lc: 'blacklist' } : { tDn: tdn, status: 'deleted' } } }] } });
       toast(disable ? 'Interface deaktiviert' : 'Interface aktiviert');
@@ -258,7 +255,7 @@ Object.assign(Views, {
   async nodeView(w, id) {
     const n = App.state.nodes.find(x => x.id === id);
     if (!n) return;
-    const dn = 'topology/pod-' + POD() + '/node-' + id;
+    const dn = 'topology/pod-' + POD(id) + '/node-' + id;
     w.appendChild(paneHead('Node - ' + n.name, dn, [h('button', { class: 'btn small', onclick: () => Term.open(n.name) }, '⌨ CLI'),
       actionsButton([{ l: 'Open CLI', fn: () => Term.open(n.name) }, { l: 'Remove From Controller', danger: true, fn: () => App.go('fabric', 'inventory', 'membership') },
         { l: 'Open In Object Store Browser', fn: () => window.open('/visore.html#' + encodeURIComponent(dn), '_blank') }])]));

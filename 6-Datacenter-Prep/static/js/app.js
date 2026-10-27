@@ -12,7 +12,7 @@ const TABS = [
   { id: 'ops', l: 'Operations', subs: [['vis', 'Visibility & Troubleshooting'], ['capacity', 'Capacity Dashboard'], ['ep', 'EP Tracker'], ['viz', 'Visualization']] },
   { id: 'apps', l: 'Apps', subs: [['apps', 'Installed Apps'], ['appfaults', 'Faults']] },
   { id: 'integrations', l: 'Integrations', subs: [['integrations', 'Integrations']] },
-  { id: 'sim', l: 'Simulation', subs: [['topo', 'Topologie & Hosts'], ['routers', 'Externe Router'], ['vcenter', 'vCenter'], ['devices', 'L4-L7 Geräte'], ['aaasrv', 'AAA-Server'], ['servers', 'Fileserver & Monitoring'], ['legacy', 'Legacy-Switches'], ['labs', 'Labs'], ['saves', 'Speichern & Laden'], ['simset', 'Einstellungen']], special: true },
+  { id: 'sim', l: 'Simulation', subs: [['topo', 'Topologie & Hosts'], ['routers', 'Externe Router'], ['vcenter', 'vCenter'], ['devices', 'L4-L7 Geräte'], ['aaasrv', 'AAA-Server'], ['servers', 'Fileserver & Monitoring'], ['legacy', 'Legacy-Switches'], ['ipn', 'IPN & WAN'], ['ndo', 'Multi-Site (NDO)'], ['labs', 'Labs'], ['saves', 'Speichern & Laden'], ['simset', 'Einstellungen']], special: true },
 ];
 
 const App = {
@@ -196,6 +196,10 @@ const App = {
     if (!MIT.get(dn)) throw new ApiError(404, 'Tenant ' + this.sub + ' existiert nicht');
     this.expanded.add('mo:' + dn);
     const root = moNode(dn);
+    if (dn === 'uni/tn-infra') {
+      const base0 = root.kids;
+      root.kids = () => base0().concat(INFRA_TREE.map(s => folderNode(dn, s)));
+    }
     if (dn === 'uni/tn-mgmt') {
       const base = root.kids;
       root.kids = () => base().concat(MGMT_TREE.map(s => folderNode(dn, s)));

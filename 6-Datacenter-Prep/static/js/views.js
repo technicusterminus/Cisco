@@ -164,13 +164,14 @@ const Views = {
     ];
   },
 
-  podView(w) {
+  podView(w, pod) {
+    pod = pod || 1;
     const draw = () => {
       clear(w);
-      w.appendChild(paneHead('Pod 1', 'Fabric-Knoten im Pod'));
+      w.appendChild(paneHead('Pod ' + pod, 'Fabric-Knoten im Pod'));
       w.appendChild(table([{ l: 'Name', f: n => n.name }, { l: 'Node ID', f: n => n.id }, { l: 'Role', f: n => n.role }, { l: 'Model', f: n => n.model },
         { l: 'Serial', f: n => n.serial }, { l: 'TEP', f: n => n.tep }, { l: 'State', f: n => stateBadge(n.state) }],
-      App.state.nodes.filter(n => n.id).sort((a, b) => a.id - b.id), { onRow: n => App.select('node:' + n.id) }));
+      App.state.nodes.filter(n => n.id && (n.pod || 1) === pod).sort((a, b) => a.id - b.id), { onRow: n => App.select('node:' + n.id) }));
     };
     draw();
     App.view = { auto: () => { draw(); App.renderTree(); } };
@@ -179,7 +180,7 @@ const Views = {
   async nodeView(w, id) {
     const n = App.state.nodes.find(x => x.id === id);
     if (!n) return;
-    w.appendChild(paneHead((n.role === 'spine' ? 'Spine' : 'Leaf') + ' – ' + n.name, 'topology/pod-' + POD() + '/node-' + id, [h('button', { class: 'btn small', onclick: () => Term.open(n.name) }, '⌨ CLI öffnen')]));
+    w.appendChild(paneHead((n.role === 'spine' ? 'Spine' : 'Leaf') + ' – ' + n.name, 'topology/pod-' + POD(id) + '/node-' + id, [h('button', { class: 'btn small', onclick: () => Term.open(n.name) }, '⌨ CLI öffnen')]));
     const body = h('div', { class: 'wbody' });
     const show = async tab => {
       clear(body);
@@ -189,7 +190,7 @@ const Views = {
         if (n.state !== 'active') body.appendChild(h('div', { class: 'card note warn' }, 'Dieser Switch ist noch nicht aktiv (Discovery läuft oder kein Nachbar aktiv).'));
       }
       if (tab === 'if') {
-        const rows = await API.cls('topology/pod-' + POD() + '/node-' + id + '/l1PhysIf', 'rsp-subtree=children');
+        const rows = await API.cls('topology/pod-' + POD(id) + '/node-' + id + '/l1PhysIf', 'rsp-subtree=children');
         const data = rows.map(r => { const a = r.l1PhysIf.attributes; const c = (r.l1PhysIf.children || [])[0]; return Object.assign({}, a, { oper: c ? c.ethpmPhysIf.attributes : {} }); })
           .sort((a, b) => portNum(a.id) - portNum(b.id));
         const upOnly = h('input', { type: 'checkbox', checked: true });
@@ -223,11 +224,14 @@ const Views = {
       if (tab === 'reg') {
         const rows = ident.map(r => r.fabricNodeIdentP.attributes).map(a => Object.assign(a, { st: App.state.nodes.find(n => n.serial === a.serial) }));
         body.appendChild(table([{ l: 'Serial Number', f: r => r.serial }, { l: 'Pod ID', f: r => r.podId }, { l: 'Node ID', f: r => r.nodeId }, { l: 'Name', f: r => r.name },
-          { l: 'Role', f: r => r.st ? r.st.role : 'unbekannt' }, { l: 'IP (TEP)', f: r => r.st && r.st.state === 'active' ? r.st.tep : '0.0.0.0' },
-          { l: 'Status', f: r => stateBadge(r.st ? r.st.state : 'nicht verkabelt') }],
+          { l: 'Role', f: r => r.st ? (r.st.remote ? 'remote leaf' : r.st.role) : 'unbekannt' }, { l: 'IP (TEP)', f: r => r.st && r.st.state === 'active' ? r.st.tep : '0.0.0.0' },
+          { l: 'Status', f: r => h('span', { title: (r.st && r.st.why) || '' }, stateBadge(r.st ? r.st.state : 'nicht verkabelt'), r.st && r.st.why && r.st.state !== 'active' ? ' ' + r.st.why : '') }],
         rows, { actions: r => [iconBtn('🗑', 'Remove From Controller', () => confirmBox('Node ' + r.nodeId + ' (' + r.serial + ') aus der Fabric entfernen?', async () => { await API.delMo(r.dn); toast('Entfernt'); App.refreshState().then(draw); }), 'danger')], empty: 'Noch keine Switches registriert. Siehe Tab „Nodes Pending Registration".' }));
       } else {
-        body.appendChild(h('div', { class: 'card note' }, 'Ein Switch erscheint hier, sobald er per LLDP an einem aktiven Knoten erkannt wird (zuerst der Leaf am APIC, danach die Spines, dann die übrigen Leafs).'));
+        body.appendChild(h('div', { class: 'card note' }, 'Ein Switch erscheint hier, sobald er per LLDP an einem aktiven Knoten erkannt wird (zuerst der Leaf am APIC, danach die Spines, dann die übrigen Leafs). Spines eines weiteren Pods und Remote Leafs erscheinen erst, wenn ihr DHCP Discover über das IPN bzw. WAN (DHCP Relay) beim APIC ankommt.'));
+        const waiting = (App.state.nodes || []).filter(n => n.why && n.state === 'undiscovered');
+        if (waiting.length) body.appendChild(h('div', { class: 'card' }, h('div', { class: 'card-h' }, 'Noch nicht sichtbar (Multi-Pod / Remote Leaf)'),
+          table([{ l: 'Serial', f: n => n.serial }, { l: 'Pod', f: n => n.pod }, { l: 'Typ', f: n => n.remote ? 'Remote Leaf' : n.role }, { l: 'Grund', f: n => n.why }], waiting)));
         body.appendChild(table([{ l: 'Serial Number', f: r => r.id }, { l: 'Model', f: r => r.model }, { l: 'Role', f: r => r.nodeRole }, { l: 'Pod', f: r => r.podId }, { l: 'Status', f: () => stateBadge('pending') }],
           pend.map(r => r.dhcpClient.attributes), { actions: r => [h('button', { class: 'btn primary small', onclick: () => Views.registerDialog(r, draw) }, 'Register')], empty: 'Keine Switches warten auf Registrierung.' }));
       }
@@ -237,13 +241,19 @@ const Views = {
   },
 
   registerDialog(r, after) {
-    const f = buildForm([{ k: 'serial', l: 'Serial Number', ro: true }, { k: 'podId', l: 'Pod ID' }, { k: 'nodeId', l: 'Node ID', req: true, ph: r.nodeRole === 'spine' ? '201' : '101' },
-      { k: 'name', l: 'Node Name', req: true, ph: r.nodeRole === 'spine' ? 'spine201' : 'leaf101' }, { k: 'role', l: 'Role', ro: true }], { serial: r.id, podId: '1', role: r.nodeRole }, { cls: 'fabricNodeIdentP' }, 'create');
+    const rl = r.nodeRole === 'remote-leaf-wan';
+    const f = buildForm([{ k: 'serial', l: 'Serial Number', ro: true }, { k: 'podId', l: 'Pod ID' }, { k: 'nodeId', l: 'Node ID', req: true, ph: r.nodeRole === 'spine' ? '201' : rl ? '301' : '101' },
+      { k: 'name', l: 'Node Name', req: true, ph: r.nodeRole === 'spine' ? 'spine201' : rl ? 'leaf301' : 'leaf101' }, { k: 'role', l: 'Role', ro: true },
+      { k: 'nodeType', l: 'Node Type', t: 'select', o: [['unspecified', 'Leaf/Spine'], ['remote-leaf-wan', 'Remote Leaf (WAN)']] },
+      { k: 'extPoolId', l: 'Remote Pool ID', ph: '11', help: 'Nur für Remote Leafs: Remote ID aus der Pod Fabric Setup Policy' }],
+    { serial: r.id, podId: r.podId || '1', role: rl ? 'leaf' : r.nodeRole, nodeType: rl ? 'remote-leaf-wan' : 'unspecified', extPoolId: '' }, { cls: 'fabricNodeIdentP' }, 'create');
     modal('Register ' + r.id, f.el, [{ l: 'Abbrechen' }, {
       l: 'Register', primary: true, fn: async () => {
         const v = f.get();
         if (!v.nodeId || !v.name) throw new ApiError('Eingabe', 'Node ID und Name angeben');
-        await API.postMo('uni/controller/nodeidentpol', { fabricNodeIdentP: { attributes: { serial: r.id, nodeId: v.nodeId, name: v.name, podId: v.podId || '1' } } });
+        const at = { serial: r.id, nodeId: v.nodeId, name: v.name, podId: v.podId || '1' };
+        if (v.nodeType === 'remote-leaf-wan') Object.assign(at, { nodeType: 'remote-leaf-wan', extPoolId: v.extPoolId || '0' });
+        await API.postMo('uni/controller/nodeidentpol', { fabricNodeIdentP: { attributes: at } });
         toast(v.name + ' registriert – Discovery läuft');
         await App.refreshState();
         after();
@@ -364,11 +374,30 @@ const Views = {
     const nodes = st.nodes;
     const spines = nodes.filter(n => n.role === 'spine');
     const leaves = nodes.filter(n => n.role === 'leaf');
-    const W = Math.max(900, leaves.length * 210 + 120);
+    const W = Math.max(900, leaves.length * 170 + 140);
     const pos = {};
-    spines.forEach((n, i) => { pos[n.serial] = [W / 2 + (i - (spines.length - 1) / 2) * 300, 50]; });
-    leaves.forEach((n, i) => { pos[n.serial] = [110 + i * ((W - 220) / Math.max(1, leaves.length - 1)), 200]; });
-    pos[st.apic.serial] = [W / 2, 330];
+    const Y = st.multipod ? 110 : 0;
+    if (!st.multipod) {
+      spines.forEach((n, i) => { pos[n.serial] = [W / 2 + (i - (spines.length - 1) / 2) * 300, 50]; });
+      leaves.forEach((n, i) => { pos[n.serial] = [110 + i * ((W - 220) / Math.max(1, leaves.length - 1)), 200]; });
+    } else {
+      /* Pods nebeneinander, IPN darueber, Remote Leaf rechts aussen */
+      const order = leaves.filter(n => !n.remote).sort((a, b) => a.pod - b.pod).concat(leaves.filter(n => n.remote));
+      const step = (W - 220) / Math.max(1, order.length - 1);
+      order.forEach((n, i) => { pos[n.serial] = [110 + i * step + (n.pod > 1 ? 30 : 0) + (n.remote ? 60 : 0), 200 + Y]; });
+      [...new Set(spines.map(n => n.pod))].forEach(pod => {
+        const sp = spines.filter(n => n.pod === pod), lv = order.filter(n => n.pod === pod && !n.remote);
+        const cx = avg(lv.map(n => pos[n.serial][0]));
+        sp.forEach((n, i) => { pos[n.serial] = [cx + (i - (sp.length - 1) / 2) * 160, 50 + Y]; });
+      });
+      (st.ipnlinks || []).forEach(([ser, , r]) => { (pos['ipn:' + r] = pos['ipn:' + r] || []).push(ser); });
+      Object.keys(pos).filter(k => k.startsWith('ipn:')).forEach(k => {
+        const sers = pos[k];
+        const x = avg(sers.map(x => (pos[x] || [W / 2])[0]));
+        pos[k] = [x, k === 'ipn:wan-rl' ? 60 + Y / 2 : 36];
+      });
+    }
+    pos[st.apic.serial] = [st.multipod ? 260 : W / 2, 330 + Y];
     const bottom = [];
     st.hosts.forEach(x => bottom.push({ kind: 'host', o: x, x: avg(x.links.map(l => (pos[l[0]] || [0])[0])) }));
     st.routers.forEach(x => bottom.push({ kind: 'router', o: x, x: avg((x.links || [[x.serial, x.port]]).map(l => (pos[l[0]] || [0])[0])) }));
@@ -378,7 +407,8 @@ const Views = {
     bottom.forEach(b => { b.x = Math.max(b.x, lastX + 105); lastX = b.x; });
     const shift = bottom.length ? Math.min(0, (W - 60) - lastX) : 0;
     bottom.forEach(b => { b.x += shift; b.y = 400; });
-    const H = bottom.length ? 470 : 380;
+    const H = (bottom.length ? 470 : 380) + Y;
+    bottom.forEach(b => { b.y += Y; });
     const s = ['<svg class="topo" viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg">'];
     const nstate = serial => { if (serial === st.apic.serial) return 'active'; const n = nodes.find(x => x.serial === serial); return n ? n.state : 'undiscovered'; };
     st.links.forEach(([a, , b]) => {
@@ -387,6 +417,13 @@ const Views = {
       const ok = nstate(a) === 'active' && nstate(b) === 'active';
       s.push('<line x1="' + pa[0] + '" y1="' + pa[1] + '" x2="' + pb[0] + '" y2="' + pb[1] + '" class="lnk ' + (ok ? 'up' : 'down') + '"/>');
     });
+    (st.ipnlinks || []).forEach(([ser, , r]) => {
+      const pa = pos[ser], pb = pos['ipn:' + r];
+      if (!pa || !pb) return;
+      s.push('<line x1="' + pa[0] + '" y1="' + pa[1] + '" x2="' + pb[0] + '" y2="' + pb[1] + '" class="lnk ' + (nstate(ser) === 'active' ? 'up' : 'down') + '"/>');
+    });
+    if (pos['ipn:ipn1'] && pos['ipn:ipn2']) s.push('<line x1="' + pos['ipn:ipn1'][0] + '" y1="36" x2="' + pos['ipn:ipn2'][0] + '" y2="36" class="lnk up"/>');
+    if (pos['ipn:ipn1'] && pos['ipn:wan-rl']) s.push('<line x1="' + pos['ipn:ipn1'][0] + '" y1="36" x2="' + pos['ipn:wan-rl'][0] + '" y2="' + pos['ipn:wan-rl'][1] + '" class="lnk up"/>');
     bottom.forEach(b => {
       const links = b.kind === 'router' ? (b.o.links || [[b.o.serial, b.o.port]]) : b.o.links;
       if (b.kind === 'esxi') b.up = (st.vmm || []).some(v => v.hosts.some(x => x.name === b.o.name && x.ok.length));
@@ -402,9 +439,12 @@ const Views = {
     const box = (x, y, w2, hh, cls, l1, l2, data) => s.push('<g class="nd ' + cls + '" data-k="' + data + '"><rect x="' + (x - w2 / 2) + '" y="' + (y - hh / 2) + '" width="' + w2 + '" height="' + hh + '" rx="6"/><text x="' + x + '" y="' + (y - 2) + '" class="t1">' + l1 + '</text><text x="' + x + '" y="' + (y + 12) + '" class="t2">' + l2 + '</text></g>');
     nodes.forEach(n => {
       const p = pos[n.serial];
-      box(p[0], p[1], 130, 38, 'sw ' + n.state, n.name || n.serial, n.name ? n.role + ' ' + n.id + ' · ' + n.state : n.role + ' · ' + n.state, 'node:' + n.serial);
+      if (!p) return;
+      const role = (n.remote ? 'remote leaf' : n.role) + (st.multipod ? ' · Pod ' + n.pod : '');
+      box(p[0], p[1], 130, 38, 'sw ' + n.state, n.name || n.serial, n.name ? role + ' ' + n.id + ' · ' + n.state : role + ' · ' + n.state, 'node:' + n.serial);
     });
     box(pos[st.apic.serial][0], pos[st.apic.serial][1], 120, 38, 'apic active', st.apic.name, 'APIC', 'apic');
+    Object.keys(pos).filter(k => k.startsWith('ipn:')).forEach(k => box(pos[k][0], pos[k][1], 110, 34, 'router up', k.slice(4), k === 'ipn:wan-rl' ? 'WAN' : 'IPN', 'ipn:' + k.slice(4)));
     bottom.forEach(b => {
       if (b.kind === 'host') box(b.x, b.y, 100, 34, 'host ' + (b.o.status.learned ? 'up' : 'warn'), b.o.name, b.o.ip.split('/')[0], 'host:' + b.o.name);
       else if (b.kind === 'esxi') box(b.x, b.y, 100, 34, 'host esxi ' + (b.up ? 'up' : 'warn'), b.o.name, 'ESXi · ' + b.o.vms.length + ' VM', 'esxi:' + b.vc.name + '|' + b.o.name);
@@ -437,6 +477,7 @@ const Views = {
             if (n && n.id && n.state === 'active') App.go('fabric', 'inventory', 'node:' + n.id);
             else App.go('fabric', 'inventory', 'membership');
           } else if (k === 'apic') Term.open('apic1');
+          else if (k.startsWith('ipn:')) App.go('sim', 'ipn');
         },
       })));
       if (withHosts) {

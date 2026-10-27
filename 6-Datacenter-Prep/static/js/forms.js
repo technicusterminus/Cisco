@@ -290,7 +290,7 @@ function pathWidget(value, ro, types, onchange) {
   return {
     el: box,
     get: () => {
-      if (typeSel.value === 'port') return nodeSel.value && portSel.value ? 'topology/pod-' + POD() + '/paths-' + nodeSel.value + '/pathep-[' + portSel.value + ']' : (value || '');
+      if (typeSel.value === 'port') return nodeSel.value && portSel.value ? 'topology/pod-' + POD(nodeSel.value) + '/paths-' + nodeSel.value + '/pathep-[' + portSel.value + ']' : (value || '');
       return bundleSel.value;
     },
   };
