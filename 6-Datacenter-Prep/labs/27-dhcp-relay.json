@@ -1,0 +1,513 @@
+{
+ "id": "27-dhcp-relay",
+ "title": "27 DHCP Relay",
+ "topic": "Tenant / Services",
+ "level": "Mittel",
+ "duration": "25 min",
+ "fabric": "discovered",
+ "goals": [
+  "Eine DHCP Relay Policy mit Provider-EPG und Server-Adresse anlegen",
+  "Die Policy per DHCP Relay Label an die Client-BD hängen",
+  "Mit show ip dhcp relay und dem Host-Status verifizieren"
+ ],
+ "intro": "Im Tenant **Office** holen sich die Büro-PCs **pc1** und **pc2** (EPG Clients, BD-Clients 10.50.0.0/24) ihre Adresse per DHCP. Der DHCP-Server **dhcp1** (10.60.0.10) steht in der EPG **Services** (BD-Services) und hat einen Scope für 10.50.0.0/24. Noch bekommen die PCs keine Adresse – der DHCP Discover ist ein Broadcast und bleibt im BD.",
+ "config": [
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "infraInfra": {
+       "attributes": {},
+       "children": [
+        {
+         "fvnsVlanInstP": {
+          "attributes": {
+           "name": "VLAN-Pool-Office",
+           "allocMode": "static"
+          },
+          "children": [
+           {
+            "fvnsEncapBlk": {
+             "attributes": {
+              "from": "vlan-150",
+              "to": "vlan-169"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAttEntityP": {
+          "attributes": {
+           "name": "AAEP-Office"
+          },
+          "children": [
+           {
+            "infraRsDomP": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Office"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraFuncP": {
+          "attributes": {},
+          "children": [
+           {
+            "infraAccPortGrp": {
+             "attributes": {
+              "name": "IPG-Office"
+             },
+             "children": [
+              {
+               "infraRsAttEntP": {
+                "attributes": {
+                 "tDn": "uni/infra/attentp-AAEP-Office"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAccPortP": {
+          "attributes": {
+           "name": "IntProf-Office"
+          },
+          "children": [
+           {
+            "infraHPortS": {
+             "attributes": {
+              "name": "Office-Ports",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraPortBlk": {
+                "attributes": {
+                 "name": "block2",
+                 "fromPort": "11",
+                 "toPort": "20"
+                }
+               }
+              },
+              {
+               "infraRsAccBaseGrp": {
+                "attributes": {
+                 "tDn": "uni/infra/funcprof/accportgrp-IPG-Office"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraNodeP": {
+          "attributes": {
+           "name": "SwProf-Office"
+          },
+          "children": [
+           {
+            "infraLeafS": {
+             "attributes": {
+              "name": "101-102",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraNodeBlk": {
+                "attributes": {
+                 "name": "blk",
+                 "from_": "101",
+                 "to_": "102"
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "infraRsAccPortP": {
+             "attributes": {
+              "tDn": "uni/infra/accportprof-IntProf-Office"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "physDomP": {
+       "attributes": {
+        "name": "PhysDom-Office"
+       },
+       "children": [
+        {
+         "infraRsVlanNs": {
+          "attributes": {
+           "tDn": "uni/infra/vlanns-[VLAN-Pool-Office]-static"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Office"
+    },
+    "children": [
+     {
+      "fvCtx": {
+       "attributes": {
+        "name": "Corp"
+       }
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Clients"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Corp"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.50.0.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Services"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Corp"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.60.0.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzBrCP": {
+       "attributes": {
+        "name": "clients-to-services",
+        "scope": "context"
+       },
+       "children": [
+        {
+         "vzSubj": {
+          "attributes": {
+           "name": "subj",
+           "revFltPorts": "yes"
+          },
+          "children": [
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "icmp"
+             }
+            }
+           },
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "default"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Office"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Clients"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Clients"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Office"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/11]",
+              "encap": "vlan-150",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/11]",
+              "encap": "vlan-150",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsCons": {
+             "attributes": {
+              "tnVzBrCPName": "clients-to-services"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Services"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Services"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Office"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/12]",
+              "encap": "vlan-160",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsProv": {
+             "attributes": {
+              "tnVzBrCPName": "clients-to-services"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "hosts": [
+  {
+   "name": "dhcp1",
+   "mac": "00:50:56:60:00:10",
+   "ip": "10.60.0.10/24",
+   "gw": "10.60.0.1",
+   "vlan": 160,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/12"
+    ]
+   ],
+   "bond": "none",
+   "descr": "DHCP-Server (Windows)",
+   "dhcpd": [
+    {
+     "net": "10.50.0.0/24",
+     "from": "10.50.0.100",
+     "to": "10.50.0.199",
+     "gw": "10.50.0.1"
+    }
+   ]
+  },
+  {
+   "name": "pc1",
+   "mac": "00:50:56:50:00:21",
+   "ip": "0.0.0.0/32",
+   "gw": "",
+   "vlan": 150,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/11"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Büro-PC (DHCP)",
+   "dhcp": true
+  },
+  {
+   "name": "pc2",
+   "mac": "00:50:56:50:00:22",
+   "ip": "0.0.0.0/32",
+   "gw": "",
+   "vlan": 150,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/11"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Büro-PC (DHCP)",
+   "dhcp": true
+  }
+ ],
+ "tasks": [
+  {
+   "title": "Relay Policy",
+   "text": "**Tenant Office > Policies > Protocol > DHCP > Relay Policies**: **DHCP-Corp** mit Provider EPG **Services** und Server-Adresse **10.60.0.10**."
+  },
+  {
+   "title": "Relay Label",
+   "text": "Am **BD-Clients** unter *DHCP Relay Labels* das Label **DHCP-Corp** (Scope tenant) anlegen.",
+   "hint": "Der Name des Labels muss genau dem Namen der Relay Policy entsprechen. Der Relay Agent nutzt das BD-Gateway 10.50.0.1 als giaddr."
+  },
+  {
+   "title": "Verifizieren",
+   "text": "Simulation > Topologie & Hosts: pc1 und pc2 haben eine Adresse aus 10.50.0.100–199. Auf leaf101 `show ip dhcp relay`. Traffic-Test pc1 → dhcp1."
+  }
+ ],
+ "checks": [
+  {
+   "desc": "pc1 hat ein DHCP-Lease",
+   "type": "dhcp",
+   "host": "pc1"
+  },
+  {
+   "desc": "pc2 hat ein DHCP-Lease",
+   "type": "dhcp",
+   "host": "pc2"
+  },
+  {
+   "desc": "pc1 erreicht dhcp1",
+   "type": "traffic",
+   "src": "pc1",
+   "dst": "dhcp1",
+   "expect": true
+  }
+ ],
+ "solution": "`{\"fvTenant\": {\"attributes\": {\"name\": \"Office\"}, \"children\": [{\"dhcpRelayP\": {\"attributes\": {\"name\": \"DHCP-Corp\", \"owner\": \"tenant\"}, \"children\": [{\"dhcpRsProv\": {\"attributes\": {\"tDn\": \"uni/tn-Office/ap-Office/epg-Services\", \"addr\": \"10.60.0.10\"}}}]}}, {\"fvBD\": {\"attributes\": {\"name\": \"BD-Clients\"}, \"children\": [{\"dhcpLbl\": {\"attributes\": {\"name\": \"DHCP-Corp\", \"owner\": \"tenant\"}}}]}}]}}`",
+ "routers": [],
+ "vcenters": [],
+ "devices": [],
+ "aaa": [],
+ "switches": [],
+ "solutionConfig": [
+  [
+   "uni",
+   {
+    "fvTenant": {
+     "attributes": {
+      "name": "Office"
+     },
+     "children": [
+      {
+       "dhcpRelayP": {
+        "attributes": {
+         "name": "DHCP-Corp",
+         "owner": "tenant"
+        },
+        "children": [
+         {
+          "dhcpRsProv": {
+           "attributes": {
+            "tDn": "uni/tn-Office/ap-Office/epg-Services",
+            "addr": "10.60.0.10"
+           }
+          }
+         }
+        ]
+       }
+      },
+      {
+       "fvBD": {
+        "attributes": {
+         "name": "BD-Clients"
+        },
+        "children": [
+         {
+          "dhcpLbl": {
+           "attributes": {
+            "name": "DHCP-Corp",
+            "owner": "tenant"
+           }
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  ]
+ ]
+}

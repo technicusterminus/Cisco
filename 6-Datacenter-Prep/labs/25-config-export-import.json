@@ -1,0 +1,756 @@
+{
+ "id": "25-config-export-import",
+ "title": "25 Config Export und Import",
+ "topic": "Fabric-Betrieb",
+ "level": "Fortgeschritten",
+ "duration": "30 min",
+ "fabric": "discovered",
+ "goals": [
+  "Eine Remote Location für SCP anlegen",
+  "Einen gelöschten Tenant per Import (Merge) aus dem Backup wiederherstellen",
+  "Exporte mit AES-Verschlüsselung erstellen, damit Passwörter und Keys enthalten sind"
+ ],
+ "intro": "Gestern Abend hat ein Kollege versehentlich den Tenant **Shop** gelöscht. Auf dem SCP-Server **192.168.10.50** (backup / Backup123!) liegt das nächtliche Backup **ce2_Shop-Nightly-2026-10-26T23-00-00.tar.gz** in `/backup`. Die Server web1 und app1 sind seitdem offline.\n\nDanach soll ein nächtlicher **Export der ganzen Fabric** eingerichtet werden – diesmal mit Passwörtern, also mit **Global AES Encryption** (Passphrase mindestens 16 Zeichen).",
+ "config": [
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "infraInfra": {
+       "attributes": {},
+       "children": [
+        {
+         "fvnsVlanInstP": {
+          "attributes": {
+           "name": "VLAN-Pool-Server",
+           "allocMode": "static"
+          },
+          "children": [
+           {
+            "fvnsEncapBlk": {
+             "attributes": {
+              "from": "vlan-100",
+              "to": "vlan-199"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAttEntityP": {
+          "attributes": {
+           "name": "AAEP-Server"
+          },
+          "children": [
+           {
+            "infraRsDomP": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraFuncP": {
+          "attributes": {},
+          "children": [
+           {
+            "infraAccPortGrp": {
+             "attributes": {
+              "name": "IPG-Server-Access"
+             },
+             "children": [
+              {
+               "infraRsAttEntP": {
+                "attributes": {
+                 "tDn": "uni/infra/attentp-AAEP-Server"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAccPortP": {
+          "attributes": {
+           "name": "IntProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraHPortS": {
+             "attributes": {
+              "name": "Server-Ports",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraPortBlk": {
+                "attributes": {
+                 "name": "block2",
+                 "fromPort": "1",
+                 "toPort": "10"
+                }
+               }
+              },
+              {
+               "infraRsAccBaseGrp": {
+                "attributes": {
+                 "tDn": "uni/infra/funcprof/accportgrp-IPG-Server-Access"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraNodeP": {
+          "attributes": {
+           "name": "SwProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraLeafS": {
+             "attributes": {
+              "name": "101-102",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraNodeBlk": {
+                "attributes": {
+                 "name": "blk",
+                 "from_": "101",
+                 "to_": "102"
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "infraRsAccPortP": {
+             "attributes": {
+              "tDn": "uni/infra/accportprof-IntProf-Leaf101-102"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "physDomP": {
+       "attributes": {
+        "name": "PhysDom-Server"
+       },
+       "children": [
+        {
+         "infraRsVlanNs": {
+          "attributes": {
+           "tDn": "uni/infra/vlanns-[VLAN-Pool-Server]-static"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "hosts": [
+  {
+   "name": "web1",
+   "mac": "00:50:56:10:10:11",
+   "ip": "10.10.10.11/24",
+   "gw": "10.10.10.1",
+   "vlan": 110,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/1"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Webserver"
+  },
+  {
+   "name": "app1",
+   "mac": "00:50:56:10:20:11",
+   "ip": "10.10.20.11/24",
+   "gw": "10.10.20.1",
+   "vlan": 120,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/2"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Applikationsserver"
+  }
+ ],
+ "fileserver": {
+  "files": {
+   "/backup/ce2_Shop-Nightly-2026-10-26T23-00-00.tar.gz": {
+    "size": "18 KB",
+    "export": {
+     "kind": "aci-config-export",
+     "created": "2026-10-26T23:00:04.000+00:00",
+     "target": "uni/tn-Shop",
+     "secure": false,
+     "key": "",
+     "policy": "Shop-Nightly",
+     "rows": [
+      [
+       "uni/tn-Shop",
+       "fvTenant",
+       {
+        "name": "Shop",
+        "modTs": "2026-10-27T20:19:07.894+00:00"
+       }
+      ],
+      [
+       "uni/tn-Shop/ctx-Prod",
+       "fvCtx",
+       {
+        "pcEnfPref": "enforced",
+        "pcEnfDir": "ingress",
+        "knwMcastAct": "permit",
+        "ipDataPlaneLearning": "enabled",
+        "bdEnforcedEnable": "no",
+        "scope": "2260992",
+        "pcTag": "16392",
+        "seg": "2260992",
+        "name": "Prod",
+        "modTs": "2026-10-27T20:19:07.894+00:00"
+       }
+      ],
+      [
+       "uni/tn-Shop/ctx-Prod/any",
+       "vzAny",
+       {
+        "matchT": "AtleastOne",
+        "prefGrMemb": "disabled",
+        "modTs": "2026-10-27T20:19:07.894+00:00"
+       }
+      ],
+      [
+       "uni/tn-Shop/BD-BD-Web",
+       "fvBD",
+       {
+        "arpFlood": "no",
+        "unicastRoute": "yes",
+        "unkMacUcastAct": "proxy",
+        "unkMcastAct": "flood",
+        "multiDstPktAct": "bd-flood",
+        "limitIpLearnToSubnets": "yes",
+        "ipLearning": "yes",
+        "epMoveDetectMode": "",
+        "mac": "00:22:BD:F8:19:FF",
+        "type": "regular",
+        "seg": "16002297",
+        "pcTag": "32777",
+        "scope": "",
+        "name": "BD-Web",
+        "modTs": "2026-10-27T20:19:07.894+00:00"
+       }
+      ],
+      [
+       "uni/tn-Shop/BD-BD-Web/rsctx",
+       "fvRsCtx",
+       {
+        "tnFvCtxName": "Prod",
+        "tDn": "",
+        "state": "unformed",
+        "stateQual": "none",
+        "tCl": "",
+        "tType": "name",
+        "forceResolve": "yes",
+        "modTs": "2026-10-27T20:19:07.894+00:00"
+       }
+      ],
+      [
+       "uni/tn-Shop/BD-BD-Web/subnet-[10.10.10.1/24]",
+       "fvSubnet",
+       {
+        "scope": "private",
+        "preferred": "no",
+        "virtual": "no",
+        "ctrl": "nd",
+        "ip": "10.10.10.1/24",
+        "modTs": "2026-10-27T20:19:07.894+00:00"
+       }
+      ],
+      [
+       "uni/tn-Shop/BD-BD-App",
+       "fvBD",
+       {
+        "arpFlood": "no",
+        "unicastRoute": "yes",
+        "unkMacUcastAct": "proxy",
+        "unkMcastAct": "flood",
+        "multiDstPktAct": "bd-flood",
+        "limitIpLearnToSubnets": "yes",
+        "ipLearning": "yes",
+        "epMoveDetectMode": "",
+        "mac": "00:22:BD:F8:19:FF",
+        "type": "regular",
+        "seg": "16006396",
+        "pcTag": "32778",
+        "scope": "",
+        "name": "BD-App",
+        "modTs": "2026-10-27T20:19:07.894+00:00"
+       }
+      ],
+      [
+       "uni/tn-Shop/BD-BD-App/rsctx",
+       "fvRsCtx",
+       {
+        "tnFvCtxName": "Prod",
+        "tDn": "",
+        "state": "unformed",
+        "stateQual": "none",
+        "tCl": "",
+        "tType": "name",
+        "forceResolve": "yes",
+        "modTs": "2026-10-27T20:19:07.894+00:00"
+       }
+      ],
+      [
+       "uni/tn-Shop/BD-BD-App/subnet-[10.10.20.1/24]",
+       "fvSubnet",
+       {
+        "scope": "private",
+        "preferred": "no",
+        "virtual": "no",
+        "ctrl": "nd",
+        "ip": "10.10.20.1/24",
+        "modTs": "2026-10-27T20:19:07.894+00:00"
+       }
+      ],
+      [
+       "uni/tn-Shop/ap-Webshop",
+       "fvAp",
+       {
+        "prio": "unspecified",
+        "name": "Webshop",
+        "modTs": "2026-10-27T20:19:07.894+00:00"
+       }
+      ],
+      [
+       "uni/tn-Shop/ap-Webshop/epg-Web",
+       "fvAEPg",
+       {
+        "pcEnfPref": "unenforced",
+        "prefGrMemb": "exclude",
+        "floodOnEncap": "disabled",
+        "isAttrBasedEPg": "no",
+        "prio": "unspecified",
+        "shutdown": "no",
+        "pcTag": "32779",
+        "scope": "",
+        "name": "Web",
+        "modTs": "2026-10-27T20:19:07.894+00:00"
+       }
+      ],
+      [
+       "uni/tn-Shop/ap-Webshop/epg-Web/rsbd",
+       "fvRsBd",
+       {
+        "tnFvBDName": "BD-Web",
+        "tDn": "",
+        "state": "unformed",
+        "stateQual": "none",
+        "tCl": "",
+        "tType": "name",
+        "forceResolve": "yes",
+        "modTs": "2026-10-27T20:19:07.894+00:00"
+       }
+      ],
+      [
+       "uni/tn-Shop/ap-Webshop/epg-Web/rsdomAtt-[uni/phys-PhysDom-Server]",
+       "fvRsDomAtt",
+       {
+        "instrImedcy": "lazy",
+        "resImedcy": "lazy",
+        "encap": "unknown",
+        "primaryEncap": "unknown",
+        "classPref": "encap",
+        "tDn": "uni/phys-PhysDom-Server",
+        "state": "unformed",
+        "stateQual": "none",
+        "tCl": "",
+        "tType": "dn",
+        "forceResolve": "yes",
+        "modTs": "2026-10-27T20:19:07.894+00:00"
+       }
+      ],
+      [
+       "uni/tn-Shop/ap-Webshop/epg-Web/rspathAtt-[topology/pod-1/paths-101/pathep-[eth1/1]]",
+       "fvRsPathAtt",
+       {
+        "encap": "vlan-110",
+        "mode": "regular",
+        "instrImedcy": "lazy",
+        "primaryEncap": "unknown",
+        "tDn": "topology/pod-1/paths-101/pathep-[eth1/1]",
+        "state": "unformed",
+        "stateQual": "none",
+        "tCl": "",
+        "tType": "dn",
+        "forceResolve": "yes",
+        "modTs": "2026-10-27T20:19:07.894+00:00"
+       }
+      ],
+      [
+       "uni/tn-Shop/ap-Webshop/epg-Web/rscons-web-to-app",
+       "fvRsCons",
+       {
+        "prio": "unspecified",
+        "tnVzBrCPName": "web-to-app",
+        "tDn": "",
+        "state": "unformed",
+        "stateQual": "none",
+        "tCl": "",
+        "tType": "name",
+        "forceResolve": "yes",
+        "modTs": "2026-10-27T20:19:07.894+00:00"
+       }
+      ],
+      [
+       "uni/tn-Shop/ap-Webshop/epg-App",
+       "fvAEPg",
+       {
+        "pcEnfPref": "unenforced",
+        "prefGrMemb": "exclude",
+        "floodOnEncap": "disabled",
+        "isAttrBasedEPg": "no",
+        "prio": "unspecified",
+        "shutdown": "no",
+        "pcTag": "32780",
+        "scope": "",
+        "name": "App",
+        "modTs": "2026-10-27T20:19:07.894+00:00"
+       }
+      ],
+      [
+       "uni/tn-Shop/ap-Webshop/epg-App/rsbd",
+       "fvRsBd",
+       {
+        "tnFvBDName": "BD-App",
+        "tDn": "",
+        "state": "unformed",
+        "stateQual": "none",
+        "tCl": "",
+        "tType": "name",
+        "forceResolve": "yes",
+        "modTs": "2026-10-27T20:19:07.894+00:00"
+       }
+      ],
+      [
+       "uni/tn-Shop/ap-Webshop/epg-App/rsdomAtt-[uni/phys-PhysDom-Server]",
+       "fvRsDomAtt",
+       {
+        "instrImedcy": "lazy",
+        "resImedcy": "lazy",
+        "encap": "unknown",
+        "primaryEncap": "unknown",
+        "classPref": "encap",
+        "tDn": "uni/phys-PhysDom-Server",
+        "state": "unformed",
+        "stateQual": "none",
+        "tCl": "",
+        "tType": "dn",
+        "forceResolve": "yes",
+        "modTs": "2026-10-27T20:19:07.894+00:00"
+       }
+      ],
+      [
+       "uni/tn-Shop/ap-Webshop/epg-App/rspathAtt-[topology/pod-1/paths-102/pathep-[eth1/2]]",
+       "fvRsPathAtt",
+       {
+        "encap": "vlan-120",
+        "mode": "regular",
+        "instrImedcy": "lazy",
+        "primaryEncap": "unknown",
+        "tDn": "topology/pod-1/paths-102/pathep-[eth1/2]",
+        "state": "unformed",
+        "stateQual": "none",
+        "tCl": "",
+        "tType": "dn",
+        "forceResolve": "yes",
+        "modTs": "2026-10-27T20:19:07.894+00:00"
+       }
+      ],
+      [
+       "uni/tn-Shop/ap-Webshop/epg-App/rsprov-web-to-app",
+       "fvRsProv",
+       {
+        "prio": "unspecified",
+        "matchT": "AtleastOne",
+        "tnVzBrCPName": "web-to-app",
+        "tDn": "",
+        "state": "unformed",
+        "stateQual": "none",
+        "tCl": "",
+        "tType": "name",
+        "forceResolve": "yes",
+        "modTs": "2026-10-27T20:19:07.894+00:00"
+       }
+      ],
+      [
+       "uni/tn-Shop/flt-tcp-8080",
+       "vzFilter",
+       {
+        "name": "tcp-8080",
+        "modTs": "2026-10-27T20:19:07.894+00:00"
+       }
+      ],
+      [
+       "uni/tn-Shop/flt-tcp-8080/e-tcp-8080",
+       "vzEntry",
+       {
+        "etherT": "ip",
+        "prot": "tcp",
+        "dFromPort": "8080",
+        "dToPort": "8080",
+        "sFromPort": "unspecified",
+        "sToPort": "unspecified",
+        "stateful": "no",
+        "applyToFrag": "no",
+        "arpOpc": "unspecified",
+        "icmpv4T": "unspecified",
+        "tcpRules": "",
+        "name": "tcp-8080",
+        "modTs": "2026-10-27T20:19:07.894+00:00"
+       }
+      ],
+      [
+       "uni/tn-Shop/brc-web-to-app",
+       "vzBrCP",
+       {
+        "scope": "context",
+        "prio": "unspecified",
+        "targetDscp": "unspecified",
+        "name": "web-to-app",
+        "modTs": "2026-10-27T20:19:07.894+00:00"
+       }
+      ],
+      [
+       "uni/tn-Shop/brc-web-to-app/subj-subj",
+       "vzSubj",
+       {
+        "revFltPorts": "yes",
+        "consMatchT": "AtleastOne",
+        "provMatchT": "AtleastOne",
+        "prio": "unspecified",
+        "targetDscp": "unspecified",
+        "name": "subj",
+        "modTs": "2026-10-27T20:19:07.894+00:00"
+       }
+      ],
+      [
+       "uni/tn-Shop/brc-web-to-app/subj-subj/rssubjFiltAtt-tcp-8080",
+       "vzRsSubjFiltAtt",
+       {
+        "action": "permit",
+        "directives": "",
+        "priorityOverride": "default",
+        "tnVzFilterName": "tcp-8080",
+        "tDn": "",
+        "state": "unformed",
+        "stateQual": "none",
+        "tCl": "",
+        "tType": "name",
+        "forceResolve": "yes",
+        "modTs": "2026-10-27T20:19:07.894+00:00"
+       }
+      ],
+      [
+       "uni/tn-Shop/brc-web-to-app/subj-subj/rssubjFiltAtt-icmp",
+       "vzRsSubjFiltAtt",
+       {
+        "action": "permit",
+        "directives": "",
+        "priorityOverride": "default",
+        "tnVzFilterName": "icmp",
+        "tDn": "",
+        "state": "unformed",
+        "stateQual": "none",
+        "tCl": "",
+        "tType": "name",
+        "forceResolve": "yes",
+        "modTs": "2026-10-27T20:19:07.894+00:00"
+       }
+      ]
+     ],
+     "version": "6.0(5h)",
+     "counters": {
+      "vnid": 5,
+      "seg": 4,
+      "pctag": 11
+     }
+    }
+   }
+  }
+ },
+ "tasks": [
+  {
+   "title": "Remote Location",
+   "text": "**Admin > Import/Export > Remote Locations**: **SCP-Backup**, Host 192.168.10.50, SCP, Port 22, Pfad /backup, Benutzer backup, Management EPG **default (Out-of-Band)**."
+  },
+  {
+   "title": "Import",
+   "text": "**Import Policies > Configuration**: **Restore-Shop**, Datei aus dem Backup, Import Type **Merge**, Mode **Atomic**, Remote Location SCP-Backup, *Start Now: Triggered*. Ergebnis unter **Jobs**.",
+   "hint": "Replace würde alles, was nicht im Backup steht, im Zielbereich ersetzen – für einen einzelnen Tenant ist Merge der sichere Weg."
+  },
+  {
+   "title": "Prüfen",
+   "text": "web1 und app1 sind wieder gelernt, web1 → app1 tcp/8080 klappt."
+  },
+  {
+   "title": "AES-Verschlüsselung",
+   "text": "**System Settings > Global AES Passphrase Encryption Settings** (oder Import/Export > Global AES Encryption): Encryption einschalten, Passphrase z. B. `Nightly-Backup#2026`."
+  },
+  {
+   "title": "Export",
+   "text": "**Export Policies > Configuration**: **Fabric-Nightly**, Remote Location SCP-Backup, Include Secure Fields yes, sofort starten. Unter Simulation > Fileserver & Monitoring siehst du die Datei – jetzt *mit* Secure Properties."
+  }
+ ],
+ "checks": [
+  {
+   "desc": "Import erfolgreich",
+   "type": "job",
+   "kind": "import"
+  },
+  {
+   "desc": "Tenant Shop mit EPG Web ist zurück",
+   "type": "exists",
+   "dn": "uni/tn-Shop/ap-Webshop/epg-Web"
+  },
+  {
+   "desc": "web1 → app1 tcp/8080",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "app1",
+   "proto": "tcp",
+   "port": 8080,
+   "expect": true
+  },
+  {
+   "desc": "Global AES Encryption aktiv",
+   "type": "exists",
+   "dn": "uni/exportcryptkey",
+   "attrs": {
+    "strongEncryptionEnabled": "yes"
+   }
+  },
+  {
+   "desc": "Export mit Secure Properties erfolgreich",
+   "type": "job",
+   "kind": "export",
+   "secure": true
+  }
+ ],
+ "solution": "`{\"fileRemotePath\": {\"attributes\": {\"name\": \"SCP-Backup\", \"host\": \"192.168.10.50\", \"protocol\": \"scp\", \"remotePath\": \"/backup\", \"remotePort\": \"22\", \"userName\": \"backup\", \"userPasswd\": \"Backup123!\"}, \"children\": [{\"fileRsARemoteHostToEpg\": {\"attributes\": {\"tDn\": \"uni/tn-mgmt/mgmtp-default/oob-default\"}}}]}}` unter uni/fabric, dann `{\"configImportP\": {\"attributes\": {\"name\": \"Restore-Shop\", \"fileName\": \"ce2_Shop-Nightly-2026-10-26T23-00-00.tar.gz\", \"importType\": \"merge\", \"importMode\": \"atomic\", \"adminSt\": \"triggered\"}, \"children\": [{\"configRsRemotePath\": {\"attributes\": {\"tnFileRemotePathName\": \"SCP-Backup\"}}}]}}`; danach `uni/exportcryptkey` mit strongEncryptionEnabled=yes und Passphrase, zuletzt `{\"configExportP\": {\"attributes\": {\"name\": \"Fabric-Nightly\", \"adminSt\": \"triggered\", \"includeSecureFields\": \"yes\"}, \"children\": [{\"configRsRemotePath\": {\"attributes\": {\"tnFileRemotePathName\": \"SCP-Backup\"}}}]}}`.",
+ "routers": [],
+ "vcenters": [],
+ "devices": [],
+ "aaa": [],
+ "switches": [],
+ "solutionConfig": [
+  [
+   "uni/fabric",
+   {
+    "fileRemotePath": {
+     "attributes": {
+      "name": "SCP-Backup",
+      "host": "192.168.10.50",
+      "protocol": "scp",
+      "remotePath": "/backup",
+      "remotePort": "22",
+      "userName": "backup",
+      "userPasswd": "Backup123!"
+     },
+     "children": [
+      {
+       "fileRsARemoteHostToEpg": {
+        "attributes": {
+         "tDn": "uni/tn-mgmt/mgmtp-default/oob-default"
+        }
+       }
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "uni/fabric",
+   {
+    "configImportP": {
+     "attributes": {
+      "name": "Restore-Shop",
+      "fileName": "ce2_Shop-Nightly-2026-10-26T23-00-00.tar.gz",
+      "importType": "merge",
+      "importMode": "atomic",
+      "adminSt": "triggered"
+     },
+     "children": [
+      {
+       "configRsRemotePath": {
+        "attributes": {
+         "tnFileRemotePathName": "SCP-Backup"
+        }
+       }
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "uni/exportcryptkey",
+   {
+    "pkiExportEncryptionKey": {
+     "attributes": {
+      "strongEncryptionEnabled": "yes",
+      "passphrase": "Nightly-Backup#2026"
+     }
+    }
+   }
+  ],
+  [
+   "uni/fabric",
+   {
+    "configExportP": {
+     "attributes": {
+      "name": "Fabric-Nightly",
+      "adminSt": "triggered",
+      "includeSecureFields": "yes"
+     },
+     "children": [
+      {
+       "configRsRemotePath": {
+        "attributes": {
+         "tnFileRemotePathName": "SCP-Backup"
+        }
+       }
+      }
+     ]
+    }
+   }
+  ]
+ ]
+}

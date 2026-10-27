@@ -1,0 +1,1013 @@
+{
+ "id": "18-ebgp-loopback-md5-summary",
+ "title": "18 eBGP über Loopbacks: Multihop, MD5, Timer und Summarization",
+ "topic": "L3Out / BGP",
+ "level": "Fortgeschritten",
+ "duration": "40 min",
+ "fabric": "discovered",
+ "goals": [
+  "eBGP zwischen Loopbacks mit Multihop und Static Routes aufbauen",
+  "BGP-Session mit MD5-Passwort und eigenen Timern",
+  "Mehrere BD-Subnetze als eine Summary ankündigen"
+ ],
+ "intro": "Der Partner-Router **partner1** (AS 65100) hängt an **leaf104 eth1/47** (Sub-Interface vlan-301, 172.16.1.1/30 ↔ 172.16.1.2/30). Laut Partner-Vertrag läuft BGP **zwischen den Loopbacks**: partner1 nutzt **192.168.255.1** und spricht die ACI an **1.1.1.104** (Router ID von leaf104) an. Weitere Vorgaben: MD5-Passwort **Partner#2026**, Keepalive **10 s**, Hold **30 s**.\n\nDer Partner möchte für den Webshop nur **eine Route 10.10.0.0/16** sehen statt der einzelnen BD-Subnetze. L3Out **Partner**, External EPG und Contract sind vorbereitet.",
+ "config": [
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "infraInfra": {
+       "attributes": {},
+       "children": [
+        {
+         "fvnsVlanInstP": {
+          "attributes": {
+           "name": "VLAN-Pool-Server",
+           "allocMode": "static"
+          },
+          "children": [
+           {
+            "fvnsEncapBlk": {
+             "attributes": {
+              "from": "vlan-100",
+              "to": "vlan-199"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAttEntityP": {
+          "attributes": {
+           "name": "AAEP-Server"
+          },
+          "children": [
+           {
+            "infraRsDomP": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraFuncP": {
+          "attributes": {},
+          "children": [
+           {
+            "infraAccPortGrp": {
+             "attributes": {
+              "name": "IPG-Server-Access"
+             },
+             "children": [
+              {
+               "infraRsAttEntP": {
+                "attributes": {
+                 "tDn": "uni/infra/attentp-AAEP-Server"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAccPortP": {
+          "attributes": {
+           "name": "IntProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraHPortS": {
+             "attributes": {
+              "name": "Server-Ports",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraPortBlk": {
+                "attributes": {
+                 "name": "block2",
+                 "fromPort": "1",
+                 "toPort": "10"
+                }
+               }
+              },
+              {
+               "infraRsAccBaseGrp": {
+                "attributes": {
+                 "tDn": "uni/infra/funcprof/accportgrp-IPG-Server-Access"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraNodeP": {
+          "attributes": {
+           "name": "SwProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraLeafS": {
+             "attributes": {
+              "name": "101-102",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraNodeBlk": {
+                "attributes": {
+                 "name": "blk",
+                 "from_": "101",
+                 "to_": "102"
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "infraRsAccPortP": {
+             "attributes": {
+              "tDn": "uni/infra/accportprof-IntProf-Leaf101-102"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "physDomP": {
+       "attributes": {
+        "name": "PhysDom-Server"
+       },
+       "children": [
+        {
+         "infraRsVlanNs": {
+          "attributes": {
+           "tDn": "uni/infra/vlanns-[VLAN-Pool-Server]-static"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "infraInfra": {
+       "attributes": {},
+       "children": [
+        {
+         "fvnsVlanInstP": {
+          "attributes": {
+           "name": "VLAN-Pool-ISP",
+           "allocMode": "static"
+          },
+          "children": [
+           {
+            "fvnsEncapBlk": {
+             "attributes": {
+              "from": "vlan-300",
+              "to": "vlan-310"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAttEntityP": {
+          "attributes": {
+           "name": "AAEP-ISP"
+          },
+          "children": [
+           {
+            "infraRsDomP": {
+             "attributes": {
+              "tDn": "uni/l3dom-L3Dom-ISP"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraFuncP": {
+          "attributes": {},
+          "children": [
+           {
+            "infraAccPortGrp": {
+             "attributes": {
+              "name": "IPG-ISP"
+             },
+             "children": [
+              {
+               "infraRsAttEntP": {
+                "attributes": {
+                 "tDn": "uni/infra/attentp-AAEP-ISP"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAccPortP": {
+          "attributes": {
+           "name": "IntProf-Leaf104"
+          },
+          "children": [
+           {
+            "infraHPortS": {
+             "attributes": {
+              "name": "isp",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraPortBlk": {
+                "attributes": {
+                 "name": "block2",
+                 "fromPort": "47",
+                 "toPort": "47"
+                }
+               }
+              },
+              {
+               "infraRsAccBaseGrp": {
+                "attributes": {
+                 "tDn": "uni/infra/funcprof/accportgrp-IPG-ISP"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraNodeP": {
+          "attributes": {
+           "name": "SwProf-Leaf104"
+          },
+          "children": [
+           {
+            "infraLeafS": {
+             "attributes": {
+              "name": "104-104",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraNodeBlk": {
+                "attributes": {
+                 "name": "blk",
+                 "from_": "104",
+                 "to_": "104"
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "infraRsAccPortP": {
+             "attributes": {
+              "tDn": "uni/infra/accportprof-IntProf-Leaf104"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "l3extDomP": {
+       "attributes": {
+        "name": "L3Dom-ISP"
+       },
+       "children": [
+        {
+         "infraRsVlanNs": {
+          "attributes": {
+           "tDn": "uni/infra/vlanns-[VLAN-Pool-ISP]-static"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "fabricInst": {
+       "attributes": {},
+       "children": [
+        {
+         "bgpInstPol": {
+          "attributes": {
+           "name": "default"
+          },
+          "children": [
+           {
+            "bgpAsP": {
+             "attributes": {
+              "asn": "65001"
+             }
+            }
+           },
+           {
+            "bgpRRP": {
+             "attributes": {},
+             "children": [
+              {
+               "bgpRRNodePEp": {
+                "attributes": {
+                 "id": "201"
+                }
+               }
+              },
+              {
+               "bgpRRNodePEp": {
+                "attributes": {
+                 "id": "202"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Shop"
+    },
+    "children": [
+     {
+      "fvCtx": {
+       "attributes": {
+        "name": "Prod"
+       }
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Web"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.10.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-App"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.20.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Webshop"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Web"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Web"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/1]",
+              "encap": "vlan-110",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "App"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-App"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/2]",
+              "encap": "vlan-120",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Shop"
+    },
+    "children": [
+     {
+      "vzBrCP": {
+       "attributes": {
+        "name": "partner-to-shop",
+        "scope": "context"
+       },
+       "children": [
+        {
+         "vzSubj": {
+          "attributes": {
+           "name": "subj",
+           "revFltPorts": "yes"
+          },
+          "children": [
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "icmp"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Web"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.10.1/24",
+           "scope": "public"
+          }
+         }
+        },
+        {
+         "fvRsBDToOut": {
+          "attributes": {
+           "tnL3extOutName": "Partner"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-App"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.20.1/24",
+           "scope": "public"
+          }
+         }
+        },
+        {
+         "fvRsBDToOut": {
+          "attributes": {
+           "tnL3extOutName": "Partner"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Webshop"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Web"
+          },
+          "children": [
+           {
+            "fvRsProv": {
+             "attributes": {
+              "tnVzBrCPName": "partner-to-shop"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "App"
+          },
+          "children": [
+           {
+            "fvRsProv": {
+             "attributes": {
+              "tnVzBrCPName": "partner-to-shop"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "l3extOut": {
+       "attributes": {
+        "name": "Partner"
+       },
+       "children": [
+        {
+         "l3extRsEctx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "l3extRsL3DomAtt": {
+          "attributes": {
+           "tDn": "uni/l3dom-L3Dom-ISP"
+          }
+         }
+        },
+        {
+         "bgpExtP": {
+          "attributes": {}
+         }
+        },
+        {
+         "l3extLNodeP": {
+          "attributes": {
+           "name": "border"
+          },
+          "children": [
+           {
+            "l3extRsNodeL3OutAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/node-104",
+              "rtrId": "1.1.1.104"
+             }
+            }
+           },
+           {
+            "l3extLIfP": {
+             "attributes": {
+              "name": "eth47"
+             },
+             "children": [
+              {
+               "l3extRsPathL3OutAtt": {
+                "attributes": {
+                 "tDn": "topology/pod-1/paths-104/pathep-[eth1/47]",
+                 "ifInstT": "sub-interface",
+                 "encap": "vlan-301",
+                 "addr": "172.16.1.1/30"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "l3extInstP": {
+          "attributes": {
+           "name": "PartnerNet"
+          },
+          "children": [
+           {
+            "l3extSubnet": {
+             "attributes": {
+              "ip": "192.168.50.0/24"
+             }
+            }
+           },
+           {
+            "fvRsCons": {
+             "attributes": {
+              "tnVzBrCPName": "partner-to-shop"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "hosts": [
+  {
+   "name": "web1",
+   "mac": "00:50:56:10:10:11",
+   "ip": "10.10.10.11/24",
+   "gw": "10.10.10.1",
+   "vlan": 110,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/1"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Webserver"
+  },
+  {
+   "name": "app1",
+   "mac": "00:50:56:10:20:11",
+   "ip": "10.10.20.11/24",
+   "gw": "10.10.20.1",
+   "vlan": 120,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/2"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Applikationsserver"
+  }
+ ],
+ "routers": [
+  {
+   "name": "partner1",
+   "serial": "SAL1931LA04",
+   "port": "eth1/47",
+   "vlan": 301,
+   "ip": "172.16.1.2/30",
+   "mtu": 1500,
+   "protocol": "bgp",
+   "routerId": "192.168.255.1",
+   "ospf": {
+    "area": "0.0.0.1",
+    "areaType": "regular",
+    "hello": 10,
+    "dead": 40,
+    "nwT": "bcast",
+    "mtuIgnore": false
+   },
+   "bgp": {
+    "asn": "65100",
+    "peerAs": "65001",
+    "password": "Partner#2026",
+    "hold": 30,
+    "keepalive": 10,
+    "updateSource": "192.168.255.1",
+    "peerAddr": "1.1.1.104"
+   },
+   "networks": [
+    "192.168.50.0/24"
+   ],
+   "advertise": [
+    "192.168.50.0/24"
+   ],
+   "staticBack": [
+    "1.1.1.104/32"
+   ]
+  }
+ ],
+ "tasks": [
+  {
+   "title": "Erreichbarkeit der Loopback",
+   "text": "Am Node 104 im Node Profile eine Static Route **192.168.255.1/32** mit Next Hop **172.16.1.2**.",
+   "hint": "Ohne diese Route kann leaf104 die Loopback des Partners nicht erreichen – BGP bleibt in Active."
+  },
+  {
+   "title": "BGP Peer am Node Profile",
+   "text": "BGP Peer Connectivity Profile **am Node Profile** (nicht am Interface): Peer **192.168.255.1**, Remote AS **65100**, **EBGP Multihop TTL 2**, Password **Partner#2026**.",
+   "hint": "Ein Peer am Node Profile nutzt die Loopback (Router ID) als Quelle."
+  },
+  {
+   "title": "BGP Timers",
+   "text": "BGP Timers Policy **Partner-Timers** (Keepalive 10, Hold 30) anlegen und am VRF **Prod** auswählen."
+  },
+  {
+   "title": "Summarization",
+   "text": "BGP Route Summarization Policy **Summary-Only** mit *Do not advertise more specifics*. Am External EPG **PartnerNet** das Subnetz **10.10.0.0/16** mit **Export Route Control Subnet** und dieser Policy anlegen."
+  },
+  {
+   "title": "Verifizieren",
+   "text": "leaf104: `show bgp ipv4 unicast neighbors vrf Shop:Prod` (Update Source, Multihop, Password, Hold Time), `show bgp ipv4 unicast summary vrf Shop:Prod`. Unter Simulation > Externe Router: Was lernt partner1?"
+  }
+ ],
+ "checks": [
+  {
+   "desc": "BGP partner1 Established",
+   "type": "router",
+   "name": "partner1",
+   "adj": "Established"
+  },
+  {
+   "desc": "Ausgehandelte Hold Time 30 s",
+   "type": "bgptimer",
+   "router": "partner1",
+   "hold": 30
+  },
+  {
+   "desc": "partner1 lernt die Summary 10.10.0.0/16",
+   "type": "learned",
+   "router": "partner1",
+   "prefix": "10.10.0.0/16"
+  },
+  {
+   "desc": "partner1 lernt 10.10.10.0/24 nicht mehr einzeln",
+   "type": "learned",
+   "router": "partner1",
+   "prefix": "10.10.10.0/24",
+   "expect": false
+  },
+  {
+   "desc": "192.168.50.10 → web1 Ping",
+   "type": "traffic",
+   "src": "192.168.50.10",
+   "dst": "web1",
+   "proto": "icmp",
+   "expect": true
+  }
+ ],
+ "solution": "`{\"fvTenant\": {\"attributes\": {\"name\": \"Shop\"}, \"children\": [{\"bgpCtxPol\": {\"attributes\": {\"name\": \"Partner-Timers\", \"kaIntvl\": \"10\", \"holdIntvl\": \"30\"}}}, {\"fvCtx\": {\"attributes\": {\"name\": \"Prod\"}, \"children\": [{\"fvRsBgpCtxPol\": {\"attributes\": {\"tnBgpCtxPolName\": \"Partner-Timers\"}}}]}}, {\"bgpRtSummPol\": {\"attributes\": {\"name\": \"Summary-Only\", \"ctrl\": \"summary-only\"}}}, {\"l3extOut\": {\"attributes\": {\"name\": \"Partner\"}, \"children\": [{\"l3extLNodeP\": {\"attributes\": {\"name\": \"border\"}, \"children\": [{\"l3extRsNodeL3OutAtt\": {\"attributes\": {\"tDn\": \"topology/pod-1/node-104\", \"rtrId\": \"1.1.1.104\"}, \"children\": [{\"ipRouteP\": {\"attributes\": {\"ip\": \"192.168.255.1/32\"}, \"children\": [{\"ipNexthopP\": {\"attributes\": {\"nhAddr\": \"172.16.1.2\"}}}]}}]}}, {\"bgpPeerP\": {\"attributes\": {\"addr\": \"192.168.255.1\", \"ttl\": \"2\", \"password\": \"Partner#2026\"}, \"children\": [{\"bgpAsP\": {\"attributes\": {\"asn\": \"65100\"}}}]}}]}}, {\"l3extInstP\": {\"attributes\": {\"name\": \"PartnerNet\"}, \"children\": [{\"l3extSubnet\": {\"attributes\": {\"ip\": \"10.10.0.0/16\", \"scope\": \"export-rtctrl\"}, \"children\": [{\"l3extRsSubnetToRtSumm\": {\"attributes\": {\"tDn\": \"uni/tn-Shop/bgprtsum-Summary-Only\"}}}]}}]}}]}}]}}`\\n\\nTypische Fehler: TTL 1 (Session bleibt Idle), fehlende Static Route zur Partner-Loopback (Active), falsches Passwort (Active, TCP-MD5 schlägt fehl).",
+ "vcenters": [],
+ "devices": [],
+ "aaa": [],
+ "switches": [],
+ "solutionConfig": [
+  [
+   "uni",
+   {
+    "fvTenant": {
+     "attributes": {
+      "name": "Shop"
+     },
+     "children": [
+      {
+       "bgpCtxPol": {
+        "attributes": {
+         "name": "Partner-Timers",
+         "kaIntvl": "10",
+         "holdIntvl": "30"
+        }
+       }
+      },
+      {
+       "fvCtx": {
+        "attributes": {
+         "name": "Prod"
+        },
+        "children": [
+         {
+          "fvRsBgpCtxPol": {
+           "attributes": {
+            "tnBgpCtxPolName": "Partner-Timers"
+           }
+          }
+         }
+        ]
+       }
+      },
+      {
+       "bgpRtSummPol": {
+        "attributes": {
+         "name": "Summary-Only",
+         "ctrl": "summary-only"
+        }
+       }
+      },
+      {
+       "l3extOut": {
+        "attributes": {
+         "name": "Partner"
+        },
+        "children": [
+         {
+          "l3extLNodeP": {
+           "attributes": {
+            "name": "border"
+           },
+           "children": [
+            {
+             "l3extRsNodeL3OutAtt": {
+              "attributes": {
+               "tDn": "topology/pod-1/node-104",
+               "rtrId": "1.1.1.104"
+              },
+              "children": [
+               {
+                "ipRouteP": {
+                 "attributes": {
+                  "ip": "192.168.255.1/32"
+                 },
+                 "children": [
+                  {
+                   "ipNexthopP": {
+                    "attributes": {
+                     "nhAddr": "172.16.1.2"
+                    }
+                   }
+                  }
+                 ]
+                }
+               }
+              ]
+             }
+            },
+            {
+             "bgpPeerP": {
+              "attributes": {
+               "addr": "192.168.255.1",
+               "ttl": "2",
+               "password": "Partner#2026"
+              },
+              "children": [
+               {
+                "bgpAsP": {
+                 "attributes": {
+                  "asn": "65100"
+                 }
+                }
+               }
+              ]
+             }
+            }
+           ]
+          }
+         },
+         {
+          "l3extInstP": {
+           "attributes": {
+            "name": "PartnerNet"
+           },
+           "children": [
+            {
+             "l3extSubnet": {
+              "attributes": {
+               "ip": "10.10.0.0/16",
+               "scope": "export-rtctrl"
+              },
+              "children": [
+               {
+                "l3extRsSubnetToRtSumm": {
+                 "attributes": {
+                  "tDn": "uni/tn-Shop/bgprtsum-Summary-Only"
+                 }
+                }
+               }
+              ]
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  ]
+ ]
+}

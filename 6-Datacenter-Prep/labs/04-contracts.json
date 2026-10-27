@@ -1,0 +1,858 @@
+{
+ "id": "04-contracts",
+ "title": "04 Contracts, Filter und vzAny",
+ "topic": "Policy / Contracts",
+ "level": "Mittel",
+ "duration": "35 min",
+ "fabric": "discovered",
+ "goals": [
+  "Filter und Contracts anlegen",
+  "Provider und Consumer richtig zuordnen",
+  "Reverse Filter Ports verstehen",
+  "vzAny für einen Contract an alle EPGs im VRF nutzen"
+ ],
+ "intro": "Der Tenant **Shop** aus Lab 03 steht. Zusätzlich gibt es die EPG **Mgmt** mit dem Jump-Host **jump1** (10.10.40.11). Jetzt kommt die Policy.\n\n**Anforderungen:**\n- Web darf App auf **TCP 8080** und per **Ping** erreichen.\n- App darf von sich aus keine Verbindung zu Web aufbauen.\n- jump1 soll **jede** EPG im VRF Prod per **SSH (TCP 22)** erreichen.",
+ "config": [
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "infraInfra": {
+       "attributes": {},
+       "children": [
+        {
+         "fvnsVlanInstP": {
+          "attributes": {
+           "name": "VLAN-Pool-Server",
+           "allocMode": "static"
+          },
+          "children": [
+           {
+            "fvnsEncapBlk": {
+             "attributes": {
+              "from": "vlan-100",
+              "to": "vlan-199"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAttEntityP": {
+          "attributes": {
+           "name": "AAEP-Server"
+          },
+          "children": [
+           {
+            "infraRsDomP": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraFuncP": {
+          "attributes": {},
+          "children": [
+           {
+            "infraAccPortGrp": {
+             "attributes": {
+              "name": "IPG-Server-Access"
+             },
+             "children": [
+              {
+               "infraRsAttEntP": {
+                "attributes": {
+                 "tDn": "uni/infra/attentp-AAEP-Server"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAccPortP": {
+          "attributes": {
+           "name": "IntProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraHPortS": {
+             "attributes": {
+              "name": "Server-Ports",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraPortBlk": {
+                "attributes": {
+                 "name": "block2",
+                 "fromPort": "1",
+                 "toPort": "10"
+                }
+               }
+              },
+              {
+               "infraRsAccBaseGrp": {
+                "attributes": {
+                 "tDn": "uni/infra/funcprof/accportgrp-IPG-Server-Access"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraNodeP": {
+          "attributes": {
+           "name": "SwProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraLeafS": {
+             "attributes": {
+              "name": "101-102",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraNodeBlk": {
+                "attributes": {
+                 "name": "blk",
+                 "from_": "101",
+                 "to_": "102"
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "infraRsAccPortP": {
+             "attributes": {
+              "tDn": "uni/infra/accportprof-IntProf-Leaf101-102"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "physDomP": {
+       "attributes": {
+        "name": "PhysDom-Server"
+       },
+       "children": [
+        {
+         "infraRsVlanNs": {
+          "attributes": {
+           "tDn": "uni/infra/vlanns-[VLAN-Pool-Server]-static"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Shop"
+    },
+    "children": [
+     {
+      "fvCtx": {
+       "attributes": {
+        "name": "Prod"
+       }
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Web"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.10.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-App"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.20.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Mgmt"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.40.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Webshop"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Web"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Web"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/1]",
+              "encap": "vlan-110",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "App"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-App"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/2]",
+              "encap": "vlan-120",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Mgmt"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Mgmt"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/5]",
+              "encap": "vlan-140",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "hosts": [
+  {
+   "name": "web1",
+   "mac": "00:50:56:10:10:11",
+   "ip": "10.10.10.11/24",
+   "gw": "10.10.10.1",
+   "vlan": 110,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/1"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Webserver"
+  },
+  {
+   "name": "app1",
+   "mac": "00:50:56:10:20:11",
+   "ip": "10.10.20.11/24",
+   "gw": "10.10.20.1",
+   "vlan": 120,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/2"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Applikationsserver"
+  },
+  {
+   "name": "jump1",
+   "mac": "00:50:56:10:40:11",
+   "ip": "10.10.40.11/24",
+   "gw": "10.10.40.1",
+   "vlan": 140,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/5"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Jump-Host der Admins"
+  }
+ ],
+ "tasks": [
+  {
+   "title": "Filter",
+   "text": "Unter **Contracts > Filters** einen Filter **tcp-8080** mit einem Entry: EtherType IP, Protocol tcp, Destination Port 8080.",
+   "hint": "Für Ping gibt es im Tenant common schon den Filter **icmp** – den kannst du direkt verwenden."
+  },
+  {
+   "title": "Contract",
+   "text": "Contract **web-to-app** (Scope VRF) mit einem Subject, das die Filter tcp-8080 und icmp enthält."
+  },
+  {
+   "title": "Provider und Consumer",
+   "text": "Die EPG **App** stellt den Dienst bereit (**Provided**), die EPG **Web** nutzt ihn (**Consumed**). Am EPG unter **Contracts** hinzufügen."
+  },
+  {
+   "title": "Testen",
+   "text": "web1 → app1: TCP 8080 und ICMP klappen, TCP 22 nicht. app1 → web1 auf TCP 8080 ist blockiert. Auf leaf101: `show zoning-rule` – erkennst du die Regeln bi-dir und uni-dir-ignore?"
+  },
+  {
+   "title": "vzAny",
+   "text": "Filter **ssh** (tcp/22) und Contract **mgmt-ssh** anlegen. Unter **VRF Prod > EPG Collection for VRF** den Contract als **Provided** eintragen, an der EPG **Mgmt** als **Consumed**.",
+   "hint": "vzAny steht für alle EPGs im VRF. Weil nur Mgmt konsumiert, darf Web trotzdem nicht per SSH zu App."
+  }
+ ],
+ "checks": [
+  {
+   "desc": "web1 → app1 TCP 8080 erlaubt",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "app1",
+   "proto": "tcp",
+   "port": 8080,
+   "expect": true
+  },
+  {
+   "desc": "web1 → app1 Ping erlaubt",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "app1",
+   "proto": "icmp",
+   "expect": true
+  },
+  {
+   "desc": "web1 → app1 TCP 22 blockiert",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "app1",
+   "proto": "tcp",
+   "port": 22,
+   "expect": false
+  },
+  {
+   "desc": "app1 → web1 TCP 8080 blockiert (Provider baut nicht auf)",
+   "type": "traffic",
+   "src": "app1",
+   "dst": "web1",
+   "proto": "tcp",
+   "port": 8080,
+   "expect": false
+  },
+  {
+   "desc": "jump1 → web1 SSH erlaubt",
+   "type": "traffic",
+   "src": "jump1",
+   "dst": "web1",
+   "proto": "tcp",
+   "port": 22,
+   "expect": true
+  },
+  {
+   "desc": "jump1 → app1 SSH erlaubt",
+   "type": "traffic",
+   "src": "jump1",
+   "dst": "app1",
+   "proto": "tcp",
+   "port": 22,
+   "expect": true
+  }
+ ],
+ "solution": "Contract web-to-app: `{\"vzBrCP\": {\"attributes\": {\"name\": \"web-to-app\", \"scope\": \"context\"}, \"children\": [{\"vzSubj\": {\"attributes\": {\"name\": \"subj\", \"revFltPorts\": \"yes\"}, \"children\": [{\"vzRsSubjFiltAtt\": {\"attributes\": {\"tnVzFilterName\": \"tcp-8080\"}}}, {\"vzRsSubjFiltAtt\": {\"attributes\": {\"tnVzFilterName\": \"icmp\"}}}]}}]}}`\n\nvzAny: `POST /api/mo/uni/tn-Shop/ctx-Prod/any.json` mit `{\"vzRsAnyToProv\":{\"attributes\":{\"tnVzBrCPName\":\"mgmt-ssh\"}}}`, an der EPG Mgmt `fvRsCons` mit `tnVzBrCPName=mgmt-ssh`.",
+ "routers": [],
+ "vcenters": [],
+ "devices": [],
+ "aaa": [],
+ "switches": [],
+ "solutionConfig": [
+  [
+   "uni",
+   {
+    "fvTenant": {
+     "attributes": {
+      "name": "Shop"
+     },
+     "children": [
+      {
+       "fvCtx": {
+        "attributes": {
+         "name": "Prod"
+        }
+       }
+      },
+      {
+       "fvBD": {
+        "attributes": {
+         "name": "BD-Web"
+        },
+        "children": [
+         {
+          "fvRsCtx": {
+           "attributes": {
+            "tnFvCtxName": "Prod"
+           }
+          }
+         },
+         {
+          "fvSubnet": {
+           "attributes": {
+            "ip": "10.10.10.1/24",
+            "scope": "private"
+           }
+          }
+         }
+        ]
+       }
+      },
+      {
+       "fvBD": {
+        "attributes": {
+         "name": "BD-App"
+        },
+        "children": [
+         {
+          "fvRsCtx": {
+           "attributes": {
+            "tnFvCtxName": "Prod"
+           }
+          }
+         },
+         {
+          "fvSubnet": {
+           "attributes": {
+            "ip": "10.10.20.1/24",
+            "scope": "private"
+           }
+          }
+         }
+        ]
+       }
+      },
+      {
+       "fvBD": {
+        "attributes": {
+         "name": "BD-Mgmt"
+        },
+        "children": [
+         {
+          "fvRsCtx": {
+           "attributes": {
+            "tnFvCtxName": "Prod"
+           }
+          }
+         },
+         {
+          "fvSubnet": {
+           "attributes": {
+            "ip": "10.10.40.1/24",
+            "scope": "private"
+           }
+          }
+         }
+        ]
+       }
+      },
+      {
+       "fvAp": {
+        "attributes": {
+         "name": "Webshop"
+        },
+        "children": [
+         {
+          "fvAEPg": {
+           "attributes": {
+            "name": "Web"
+           },
+           "children": [
+            {
+             "fvRsBd": {
+              "attributes": {
+               "tnFvBDName": "BD-Web"
+              }
+             }
+            },
+            {
+             "fvRsDomAtt": {
+              "attributes": {
+               "tDn": "uni/phys-PhysDom-Server"
+              }
+             }
+            },
+            {
+             "fvRsPathAtt": {
+              "attributes": {
+               "tDn": "topology/pod-1/paths-101/pathep-[eth1/1]",
+               "encap": "vlan-110",
+               "mode": "regular"
+              }
+             }
+            },
+            {
+             "fvRsCons": {
+              "attributes": {
+               "tnVzBrCPName": "web-to-app"
+              }
+             }
+            }
+           ]
+          }
+         },
+         {
+          "fvAEPg": {
+           "attributes": {
+            "name": "App"
+           },
+           "children": [
+            {
+             "fvRsBd": {
+              "attributes": {
+               "tnFvBDName": "BD-App"
+              }
+             }
+            },
+            {
+             "fvRsDomAtt": {
+              "attributes": {
+               "tDn": "uni/phys-PhysDom-Server"
+              }
+             }
+            },
+            {
+             "fvRsPathAtt": {
+              "attributes": {
+               "tDn": "topology/pod-1/paths-102/pathep-[eth1/2]",
+               "encap": "vlan-120",
+               "mode": "regular"
+              }
+             }
+            },
+            {
+             "fvRsProv": {
+              "attributes": {
+               "tnVzBrCPName": "web-to-app"
+              }
+             }
+            }
+           ]
+          }
+         },
+         {
+          "fvAEPg": {
+           "attributes": {
+            "name": "Mgmt"
+           },
+           "children": [
+            {
+             "fvRsBd": {
+              "attributes": {
+               "tnFvBDName": "BD-Mgmt"
+              }
+             }
+            },
+            {
+             "fvRsDomAtt": {
+              "attributes": {
+               "tDn": "uni/phys-PhysDom-Server"
+              }
+             }
+            },
+            {
+             "fvRsPathAtt": {
+              "attributes": {
+               "tDn": "topology/pod-1/paths-101/pathep-[eth1/5]",
+               "encap": "vlan-140",
+               "mode": "regular"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      },
+      {
+       "vzFilter": {
+        "attributes": {
+         "name": "tcp-8080"
+        },
+        "children": [
+         {
+          "vzEntry": {
+           "attributes": {
+            "name": "tcp-8080",
+            "etherT": "ip",
+            "prot": "tcp",
+            "dFromPort": "8080",
+            "dToPort": "8080"
+           }
+          }
+         }
+        ]
+       }
+      },
+      {
+       "vzBrCP": {
+        "attributes": {
+         "name": "web-to-app",
+         "scope": "context"
+        },
+        "children": [
+         {
+          "vzSubj": {
+           "attributes": {
+            "name": "subj",
+            "revFltPorts": "yes"
+           },
+           "children": [
+            {
+             "vzRsSubjFiltAtt": {
+              "attributes": {
+               "tnVzFilterName": "tcp-8080"
+              }
+             }
+            },
+            {
+             "vzRsSubjFiltAtt": {
+              "attributes": {
+               "tnVzFilterName": "icmp"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "uni/tn-Shop",
+   {
+    "fvTenant": {
+     "attributes": {
+      "name": "Shop"
+     },
+     "children": [
+      {
+       "vzFilter": {
+        "attributes": {
+         "name": "ssh"
+        },
+        "children": [
+         {
+          "vzEntry": {
+           "attributes": {
+            "name": "ssh",
+            "etherT": "ip",
+            "prot": "tcp",
+            "dFromPort": "22",
+            "dToPort": "22"
+           }
+          }
+         }
+        ]
+       }
+      },
+      {
+       "vzBrCP": {
+        "attributes": {
+         "name": "mgmt-ssh",
+         "scope": "context"
+        },
+        "children": [
+         {
+          "vzSubj": {
+           "attributes": {
+            "name": "subj",
+            "revFltPorts": "yes"
+           },
+           "children": [
+            {
+             "vzRsSubjFiltAtt": {
+              "attributes": {
+               "tnVzFilterName": "ssh"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "uni/tn-Shop/ctx-Prod/any",
+   {
+    "vzAny": {
+     "attributes": {},
+     "children": [
+      {
+       "vzRsAnyToProv": {
+        "attributes": {
+         "tnVzBrCPName": "mgmt-ssh"
+        }
+       }
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "uni/tn-Shop/ap-Webshop/epg-Mgmt",
+   {
+    "fvAEPg": {
+     "attributes": {},
+     "children": [
+      {
+       "fvRsCons": {
+        "attributes": {
+         "tnVzBrCPName": "mgmt-ssh"
+        }
+       }
+      }
+     ]
+    }
+   }
+  ]
+ ]
+}

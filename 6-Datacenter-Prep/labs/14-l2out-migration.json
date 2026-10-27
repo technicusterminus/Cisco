@@ -1,0 +1,772 @@
+{
+ "id": "14-l2out-migration",
+ "title": "14 L2Out und Migration: stille Hosts und ARP Flooding",
+ "topic": "Netzwerk-Migration",
+ "level": "Fortgeschritten",
+ "duration": "40 min",
+ "fabric": "discovered",
+ "goals": [
+  "Ein altes Netz per L2Out (External Bridged Network) an eine Bridge Domain anbinden",
+  "Verstehen, warum stille Hosts ohne ARP Flooding unerreichbar bleiben",
+  "BD-Einstellungen für eine Migrationsphase wählen"
+ ],
+ "intro": "Das Subnetz **10.10.50.0/24** zieht vom alten Netz in die ACI. Das Gateway **10.10.50.1** bleibt während der Migration noch auf dem Legacy-Router – die **BD-Migration** ist deshalb reines Layer 2 (Unicast Routing aus, kein Subnetz). Der neue Server **web2** (EPG **Neu**) ist schon in der ACI.\n\nDer Legacy-Switch hängt an **leaf103 eth1/20** und spricht **VLAN 300**. Dahinter steht **old-srv** (10.10.50.20) – ein Altsystem, das nie von selbst sendet. Die ACI kann es also nicht lernen, bis jemand es per ARP anfragt.",
+ "config": [
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "infraInfra": {
+       "attributes": {},
+       "children": [
+        {
+         "fvnsVlanInstP": {
+          "attributes": {
+           "name": "VLAN-Pool-Server",
+           "allocMode": "static"
+          },
+          "children": [
+           {
+            "fvnsEncapBlk": {
+             "attributes": {
+              "from": "vlan-100",
+              "to": "vlan-199"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAttEntityP": {
+          "attributes": {
+           "name": "AAEP-Server"
+          },
+          "children": [
+           {
+            "infraRsDomP": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraFuncP": {
+          "attributes": {},
+          "children": [
+           {
+            "infraAccPortGrp": {
+             "attributes": {
+              "name": "IPG-Server-Access"
+             },
+             "children": [
+              {
+               "infraRsAttEntP": {
+                "attributes": {
+                 "tDn": "uni/infra/attentp-AAEP-Server"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAccPortP": {
+          "attributes": {
+           "name": "IntProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraHPortS": {
+             "attributes": {
+              "name": "Server-Ports",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraPortBlk": {
+                "attributes": {
+                 "name": "block2",
+                 "fromPort": "1",
+                 "toPort": "10"
+                }
+               }
+              },
+              {
+               "infraRsAccBaseGrp": {
+                "attributes": {
+                 "tDn": "uni/infra/funcprof/accportgrp-IPG-Server-Access"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraNodeP": {
+          "attributes": {
+           "name": "SwProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraLeafS": {
+             "attributes": {
+              "name": "101-102",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraNodeBlk": {
+                "attributes": {
+                 "name": "blk",
+                 "from_": "101",
+                 "to_": "102"
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "infraRsAccPortP": {
+             "attributes": {
+              "tDn": "uni/infra/accportprof-IntProf-Leaf101-102"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "physDomP": {
+       "attributes": {
+        "name": "PhysDom-Server"
+       },
+       "children": [
+        {
+         "infraRsVlanNs": {
+          "attributes": {
+           "tDn": "uni/infra/vlanns-[VLAN-Pool-Server]-static"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Shop"
+    },
+    "children": [
+     {
+      "fvCtx": {
+       "attributes": {
+        "name": "Prod"
+       }
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Web"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.10.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-App"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.20.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Webshop"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Web"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Web"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/1]",
+              "encap": "vlan-110",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "App"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-App"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/2]",
+              "encap": "vlan-120",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Shop"
+    },
+    "children": [
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Migration",
+        "unicastRoute": "no",
+        "arpFlood": "no",
+        "unkMacUcastAct": "flood"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Migration"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Neu"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Migration"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/6]",
+              "encap": "vlan-150",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "hosts": [
+  {
+   "name": "web2",
+   "mac": "00:50:56:14:50:11",
+   "ip": "10.10.50.11/24",
+   "gw": "10.10.50.1",
+   "vlan": 150,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/6"
+    ]
+   ],
+   "bond": "none",
+   "descr": "neuer Server in der ACI"
+  },
+  {
+   "name": "old-srv",
+   "mac": "00:50:56:14:50:20",
+   "ip": "10.10.50.20/24",
+   "gw": "10.10.50.1",
+   "vlan": 300,
+   "links": [
+    [
+     "SAL1931LA03",
+     "eth1/20"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Altsystem hinter dem Legacy-Switch, sendet nie von selbst",
+   "silent": true
+  }
+ ],
+ "tasks": [
+  {
+   "title": "Access Policies",
+   "text": "VLAN Pool **VLAN-Pool-Legacy** (static, vlan-300), **External Bridged Domain** **L2Dom-Legacy** (Physical and External Domains > External Bridged Domains), AAEP **AAEP-Legacy**, Policy Group **IPG-Legacy**, Interface Profile **IntProf-Leaf103** mit Port 1/20 und Switch Profile **SwProf-Leaf103** für Node 103."
+  },
+  {
+   "title": "L2Out",
+   "text": "Im Tenant Shop **Networking > L2Outs**, **Create L2Out**: Name **Legacy**, Bridge Domain **BD-Migration**, Encap **vlan-300**, Domain L2Dom-Legacy, Path leaf103 eth1/20, External EPG **LegacyNet**."
+  },
+  {
+   "title": "Contract",
+   "text": "Contract **migration** (Filter **default** aus common): LegacyNet *Provided*, EPG **Neu** *Consumed*.",
+   "hint": "Ein L2Out hat ein eigenes External EPG (eigener pcTag) – auch im selben BD braucht es einen Contract."
+  },
+  {
+   "title": "Erster Test",
+   "text": "Ping von web2 zu old-srv. Warum scheitert er? Lies den Schritt im Ergebnis."
+  },
+  {
+   "title": "ARP Flooding",
+   "text": "Im **BD-Migration** unter Policy > General **ARP Flooding** aktivieren und erneut testen.",
+   "hint": "Ohne Unicast Routing kann die ACI kein ARP Glean machen. Den ARP-Request für einen unbekannten Host muss sie dann fluten."
+  }
+ ],
+ "checks": [
+  {
+   "desc": "L2Out Legacy ohne F0467",
+   "type": "nofaults",
+   "under": "uni/tn-Shop/l2out-Legacy",
+   "code": "F0467"
+  },
+  {
+   "desc": "L2Out Legacy auf leaf103 eth1/20",
+   "type": "exists",
+   "dn": "uni/tn-Shop/l2out-Legacy/lnodep-default/lifp-default/rspathL2OutAtt-[topology/pod-1/paths-103/pathep-[eth1/20]]"
+  },
+  {
+   "desc": "ARP Flooding im BD-Migration",
+   "type": "exists",
+   "dn": "uni/tn-Shop/BD-BD-Migration",
+   "attrs": {
+    "arpFlood": "yes"
+   }
+  },
+  {
+   "desc": "web2 → old-srv Ping",
+   "type": "traffic",
+   "src": "web2",
+   "dst": "old-srv",
+   "proto": "icmp",
+   "expect": true
+  }
+ ],
+ "solution": "Access: `{\"polUni\": {\"attributes\": {}, \"children\": [{\"infraInfra\": {\"attributes\": {}, \"children\": [{\"fvnsVlanInstP\": {\"attributes\": {\"name\": \"VLAN-Pool-Legacy\", \"allocMode\": \"static\"}, \"children\": [{\"fvnsEncapBlk\": {\"attributes\": {\"from\": \"vlan-300\", \"to\": \"vlan-300\"}}}]}}, {\"infraAttEntityP\": {\"attributes\": {\"name\": \"AAEP-Legacy\"}, \"children\": [{\"infraRsDomP\": {\"attributes\": {\"tDn\": \"uni/l2dom-L2Dom-Legacy\"}}}]}}, {\"infraFuncP\": {\"attributes\": {}, \"children\": [{\"infraAccPortGrp\": {\"attributes\": {\"name\": \"IPG-Legacy\"}, \"children\": [{\"infraRsAttEntP\": {\"attributes\": {\"tDn\": \"uni/infra/attentp-AAEP-Legacy\"}}}]}}]}}, {\"infraAccPortP\": {\"attributes\": {\"name\": \"IntProf-Leaf103\"}, \"children\": [{\"infraHPortS\": {\"attributes\": {\"name\": \"legacy\", \"type\": \"range\"}, \"children\": [{\"infraPortBlk\": {\"attributes\": {\"name\": \"block2\", \"fromPort\": \"20\", \"toPort\": \"20\"}}}, {\"infraRsAccBaseGrp\": {\"attributes\": {\"tDn\": \"uni/infra/funcprof/accportgrp-IPG-Legacy\"}}}]}}]}}, {\"infraNodeP\": {\"attributes\": {\"name\": \"SwProf-Leaf103\"}, \"children\": [{\"infraLeafS\": {\"attributes\": {\"name\": \"103\", \"type\": \"range\"}, \"children\": [{\"infraNodeBlk\": {\"attributes\": {\"name\": \"blk\", \"from_\": \"103\", \"to_\": \"103\"}}}]}}, {\"infraRsAccPortP\": {\"attributes\": {\"tDn\": \"uni/infra/accportprof-IntProf-Leaf103\"}}}]}}]}}, {\"l2extDomP\": {\"attributes\": {\"name\": \"L2Dom-Legacy\"}, \"children\": [{\"infraRsVlanNs\": {\"attributes\": {\"tDn\": \"uni/infra/vlanns-[VLAN-Pool-Legacy]-static\"}}}]}}]}}`\n\nTenant: `{\"fvTenant\": {\"attributes\": {\"name\": \"Shop\"}, \"children\": [{\"vzBrCP\": {\"attributes\": {\"name\": \"migration\", \"scope\": \"context\"}, \"children\": [{\"vzSubj\": {\"attributes\": {\"name\": \"any\", \"revFltPorts\": \"yes\"}, \"children\": [{\"vzRsSubjFiltAtt\": {\"attributes\": {\"tnVzFilterName\": \"default\"}}}]}}]}}, {\"fvAp\": {\"attributes\": {\"name\": \"Migration\"}, \"children\": [{\"fvAEPg\": {\"attributes\": {\"name\": \"Neu\"}, \"children\": [{\"fvRsCons\": {\"attributes\": {\"tnVzBrCPName\": \"migration\"}}}]}}]}}, {\"l2extOut\": {\"attributes\": {\"name\": \"Legacy\"}, \"children\": [{\"l2extRsEBd\": {\"attributes\": {\"tnFvBDName\": \"BD-Migration\", \"encap\": \"vlan-300\"}}}, {\"l2extRsL2DomAtt\": {\"attributes\": {\"tDn\": \"uni/l2dom-L2Dom-Legacy\"}}}, {\"l2extLNodeP\": {\"attributes\": {\"name\": \"default\"}, \"children\": [{\"l2extLIfP\": {\"attributes\": {\"name\": \"default\"}, \"children\": [{\"l2extRsPathL2OutAtt\": {\"attributes\": {\"tDn\": \"topology/pod-1/paths-103/pathep-[eth1/20]\"}}}]}}]}}, {\"l2extInstP\": {\"attributes\": {\"name\": \"LegacyNet\"}, \"children\": [{\"fvRsProv\": {\"attributes\": {\"tnVzBrCPName\": \"migration\"}}}]}}]}}]}}`\n\nUnd am BD: `arpFlood=yes`. In der Migrationsphase typisch: L2 Unknown Unicast *Flood*, ARP Flooding *an*, Unicast Routing *aus*.",
+ "routers": [],
+ "vcenters": [],
+ "devices": [],
+ "aaa": [],
+ "switches": [],
+ "solutionConfig": [
+  [
+   "uni",
+   {
+    "polUni": {
+     "attributes": {},
+     "children": [
+      {
+       "infraInfra": {
+        "attributes": {},
+        "children": [
+         {
+          "fvnsVlanInstP": {
+           "attributes": {
+            "name": "VLAN-Pool-Legacy",
+            "allocMode": "static"
+           },
+           "children": [
+            {
+             "fvnsEncapBlk": {
+              "attributes": {
+               "from": "vlan-300",
+               "to": "vlan-300"
+              }
+             }
+            }
+           ]
+          }
+         },
+         {
+          "infraAttEntityP": {
+           "attributes": {
+            "name": "AAEP-Legacy"
+           },
+           "children": [
+            {
+             "infraRsDomP": {
+              "attributes": {
+               "tDn": "uni/l2dom-L2Dom-Legacy"
+              }
+             }
+            }
+           ]
+          }
+         },
+         {
+          "infraFuncP": {
+           "attributes": {},
+           "children": [
+            {
+             "infraAccPortGrp": {
+              "attributes": {
+               "name": "IPG-Legacy"
+              },
+              "children": [
+               {
+                "infraRsAttEntP": {
+                 "attributes": {
+                  "tDn": "uni/infra/attentp-AAEP-Legacy"
+                 }
+                }
+               }
+              ]
+             }
+            }
+           ]
+          }
+         },
+         {
+          "infraAccPortP": {
+           "attributes": {
+            "name": "IntProf-Leaf103"
+           },
+           "children": [
+            {
+             "infraHPortS": {
+              "attributes": {
+               "name": "legacy",
+               "type": "range"
+              },
+              "children": [
+               {
+                "infraPortBlk": {
+                 "attributes": {
+                  "name": "block2",
+                  "fromPort": "20",
+                  "toPort": "20"
+                 }
+                }
+               },
+               {
+                "infraRsAccBaseGrp": {
+                 "attributes": {
+                  "tDn": "uni/infra/funcprof/accportgrp-IPG-Legacy"
+                 }
+                }
+               }
+              ]
+             }
+            }
+           ]
+          }
+         },
+         {
+          "infraNodeP": {
+           "attributes": {
+            "name": "SwProf-Leaf103"
+           },
+           "children": [
+            {
+             "infraLeafS": {
+              "attributes": {
+               "name": "103",
+               "type": "range"
+              },
+              "children": [
+               {
+                "infraNodeBlk": {
+                 "attributes": {
+                  "name": "blk",
+                  "from_": "103",
+                  "to_": "103"
+                 }
+                }
+               }
+              ]
+             }
+            },
+            {
+             "infraRsAccPortP": {
+              "attributes": {
+               "tDn": "uni/infra/accportprof-IntProf-Leaf103"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      },
+      {
+       "l2extDomP": {
+        "attributes": {
+         "name": "L2Dom-Legacy"
+        },
+        "children": [
+         {
+          "infraRsVlanNs": {
+           "attributes": {
+            "tDn": "uni/infra/vlanns-[VLAN-Pool-Legacy]-static"
+           }
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "uni",
+   {
+    "fvTenant": {
+     "attributes": {
+      "name": "Shop"
+     },
+     "children": [
+      {
+       "vzBrCP": {
+        "attributes": {
+         "name": "migration",
+         "scope": "context"
+        },
+        "children": [
+         {
+          "vzSubj": {
+           "attributes": {
+            "name": "any",
+            "revFltPorts": "yes"
+           },
+           "children": [
+            {
+             "vzRsSubjFiltAtt": {
+              "attributes": {
+               "tnVzFilterName": "default"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      },
+      {
+       "fvAp": {
+        "attributes": {
+         "name": "Migration"
+        },
+        "children": [
+         {
+          "fvAEPg": {
+           "attributes": {
+            "name": "Neu"
+           },
+           "children": [
+            {
+             "fvRsCons": {
+              "attributes": {
+               "tnVzBrCPName": "migration"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      },
+      {
+       "l2extOut": {
+        "attributes": {
+         "name": "Legacy"
+        },
+        "children": [
+         {
+          "l2extRsEBd": {
+           "attributes": {
+            "tnFvBDName": "BD-Migration",
+            "encap": "vlan-300"
+           }
+          }
+         },
+         {
+          "l2extRsL2DomAtt": {
+           "attributes": {
+            "tDn": "uni/l2dom-L2Dom-Legacy"
+           }
+          }
+         },
+         {
+          "l2extLNodeP": {
+           "attributes": {
+            "name": "default"
+           },
+           "children": [
+            {
+             "l2extLIfP": {
+              "attributes": {
+               "name": "default"
+              },
+              "children": [
+               {
+                "l2extRsPathL2OutAtt": {
+                 "attributes": {
+                  "tDn": "topology/pod-1/paths-103/pathep-[eth1/20]"
+                 }
+                }
+               }
+              ]
+             }
+            }
+           ]
+          }
+         },
+         {
+          "l2extInstP": {
+           "attributes": {
+            "name": "LegacyNet"
+           },
+           "children": [
+            {
+             "fvRsProv": {
+              "attributes": {
+               "tnVzBrCPName": "migration"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "uni/tn-Shop/BD-BD-Migration",
+   {
+    "fvBD": {
+     "attributes": {
+      "arpFlood": "yes"
+     }
+    }
+   }
+  ]
+ ]
+}

@@ -1,0 +1,730 @@
+{
+ "id": "13-shared-services",
+ "title": "13 Shared Services: Route Leaking zwischen Tenants",
+ "topic": "Policy / Inter-VRF",
+ "level": "Fortgeschritten",
+ "duration": "35 min",
+ "fabric": "discovered",
+ "goals": [
+  "Einen Contract mit Scope global in einen anderen Tenant exportieren",
+  "Provider-Subnetz an der EPG und Consumer-Subnetz mit \"Shared between VRFs\" setzen",
+  "Verstehen, warum Route Leaking in der ACI an den Contract gekoppelt ist"
+ ],
+ "intro": "Der zentrale DNS-Server **dns1** (10.99.0.53) steht im Tenant **Shared**, VRF **Services**, EPG **DNS**. Die Webserver im Tenant **Shop** (VRF Prod) sollen ihn per **DNS (UDP 53)** erreichen – sonst nichts. Die App-Server dürfen gar nicht zum DNS.\n\nZwischen zwei VRFs gibt es in der ACI erst Routen, wenn ein Contract die EPGs verbindet und die Subnetze als *shared* markiert sind.",
+ "config": [
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "infraInfra": {
+       "attributes": {},
+       "children": [
+        {
+         "fvnsVlanInstP": {
+          "attributes": {
+           "name": "VLAN-Pool-Server",
+           "allocMode": "static"
+          },
+          "children": [
+           {
+            "fvnsEncapBlk": {
+             "attributes": {
+              "from": "vlan-100",
+              "to": "vlan-199"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAttEntityP": {
+          "attributes": {
+           "name": "AAEP-Server"
+          },
+          "children": [
+           {
+            "infraRsDomP": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraFuncP": {
+          "attributes": {},
+          "children": [
+           {
+            "infraAccPortGrp": {
+             "attributes": {
+              "name": "IPG-Server-Access"
+             },
+             "children": [
+              {
+               "infraRsAttEntP": {
+                "attributes": {
+                 "tDn": "uni/infra/attentp-AAEP-Server"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAccPortP": {
+          "attributes": {
+           "name": "IntProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraHPortS": {
+             "attributes": {
+              "name": "Server-Ports",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraPortBlk": {
+                "attributes": {
+                 "name": "block2",
+                 "fromPort": "1",
+                 "toPort": "10"
+                }
+               }
+              },
+              {
+               "infraRsAccBaseGrp": {
+                "attributes": {
+                 "tDn": "uni/infra/funcprof/accportgrp-IPG-Server-Access"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraNodeP": {
+          "attributes": {
+           "name": "SwProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraLeafS": {
+             "attributes": {
+              "name": "101-102",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraNodeBlk": {
+                "attributes": {
+                 "name": "blk",
+                 "from_": "101",
+                 "to_": "102"
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "infraRsAccPortP": {
+             "attributes": {
+              "tDn": "uni/infra/accportprof-IntProf-Leaf101-102"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "physDomP": {
+       "attributes": {
+        "name": "PhysDom-Server"
+       },
+       "children": [
+        {
+         "infraRsVlanNs": {
+          "attributes": {
+           "tDn": "uni/infra/vlanns-[VLAN-Pool-Server]-static"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Shop"
+    },
+    "children": [
+     {
+      "fvCtx": {
+       "attributes": {
+        "name": "Prod"
+       }
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Web"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.10.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-App"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.20.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Webshop"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Web"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Web"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/1]",
+              "encap": "vlan-110",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsCons": {
+             "attributes": {
+              "tnVzBrCPName": "web-to-app"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "App"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-App"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/2]",
+              "encap": "vlan-120",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsProv": {
+             "attributes": {
+              "tnVzBrCPName": "web-to-app"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzFilter": {
+       "attributes": {
+        "name": "tcp-8080"
+       },
+       "children": [
+        {
+         "vzEntry": {
+          "attributes": {
+           "name": "tcp-8080",
+           "etherT": "ip",
+           "prot": "tcp",
+           "dFromPort": "8080",
+           "dToPort": "8080"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzBrCP": {
+       "attributes": {
+        "name": "web-to-app",
+        "scope": "context"
+       },
+       "children": [
+        {
+         "vzSubj": {
+          "attributes": {
+           "name": "subj",
+           "revFltPorts": "yes"
+          },
+          "children": [
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "tcp-8080"
+             }
+            }
+           },
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "icmp"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Shared"
+    },
+    "children": [
+     {
+      "fvCtx": {
+       "attributes": {
+        "name": "Services"
+       }
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-DNS"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Services"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.99.0.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Infra"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "DNS"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-DNS"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/4]",
+              "encap": "vlan-199",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "hosts": [
+  {
+   "name": "web1",
+   "mac": "00:50:56:10:10:11",
+   "ip": "10.10.10.11/24",
+   "gw": "10.10.10.1",
+   "vlan": 110,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/1"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Webserver"
+  },
+  {
+   "name": "app1",
+   "mac": "00:50:56:10:20:11",
+   "ip": "10.10.20.11/24",
+   "gw": "10.10.20.1",
+   "vlan": 120,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/2"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Applikationsserver"
+  },
+  {
+   "name": "dns1",
+   "mac": "00:50:56:13:99:53",
+   "ip": "10.99.0.53/24",
+   "gw": "10.99.0.1",
+   "vlan": 199,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/4"
+    ]
+   ],
+   "bond": "none",
+   "descr": "zentraler DNS-Server"
+  }
+ ],
+ "tasks": [
+  {
+   "title": "Filter und Contract",
+   "text": "Im Tenant **Shared**: Filter **dns** (udp, Destination Port dns/53) und Contract **dns** mit **Scope Global**. Die EPG **DNS** stellt ihn bereit (**Provided**).",
+   "hint": "Scope VRF (context) wirkt nur innerhalb eines VRFs, Scope Tenant nur innerhalb des Tenants."
+  },
+  {
+   "title": "Provider-Subnetz",
+   "text": "Unter der EPG **DNS** (nicht der BD!) das Subnetz **10.99.0.1/24** mit Scope *Shared between VRFs* anlegen.",
+   "hint": "Beim Provider muss das Subnetz für das Route Leaking an der EPG stehen."
+  },
+  {
+   "title": "Contract exportieren",
+   "text": "Rechtsklick auf den Contract **dns** > **Export Contract**: Name **dns**, Ziel-Tenant **Shop**. Im Tenant Shop erscheint er unter **Contracts > Imported**."
+  },
+  {
+   "title": "Consumer",
+   "text": "An der EPG **Web** im Tenant Shop **Add Consumed Contract Interface** mit **dns**. Am **BD-Web** das Subnetz 10.10.10.1/24 zusätzlich auf *Shared between VRFs* stellen."
+  },
+  {
+   "title": "Prüfen",
+   "text": "web1 → dns1 UDP 53 klappt, TCP 22 nicht, app1 → dns1 gar nicht. Auf leaf101: `show ip route vrf Shop:Prod` – die Route 10.99.0.0/24 ist geleakt."
+  }
+ ],
+ "checks": [
+  {
+   "desc": "Imported Contract dns im Tenant Shop",
+   "type": "exists",
+   "dn": "uni/tn-Shop/cif-dns"
+  },
+  {
+   "desc": "web1 → dns1 UDP 53",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "dns1",
+   "proto": "udp",
+   "port": 53,
+   "expect": true
+  },
+  {
+   "desc": "web1 → dns1 TCP 22 blockiert",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "dns1",
+   "proto": "tcp",
+   "port": 22,
+   "expect": false
+  },
+  {
+   "desc": "app1 → dns1 blockiert",
+   "type": "traffic",
+   "src": "app1",
+   "dst": "dns1",
+   "proto": "udp",
+   "port": 53,
+   "expect": false
+  }
+ ],
+ "solution": "Tenant Shared: `vzBrCP dns scope=global` mit Filter udp/53, an der EPG DNS `fvRsProv` und `fvSubnet ip=10.99.0.1/24 scope=private,shared`. Export: `vzCPIf name=dns` im Tenant Shop mit `vzRsIf tDn=uni/tn-Shared/brc-dns`. Consumer: `fvRsConsIf tnVzCPIfName=dns` an der EPG Web und `fvSubnet 10.10.10.1/24 scope=private,shared` am BD-Web.",
+ "routers": [],
+ "vcenters": [],
+ "devices": [],
+ "aaa": [],
+ "switches": [],
+ "solutionConfig": [
+  [
+   "uni/tn-Shared",
+   {
+    "fvTenant": {
+     "attributes": {},
+     "children": [
+      {
+       "vzFilter": {
+        "attributes": {
+         "name": "dns"
+        },
+        "children": [
+         {
+          "vzEntry": {
+           "attributes": {
+            "name": "dns",
+            "etherT": "ip",
+            "prot": "udp",
+            "dFromPort": "dns",
+            "dToPort": "dns"
+           }
+          }
+         }
+        ]
+       }
+      },
+      {
+       "vzBrCP": {
+        "attributes": {
+         "name": "dns",
+         "scope": "global"
+        },
+        "children": [
+         {
+          "vzSubj": {
+           "attributes": {
+            "name": "subj",
+            "revFltPorts": "yes"
+           },
+           "children": [
+            {
+             "vzRsSubjFiltAtt": {
+              "attributes": {
+               "tnVzFilterName": "dns"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      },
+      {
+       "fvAp": {
+        "attributes": {
+         "name": "Infra"
+        },
+        "children": [
+         {
+          "fvAEPg": {
+           "attributes": {
+            "name": "DNS"
+           },
+           "children": [
+            {
+             "fvRsProv": {
+              "attributes": {
+               "tnVzBrCPName": "dns"
+              }
+             }
+            },
+            {
+             "fvSubnet": {
+              "attributes": {
+               "ip": "10.99.0.1/24",
+               "scope": "private,shared"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "uni/tn-Shop",
+   {
+    "fvTenant": {
+     "attributes": {},
+     "children": [
+      {
+       "vzCPIf": {
+        "attributes": {
+         "name": "dns"
+        },
+        "children": [
+         {
+          "vzRsIf": {
+           "attributes": {
+            "tDn": "uni/tn-Shared/brc-dns"
+           }
+          }
+         }
+        ]
+       }
+      },
+      {
+       "fvBD": {
+        "attributes": {
+         "name": "BD-Web"
+        },
+        "children": [
+         {
+          "fvSubnet": {
+           "attributes": {
+            "ip": "10.10.10.1/24",
+            "scope": "private,shared"
+           }
+          }
+         }
+        ]
+       }
+      },
+      {
+       "fvAp": {
+        "attributes": {
+         "name": "Webshop"
+        },
+        "children": [
+         {
+          "fvAEPg": {
+           "attributes": {
+            "name": "Web"
+           },
+           "children": [
+            {
+             "fvRsConsIf": {
+              "attributes": {
+               "tnVzCPIfName": "dns"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  ]
+ ]
+}

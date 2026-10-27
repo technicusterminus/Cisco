@@ -1,0 +1,852 @@
+{
+ "id": "05-vpc-lacp",
+ "title": "05 vPC mit LACP für einen Datenbankserver",
+ "topic": "Access Policies / vPC",
+ "level": "Mittel",
+ "duration": "35 min",
+ "fabric": "discovered",
+ "goals": [
+  "Eine Explicit vPC Protection Group anlegen",
+  "Eine vPC Interface Policy Group mit LACP bauen",
+  "Einen vPC-Pfad als Static Port verwenden"
+ ],
+ "intro": "Der Datenbankserver **db1** (10.10.30.11/24, VLAN 130) ist mit zwei NICs per **LACP active** an **leaf103 eth1/10** und **leaf104 eth1/10** angeschlossen. Der Tenant Shop mit Web und App läuft schon.",
+ "config": [
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "infraInfra": {
+       "attributes": {},
+       "children": [
+        {
+         "fvnsVlanInstP": {
+          "attributes": {
+           "name": "VLAN-Pool-Server",
+           "allocMode": "static"
+          },
+          "children": [
+           {
+            "fvnsEncapBlk": {
+             "attributes": {
+              "from": "vlan-100",
+              "to": "vlan-199"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAttEntityP": {
+          "attributes": {
+           "name": "AAEP-Server"
+          },
+          "children": [
+           {
+            "infraRsDomP": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraFuncP": {
+          "attributes": {},
+          "children": [
+           {
+            "infraAccPortGrp": {
+             "attributes": {
+              "name": "IPG-Server-Access"
+             },
+             "children": [
+              {
+               "infraRsAttEntP": {
+                "attributes": {
+                 "tDn": "uni/infra/attentp-AAEP-Server"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAccPortP": {
+          "attributes": {
+           "name": "IntProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraHPortS": {
+             "attributes": {
+              "name": "Server-Ports",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraPortBlk": {
+                "attributes": {
+                 "name": "block2",
+                 "fromPort": "1",
+                 "toPort": "10"
+                }
+               }
+              },
+              {
+               "infraRsAccBaseGrp": {
+                "attributes": {
+                 "tDn": "uni/infra/funcprof/accportgrp-IPG-Server-Access"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraNodeP": {
+          "attributes": {
+           "name": "SwProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraLeafS": {
+             "attributes": {
+              "name": "101-102",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraNodeBlk": {
+                "attributes": {
+                 "name": "blk",
+                 "from_": "101",
+                 "to_": "102"
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "infraRsAccPortP": {
+             "attributes": {
+              "tDn": "uni/infra/accportprof-IntProf-Leaf101-102"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "physDomP": {
+       "attributes": {
+        "name": "PhysDom-Server"
+       },
+       "children": [
+        {
+         "infraRsVlanNs": {
+          "attributes": {
+           "tDn": "uni/infra/vlanns-[VLAN-Pool-Server]-static"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Shop"
+    },
+    "children": [
+     {
+      "fvCtx": {
+       "attributes": {
+        "name": "Prod"
+       }
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Web"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.10.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-App"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.20.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Webshop"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Web"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Web"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/1]",
+              "encap": "vlan-110",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsCons": {
+             "attributes": {
+              "tnVzBrCPName": "web-to-app"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "App"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-App"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/2]",
+              "encap": "vlan-120",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsProv": {
+             "attributes": {
+              "tnVzBrCPName": "web-to-app"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzFilter": {
+       "attributes": {
+        "name": "tcp-8080"
+       },
+       "children": [
+        {
+         "vzEntry": {
+          "attributes": {
+           "name": "tcp-8080",
+           "etherT": "ip",
+           "prot": "tcp",
+           "dFromPort": "8080",
+           "dToPort": "8080"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzBrCP": {
+       "attributes": {
+        "name": "web-to-app",
+        "scope": "context"
+       },
+       "children": [
+        {
+         "vzSubj": {
+          "attributes": {
+           "name": "subj",
+           "revFltPorts": "yes"
+          },
+          "children": [
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "tcp-8080"
+             }
+            }
+           },
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "icmp"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "hosts": [
+  {
+   "name": "web1",
+   "mac": "00:50:56:10:10:11",
+   "ip": "10.10.10.11/24",
+   "gw": "10.10.10.1",
+   "vlan": 110,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/1"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Webserver"
+  },
+  {
+   "name": "app1",
+   "mac": "00:50:56:10:20:11",
+   "ip": "10.10.20.11/24",
+   "gw": "10.10.20.1",
+   "vlan": 120,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/2"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Applikationsserver"
+  },
+  {
+   "name": "db1",
+   "mac": "00:50:56:10:30:11",
+   "ip": "10.10.30.11/24",
+   "gw": "10.10.30.1",
+   "vlan": 130,
+   "links": [
+    [
+     "SAL1931LA03",
+     "eth1/10"
+    ],
+    [
+     "SAL1931LA04",
+     "eth1/10"
+    ]
+   ],
+   "bond": "lacp-active",
+   "descr": "Datenbank mit LACP-Bond"
+  }
+ ],
+ "tasks": [
+  {
+   "title": "vPC-Domäne",
+   "text": "**Fabric > Access Policies > Policies > Switch > Virtual Port Channel default**: Explicit vPC Protection Group **vpc-103-104**, ID **34**, Switches 103 und 104."
+  },
+  {
+   "title": "Port Channel Policy",
+   "text": "**Policies > Interface > Port Channel**: **LACP-Active** mit Mode *LACP Active*."
+  },
+  {
+   "title": "vPC Policy Group",
+   "text": "**Policy Groups > PC/VPC Interface**: **IPG-vPC-db1**, Typ *Virtual Port Channel*, AAEP **AAEP-Server**, Port Channel Policy LACP-Active."
+  },
+  {
+   "title": "Interface- und Switch-Profil",
+   "text": "Interface Profile **IntProf-Leaf103-104** mit Selector **db1** für Port 1/10 → IPG-vPC-db1. Switch Profile **SwProf-Leaf103-104** für die Nodes 103-104."
+  },
+  {
+   "title": "Tenant",
+   "text": "Im Tenant Shop: **BD-DB** mit **10.10.30.1/24** im VRF Prod, EPG **DB** im AP Webshop mit Domain PhysDom-Server und Static Port **Virtual Port Channel** IPG-vPC-db1, **vlan-130**.",
+   "hint": "Den vPC-Pfad gibt es erst, wenn die vPC Policy Group auf Ports beider Leafs angewendet ist."
+  },
+  {
+   "title": "Contract",
+   "text": "Filter **mysql** (tcp/3306), Contract **app-to-db**: DB provided, App consumed."
+  },
+  {
+   "title": "Prüfen",
+   "text": "Auf leaf103: `show vpc brief` und `show port-channel summary`. Was passiert, wenn du die Port Channel Policy auf *Static Channel - Mode On* stellst?"
+  }
+ ],
+ "checks": [
+  {
+   "desc": "vPC-Gruppe 103/104",
+   "type": "class",
+   "cls": "fabricExplicitGEp",
+   "attrs": {
+    "id": "34"
+   }
+  },
+  {
+   "desc": "db1 gelernt in EPG DB",
+   "type": "endpoint",
+   "host": "db1",
+   "epg": "uni/tn-Shop/ap-Webshop/epg-DB"
+  },
+  {
+   "desc": "app1 → db1 TCP 3306 erlaubt",
+   "type": "traffic",
+   "src": "app1",
+   "dst": "db1",
+   "proto": "tcp",
+   "port": 3306,
+   "expect": true
+  },
+  {
+   "desc": "web1 → db1 blockiert",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "db1",
+   "proto": "tcp",
+   "port": 3306,
+   "expect": false
+  }
+ ],
+ "solution": "Access-Teil: `{\"polUni\": {\"attributes\": {}, \"children\": [{\"infraInfra\": {\"attributes\": {}, \"children\": [{\"fvnsVlanInstP\": {\"attributes\": {\"name\": \"VLAN-Pool-Server\", \"allocMode\": \"static\"}, \"children\": [{\"fvnsEncapBlk\": {\"attributes\": {\"from\": \"vlan-100\", \"to\": \"vlan-199\"}}}]}}, {\"infraAttEntityP\": {\"attributes\": {\"name\": \"AAEP-Server\"}, \"children\": [{\"infraRsDomP\": {\"attributes\": {\"tDn\": \"uni/phys-PhysDom-Server\"}}}]}}, {\"lacpLagPol\": {\"attributes\": {\"name\": \"LACP-Active\", \"mode\": \"active\"}}}, {\"infraFuncP\": {\"attributes\": {}, \"children\": [{\"infraAccBndlGrp\": {\"attributes\": {\"name\": \"IPG-vPC-db1\", \"lagT\": \"node\"}, \"children\": [{\"infraRsAttEntP\": {\"attributes\": {\"tDn\": \"uni/infra/attentp-AAEP-Server\"}}}, {\"infraRsLacpPol\": {\"attributes\": {\"tnLacpLagPolName\": \"LACP-Active\"}}}]}}]}}, {\"infraAccPortP\": {\"attributes\": {\"name\": \"IntProf-Leaf103-104\"}, \"children\": [{\"infraHPortS\": {\"attributes\": {\"name\": \"db1\", \"type\": \"range\"}, \"children\": [{\"infraPortBlk\": {\"attributes\": {\"name\": \"block2\", \"fromPort\": \"10\", \"toPort\": \"10\"}}}, {\"infraRsAccBaseGrp\": {\"attributes\": {\"tDn\": \"uni/infra/funcprof/accbundle-IPG-vPC-db1\"}}}]}}]}}, {\"infraNodeP\": {\"attributes\": {\"name\": \"SwProf-Leaf103-104\"}, \"children\": [{\"infraLeafS\": {\"attributes\": {\"name\": \"103-104\", \"type\": \"range\"}, \"children\": [{\"infraNodeBlk\": {\"attributes\": {\"name\": \"blk\", \"from_\": \"103\", \"to_\": \"104\"}}}]}}, {\"infraRsAccPortP\": {\"attributes\": {\"tDn\": \"uni/infra/accportprof-IntProf-Leaf103-104\"}}}]}}]}}, {\"physDomP\": {\"attributes\": {\"name\": \"PhysDom-Server\"}, \"children\": [{\"infraRsVlanNs\": {\"attributes\": {\"tDn\": \"uni/infra/vlanns-[VLAN-Pool-Server]-static\"}}}]}}]}}`\n\nvPC-Pfad für den Static Port: `topology/pod-1/protpaths-103-104/pathep-[IPG-vPC-db1]`. Mit Mode On statt LACP sendet die ACI keine LACP-PDUs, der Host suspendiert seine Links und db1 verschwindet.",
+ "routers": [],
+ "vcenters": [],
+ "devices": [],
+ "aaa": [],
+ "switches": [],
+ "solutionConfig": [
+  [
+   "uni",
+   {
+    "polUni": {
+     "attributes": {},
+     "children": [
+      {
+       "infraInfra": {
+        "attributes": {},
+        "children": [
+         {
+          "fvnsVlanInstP": {
+           "attributes": {
+            "name": "VLAN-Pool-Server",
+            "allocMode": "static"
+           },
+           "children": [
+            {
+             "fvnsEncapBlk": {
+              "attributes": {
+               "from": "vlan-100",
+               "to": "vlan-199"
+              }
+             }
+            }
+           ]
+          }
+         },
+         {
+          "infraAttEntityP": {
+           "attributes": {
+            "name": "AAEP-Server"
+           },
+           "children": [
+            {
+             "infraRsDomP": {
+              "attributes": {
+               "tDn": "uni/phys-PhysDom-Server"
+              }
+             }
+            }
+           ]
+          }
+         },
+         {
+          "lacpLagPol": {
+           "attributes": {
+            "name": "LACP-Active",
+            "mode": "active"
+           }
+          }
+         },
+         {
+          "infraFuncP": {
+           "attributes": {},
+           "children": [
+            {
+             "infraAccBndlGrp": {
+              "attributes": {
+               "name": "IPG-vPC-db1",
+               "lagT": "node"
+              },
+              "children": [
+               {
+                "infraRsAttEntP": {
+                 "attributes": {
+                  "tDn": "uni/infra/attentp-AAEP-Server"
+                 }
+                }
+               },
+               {
+                "infraRsLacpPol": {
+                 "attributes": {
+                  "tnLacpLagPolName": "LACP-Active"
+                 }
+                }
+               }
+              ]
+             }
+            }
+           ]
+          }
+         },
+         {
+          "infraAccPortP": {
+           "attributes": {
+            "name": "IntProf-Leaf103-104"
+           },
+           "children": [
+            {
+             "infraHPortS": {
+              "attributes": {
+               "name": "db1",
+               "type": "range"
+              },
+              "children": [
+               {
+                "infraPortBlk": {
+                 "attributes": {
+                  "name": "block2",
+                  "fromPort": "10",
+                  "toPort": "10"
+                 }
+                }
+               },
+               {
+                "infraRsAccBaseGrp": {
+                 "attributes": {
+                  "tDn": "uni/infra/funcprof/accbundle-IPG-vPC-db1"
+                 }
+                }
+               }
+              ]
+             }
+            }
+           ]
+          }
+         },
+         {
+          "infraNodeP": {
+           "attributes": {
+            "name": "SwProf-Leaf103-104"
+           },
+           "children": [
+            {
+             "infraLeafS": {
+              "attributes": {
+               "name": "103-104",
+               "type": "range"
+              },
+              "children": [
+               {
+                "infraNodeBlk": {
+                 "attributes": {
+                  "name": "blk",
+                  "from_": "103",
+                  "to_": "104"
+                 }
+                }
+               }
+              ]
+             }
+            },
+            {
+             "infraRsAccPortP": {
+              "attributes": {
+               "tDn": "uni/infra/accportprof-IntProf-Leaf103-104"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      },
+      {
+       "physDomP": {
+        "attributes": {
+         "name": "PhysDom-Server"
+        },
+        "children": [
+         {
+          "infraRsVlanNs": {
+           "attributes": {
+            "tDn": "uni/infra/vlanns-[VLAN-Pool-Server]-static"
+           }
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "uni/fabric/protpol",
+   {
+    "fabricExplicitGEp": {
+     "attributes": {
+      "name": "vpc-103-104",
+      "id": "34"
+     },
+     "children": [
+      {
+       "fabricNodePEp": {
+        "attributes": {
+         "id": "103"
+        }
+       }
+      },
+      {
+       "fabricNodePEp": {
+        "attributes": {
+         "id": "104"
+        }
+       }
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "uni",
+   {
+    "fvTenant": {
+     "attributes": {
+      "name": "Shop"
+     },
+     "children": [
+      {
+       "fvBD": {
+        "attributes": {
+         "name": "BD-DB"
+        },
+        "children": [
+         {
+          "fvRsCtx": {
+           "attributes": {
+            "tnFvCtxName": "Prod"
+           }
+          }
+         },
+         {
+          "fvSubnet": {
+           "attributes": {
+            "ip": "10.10.30.1/24",
+            "scope": "private"
+           }
+          }
+         }
+        ]
+       }
+      },
+      {
+       "vzFilter": {
+        "attributes": {
+         "name": "mysql"
+        },
+        "children": [
+         {
+          "vzEntry": {
+           "attributes": {
+            "name": "mysql",
+            "etherT": "ip",
+            "prot": "tcp",
+            "dFromPort": "3306",
+            "dToPort": "3306"
+           }
+          }
+         }
+        ]
+       }
+      },
+      {
+       "vzBrCP": {
+        "attributes": {
+         "name": "app-to-db",
+         "scope": "context"
+        },
+        "children": [
+         {
+          "vzSubj": {
+           "attributes": {
+            "name": "subj",
+            "revFltPorts": "yes"
+           },
+           "children": [
+            {
+             "vzRsSubjFiltAtt": {
+              "attributes": {
+               "tnVzFilterName": "mysql"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      },
+      {
+       "fvAp": {
+        "attributes": {
+         "name": "Webshop"
+        },
+        "children": [
+         {
+          "fvAEPg": {
+           "attributes": {
+            "name": "DB"
+           },
+           "children": [
+            {
+             "fvRsBd": {
+              "attributes": {
+               "tnFvBDName": "BD-DB"
+              }
+             }
+            },
+            {
+             "fvRsDomAtt": {
+              "attributes": {
+               "tDn": "uni/phys-PhysDom-Server"
+              }
+             }
+            },
+            {
+             "fvRsPathAtt": {
+              "attributes": {
+               "tDn": "topology/pod-1/protpaths-103-104/pathep-[IPG-vPC-db1]",
+               "encap": "vlan-130",
+               "mode": "regular"
+              }
+             }
+            },
+            {
+             "fvRsProv": {
+              "attributes": {
+               "tnVzBrCPName": "app-to-db"
+              }
+             }
+            }
+           ]
+          }
+         },
+         {
+          "fvAEPg": {
+           "attributes": {
+            "name": "App"
+           },
+           "children": [
+            {
+             "fvRsCons": {
+              "attributes": {
+               "tnVzBrCPName": "app-to-db"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  ]
+ ]
+}

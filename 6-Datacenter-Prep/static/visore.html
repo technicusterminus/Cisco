@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Visore – Object Store Browser</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; font-size: 13px; margin: 0; background: #f4f6f8; color: #1e2a33; }
+  header { background: #1f2a33; color: #dfe7ee; padding: 10px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  header b { font-size: 15px; }
+  input, select, button { padding: 5px 8px; border: 1px solid #c4ccd3; border-radius: 3px; font-size: 13px; }
+  button { background: #049fd9; color: #fff; border-color: #049fd9; cursor: pointer; }
+  main { padding: 14px 16px; }
+  .mo { background: #fff; border: 1px solid #d8dee3; border-radius: 4px; margin-bottom: 12px; }
+  .mo h3 { margin: 0; padding: 7px 10px; background: #e9eef2; font-size: 13px; font-family: Menlo, Consolas, monospace; }
+  table { border-collapse: collapse; width: 100%; font-family: Menlo, Consolas, monospace; font-size: 12px; }
+  td { padding: 3px 10px; border-bottom: 1px solid #eef1f3; vertical-align: top; word-break: break-all; }
+  td.k { width: 220px; color: #5b6b78; }
+  a { color: #0379a6; cursor: pointer; }
+  .nav { padding: 6px 10px; display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; }
+  .err { color: #d64545; }
+  .muted { color: #5b6b78; }
+</style>
+</head>
+<body>
+<header>
+  <b>Visore</b><span class="muted">Object Store Browser (Simulator)</span>
+  <label>Class or DN: <input id="q" size="44" placeholder="fvTenant oder uni/tn-common"></label>
+  <label>Property: <input id="p" size="12" placeholder="name"></label>
+  <select id="op"><option value="eq">==</option><option value="ne">!=</option><option value="wcard">contains</option></select>
+  <label>Value: <input id="v" size="14"></label>
+  <button id="run">Run Query</button>
+</header>
+<main id="out"><p class="muted">Klassenname (z. B. <code>fvBD</code>) oder DN (z. B. <code>uni/tn-common/BD-default</code>) eingeben. Anmeldung erfolgt über die APIC-Oberfläche.</p></main>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const enc = dn => dn.split('').map(c => /[A-Za-z0-9_\-.\/:]/.test(c) ? c : encodeURIComponent(c)).join('');
+function parent(dn) { const p = []; let b = '', d = 0; for (const c of dn) { if (c === '[') d++; else if (c === ']') d--; if (c === '/' && !d) { p.push(b); b = ''; } else b += c; } return p.join('/'); }
+async function run(q) {
+  q = (q || $('q').value).trim();
+  $('q').value = q;
+  location.hash = encodeURIComponent(q);
+  const isDn = q.includes('/') || q === 'uni' || q === 'topology';
+  let url = isDn ? '/api/mo/' + enc(q) + '.json?query-target=self' : '/api/class/' + q + '.json?';
+  if (!isDn && $('p').value) url += '&query-target-filter=' + encodeURIComponent($('op').value + '(' + q + '.' + $('p').value + ',"' + $('v').value + '")');
+  const out = $('out');
+  out.innerHTML = '<p class="muted">lädt …</p>';
+  const r = await fetch(url, { credentials: 'same-origin' });
+  const j = await r.json();
+  if (!r.ok) { out.innerHTML = '<p class="err">' + esc(j.imdata[0].error.attributes.text) + (r.status === 403 ? ' – bitte zuerst in der APIC-Oberfläche anmelden.' : '') + '</p>'; return; }
+  let html = '<p class="muted">Total objects shown: ' + j.totalCount + '</p>';
+  j.imdata.forEach(o => {
+    const cls = Object.keys(o)[0]; const a = o[cls].attributes;
+    html += '<div class="mo"><h3>' + esc(cls) + '</h3><div class="nav">';
+    html += '<a data-q="' + esc(parent(a.dn)) + '">&lt; parent</a><a data-c="' + esc(a.dn) + '">children &gt;</a><a data-q="' + esc(a.dn) + '">self</a></div><table>';
+    Object.keys(a).sort((x, y) => (x === 'dn' ? -1 : y === 'dn' ? 1 : x.localeCompare(y))).forEach(k => {
+      const v = a[k];
+      const link = (k === 'dn' || k === 'tDn' || k.endsWith('Dn')) && v ? '<a data-q="' + esc(v) + '">' + esc(v) + '</a>' : esc(v);
+      html += '<tr><td class="k">' + esc(k) + '</td><td>' + link + '</td></tr>';
+    });
+    html += '</table></div>';
+  });
+  out.innerHTML = html;
+}
+async function children(dn) {
+  const r = await fetch('/api/mo/' + enc(dn) + '.json?query-target=children', { credentials: 'same-origin' });
+  const j = await r.json();
+  let html = '<p class="muted">Children of <b>' + esc(dn) + '</b>: ' + j.totalCount + '</p><div class="mo"><table>';
+  j.imdata.forEach(o => { const cls = Object.keys(o)[0]; const a = o[cls].attributes; html += '<tr><td class="k">' + esc(cls) + '</td><td><a data-q="' + esc(a.dn) + '">' + esc(a.dn) + '</a></td></tr>'; });
+  $('out').innerHTML = html + '</table></div>';
+}
+document.addEventListener('click', e => { const a = e.target.closest('a'); if (!a) return; if (a.dataset.q !== undefined) run(a.dataset.q || 'uni'); if (a.dataset.c) children(a.dataset.c); });
+$('run').onclick = () => run();
+$('q').addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
+if (location.hash.length > 1) run(decodeURIComponent(location.hash.slice(1)));
+</script>
+</body>
+</html>

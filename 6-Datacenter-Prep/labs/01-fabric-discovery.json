@@ -1,0 +1,221 @@
+{
+ "id": "01-fabric-discovery",
+ "title": "01 Fabric Discovery und BGP Route Reflector",
+ "topic": "Fabric-Inbetriebnahme",
+ "level": "Einstieg",
+ "duration": "20 min",
+ "fabric": "empty",
+ "goals": [
+  "Die Reihenfolge der Fabric Discovery verstehen (APIC-Leaf, Spines, übrige Leafs)",
+  "Switches unter Fabric Membership registrieren",
+  "Den MP-BGP Route Reflector für die Fabric einrichten"
+ ],
+ "intro": "Die Fabric ist frisch verkabelt, aber noch kein Switch ist registriert. Der APIC sieht per LLDP zunächst nur die Leafs, an denen er direkt hängt. Erst wenn ein Switch registriert und aktiv ist, entdeckt die Fabric dessen Nachbarn.\n\n**Ausgangslage:** 1 APIC, 2 Spines, 4 Leafs, alles unregistriert. Ein Discovery-Schritt dauert im Simulator 20 Sekunden (einstellbar unter Simulation > Einstellungen).",
+ "tasks": [
+  {
+   "title": "Leafs am APIC registrieren",
+   "text": "Öffne **Fabric > Inventory > Fabric Membership > Nodes Pending Registration** und registriere die Switches nach dieser Tabelle:\n- SAL1931LA01 → Node ID **101**, Name **leaf101**\n- SAL1931LA02 → Node ID **102**, Name **leaf102**",
+   "hint": "Pod ID bleibt 1. Nach der Registrierung wechselt der Status auf *discovering*, dann auf *active*."
+  },
+  {
+   "title": "Spines registrieren",
+   "text": "Sobald leaf101 aktiv ist, erscheinen die Spines. Registriere:\n- FDO2219SP01 → **201**, **spine201**\n- FDO2219SP02 → **202**, **spine202**",
+   "hint": "Die Spines erscheinen erst, wenn ein Leaf mit Uplink zu ihnen aktiv ist."
+  },
+  {
+   "title": "Restliche Leafs registrieren",
+   "text": "- SAL1931LA03 → **103**, **leaf103**\n- SAL1931LA04 → **104**, **leaf104**"
+  },
+  {
+   "title": "Kontrolle per CLI",
+   "text": "Öffne die CLI (oben rechts) und prüfe auf dem APIC mit `acidiag fnvread`, dass alle sechs Switches *active* sind. Schau dir mit `ssh leaf101` und `show lldp neighbors` die Nachbarn an."
+  },
+  {
+   "title": "BGP Route Reflector",
+   "text": "Unter **System > System Settings > BGP Route Reflector** die Fabric-AS **65001** eintragen und **spine201** und **spine202** (Node 201 und 202) als Route Reflector hinzufügen.",
+   "hint": "Ohne diese Policy verteilt die Fabric keine externen Routen von L3Outs an die anderen Leafs."
+  }
+ ],
+ "checks": [
+  {
+   "desc": "leaf101 aktiv (101)",
+   "type": "node",
+   "serial": "SAL1931LA01",
+   "id": 101,
+   "name": "leaf101"
+  },
+  {
+   "desc": "leaf102 aktiv (102)",
+   "type": "node",
+   "serial": "SAL1931LA02",
+   "id": 102,
+   "name": "leaf102"
+  },
+  {
+   "desc": "spine201 aktiv (201)",
+   "type": "node",
+   "serial": "FDO2219SP01",
+   "id": 201,
+   "name": "spine201"
+  },
+  {
+   "desc": "spine202 aktiv (202)",
+   "type": "node",
+   "serial": "FDO2219SP02",
+   "id": 202,
+   "name": "spine202"
+  },
+  {
+   "desc": "leaf103 aktiv (103)",
+   "type": "node",
+   "serial": "SAL1931LA03",
+   "id": 103,
+   "name": "leaf103"
+  },
+  {
+   "desc": "leaf104 aktiv (104)",
+   "type": "node",
+   "serial": "SAL1931LA04",
+   "id": 104,
+   "name": "leaf104"
+  },
+  {
+   "desc": "Fabric-AS 65001",
+   "type": "exists",
+   "dn": "uni/fabric/bgpInstP-default/as",
+   "attrs": {
+    "asn": "65001"
+   }
+  },
+  {
+   "desc": "spine201 ist Route Reflector",
+   "type": "exists",
+   "dn": "uni/fabric/bgpInstP-default/rr/node-201"
+  },
+  {
+   "desc": "spine202 ist Route Reflector",
+   "type": "exists",
+   "dn": "uni/fabric/bgpInstP-default/rr/node-202"
+  }
+ ],
+ "solution": "Fabric Membership: die sechs Seriennummern in der Reihenfolge leaf101/leaf102 → spine201/spine202 → leaf103/leaf104 registrieren. Per REST geht das mit `POST /api/mo/uni/controller/nodeidentpol.json` und `{\"fabricNodeIdentP\":{\"attributes\":{\"serial\":\"SAL1931LA01\",\"nodeId\":\"101\",\"name\":\"leaf101\"}}}`.\n\nBGP Route Reflector: `uni/fabric/bgpInstP-default/as` mit `asn=65001`, darunter `rr/node-201` und `rr/node-202`.",
+ "config": [],
+ "hosts": [],
+ "routers": [],
+ "vcenters": [],
+ "devices": [],
+ "aaa": [],
+ "switches": [],
+ "solutionConfig": [
+  [
+   "uni/controller/nodeidentpol",
+   {
+    "fabricNodeIdentP": {
+     "attributes": {
+      "serial": "SAL1931LA01",
+      "nodeId": "101",
+      "name": "leaf101"
+     }
+    }
+   }
+  ],
+  [
+   "uni/controller/nodeidentpol",
+   {
+    "fabricNodeIdentP": {
+     "attributes": {
+      "serial": "SAL1931LA02",
+      "nodeId": "102",
+      "name": "leaf102"
+     }
+    }
+   }
+  ],
+  [
+   "uni/controller/nodeidentpol",
+   {
+    "fabricNodeIdentP": {
+     "attributes": {
+      "serial": "FDO2219SP01",
+      "nodeId": "201",
+      "name": "spine201"
+     }
+    }
+   }
+  ],
+  [
+   "uni/controller/nodeidentpol",
+   {
+    "fabricNodeIdentP": {
+     "attributes": {
+      "serial": "FDO2219SP02",
+      "nodeId": "202",
+      "name": "spine202"
+     }
+    }
+   }
+  ],
+  [
+   "uni/controller/nodeidentpol",
+   {
+    "fabricNodeIdentP": {
+     "attributes": {
+      "serial": "SAL1931LA03",
+      "nodeId": "103",
+      "name": "leaf103"
+     }
+    }
+   }
+  ],
+  [
+   "uni/controller/nodeidentpol",
+   {
+    "fabricNodeIdentP": {
+     "attributes": {
+      "serial": "SAL1931LA04",
+      "nodeId": "104",
+      "name": "leaf104"
+     }
+    }
+   }
+  ],
+  [
+   "uni/fabric/bgpInstP-default",
+   {
+    "bgpInstPol": {
+     "attributes": {},
+     "children": [
+      {
+       "bgpAsP": {
+        "attributes": {
+         "asn": "65001"
+        }
+       }
+      },
+      {
+       "bgpRRP": {
+        "attributes": {},
+        "children": [
+         {
+          "bgpRRNodePEp": {
+           "attributes": {
+            "id": "201"
+           }
+          }
+         },
+         {
+          "bgpRRNodePEp": {
+           "attributes": {
+            "id": "202"
+           }
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  ]
+ ]
+}
