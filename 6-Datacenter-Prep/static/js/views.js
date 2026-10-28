@@ -39,10 +39,10 @@ function traceCard(r) {
     const hops = local ? [['src', 'Host', path.src], ['srcLeaf', 'Leaf (lokal)', sl], ['dst', 'Host', path.dst]]
       : [['src', 'Host', path.src], ['srcLeaf', 'Leaf', sl], ['fabric', 'Fabric', 'Spine (VXLAN)'], ['dstLeaf', 'Leaf', dl], ['dst', 'Host', path.dst || '—']];
     // Wo der Test endet (vereinfacht): Quelle, Leaf der Quelle (Gateway/Routing), Fabric, Ziel (Endpoint, Policy, Dienst)
-    const failKey = !bad ? null : bad.layer === 'endpoint' ? (/^Quelle/.test(bad.title) ? 'src' : 'dst')
+    const failKey = !bad ? null : ['endpoint', 'physical'].includes(bad.layer) ? (/^Quelle/.test(bad.title) ? 'src' : 'dst')
       : bad.layer === 'fabric' ? (local ? 'srcLeaf' : 'fabric') : ['routing', 'forwarding'].includes(bad.layer) ? 'srcLeaf' : 'dst';
     const failAt = failKey ? hops.findIndex(x => x[0] === failKey) : -1;
-    const lbl = !bad ? '' : bad.layer === 'policy' ? '✖ Policy verwirft' : bad.layer === 'service' ? '✖ Dienst fehlt' : '✖ Drop hier';
+    const lbl = !bad ? '' : bad.layer === 'policy' ? '✖ Policy verwirft' : bad.layer === 'service' ? '✖ Dienst fehlt' : bad.layer === 'physical' ? '✖ kein Link' : '✖ Drop hier';
     strip = h('div', { class: 'tpath', role: 'list', 'aria-label': 'Pfad' }, hops.map(([, k, n], i) => {
       const st = failAt === -1 || i < failAt ? 'ok' : i === failAt ? 'bad' : 'off';
       return h('div', { class: 'thop ' + st, role: 'listitem' }, h('span', { class: 'muted small' }, k), h('b', null, n), h('span', { class: 'small' }, st === 'ok' ? '✔ ok' : st === 'bad' ? lbl : '– nicht erreicht'));
@@ -403,11 +403,31 @@ const Views = {
       clear(res).appendChild(table([{ l: 'MAC', f: r => r.mac }, { l: 'IP', f: r => r.ip }, { l: 'Encap', f: r => r.encap }, { l: 'Path', f: r => pathLabel(r.fabricPathDn) },
         { l: 'EPG', f: r => h('a', { class: 'lnk', onclick: () => App.gotoDn(parentDn(r.dn)) }, parentDn(r.dn).replace(/^uni\//, '')) }], rows, { empty: 'Kein Endpoint gefunden.' }));
     };
-    q.addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
-    w.appendChild(paneHead('EP Tracker', 'Wo ist ein Endpoint gelernt?'));
-    w.appendChild(h('div', { class: 'card' }, h('div', { class: 'traffic' }, h('label', null, 'Endpoint'), q, h('button', { class: 'btn primary', onclick: search }, 'Suchen'))));
+    const hist = h('div');
+    const EV = { learned: '✔ gelernt', moved: '↪ umgezogen (Move)', lost: '✖ nicht mehr gelernt', linkdown: '⚡ Link down', linkup: '🔌 Link up' };
+    const showHist = async v => {
+      const hs = (App.state.hosts || []).filter(x => !v || x.name === v || x.ip.split('/')[0] === v || x.mac.toUpperCase() === v.toUpperCase());
+      const all = await API.get('/sim/ephist', true);
+      clear(hist);
+      hs.forEach(x => {
+        const rows = (all[x.name] || []).slice().reverse();
+        if (!rows.length && !v) return;
+        hist.appendChild(h('div', { class: 'card' }, h('div', { class: 'card-h' }, 'Verlauf ' + x.name, ' ', x.status && x.status.learned ? stateBadge('learned') : stateBadge('down')),
+          table([{ l: 'Zeit', f: r => fmtTs(r.ts) }, { l: 'Ereignis', f: r => EV[r.event] || r.event }, { l: 'Ort', f: r => r.where }, { l: 'EPG', f: r => r.epg ? r.epg.replace(/^uni\//, '') : '—' },
+            { l: 'Encap', f: r => r.encap || '—' }, { l: 'Detail', f: r => r.detail || '' }], rows, { empty: 'Noch keine Ereignisse für diesen Endpoint.' })));
+      });
+      if (!hist.firstChild && v) hist.appendChild(h('div', { class: 'card note' }, 'Kein simulierter Host „' + v + '“ – der Verlauf gibt es nur für Hosts der Simulation.'));
+    };
+    const search0 = search;
+    const searchAll = async () => { await search0(); await showHist(q.value.trim()); };
+    q.addEventListener('keydown', e => { if (e.key === 'Enter') searchAll(); });
+    w.appendChild(paneHead('EP Tracker', 'Wo ist ein Endpoint gelernt – und wo war er vorher?'));
+    w.appendChild(h('div', { class: 'card' }, h('div', { class: 'traffic' }, h('label', null, 'Endpoint'), q, h('button', { class: 'btn primary', onclick: searchAll }, 'Suchen'))));
     w.appendChild(res);
-    search();
+    w.appendChild(h('h4', null, 'Endpoint-Verlauf'));
+    w.appendChild(h('div', { class: 'muted small' }, 'Lernen, Umzug (Endpoint Move), Verlust und Link-Ereignisse aus der Simulation. Die Ereignis-Codes S9101 bis S9103 sind simulator-spezifisch; Suche auch nach Hostname.'));
+    w.appendChild(hist);
+    searchAll();
   },
 
   /* ================================================================ Simulation */
@@ -529,7 +549,10 @@ const Views = {
             { l: 'Status', f: r => r.status.learned ? h('span', null, stateBadge('learned'), ' ', parentDn(r.status.epg + '/x').replace(/^uni\//, '')) : r.status.quiet ? h('span', { title: 'Stiller Host: wird erst gelernt, wenn er antwortet oder selbst sendet' }, stateBadge('silent')) : stateBadge('down') },
             { l: 'Hinweis', f: r => (r.status.dhcp && r.status.dhcp.ok ? 'DHCP: ' + r.status.dhcp.ip + ' von ' + r.status.dhcp.server + ' (' + r.status.dhcp.how + '); ' : '') + (r.status.reasons || []).join('; ') }], st.hosts, {
             onRow: r => Views.hostDialog(r),
-            actions: r => [iconBtn('🗑', 'Löschen', () => confirmBox('Host ' + r.name + ' entfernen?', async () => { await API.sim('hosts', { op: 'delete', name: r.name }); await App.refreshState(); draw(); }), 'danger')],
+            actions: r => [h('button', { class: 'btn small', title: 'Simulator-Ereignis: Kabel/NIC des Hosts fällt aus bzw. ist wieder da',
+                onclick: async () => { await API.sim('hosts', { op: 'link', name: r.name, up: !!r.linkdown }); toast(r.linkdown ? 'Link von ' + r.name + ' wieder verbunden' : 'Link von ' + r.name + ' getrennt'); await App.refreshState(); draw(); } },
+              r.linkdown ? '🔌 Link verbinden' : '✂ Link trennen'),
+              iconBtn('🗑', 'Löschen', () => confirmBox('Host ' + r.name + ' entfernen?', async () => { await API.sim('hosts', { op: 'delete', name: r.name }); await App.refreshState(); draw(); }), 'danger')],
             empty: 'Noch keine Hosts. Ein Host simuliert einen Server an einem Leaf-Port – mit VLAN, MAC und IP.',
           })));
       }

@@ -16,8 +16,6 @@ Alle Punkte sind offen. Erledigt ist, was in `docs/GAP-ANALYSE.md` als „behobe
 
 | # | Punkt | Begründung |
 |---|---|---|
-| B-03 | Endpoint Move als Ereignis: Host umstecken → Ereignis mit altem und neuem Ort, Lernzustand, History im Endpoint Explorer | Soll-Lab 16 |
-| B-04 | Link-Ausfall als Ereignis (Interface admin/oper down) mit Code `LINK_DOWN` im Traffic-Test | Soll-Lab 17: Interface-Ausfall vs. Policy-Drop |
 | B-05 | Intra-EPG-Contracts (`fvRsIntraEpg`) bei Isolation auswerten | fachlich unvollständig |
 | B-07 | Simulierte Uhr statt Wanduhr für Discovery, Upgrades und Fault-Lebenszyklus (soaking → raised → retaining) | Determinismus |
 | B-13 | Diagnoseprozess erfassen: ausgeführte Traffic-Tests und CLI-Befehle je Lab-Sitzung protokollieren und anzeigen, ohne die Denkweise zu „bewerten“ | optionaler Troubleshooting-Modus |

@@ -403,6 +403,8 @@ class TestRequirementLabs(unittest.TestCase):
         '33-same-epg': ['Static Port', 'fvRsPathAtt'],
         '34-two-epgs-same-bd': ['Consumer', 'Provider', 'admin-to-web'],
         '35-port-and-direction': ['8443', 'Consumer', 'Provider', 'vertauscht', 'konsumiert'],
+        '36-endpoint-move': ['eth1/7', 'eth1/6', 'pc-x', 'Static Port', 'Bindung'],
+        '37-link-or-policy': ['Disabled', 'deaktiviert', 'Kabel', 'LINK_DOWN', 'Contract', 'eth1/2 ist'],
     }
 
     def setUp(self):
@@ -533,6 +535,115 @@ class TestRequirementLabs(unittest.TestCase):
         r, by = self.result()
         self.assertTrue(by['Ping h1 → h2'])
         self.assertFalse(by['Fremdgerät h9 an leaf101 eth1/5 (ohne EPG-Bindung) bekommt keinen Zugang'])
+
+
+class TestEventsAndPhysical(unittest.TestCase):
+    """Endpoint Move, Link-Ausfall und deaktivierter Port: eigene Reason Codes, Ereignisse und Endpoint-Verlauf."""
+
+    def setUp(self):
+        self.S = Sim(tempfile.mkdtemp(), 'admin')
+        self.S.sim['settings']['discoverySeconds'] = 0
+        self.S.load_lab(LAB)
+        self.leaf102 = self.S.sim['hosts'][1]['links'][0][0]
+
+    def tr(self, *a):
+        return trace.run(self.S.engine, self.S.sim, *a)
+
+    def codes(self):
+        return [e['code'] for e in self.S.sim['events']]
+
+    def test_lab_load_writes_no_history(self):
+        self.assertEqual(self.S.sim['ephist'], {})
+
+    def test_link_down_is_physical_not_policy(self):
+        self.S.host_event({'op': 'link', 'name': 'app1', 'up': False})
+        self.S.changed()
+        r = self.tr('web1', 'app1', 'tcp', 443)
+        self.assertEqual((r['verdict'], r['reason'], r['layer']), ('DROP', 'LINK_DOWN', 'physical'))
+        self.assertEqual(r['policy'], [])
+        self.assertIn('S9102', self.codes())
+        self.S.host_event({'op': 'link', 'name': 'app1', 'up': True})
+        self.S.changed()
+        self.assertIn('S9103', self.codes())
+        self.assertEqual([x['event'] for x in self.S.sim['ephist']['app1']], ['lost', 'linkdown', 'learned', 'linkup'])
+
+    def test_disabled_interface(self):
+        post(self.S.store, 'uni/fabric/outofsvc', mo('fabricOOServicePol', {}, mo('fabricRsOosPath', {'tDn': 'topology/pod-1/paths-102/pathep-[eth1/2]'})))
+        self.S.changed()
+        self.assertEqual(self.tr('web1', 'app1', 'tcp', 443)['reason'], 'PORT_ADMIN_DOWN')
+
+    def test_move_to_bound_port_is_a_move_event(self):
+        post(self.S.store, 'uni/tn-Shop/ap-Webshop/epg-App', mo('fvAEPg', {}, mo('fvRsPathAtt', {
+            'tDn': 'topology/pod-1/paths-102/pathep-[eth1/8]', 'encap': 'vlan-120'})))
+        self.S.changed()
+        self.S.host_event({'op': 'move', 'name': 'app1', 'links': [[self.leaf102, 'eth1/8']]})
+        self.S.changed()
+        self.assertIn('S9101', self.codes())
+        last = self.S.sim['ephist']['app1'][-1]
+        self.assertEqual((last['event'], last['where'], last['detail']), ('moved', 'leaf102 eth1/8', 'vorher leaf102 eth1/2'))
+
+    def test_move_to_unbound_port_is_not_learned(self):
+        self.S.host_event({'op': 'move', 'name': 'app1', 'links': [[self.leaf102, 'eth1/9']]})
+        self.S.changed()
+        r = self.tr('web1', 'app1', 'tcp', 443)
+        self.assertEqual(r['reason'], 'EP_NOT_LEARNED')
+        self.assertEqual(self.S.sim['ephist']['app1'][-1]['event'], 'lost')
+
+    def test_history_over_http_api_shape(self):
+        self.S.host_event({'op': 'link', 'name': 'app1', 'up': False})
+        self.S.changed()
+        self.S.save()
+        again = Sim(self.S.data_dir, 'admin')
+        self.assertEqual(again.sim['ephist']['app1'][-1]['event'], 'linkdown', 'Verlauf bleibt nach Neustart erhalten')
+
+
+class TestTroubleshootingLabs(unittest.TestCase):
+    def setUp(self):
+        self.S = Sim(tempfile.mkdtemp(), 'admin')
+        self.S.sim['settings']['discoverySeconds'] = 0
+
+    def apply(self, *items):
+        for dn, body in items:
+            post(self.S.store, dn, body)
+        self.S.changed()
+
+    def by(self):
+        return {c['desc']: c['ok'] for c in self.S.check_lab()['checks']}
+
+    def test_lab36_start_shows_risk_and_history(self):
+        self.S.load_lab('36-endpoint-move')
+        self.assertEqual(trace.run(self.S.engine, self.S.sim, 'web1', 'app2', 'tcp', 8080)['reason'], 'EP_NOT_LEARNED')
+        self.assertEqual(trace.run(self.S.engine, self.S.sim, 'pc-x', 'app1', 'icmp')['verdict'], 'ALLOW', 'Fremdgeraet ist in der EPG App')
+        self.assertEqual(self.S.sim['ephist']['app2'][0]['where'], 'leaf101 eth1/6')
+
+    def test_lab36_new_binding_without_cleanup_fails_security(self):
+        lab = self.S.load_lab('36-endpoint-move')
+        self.apply(('uni/tn-Shop/ap-Webshop/epg-App', mo('fvAEPg', {}, mo('fvRsPathAtt', {
+            'tDn': 'topology/pod-1/paths-102/pathep-[eth1/7]', 'encap': 'vlan-120'}))))
+        by = self.by()
+        self.assertTrue(by['web1 → app2 TCP 8080'])
+        self.assertFalse(by['Am alten Anschluss kommt niemand mehr in die EPG App'])
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+        self.assertEqual(self.S.sim['ephist']['app2'][-1]['event'], 'learned')
+
+    def test_lab37_three_different_causes(self):
+        self.S.load_lab('37-link-or-policy')
+        got = {k: trace.run(self.S.engine, self.S.sim, *a)['reason'] for k, a in
+               {'t1': ('web1', 'app1', 'tcp', 8080), 't2': ('jump1', 'web1', 'tcp', 22), 't3': ('web1', 'web3', 'icmp')}.items()}
+        self.assertEqual(got, {'t1': 'PORT_ADMIN_DOWN', 't2': 'POLICY_IMPLICIT_DENY', 't3': 'LINK_DOWN'})
+
+    def test_lab37_permit_any_for_ticket2_fails(self):
+        lab = self.S.load_lab('37-link-or-policy')
+        self.apply(lab['solutionConfig'][0], ('uni', mo('fvTenant', {'name': 'Shop'},
+            mo('vzFilter', {'name': 'any'}, mo('vzEntry', {'name': 'any'})),
+            mo('vzBrCP', {'name': 'all'}, mo('vzSubj', {'name': 's'}, mo('vzRsSubjFiltAtt', {'tnVzFilterName': 'any'}))),
+            mo('fvAp', {'name': 'Webshop'}, mo('fvAEPg', {'name': 'Web'}, mo('fvRsProv', {'tnVzBrCPName': 'all'})),
+               mo('fvAEPg', {'name': 'Mgmt'}, mo('fvRsCons', {'tnVzBrCPName': 'all'}))))))
+        by = self.by()
+        self.assertTrue(by['Ticket 1: web1 → app1 TCP 8080'] and by['Ticket 2: jump1 → web1 SSH'])
+        self.assertFalse(by['Least Privilege jump1 → Web: nur SSH'])
+        self.assertEqual(trace.run(self.S.engine, self.S.sim, 'web1', 'web3', 'icmp')['reason'], 'LINK_DOWN', 'Ticket 3 bleibt physisch')
 
 
 if __name__ == '__main__':

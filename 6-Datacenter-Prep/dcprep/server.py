@@ -134,6 +134,7 @@ class Sim:
         st = self.store
         return {'nodes': {nid: (n['name'], n['state']) for nid, n in e.nodes.items()},
                 'hosts': {k: (v['learned'], v.get('epg'), v.get('path')) for k, v in e.hosts.items()},
+                'phys': {k: tuple(sorted(set(v.get('codes') or []))) if not v.get('legs') else () for k, v in e.hosts.items()},
                 'routers': {k: (v.get('adj'), (v.get('iface') or {}).get('dn')) for k, v in e.routers.items()},
                 'faults': {d: (st.attrs(d)['code'], st.attrs(d)['severity'], st.attrs(d)['descr'])
                            for d in st.by_class('faultInst')}}
@@ -145,6 +146,14 @@ class Sim:
                    'code': code, 'created': now_ts(), 'ind': 'state-transition', 'trig': 'oper', 'user': 'internal',
                    'changeSet': ''})
         del ev[:-2000]
+
+    def _ephist(self, host, event, where, epg, encap, detail=''):
+        """Endpoint-History je Host (Lernen, Move, Verlust, Link) - nicht beim Laden eines Labs oder Spielstands."""
+        if getattr(self, '_quiet', False):
+            return
+        lst = self.sim.setdefault('ephist', {}).setdefault(host, [])
+        lst.append({'ts': now_ts(), 'event': event, 'where': where, 'epg': epg, 'encap': encap, 'detail': detail})
+        del lst[:-30]
 
     def rebuild(self):
         if not hasattr(self, 'outbox'):
@@ -159,13 +168,30 @@ class Sim:
             if before['nodes'].get(nid, (None, None))[1] != state:
                 self._event('%s/node-%d' % (self.engine.pdn(nid), nid), 'Node %s (%d) changed state to %s' % (name, nid, state),
                             code='E4204979')
+        e = self.engine
+        lbl = lambda p_: e.path_label(p_) if p_ else '-'
         for name, (learned, epg, path) in after['hosts'].items():
             ob = before['hosts'].get(name, (False, None, None))
+            hs = e.hosts.get(name, {})
             if learned and (not ob[0] or ob[1] != epg):
-                h = next((x for x in self.engine.all_hosts() if x['name'] == name), {})
+                h = next((x for x in e.all_hosts() if x['name'] == name), {})
                 self._event(epg, 'Endpoint %s (%s) learned on %s' % (h.get('mac', ''), name, path), code='E4209232')
+                self._ephist(name, 'learned', lbl(path), epg, hs.get('encap'))
+            elif learned and ob[0] and ob[2] != path:
+                # Endpoint Move: gleiche EPG, anderer Ort (simulator-spezifischer Event-Code S9101)
+                self._event(epg, 'Endpoint %s moved from %s to %s' % (name, lbl(ob[2]), lbl(path)), code='S9101')
+                self._ephist(name, 'moved', lbl(path), epg, hs.get('encap'), 'vorher %s' % lbl(ob[2]))
             if ob[0] and not learned:
                 self._event(ob[1], 'Endpoint of host %s aged out / no longer learned' % name, code='E4209233')
+                self._ephist(name, 'lost', lbl(ob[2]), ob[1], None, '; '.join(hs.get('reasons') or [])[:300])
+        for name, codes in after['phys'].items():
+            old = before.get('phys', {}).get(name, ())
+            if codes != old and ('LINK_DOWN' in codes or 'PORT_ADMIN_DOWN' in codes):
+                self._event('host:' + name, 'Link of host %s down (%s)' % (name, ', '.join(codes)), sev='warning', code='S9102')
+                self._ephist(name, 'linkdown', '-', None, None, ', '.join(codes))
+            elif old and not codes and name in after['phys']:
+                self._event('host:' + name, 'Link of host %s up again' % name, code='S9103')
+                self._ephist(name, 'linkup', '-', None, None, '')
         for name, (adj, idn) in after['routers'].items():
             if before['routers'].get(name, (None,))[0] != adj and idn:
                 self._event(idn, 'Routing adjacency to %s changed to %s' % (name, adj),
@@ -309,7 +335,12 @@ class Sim:
         self.sim['lab'] = lid
         # Lab-Sitzung: Modus und erfasste Aktionen (Hinweise, Antworten) - aendern die Konfiguration nicht
         self.sim['labSession'] = {'mode': mode, 'hints': 0, 'answers': {}, 'checks': 0}
-        self.changed()
+        self.sim['ephist'] = json.loads(json.dumps(lab.get('ephist', {})))
+        self._quiet = True
+        try:
+            self.changed()
+        finally:
+            self._quiet = False
         return lab
 
     def lab_session(self):
@@ -397,7 +428,7 @@ class Sim:
                     ok, info = self.exposure_check(c)
                 elif t == 'endpoint':
                     hs = e.hosts.get(c['host'], {})
-                    ok = hs.get('learned') and (not c.get('epg') or hs.get('epg') == c['epg'])
+                    ok = bool(hs.get('learned') and (not c.get('epg') or hs.get('epg') == c['epg'])) == c.get('expect', True)
                     info = 'gelernt in %s' % e.short(hs.get('epg')) if hs.get('learned') else 'nicht gelernt'
                 elif t == 'nofaults':
                     fl = [d for d in self.store.by_class('faultInst') if d.startswith(c.get('under', ''))
@@ -690,7 +721,11 @@ class Sim:
             sim['setup'] = {k: v for k, v in apic_setup.DEFAULTS.items() if k != 'pwd'}
         self.sim = sim
         self.engine = Engine(self.store, self.sim)
-        self.changed()
+        self._quiet = True
+        try:
+            self.changed()
+        finally:
+            self._quiet = False
 
     @staticmethod
     def auto_name(lid):
@@ -853,6 +888,8 @@ class Sim:
                  'descr': h.get('descr', ''), 'silent': bool(h.get('silent'))}
         if h.get('dhcp'):
             clean['dhcp'] = True
+        if h.get('linkdown'):
+            clean['linkdown'] = True
         svc = h.get('services')
         if isinstance(svc, str):
             svc = [x for x in re.split(r'[\s,;]+', svc) if x]
@@ -866,6 +903,20 @@ class Sim:
             clean['dhcpd'] = scopes
         self.sim['woken'] = [n for n in self.sim.get('woken', []) if n != clean['name']]
         self.sim['hosts'] = [x for x in self.sim['hosts'] if x['name'] != (old or h['name'])] + [clean]
+
+    def host_event(self, b):
+        """Simulator-Ereignisse an einem Host: Link ausfallen lassen/wiederherstellen, Host umstecken (Endpoint Move)."""
+        h = next((x for x in self.sim['hosts'] if x['name'] == b.get('name')), None)
+        if not h:
+            raise AciError(404, 'Host %s gibt es nicht' % b.get('name'), 404)
+        if b['op'] == 'link':
+            if b.get('up', True):
+                h.pop('linkdown', None)
+            else:
+                h['linkdown'] = True
+            return
+        new = dict(h, links=b.get('links') or [])
+        self.set_host(new, h['name'])
 
     def set_router(self, r, old=None):
         if not NAME_RE.match(r.get('name', '')):
@@ -1588,10 +1639,15 @@ def make_handler(hub):
                         return self.send(200, {'ok': True, 'added': n})
                     if b.get('op') == 'delete':
                         S.sim['hosts'] = [h for h in S.sim['hosts'] if h['name'] != b.get('name')]
+                    elif b.get('op') in ('link', 'move'):
+                        S.host_event(b)
                     else:
                         S.set_host(b.get('host') or {}, b.get('old'))
                     S.changed()
                     return self.send(200, {'ok': True})
+                if rest == 'ephist':
+                    hist, host_ = S.sim.get('ephist', {}), (q.get('host') or [''])[0]
+                    return self.send(200, hist.get(host_, []) if host_ else hist)
                 if rest == 'aaaservers':
                     if method == 'POST':
                         S.aaa_server_op(b)

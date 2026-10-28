@@ -171,8 +171,10 @@ Unter *Simulation > Labs & Stände* laden. Jedes Lab setzt die Konfiguration auf
 | 33 | Zwei Endpoints in derselben EPG (neues Format) | 15 min |
 | 34 | Zwei EPGs in derselben Bridge Domain: Bridging ist nicht Policy (neues Format) | 20 min |
 | 35 | Falscher Port, falsche Richtung: eine kaputte Freigabe reparieren (neues Format) | 20 min |
+| 36 | Endpoint Move nachvollziehen: Verlauf lesen, alte Bindung entfernen (neues Format) | 25 min |
+| 37 | Interface-Ausfall oder Policy-Drop? Drei Tickets, drei Ursachen (neues Format) | 25 min |
 
-**Neues Lab-Format** (Labs 02, 03, 04, 07 und 32 bis 35): Statt einer Klickanleitung gibt es Anforderungen. Der Rest im Überblick:
+**Neues Lab-Format** (Labs 02, 03, 04, 07 und 32 bis 37): Statt einer Klickanleitung gibt es Anforderungen. Der Rest im Überblick:
 
 - **Hinweise** in vier Stufen: Konzept, Objekte, Prüfschritt, Lösung. Die Oberfläche zählt, wie viele genutzt wurden.
 - **Bewertung** getrennt nach *Funktion* und *Sicherheit / Least Privilege*. Eine Permit-any-Abkürzung funktioniert zwar, besteht aber nicht.
@@ -184,11 +186,13 @@ Den Stand gegenüber dem geplanten Lernpfad zeigt [docs/LAB-KATALOG.md](docs/LAB
 **Traffic Inspector** (*Operations > Visibility & Troubleshooting*): Jeder Test liefert ein Ergebnis aus der gemeinsamen Connectivity-Engine, dieselbe, die auch die Labs bewertet:
 
 - **ALLOW**, **DROP** oder **UNRESOLVED**
-- maschinenlesbarer Reason Code (z. B. `POLICY_IMPLICIT_DENY`, `POLICY_REPLY_DENIED`, `EP_NOT_LEARNED`, `SERVICE_NOT_LISTENING`)
+- maschinenlesbarer Reason Code (z. B. `POLICY_IMPLICIT_DENY`, `POLICY_REPLY_DENIED`, `EP_NOT_LEARNED`, `LINK_DOWN`, `PORT_ADMIN_DOWN`, `SERVICE_NOT_LISTENING`)
 - Fehlerort, Erklärung und nächster Diagnoseschritt
 - angewandte Regel für Anfrage und Antwort (Contract, Filter, Richtung) und der Pfad über die Leafs
 
 Reason Codes und das Dienstmodell der Hosts (Feld *Dienste*) sind simulator-spezifisch.
+
+**Ereignisse:** In der Hosttabelle (*Simulation > Topologie & Hosts*) lässt sich der Link eines Hosts trennen und wieder verbinden; ein umgesteckter Host (anderer Port im Host-Dialog) ist ein Endpoint Move. Der **EP Tracker** zeigt pro Host den Verlauf: gelernt, umgezogen, nicht mehr gelernt, Link down/up. Die Event-Codes S9101–S9103 sind simulator-spezifisch.
 
 Die Lab-Dateien entstehen aus `Labs-Quelle/build_labs.py` (`python3 Labs-Quelle/build_labs.py`). Die Tests prüfen für jedes Lab, dass es ohne Lösung nicht bestanden und mit Musterlösung vollständig bestanden ist.
 
@@ -288,7 +292,7 @@ Das Verhalten ist nachgebildet und nicht gegen einen echten APIC geprüft. Dafü
 
 ## Grenzen
 
-Nicht simuliert: VMM für Kubernetes, Microsoft und OpenStack, vPC über Pods hinweg, Remote-Leaf-vPC, Stretched Fabric, GOLF und SR-MPLS, die vollständige NDO-Oberfläche (der NDO ist vereinfacht, die zweite Site hat nur feste Endpoints), Service Graphs ohne PBR (Firewall als Gateway), Managed Devices (Device Packages), Set Rules und Route-Profile mit Community/Tag, Multicast, Custom QoS Policies und die Wirkung von QoS auf den Datenverkehr, SNMPv3, Scheduler für Exporte und Upgrades, DHCP über L3Out. Nicht unterstützt sind außerdem Endpoint Move als Ereignis, Subjects ohne „Apply Both Directions“ und Intra-EPG-Contracts (siehe [Backlog](docs/BACKLOG.md)). Die Pakete fließen nicht wirklich: Der Traffic-Test berechnet anhand von Konfiguration und Zustand, ob ein Paket und seine Antwort ankommen würden, und begründet jeden Schritt.
+Nicht simuliert: VMM für Kubernetes, Microsoft und OpenStack, vPC über Pods hinweg, Remote-Leaf-vPC, Stretched Fabric, GOLF und SR-MPLS, die vollständige NDO-Oberfläche (der NDO ist vereinfacht, die zweite Site hat nur feste Endpoints), Service Graphs ohne PBR (Firewall als Gateway), Managed Devices (Device Packages), Set Rules und Route-Profile mit Community/Tag, Multicast, Custom QoS Policies und die Wirkung von QoS auf den Datenverkehr, SNMPv3, Scheduler für Exporte und Upgrades, DHCP über L3Out. Nicht unterstützt sind außerdem Subjects ohne „Apply Both Directions“ und Intra-EPG-Contracts (siehe [Backlog](docs/BACKLOG.md)). Die Pakete fließen nicht wirklich: Der Traffic-Test berechnet anhand von Konfiguration und Zustand, ob ein Paket und seine Antwort ankommen würden, und begründet jeden Schritt.
 
 ## Aufbau des Ordners
 
@@ -311,7 +315,7 @@ Nicht simuliert: VMM für Kubernetes, Microsoft und OpenStack, vPC über Pods hi
 | `labs/`, `Labs-Quelle/` | Lab-Dateien und ihr Generator |
 | `beispiele/` | Ansible, curl, Python, Terraform |
 | `werkzeuge/` | `abgleich.py` und `ABGLEICH.md`: Abgleich mit echtem ACI |
-| `tests/` | `python3 -m unittest discover -s tests` (Unit, Integration, Abnahmefall `test_acceptance.py`), GUI: `node tests/gui/smoke.js` und `node tests/gui/acceptance.js` (brauchen Playwright) |
+| `tests/` | `python3 -m unittest discover -s tests` (Unit, Integration, Abnahmefall `test_acceptance.py`), GUI: `node tests/gui/smoke.js`, `node tests/gui/acceptance.js` und `node tests/gui/troubleshooting.js` (brauchen Playwright) |
 | `docs/` | [Architektur](docs/ARCHITEKTUR.md), [Referenzprofil und Regelbasis](docs/REFERENZPROFIL.md), [Lab-Katalog](docs/LAB-KATALOG.md), [Labs schreiben](docs/LAB-AUTHORING.md), [Gap-Analyse](docs/GAP-ANALYSE.md), [Backlog](docs/BACKLOG.md) |
 | `CLAUDE.md` | Projektkonventionen und Prüfkommandos |
 

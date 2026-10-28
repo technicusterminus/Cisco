@@ -26,7 +26,8 @@ Status-Begriffe in dieser Datei:
 | Access Policies: VLAN-Pool, Domain, AAEP, Policy Group, Interface-/Switch-Profil, Static Path | umgesetzt + getestet | Die Kette wird vollständig ausgewertet. Fehlt ein Glied, wird der Endpoint nicht gelernt, und es gibt einen Fault |
 | vPC, Port-Channel, LACP | umgesetzt | Explicit Protection Group, LACP-Partnerzustand |
 | Endpoint Learning (MAC/IP, EPG, Leaf, Interface) | umgesetzt + getestet | stille Hosts, ARP Flooding/Glean, Limit IP Learning |
-| Endpoint Move als Ereignis | **nicht unterstützt** | Ein Host lässt sich umstecken, ein eigenes Move-Ereignis mit History gibt es nicht (Backlog B-03) |
+| Endpoint Move als Ereignis | umgesetzt + getestet | Umstecken eines Hosts ergibt Ereignis S9101 (gebundener Port) bzw. Verlust und neues Lernen. Endpoint-Verlauf je Host im EP Tracker. Event-Codes S91xx sind simulator-spezifisch |
+| Link-Ausfall, deaktivierter Port | umgesetzt + getestet | Kabel/NIC-Ausfall als simulator-spezifisches Host-Ereignis (`LINK_DOWN`, Events S9102/S9103). Disabled Interface wie beim APIC über `fabricRsOosPath` (`PORT_ADMIN_DOWN`) |
 | Contracts, Subjects, Filter, Consumer/Provider | umgesetzt + getestet | zustandslos, Reverse Filter Ports, Stateful-ACK, Scope, Deny-Aktion |
 | Subject ohne „Apply Both Directions“ (vzInTerm/vzOutTerm) | **nicht unterstützt** | Die Klassen gibt es im Modell nicht |
 | Intra-EPG Isolation | vereinfacht | „enforced“ verbietet allen Verkehr innerhalb der EPG. Intra-EPG-Contracts (`fvRsIntraEpg`) werden gespeichert, aber nicht ausgewertet (Backlog B-05) |
@@ -47,7 +48,7 @@ Status-Begriffe in dieser Datei:
 Ein Test `src → dst, Protokoll, Port` durchläuft diese Schritte (`trace.py`). Die Reihenfolge ist ein **didaktisches Diagnosemodell**, keine Hardware-Pipeline.
 
 1. Quelle und Ziel auflösen (Host, Router, IP, Gateway) → sonst `UNRESOLVED / INPUT_INVALID`
-2. Endpoint der Quelle gelernt (prüft Link, Access-Kette, Encap im Pool, Domain an der EPG) → `EP_NOT_LEARNED`
+2. Endpoint der Quelle gelernt. Ist kein Link des Hosts nutzbar → `LINK_DOWN`, `PORT_ADMIN_DOWN`, `PORT_ERR_DISABLED`, `SWITCH_INACTIVE` (Ebene *physical*). Sonst prüft der Schritt Access-Kette, Encap im Pool und Domain an der EPG → `EP_NOT_LEARNED`
 3. Endpoint des Ziels gelernt → `EP_NOT_LEARNED`
 4. Bridging (gleiches Subnetz): gleiche BD, ARP → `L2_DIFFERENT_BD`, `ARP_UNRESOLVED`
 5. Routing (anderes Subnetz): Gateway, BD-Subnetz, VRF, Leaking → `GATEWAY_INVALID`, `ROUTE_MISSING`, `INTERVRF_LEAK_MISSING`

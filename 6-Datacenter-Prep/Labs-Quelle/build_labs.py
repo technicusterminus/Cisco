@@ -1957,6 +1957,117 @@ lab(id='35-port-and-direction', title='35 Falscher Port, falsche Richtung', topi
 
 
 # ----------------------------------------------------------------------------
+# Lab 36 - Endpoint Move nachvollziehen
+# ----------------------------------------------------------------------------
+APP2 = host('app2', '00:50:56:10:20:12', '10.10.20.12/24', '10.10.20.1', 120, [[L102, 'eth1/7']], descr='Applikationsserver (umgezogen)')
+PCX = host('pc-x', '00:50:56:66:00:01', '10.10.20.99/24', '10.10.20.1', 120, [[L101, 'eth1/6']], descr='Notebook am frei gewordenen Port')
+OLD36 = mo('fvTenant', {'name': 'Shop'}, mo('fvAp', {'name': 'Webshop'}, mo('fvAEPg', {'name': 'App'},
+           mo('fvRsPathAtt', {'tDn': path(101, 'eth1/6'), 'encap': 'vlan-120', 'mode': 'regular'}))))
+lab(id='36-endpoint-move', title='36 Endpoint Move nachvollziehen', topic='Endpoints / Troubleshooting', level='Mittel',
+    duration='25 min', fabric='discovered', kind='troubleshooting', modes=['guided', 'exam'],
+    prerequisites=['Lab 33'], tools=['EP Tracker mit Endpoint-Verlauf', 'Traffic Inspector', 'Faults der EPG', 'CLI: show endpoint'],
+    goals=['Den Endpoint-Verlauf lesen: wo war ein Host, wo ist er jetzt', 'Verstehen, dass ACI Endpoints dort lernt, wo ihr Verkehr ankommt',
+           'Alte Port-Bindungen nach einem Umzug als Sicherheitsrisiko erkennen'],
+    intro='Gestern Abend wurde der Applikationsserver **app2** (10.10.20.12, VLAN 120, EPG **App**) in ein anderes Rack umgebaut. '
+          'Seitdem meldet das Ticket: „web1 erreicht app2 nicht mehr auf TCP 8080.“ An app2 selbst wurde nichts geändert.\n\n'
+          'Finde heraus, wo app2 vorher war und wo er jetzt angeschlossen ist.',
+    requirements=['web1 erreicht app2 wieder auf TCP 8080.',
+                  'app2 wird an seinem neuen Anschluss in der EPG App gelernt; app1 bleibt erreichbar.',
+                  'Nach dem Umzug darf am alten Anschluss niemand mehr Zugang zur EPG App bekommen.'],
+    limits=['Der Verlauf vor dem Lab-Start ist vorgegeben (Szenario). Neue Einträge entstehen, sobald du etwas änderst.',
+            'Event-Codes S9101 bis S9103 sind simulator-spezifisch.'],
+    hints=['**Konzept:** Die ACI lernt einen Endpoint dort, wo sein Verkehr ankommt – auf einem Port mit einer Bindung an die EPG. '
+           'Zieht ein Server um, muss der neue Port zur EPG gehören. Was passiert mit der alten Bindung?',
+           '**Ebene:** Endpoint-Zuordnung und Port-Bindungen der EPG App. Der EP Tracker zeigt den Verlauf von app2.',
+           '**Prüfschritt:** EP Tracker: Suche nach „app2“ – wo wurde er zuletzt gelernt? Simulation > Topologie & Hosts: Wo hängt app2 '
+           'jetzt? Danach: Wer ist heute am alten Port gelernt (`show endpoint` auf dem Leaf)?',
+           '**Lösung:** An der EPG App einen Static Port für leaf102 eth1/7 mit vlan-120 anlegen und den alten Static Port '
+           'leaf101 eth1/6 löschen. Sonst landet jedes Gerät, das dort mit VLAN 120 sendet, in der EPG App.'],
+    cause='app2 hängt jetzt an leaf102 eth1/7, die EPG App hat dort keine Bindung (EP_NOT_LEARNED). Die alte Bindung leaf101 eth1/6 '
+          'besteht weiter – dort ist inzwischen ein fremdes Notebook in der EPG App gelandet.',
+    config=[SERVER_ACCESS, shop_tenant(with_contracts=True), OLD36], hosts=[WEB1, APP1, APP2, PCX], tasks=[],
+    ephist={'app2': [{'ts': '2026-10-27T09:12:44.000+00:00', 'event': 'learned', 'where': 'leaf101 eth1/6', 'epg': 'uni/tn-Shop/ap-Webshop/epg-App',
+                      'encap': 'vlan-120', 'detail': ''},
+                     {'ts': '2026-10-27T18:40:02.000+00:00', 'event': 'linkdown', 'where': '-', 'epg': None, 'encap': None, 'detail': 'LINK_DOWN'},
+                     {'ts': '2026-10-27T18:40:02.000+00:00', 'event': 'lost', 'where': 'leaf101 eth1/6', 'epg': 'uni/tn-Shop/ap-Webshop/epg-App',
+                      'encap': None, 'detail': 'leaf101 eth1/6: kein Link'},
+                     {'ts': '2026-10-27T19:05:31.000+00:00', 'event': 'linkup', 'where': '-', 'epg': None, 'encap': None, 'detail': ''}],
+            'pc-x': [{'ts': '2026-10-28T08:05:10.000+00:00', 'event': 'learned', 'where': 'leaf101 eth1/6', 'epg': 'uni/tn-Shop/ap-Webshop/epg-App',
+                      'encap': 'vlan-120', 'detail': ''}]},
+    checks=[check('app2 in EPG App gelernt', 'endpoint', host='app2', epg='uni/tn-Shop/ap-Webshop/epg-App'),
+            check('web1 → app2 TCP 8080', 'traffic', src='web1', dst='app2', proto='tcp', port=8080, expect=True),
+            check('web1 → app1 TCP 8080 funktioniert weiterhin', 'traffic', src='web1', dst='app1', proto='tcp', port=8080, expect=True),
+            check('Am alten Anschluss kommt niemand mehr in die EPG App', 'endpoint', host='pc-x', epg='uni/tn-Shop/ap-Webshop/epg-App',
+                  category='security', expect=False)],
+    questions=[{'id': 'q1', 'q': 'Warum wurde app2 nach dem Umbau nicht mehr gelernt, obwohl VLAN und IP gleich blieben?',
+                'options': ['Der neue Port hat keine Bindung an die EPG App', 'app2 brauchte eine neue IP', 'Der Contract galt nur für den alten Port',
+                            'Endpoints werden nur einmal pro Tag gelernt'],
+                'answer': 0, 'explain': 'Die EPG-Zuordnung hängt an Port und VLAN. Ein neuer Port braucht eine eigene Bindung.'},
+               {'id': 'q2', 'q': 'Warum ist die alte Bindung gefährlich?',
+                'options': ['Sie verbraucht zu viel TCAM', 'Jedes Gerät, das dort mit VLAN 120 sendet, landet in der EPG App und erbt ihre Freigaben',
+                            'Sie verhindert das Lernen am neuen Port', 'Sie ist nicht gefährlich'],
+                'answer': 1, 'explain': 'Genau das ist pc-x passiert: Das Notebook ist in der EPG App gelandet und könnte deren Contracts nutzen.'}],
+    solution='`POST /api/mo/uni/tn-Shop/ap-Webshop/epg-App.json` mit `' + json.dumps(mo('fvAEPg', {},
+        mo('fvRsPathAtt', {'tDn': path(102, 'eth1/7'), 'encap': 'vlan-120'}),
+        mo('fvRsPathAtt', {'tDn': path(101, 'eth1/6'), 'status': 'deleted'}))) + '`')
+
+# ----------------------------------------------------------------------------
+# Lab 37 - Interface-Ausfall oder Policy-Drop?
+# ----------------------------------------------------------------------------
+WEB3 = dict(host('web3', '00:50:56:10:10:13', '10.10.10.13/24', '10.10.10.1', 110, [[L101, 'eth1/7']], descr='Webserver'), linkdown=True)
+START37 = [mo('fvTenant', {'name': 'Shop'}, mo('fvAp', {'name': 'Webshop'}, mo('fvAEPg', {'name': 'Web'},
+              mo('fvRsPathAtt', {'tDn': path(101, 'eth1/7'), 'encap': 'vlan-110', 'mode': 'regular'})))),
+           mo('fabricInst', {}, mo('fabricOOServicePol', {}, mo('fabricRsOosPath', {'tDn': path(102, 'eth1/2')})))]
+SOL37 = mo('fvTenant', {'name': 'Shop'},
+           filt('ssh', {'name': 'ssh', 'etherT': 'ip', 'prot': 'tcp', 'dFromPort': '22', 'dToPort': '22'}),
+           contract('mgmt-ssh-web', ['ssh']),
+           mo('fvAp', {'name': 'Webshop'},
+              mo('fvAEPg', {'name': 'Web'}, mo('fvRsProv', {'tnVzBrCPName': 'mgmt-ssh-web'})),
+              mo('fvAEPg', {'name': 'Mgmt'}, mo('fvRsCons', {'tnVzBrCPName': 'mgmt-ssh-web'}))))
+lab(id='37-link-or-policy', title='37 Interface-Ausfall oder Policy-Drop?', topic='Fabric / Troubleshooting', level='Mittel',
+    duration='25 min', fabric='discovered', kind='troubleshooting', modes=['guided', 'exam'],
+    prerequisites=['Labs 32 und 36'], tools=['Traffic Inspector', 'Fabric > Inventory (Interfaces, Disabled Interfaces)', 'EP Tracker',
+                                           'CLI: show interface, show endpoint, show zoning-rule'],
+    goals=['Physische Ursachen (Link, deaktivierter Port) von Policy-Drops unterscheiden', 'Nur beheben, was in der ACI liegt',
+           'Eine Freigabe mit Least Privilege ergänzen'],
+    intro='Drei Tickets kommen gleichzeitig rein. Alle Hosts sind richtig konfiguriert.\n\n'
+          '- web1: leaf101 eth1/1, VLAN 110 · web3: leaf101 eth1/7, VLAN 110 (EPG Web)\n- app1: leaf102 eth1/2, VLAN 120 (EPG App)\n'
+          '- jump1: leaf101 eth1/5, VLAN 140 (EPG Mgmt)',
+    requirements=['Ticket 1: „web1 erreicht app1 nicht auf TCP 8080.“ – beheben.',
+                  'Ticket 2: „jump1 kommt per SSH nicht auf web1.“ – beheben, jump1 darf nur SSH zu Web.',
+                  'Ticket 3: „web3 ist nicht erreichbar.“ – Ursache klären. Liegt sie nicht in der ACI, nichts an der Konfiguration ändern '
+                  'und die Frage unten beantworten.'],
+    limits=['Physische Ausfälle (Kabel, NIC) sind in der Simulation Ereignisse am Host (simulator-spezifisch).',
+            'Disabled Interfaces werden wie beim APIC über die Out-of-Service-Policy (fabricRsOosPath) modelliert.'],
+    hints=['**Konzept:** Bevor man an Contracts dreht: Ist der Host überhaupt gelernt, und hat sein Port Link? Ein Policy-Drop setzt '
+           'einen gelernten Endpoint voraus.',
+           '**Ebene:** Der Reason Code im Traffic Inspector trennt die Fälle: LINK_DOWN und PORT_ADMIN_DOWN sind physisch, POLICY_* ist '
+           'die Policy.',
+           '**Prüfschritte:** Ticket 1: Traffic-Test web1 → app1 TCP 8080 und Fabric > Inventory > Disabled Interfaces. Ticket 2: '
+           'Traffic-Test jump1 → web1 TCP 22, Abschnitt Angewandte Policy. Ticket 3: Traffic-Test web1 → web3 und EP Tracker web3.',
+           '**Lösung:** Ticket 1: leaf102 eth1/2 wieder aktivieren (Disabled Interface entfernen). Ticket 2: Filter ssh (tcp/22) und Contract, '
+           'Web stellt bereit, Mgmt konsumiert. Ticket 3: kein Link am Port (Kabel/NIC) – außerhalb der ACI, Vor-Ort-Team.'],
+    cause='Ticket 1: Port leaf102 eth1/2 ist deaktiviert (PORT_ADMIN_DOWN). Ticket 2: kein Contract zwischen Mgmt und Web '
+          '(POLICY_IMPLICIT_DENY). Ticket 3: kein Link am Port von web3 (LINK_DOWN).',
+    config=[SERVER_ACCESS, shop_tenant(with_contracts=True, with_mgmt=True)] + START37, hosts=[WEB1, APP1, JUMP1, WEB3], tasks=[],
+    checks=[check('Ticket 1: web1 → app1 TCP 8080', 'traffic', src='web1', dst='app1', proto='tcp', port=8080, expect=True),
+            check('Ticket 2: jump1 → web1 SSH', 'traffic', src='jump1', dst='web1', proto='tcp', port=22, expect=True),
+            check('Least Privilege jump1 → Web: nur SSH', 'exposure', src='jump1', dst='web1', allow=['tcp/22'], category='security'),
+            check('Web baut keine Verbindungen zu jump1 auf', 'exposure', src='web1', dst='jump1', allow=[], category='security')],
+    questions=[{'id': 'q1', 'q': 'Ticket 3: Was ist die Ursache bei web3?',
+                'options': ['Fehlender Contract zwischen Web und Web', 'Kein Link am Leaf-Port (Kabel oder NIC) – außerhalb der ACI-Konfiguration',
+                            'Der Port ist in der ACI deaktiviert', 'Das VLAN fehlt im Pool'],
+                'answer': 1, 'explain': 'Der Traffic Inspector meldet LINK_DOWN: Der Port hat keinen Link. web1 und web3 sind in derselben EPG, '
+                                        'ein Contract wäre nicht nötig.'},
+               {'id': 'q2', 'q': 'Ticket 1: Woran erkennst du, dass es kein Policy-Problem war?',
+                'options': ['Der Test endet beim Ziel-Endpoint mit PORT_ADMIN_DOWN, die Policy wird gar nicht geprüft',
+                            'An einem Fault F0467', 'Der Contract fehlte', 'Gar nicht'],
+                'answer': 0, 'explain': 'Ohne gelernten Endpoint kommt die Policy-Entscheidung nicht zustande. Die Tabelle „Angewandte Policy“ bleibt leer.'}],
+    solution='Ticket 1: `POST /api/mo/uni/fabric/outofsvc.json` mit `{"fabricOOServicePol":{"attributes":{},"children":[{"fabricRsOosPath":'
+             '{"attributes":{"tDn":"topology/pod-1/paths-102/pathep-[eth1/2]","status":"deleted"}}}]}}`.\n\nTicket 2: `' + json.dumps(SOL37) + '`')
+
+
+# ----------------------------------------------------------------------------
 # Maschinenlesbare Musterloesungen (fuer die Tests: [URL-DN, Body])
 # ----------------------------------------------------------------------------
 BGP_RR = ['uni/fabric/bgpInstP-default', mo('bgpInstPol', {}, mo('bgpAsP', {'asn': '65001'}),
@@ -2085,6 +2196,10 @@ SOLUTIONS = {
     '32-https-least-privilege': [['uni', SOL32]],
     '33-same-epg': [['uni/tn-Shop/ap-Webshop/epg-Web', mo('fvAEPg', {}, mo('fvRsPathAtt', {'tDn': path(102, 'eth1/3'), 'encap': 'vlan-110'}))]],
     '34-two-epgs-same-bd': [['uni', SOL34]],
+    '36-endpoint-move': [['uni/tn-Shop/ap-Webshop/epg-App', mo('fvAEPg', {}, mo('fvRsPathAtt', {'tDn': path(102, 'eth1/7'), 'encap': 'vlan-120'}),
+                                                                  mo('fvRsPathAtt', {'tDn': path(101, 'eth1/6'), 'status': 'deleted'}))]],
+    '37-link-or-policy': [['uni/fabric/outofsvc', mo('fabricOOServicePol', {}, mo('fabricRsOosPath', {'tDn': path(102, 'eth1/2'), 'status': 'deleted'}))],
+                          ['uni', SOL37]],
     '35-port-and-direction': [['uni/tn-Shop/flt-https/e-https', mo('vzEntry', {'dFromPort': '443', 'dToPort': '443'})],
                               ['uni/tn-Shop/ap-Webshop/epg-Web', mo('fvAEPg', {}, mo('fvRsProv', {'tnVzBrCPName': 'web-to-app-https', 'status': 'deleted'}),
                                                                    mo('fvRsCons', {'tnVzBrCPName': 'web-to-app-https'}))],

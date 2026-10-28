@@ -2,7 +2,7 @@
 
 Die Tabelle vergleicht den geplanten Lernpfad (26 Labs) mit den vorhandenen Lab-Dateien in `labs/`.
 
-**Format neu** (Labs 02, 03, 04, 07 und 32 bis 35) heißt, das Lab hat:
+**Format neu** (Labs 02, 03, 04, 07 und 32 bis 37) heißt, das Lab hat:
 
 - Anforderungen statt Klickanleitung
 - vier Hinweisstufen
@@ -35,8 +35,8 @@ Startbar sind nur Labs, die es als Datei gibt. Die Spalte *Stand* gilt für die 
 | 13 | Falscher Port, falsche Richtung | **35 Falscher Port, falsche Richtung** | vollständig (neu) | zwei unabhängige Fehler, permit any scheitert |
 | 14 | Intra-EPG Isolation | – | geplant | Engine vereinfacht: Intra-EPG-Contracts fehlen (B-05) |
 | 15 | Fehlendes Endpoint Learning | 07 Troubleshooting (Ticket 5) | teilweise (neu) | |
-| 16 | Endpoint Move | – | geplant | **nicht unterstützt**, Engine-Arbeit nötig (B-03) |
-| 17 | Interface-Ausfall vs. Policy-Drop | – | geplant | Link-Zustand als Ereignis fehlt (B-04) |
+| 16 | Endpoint Move | **36 Endpoint Move nachvollziehen** | vollständig (neu) | Endpoint-Verlauf im EP Tracker; alte Bindung als Sicherheitsrisiko |
+| 17 | Interface-Ausfall vs. Policy-Drop | **37 Interface-Ausfall oder Policy-Drop?** | vollständig (neu) | drei Ursachen: PORT_ADMIN_DOWN, POLICY_IMPLICIT_DENY, LINK_DOWN |
 | 18 | Mehrere unabhängige Fehler | 07 Troubleshooting (sechs Tickets) | vollständig (neu) | mit Least-Privilege-Nebenbedingung |
 | 19 | Einfacher L3Out | 06 L3Out OSPF, 09 eBGP | vollständig (alt) | |
 | 20 | Routingfehler vs. fehlender External-EPG-Contract | 06, 09 | teilweise | Codes `ROUTE_MISSING`, `EXT_EPG_NO_MATCH`, `POLICY_*` |

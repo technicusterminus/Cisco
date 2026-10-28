@@ -50,6 +50,16 @@ POLICY_HINTS = {
 }
 
 
+# Physische Ursachen, wenn kein Link eines Hosts nutzbar ist
+PHYS_HINTS = {
+    'LINK_DOWN': 'Kein Link am Leaf-Port: Kabel, Transceiver oder NIC des Hosts pruefen. Das ist kein Konfigurationsfehler der ACI '
+                 '(CLI: show interface ethX/Y, Fabric > Inventory > Interfaces).',
+    'PORT_ADMIN_DOWN': 'Der Port ist in der ACI deaktiviert (Fabric > Inventory > Disabled Interfaces, fabricRsOosPath). Wieder aktivieren.',
+    'PORT_ERR_DISABLED': 'Der Port ist error-disabled (z. B. durch MCP). Ursache beseitigen, dann den Port wieder aktivieren.',
+    'SWITCH_INACTIVE': 'Der Leaf ist nicht aktiv (Discovery, Upgrade oder nicht registriert). Fabric > Inventory pruefen.',
+}
+
+
 class Trace:
     def __init__(self):
         self.steps = []
@@ -175,7 +185,15 @@ def _host_checks(eng, t, ep, role):
         hs = dict(hs, learned=True, silent_dst=role != 'Quelle')
     if not hs or not hs['learned']:
         reasons = (hs or {}).get('reasons') or ['Host ist mit keinem aktiven Leaf verbunden']
-        t.step(False, '%s %s: Endpoint nicht gelernt' % (role, h['name']), '; '.join(reasons))
+        codes = (hs or {}).get('codes') or []
+        if codes and not hs.get('legs'):
+            # kein einziger Link nutzbar: physische Ursache statt Access-/EPG-Problem
+            c = codes[0]
+            t.step(False, '%s %s: Link nicht nutzbar' % (role, h['name']), '; '.join(reasons), code=c,
+                   hint=PHYS_HINTS.get(c))
+            t.steps[-1]['layer'] = 'physical'
+        else:
+            t.step(False, '%s %s: Endpoint nicht gelernt' % (role, h['name']), '; '.join(reasons))
         return None
     if hs.get('storm'):
         t.step(False, '%s %s: Layer-2-Schleife im BD %s' % (role, h['name'], eng.short(hs['bd'])), hs['storm'])

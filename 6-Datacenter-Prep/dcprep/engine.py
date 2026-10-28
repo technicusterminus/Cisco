@@ -455,6 +455,8 @@ class Engine(OpsMixin, PodMixin, SiteMixin):
         # Hosts/Router verkabeln
         self.cabled = {}
         for h in self.sim.get('hosts', []):
+            if h.get('linkdown'):
+                continue  # simulierter Kabel-/NIC-Ausfall am Host: Port bleibt ohne Link
             for s, p in h.get('links', []):
                 nid = self.serial_active.get(s)
                 if nid and (nid, p) in self.ports:
@@ -1284,7 +1286,7 @@ class Engine(OpsMixin, PodMixin, SiteMixin):
         self.hosts = {}
         woken = set(self.sim.get('woken', []))
         for h in self.all_hosts():
-            hs = {'name': h['name'], 'learned': False, 'ipLearned': False, 'reasons': [], 'legs': [],
+            hs = {'name': h['name'], 'learned': False, 'ipLearned': False, 'reasons': [], 'codes': [], 'legs': [],
                   'path': None, 'epg': None, 'bd': None, 'vrf': None, 'nodes': [], 'linkdown': [],
                   'vm': h.get('vm', False), 'silent': bool(h.get('silent')) and h['name'] not in woken}
             self.hosts[h['name']] = hs
@@ -1299,12 +1301,20 @@ class Engine(OpsMixin, PodMixin, SiteMixin):
                     hs['reasons'].append('Switch %s laedt gerade neu (Firmware-Upgrade auf %s, Upgrade Group %s)'
                                          % (self.node_label(s), plain(up['version']), up.get('grp')) if up else
                                          'Switch %s ist nicht aktiv (%s)' % (self.node_label(s), self.mp['reasons'].get(s) or 'nicht registriert oder noch in Discovery'))
+                    hs['codes'].append('SWITCH_INACTIVE')
                     continue
                 if self.ports.get((nid, p), {}).get('qual') == 'error-disabled':
                     hs['reasons'].append('%s %s ist error-disabled (%s)' % (self.nodes[nid]['name'], p, self.ports[(nid, p)].get('errdis')))
+                    hs['codes'].append('PORT_ERR_DISABLED')
                     continue
                 if self.ports.get((nid, p), {}).get('qual') == 'admin-down':
                     hs['reasons'].append('%s %s ist deaktiviert (Disabled Interface)' % (self.nodes[nid]['name'], p))
+                    hs['codes'].append('PORT_ADMIN_DOWN')
+                    continue
+                if h.get('linkdown') and (nid, p) in self.ports:
+                    hs['reasons'].append('%s %s: kein Link (operSt down, link-not-connected) - Kabel oder NIC des Hosts '
+                                         '(simulator-spezifisches Ereignis)' % (self.nodes[nid]['name'], p))
+                    hs['codes'].append('LINK_DOWN')
                     continue
                 legs.append((nid, p))
             hs['legs'] = legs
