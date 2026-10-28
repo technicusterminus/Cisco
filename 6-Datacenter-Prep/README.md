@@ -131,7 +131,7 @@ Davon getrennt gibt es wie beim echten APIC die **Config Rollbacks** (*Admin > C
 
 ## Labs
 
-Unter *Simulation > Labs* laden. Jedes Lab setzt die Konfiguration auf einen Startzustand, bringt Hosts und Router mit und prüft das Ergebnis per Knopfdruck. Die Musterlösung lässt sich einblenden.
+Unter *Simulation > Labs & Stände* laden. Jedes Lab setzt die Konfiguration auf einen Startzustand, bringt Hosts und Router mit und prüft das Ergebnis per Knopfdruck. Die Musterlösung lässt sich einblenden.
 
 | Lab | Thema | Dauer |
 |---|---|---|
@@ -252,6 +252,18 @@ Datacenter Prep ist ein Webserver, kein Image mit echtem Datenverkehr. Du kannst
 
 Die externen Router, Hosts und Pakete sind simuliert. Ein echter Router aus CML oder EVE-NG kann keine OSPF-Nachbarschaft zu Datacenter Prep aufbauen. Du kannst aber Ansible, Python oder Postman aus deinem Lab heraus gegen die REST-API laufen lassen.
 
+## Abgleich mit echtem ACI
+
+Das Verhalten ist nachgebildet und nicht gegen einen echten APIC geprüft. Dafür gibt es zwei Werkzeuge:
+
+- **`werkzeuge/abgleich.py`** schickt dieselben rund 80 REST-Prüfungen an Datacenter Prep und an einen echten APIC (z. B. die Cisco DevNet Sandbox) und listet jede Abweichung auf. Geprüft werden Defaults, Fehlercodes, automatisch angelegte Objekte, Relationen, Faults und das Abfrage-Verhalten. Ohne `--write` liest das Skript nur. Mit `--write` legt es einen Test-Tenant an und löscht ihn danach wieder.
+
+  ```sh
+  python3 werkzeuge/abgleich.py --apic https://sandboxapicdc.cisco.com --apic-user admin --insecure
+  ```
+
+- **[`werkzeuge/ABGLEICH.md`](werkzeuge/ABGLEICH.md)** ist die Prüfliste für alles, was sich per REST nicht vergleichen lässt (Datenebene, Deployment, Protokolle), nach Risiko sortiert.
+
 ## Grenzen
 
 Nicht simuliert: VMM für Kubernetes, Microsoft und OpenStack, vPC über Pods hinweg, Remote-Leaf-vPC, Stretched Fabric, GOLF und SR-MPLS, die vollständige NDO-Oberfläche (der NDO ist vereinfacht, die zweite Site hat nur feste Endpoints), Service Graphs ohne PBR (Firewall als Gateway), Managed Devices (Device Packages), Set Rules und Route-Profile mit Community/Tag, Multicast, Custom QoS Policies und die Wirkung von QoS auf den Datenverkehr, SNMPv3, Scheduler für Exporte und Upgrades, DHCP über L3Out. Die Pakete fließen nicht wirklich: Der Traffic-Test berechnet anhand von Konfiguration und Zustand, ob ein Paket und seine Antwort ankommen würden, und begründet jeden Schritt.
@@ -276,7 +288,8 @@ Nicht simuliert: VMM für Kubernetes, Microsoft und OpenStack, vPC über Pods hi
 | `static/` | Weboberfläche (ohne Build-Schritt): `app.js` Navigation und Tabs, `specs.js` Formulare, Wizards und Baumstruktur je Klasse, `forms.js` Steuerelemente und Wizard, `views*.js` Spezialseiten, `visore.html` |
 | `labs/`, `Labs-Quelle/` | Lab-Dateien und ihr Generator |
 | `beispiele/` | Ansible, curl, Python, Terraform |
-| `tests/` | `python3 -m unittest discover -s tests` |
+| `werkzeuge/` | `abgleich.py` und `ABGLEICH.md`: Abgleich mit echtem ACI |
+| `tests/` | `python3 -m unittest discover -s tests`, GUI-Test mit `node tests/gui/smoke.js` (braucht Playwright) |
 
 > Kein offizielles Cisco-Material. Cisco, ACI, APIC und Nexus sind Marken von Cisco Systems, Inc.
 
