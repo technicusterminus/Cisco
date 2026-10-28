@@ -2259,6 +2259,150 @@ lab(id='40-it-ot-segmentation', title='40 IT-/OT-Segmentierung einer Fertigungsl
 
 
 # ----------------------------------------------------------------------------
+# Labs 41-43: L3Out-Diagnose und Change mit Snapshot
+# ----------------------------------------------------------------------------
+WAN_ACCESS = access('VLAN-Pool-WAN', 300, 399, 'L3Dom-WAN', 'AAEP-WAN', 'IPG-WAN', 'IntProf-Leaf103', 'wan', 48, 48, 'SwProf-Leaf103', 103, 103, l3=True)
+
+
+def wan_shop(web_cons=True, bd_public=True, bd_l3out=True):
+    """Funktionierendes L3Out WAN aus Lab 06 (OSPF, Routed Interface, External EPG 0.0.0.0/0) - mit Schaltern fuer gezielte Fehler."""
+    return mo('fvTenant', {'name': 'Shop'},
+              filt('https', {'name': 'https', 'etherT': 'ip', 'prot': 'tcp', 'dFromPort': 'https', 'dToPort': 'https'}),
+              contract('web-to-internet', ['icmp', 'https']),
+              bd('BD-Web', 'Prod', '10.10.10.1/24', 'public' if bd_public else 'private', 'WAN' if bd_l3out else None),
+              mo('fvAp', {'name': 'Webshop'}, mo('fvAEPg', {'name': 'Web'}, mo('fvRsCons', {'tnVzBrCPName': 'web-to-internet'}) if web_cons else None)),
+              mo('l3extOut', {'name': 'WAN'}, mo('l3extRsEctx', {'tnFvCtxName': 'Prod'}),
+                 mo('l3extRsL3DomAtt', {'tDn': 'uni/l3dom-L3Dom-WAN'}), mo('ospfExtP', {'areaId': '0.0.0.1'}),
+                 mo('l3extLNodeP', {'name': 'border'},
+                    mo('l3extRsNodeL3OutAtt', {'tDn': 'topology/pod-1/node-103', 'rtrId': '1.1.1.103'}),
+                    mo('l3extLIfP', {'name': 'eth48'}, mo('ospfIfP', {}),
+                       mo('l3extRsPathL3OutAtt', {'tDn': path(103, 'eth1/48'), 'ifInstT': 'l3-port', 'addr': '172.16.0.1/30', 'mtu': '1500'}))),
+                 mo('l3extInstP', {'name': 'Internet'}, mo('l3extSubnet', {'ip': '0.0.0.0/0'}),
+                    mo('fvRsProv', {'tnVzBrCPName': 'web-to-internet'}))))
+
+
+lab(id='41-route-or-contract', title='41 Routingfehler oder fehlender Contract?', topic='External Routing / Troubleshooting', level='Fortgeschritten',
+    duration='25 min', fabric='discovered', kind='troubleshooting', modes=['guided', 'exam'],
+    prerequisites=['Lab 06'], tools=['Traffic Inspector (Ziel: IP-Adresse)', 'CLI: show ip route vrf Shop:Prod auf leaf101 und leaf103, show zoning-rule',
+                                    'Simulation > Externe Router'],
+    goals=['Für externen Verkehr Routing und Policy als getrennte Prüfungen lesen', 'Verstehen, wie Routen vom Border Leaf zu den anderen Leafs kommen',
+           'Den Contract zum External EPG richtig zuordnen'],
+    intro='Das L3Out **WAN** zum Router **wan1** (leaf103 eth1/48, OSPF) ist gebaut, die Nachbarschaft steht. Trotzdem meldet das Ticket: '
+          '„web1 kommt nicht ins Internet (8.8.8.8, Ping und HTTPS).“ app1 soll weiterhin keinen Internetzugang haben.',
+    requirements=['web1 erreicht 8.8.8.8 per Ping und HTTPS.',
+                  'app1 hat keinen Internetzugang – blockiert durch die Policy.',
+                  'Die OSPF-Nachbarschaft zu wan1 bleibt stehen, das L3Out wird nicht neu gebaut.'],
+    limits=['Der externe Router ist simuliert. Er kündigt eine Default Route an und kennt 8.8.8.0/24 und 1.1.1.0/24.'],
+    hints=['**Konzept:** Für Verkehr nach außen prüft der Traffic Inspector nacheinander: Route auf dem Leaf der Quelle, Route auf dem '
+           'Border Leaf, Klassifizierung im External EPG, Policy, Rückweg. Bei mehreren Fehlern siehst du immer den ersten.',
+           '**Ebene:** Zuerst die Route auf leaf101 (dort hängt web1), danach die Policy zwischen der EPG Web und dem External EPG Internet.',
+           '**Prüfschritte:** `show ip route vrf Shop:Prod` auf leaf103 und auf leaf101 vergleichen – warum kennt leaf101 die Route nicht? '
+           'Danach im Traffic Inspector den Abschnitt *Angewandte Policy* lesen: Welche Beziehung hat die EPG Web zum Contract?',
+           '**Lösung:** Fehler 1 (Routing): Es fehlt die BGP Route Reflector Policy (System > System Settings > BGP Route Reflector: '
+           'Fabric-AS und die Spines als Route Reflector). Ohne MP-BGP verteilt der Border Leaf seine externen Routen nicht. '
+           'Fehler 2 (Policy): Die EPG Web konsumiert den Contract web-to-internet nicht.'],
+    cause='Zwei Fehler: keine BGP-Route-Reflector-Policy (ROUTE_MISSING auf leaf101), und die EPG Web konsumiert den Contract nicht (POLICY_IMPLICIT_DENY).',
+    config=[SERVER_ACCESS, shop_tenant(with_contracts=True), WAN_ACCESS, wan_shop(web_cons=False)], hosts=[WEB1, APP1], routers=[wan_router], tasks=[],
+    checks=[check('web1 → 8.8.8.8 Ping', 'traffic', src='web1', dst='8.8.8.8', proto='icmp', expect=True),
+            check('web1 → 8.8.8.8 HTTPS', 'traffic', src='web1', dst='8.8.8.8', proto='tcp', port=443, expect=True),
+            check('OSPF-Nachbarschaft zu wan1 steht', 'router', name='wan1', adj='FULL'),
+            check('app1 → 8.8.8.8 durch die Policy blockiert', 'traffic', src='app1', dst='8.8.8.8', proto='icmp', expect=False,
+                  reason='POLICY_', category='security'),
+            check('Least Privilege web1 → Internet: nur Ping und HTTPS', 'exposure', src='web1', dst='8.8.8.8', allow=['icmp', 'tcp/443'],
+                  category='security')],
+    questions=[{'id': 'q1', 'q': 'Warum zeigte der Traffic Inspector zuerst einen Routingfehler und erst danach den Policy-Fehler?',
+                'options': ['Die Prüfschritte laufen nacheinander; der erste Fehler beendet den Test', 'Der Policy-Fehler entstand erst durch die Reparatur',
+                            'Routingfehler sind wichtiger', 'Der Simulator prüft Policy nur bei TCP'],
+                'answer': 0, 'explain': 'Bei mehreren Fehlern zeigt der Test den ersten. Nach jeder Reparatur neu testen.'},
+               {'id': 'q2', 'q': 'Warum kannte leaf101 die externe Route nicht, obwohl leaf103 sie per OSPF gelernt hatte?',
+                'options': ['Externe Routen werden in der Fabric per MP-BGP verteilt – ohne Route Reflector nicht', 'leaf101 spricht kein OSPF',
+                            'Der Contract fehlte', 'Die MTU war falsch'],
+                'answer': 0, 'explain': 'Der Border Leaf redistribuiert in MP-BGP, die Spines reflektieren an alle Leafs.'}],
+    solution='1. BGP Route Reflector: `' + json.dumps(BGP_TREE) + '`\n\n2. An der EPG Web `fvRsCons` mit `tnVzBrCPName=web-to-internet`.')
+
+lab(id='42-return-path', title='42 Fehlender Rückweg', topic='External Routing / Troubleshooting', level='Fortgeschritten',
+    duration='20 min', fabric='discovered', kind='troubleshooting', modes=['guided', 'exam'],
+    prerequisites=['Lab 41'], tools=['Traffic Inspector', 'Simulation > Externe Router (gelernte Routen)', 'CLI: show ip route vrf Shop:Prod'],
+    goals=['Hinweg und Rückweg getrennt betrachten', 'Verstehen, wann die ACI ein BD-Subnetz nach außen ankündigt',
+           'Nur ankündigen, was außen bekannt sein soll'],
+    intro='Das L3Out **WAN** steht, die Route Reflector Policy ist da, der Contract für Web ins Internet auch. Das Ticket sagt: '
+          '„Pakete von web1 gehen raus, aber es kommt nichts zurück.“',
+    requirements=['web1 erreicht 8.8.8.8 per Ping und HTTPS.',
+                  'Der WAN-Router kennt das Netz von web1 (10.10.10.0/24).',
+                  'Das Netz der Applikationsserver (10.10.20.0/24) wird nicht nach außen angekündigt.'],
+    limits=['Route Control (Route Maps) ist vereinfacht; ausgewertet werden der Subnetz-Scope und die Verknüpfung BD → L3Out.'],
+    hints=['**Konzept:** Damit eine Antwort zurückkommt, muss der externe Router das Quellnetz kennen. Die ACI kündigt ein BD-Subnetz '
+           'nur an, wenn man es ausdrücklich erlaubt.',
+           '**Ebene:** Bridge Domain BD-Web: Scope des Subnetzes und Verknüpfung mit dem L3Out.',
+           '**Prüfschritt:** Im Traffic Inspector ist der letzte Schritt rot. Unter *Simulation > Externe Router* stehen die Routen, die '
+           'wan1 von der ACI gelernt hat. Welche Optionen hat das Subnetz von BD-Web?',
+           '**Lösung:** Im BD-Web das Subnetz 10.10.10.1/24 auf *Advertised Externally* (Scope public) stellen und das L3Out **WAN** '
+           'beim BD unter *Associated L3 Outs* eintragen. BD-App bleibt privat.'],
+    cause='Das Subnetz von BD-Web ist privat und das BD ist nicht mit dem L3Out verknüpft: wan1 kennt keine Route zurück (RETURN_ROUTE_MISSING).',
+    config=[SERVER_ACCESS, shop_tenant(with_contracts=True), WAN_ACCESS, wan_shop(bd_public=False, bd_l3out=False), BGP_TREE],
+    hosts=[WEB1, APP1], routers=[wan_router], tasks=[],
+    checks=[check('web1 → 8.8.8.8 Ping', 'traffic', src='web1', dst='8.8.8.8', proto='icmp', expect=True),
+            check('web1 → 8.8.8.8 HTTPS', 'traffic', src='web1', dst='8.8.8.8', proto='tcp', port=443, expect=True),
+            check('wan1 kennt 10.10.10.0/24', 'learned', router='wan1', prefix='10.10.10.0/24', expect=True),
+            check('10.10.20.0/24 wird nicht angekündigt', 'learned', router='wan1', prefix='10.10.20.0/24', expect=False, category='security'),
+            check('app1 bleibt ohne Internetzugang', 'traffic', src='app1', dst='8.8.8.8', proto='icmp', expect=False, category='security')],
+    questions=[{'id': 'q1', 'q': 'Woran erkennst du im Traffic Inspector, dass es nicht am Hinweg liegt?',
+                'options': ['Route, Klassifizierung und Policy sind grün, erst der Rückweg ist rot', 'Am Fault F0467', 'Am Verdict ALLOW', 'Gar nicht'],
+                'answer': 0, 'explain': 'Der Test prüft den Rückweg als eigenen Schritt (RETURN_ROUTE_MISSING).'},
+               {'id': 'q2', 'q': 'Warum nicht einfach alle BD-Subnetze nach außen ankündigen?',
+                'options': ['Das geht technisch nicht', 'Was außen bekannt ist, ist erreichbar – nur ankündigen, was außen gebraucht wird',
+                            'Das kostet Lizenzen', 'Weil OSPF nur ein Netz kann'],
+                'answer': 1, 'explain': 'Auch Routing ist ein Teil von Least Privilege: unbekannte Netze sind schwerer angreifbar.'},
+               {'id': 'q3', 'q': 'BD-App wäre „Advertised Externally“ und mit dem L3Out verknüpft, aber ohne Contract zum External EPG. Wird 10.10.20.0/24 angekündigt?',
+                'options': ['Nein – ohne Contract ist die BD nicht auf dem Border Leaf aktiv', 'Ja, sofort', 'Nur per BGP', 'Nur wenn app1 sendet'],
+                'answer': 0, 'explain': 'Die Ankündigung setzt voraus, dass die BD auf dem Border Leaf deployt ist – in der Regel durch den Contract zum External EPG.'}],
+    solution='`POST /api/mo/uni/tn-Shop/BD-BD-Web.json` mit `' + json.dumps(mo('fvBD', {}, mo('fvSubnet', {'ip': '10.10.10.1/24', 'scope': 'public'}),
+        mo('fvRsBDToOut', {'tnL3extOutName': 'WAN'}))) + '`')
+
+CHG4711 = mo('fvTenant', {'name': 'Shop'},
+             mo('vzFilter', {'name': 'https'}, mo('vzEntry', {'name': 'https', 'dFromPort': '8443', 'dToPort': '8443'})),
+             mo('fvAp', {'name': 'Webshop'}, mo('fvAEPg', {'name': 'Api'}, mo('fvRsBd', {'tnFvBDName': 'BD-App'}),
+                                                 mo('fvRsCons', {'tnVzBrCPName': 'web-to-app-https'}))))
+lab(id='43-change-snapshot', title='43 Change mit Snapshot absichern und zurückrollen', topic='Betrieb / Change', level='Mittel',
+    duration='20 min', fabric='discovered', kind='requirements', modes=['guided', 'exam'],
+    prerequisites=['Lab 32'], tools=['Admin > Config Rollbacks', 'Admin > Import/Export oder REST-API', 'Traffic Inspector'],
+    goals=['Vor einer Änderung einen Sicherungspunkt anlegen', 'Nach der Änderung die wichtigsten Flüsse testen',
+           'Eine fehlerhafte Änderung vollständig zurückrollen'],
+    intro='Der Webshop aus Lab 32 läuft: web1 → app1 HTTPS ist erlaubt, alles andere zu. Ein Kollege hat den Change **CHG-4711** '
+          'vorbereitet (neue EPG Api). Du sollst ihn einspielen – als `POST` auf `uni/tn-Shop`:\n\n`' + json.dumps(CHG4711) + '`',
+    requirements=['Vor dem Change einen Sicherungspunkt der Konfiguration anlegen, Name beginnt mit **vor-CHG4711**.',
+                  'Den Change genau wie vorbereitet einspielen.',
+                  'Danach testen, ob web1 app1 weiterhin per HTTPS erreicht.',
+                  'Ist der Change fehlerhaft, die Konfiguration vollständig auf den Sicherungspunkt zurücksetzen.'],
+    limits=['Ein Config Rollback setzt wie beim APIC nur die Konfiguration zurück, nicht die simulierte Welt (Hosts, Router).',
+            'Die Bewertung erkennt den eingespielten Change am Audit-Log, deshalb muss er über die REST-API oder die Oberfläche kommen.'],
+    hints=['**Konzept:** Ein Change ohne Rückweg ist ein Risiko. Der APIC kann jederzeit Snapshots der Konfiguration anlegen und auf sie '
+           'zurücksetzen.',
+           '**Wo:** *Admin > Config Rollbacks*: „Create a snapshot now“ und „Rollback“. Den Change spielst du unter *Admin > Import/Export* '
+           '(JSON-Datei) oder per REST ein.',
+           '**Prüfschritt:** Nach dem Change: Traffic Inspector web1 → app1 TCP 443. Was hat der Change außer der neuen EPG noch verändert? '
+           'Das Audit-Log (*System > History*) zeigt jede Änderung.',
+           '**Lösung:** Snapshot vor-CHG4711 anlegen → Change per POST einspielen → HTTPS scheitert, weil der Change den Filter https auf '
+           'Port 8443 ändert → Rollback auf vor-CHG4711. Die EPG Api verschwindet dabei mit, der Change muss korrigiert neu kommen.'],
+    cause='Der Change ändert nebenbei den Filter https auf Port 8443.',
+    config=[SERVER_ACCESS, shop_tenant(), SOL32], hosts=[WEB32, APP32], tasks=[],
+    checks=[check('Sicherungspunkt vor-CHG4711 in diesem Lab angelegt', 'snapshot', prefix='vor-CHG4711'),
+            check('Change CHG-4711 wurde eingespielt (Audit-Log)', 'audited', dn='uni/tn-Shop/flt-https/e-https', contains='8443'),
+            check('web1 → app1 HTTPS funktioniert', 'traffic', src='web1', dst='app1', proto='tcp', port=443, expect=True),
+            check('Change vollständig zurückgerollt (keine EPG Api)', 'class', cls='fvAEPg', under='uni/tn-Shop/ap-Webshop/epg-Api', expect=False),
+            check('Least Privilege Web → App: nur tcp/443', 'exposure', src='web1', dst='app1', allow=['tcp/443'], category='security')],
+    questions=[{'id': 'q1', 'q': 'Was stellt ein Config Rollback wieder her?',
+                'options': ['Nur die Konfiguration – gelernte Endpoints und die Außenwelt bleiben', 'Alles inklusive der Server',
+                            'Nur den letzten Befehl', 'Nur die Contracts'],
+                'answer': 0, 'explain': 'Der Rollback spielt den Konfigurationsstand des Snapshots ein; der operative Zustand wird daraus neu berechnet.'},
+               {'id': 'q2', 'q': 'Warum den Snapshot vor dem Change und nicht danach?',
+                'options': ['Danach enthält er schon den Fehler', 'Weil der APIC danach keine Snapshots mehr erlaubt', 'Das ist egal', 'Wegen der Lizenz'],
+                'answer': 0, 'explain': 'Der Sicherungspunkt muss den letzten guten Stand zeigen.'}],
+    solution='1. *Admin > Config Rollbacks* → Snapshot **vor-CHG4711**.\n2. Change per `POST /api/mo/uni/tn-Shop.json`.\n'
+             '3. Test web1 → app1 TCP 443 scheitert (Filter auf 8443).\n4. Rollback auf vor-CHG4711.')
+
+
+# ----------------------------------------------------------------------------
 # Maschinenlesbare Musterloesungen (fuer die Tests: [URL-DN, Body])
 # ----------------------------------------------------------------------------
 BGP_RR = ['uni/fabric/bgpInstP-default', mo('bgpInstPol', {}, mo('bgpAsP', {'asn': '65001'}),
@@ -2396,6 +2540,11 @@ SOLUTIONS = {
                                               mo('fvAp', {'name': 'Webshop'}, mo('fvAEPg', {'name': 'Web', 'prefGrMemb': 'include'}),
                                                  mo('fvAEPg', {'name': 'App', 'prefGrMemb': 'include'})))]],
     '40-it-ot-segmentation': [['uni', SOL40]],
+    '41-route-or-contract': [BGP_RR, ['uni/tn-Shop/ap-Webshop/epg-Web', mo('fvAEPg', {}, mo('fvRsCons', {'tnVzBrCPName': 'web-to-internet'}))]],
+    '42-return-path': [['uni/tn-Shop/BD-BD-Web', mo('fvBD', {}, mo('fvSubnet', {'ip': '10.10.10.1/24', 'scope': 'public'}),
+                                                     mo('fvRsBDToOut', {'tnL3extOutName': 'WAN'}))]],
+    '43-change-snapshot': [['#snapshot', {'op': 'create', 'name': 'vor-CHG4711'}], ['#change', ['uni/tn-Shop', CHG4711]],
+                           ['#snapshot', {'op': 'rollback', 'name': 'vor-CHG4711'}]],
     '35-port-and-direction': [['uni/tn-Shop/flt-https/e-https', mo('vzEntry', {'dFromPort': '443', 'dToPort': '443'})],
                               ['uni/tn-Shop/ap-Webshop/epg-Web', mo('fvAEPg', {}, mo('fvRsProv', {'tnVzBrCPName': 'web-to-app-https', 'status': 'deleted'}),
                                                                    mo('fvRsCons', {'tnVzBrCPName': 'web-to-app-https'}))],

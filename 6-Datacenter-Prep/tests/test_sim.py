@@ -454,6 +454,14 @@ class TestLabs(Base):
                         self.S.ipn_op({'router': body})
                         self.S.changed()
                         continue
+                    if url == '#snapshot':
+                        self.S.snapshot(body['op'], body['name'])
+                        continue
+                    if url == '#change':
+                        self.S.audit('admin', post(self.S.store, body[0], body[1]))
+                        self.S.rebuild()
+                        self.S.changed()
+                        continue
                     if url == '#monitor-test':
                         self.S.monitor_op(dict(body, op='test'))
                         self.S.changed()

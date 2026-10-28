@@ -22,6 +22,7 @@ lab(id='33-beispiel', title='33 Titel', topic='Policy / Contracts', level='Einst
 
 Dazu gehört immer ein Eintrag in `SOLUTIONS['33-beispiel'] = [[dn, body], …]`. Sonderziele:
 
+- `#snapshot` (`{op, name}`) und `#change` (`[dn, body]`, mit Audit-Eintrag)
 - `#setup`
 - `#ipn`
 - `#ndo`
@@ -39,6 +40,8 @@ Jede Prüfung hat `desc`, `type` und `category`. Die Kategorie ist `function` (S
 | `exists` / `class` | `dn` bzw. `cls`, `attrs`, `under`; bei `class` zusätzlich `expect` (False = darf es nicht geben) oder `max` (höchstens so viele) | Objekt mit Attributen vorhanden. Nur verwenden, wenn die Aufgabe das Objekt wirklich verlangt, sonst lieber Verhalten prüfen |
 | `nofaults` | `under`, optional `code` | keine Faults |
 | `router`, `learned`, `route`, `bfd`, `bgptimer` | siehe vorhandene Labs | externe Nachbarschaften und Routen |
+| `snapshot` | `prefix` | Ein Config-Snapshot mit diesem Namensanfang wurde nach dem Lab-Start angelegt |
+| `audited` | `dn`, optional `contains`, `expect` | Eine Änderung an diesem DN steht seit dem Lab-Start im Audit-Log (z. B. „Change wurde eingespielt“) |
 | weitere | `node`, `ntp`, `graph`, `login`, `rbac`, `firmware`, `job`, `mon`, `snmp`, `dhcp`, `loop`, `msite`, `ipnadj`, `inb`, `vmm`, `setup` | siehe `Sim.check_lab` |
 
 Regeln für gute Prüfungen:

@@ -1,0 +1,629 @@
+{
+ "id": "43-change-snapshot",
+ "title": "43 Change mit Snapshot absichern und zurückrollen",
+ "topic": "Betrieb / Change",
+ "level": "Mittel",
+ "duration": "20 min",
+ "fabric": "discovered",
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 32"
+ ],
+ "tools": [
+  "Admin > Config Rollbacks",
+  "Admin > Import/Export oder REST-API",
+  "Traffic Inspector"
+ ],
+ "goals": [
+  "Vor einer Änderung einen Sicherungspunkt anlegen",
+  "Nach der Änderung die wichtigsten Flüsse testen",
+  "Eine fehlerhafte Änderung vollständig zurückrollen"
+ ],
+ "intro": "Der Webshop aus Lab 32 läuft: web1 → app1 HTTPS ist erlaubt, alles andere zu. Ein Kollege hat den Change **CHG-4711** vorbereitet (neue EPG Api). Du sollst ihn einspielen – als `POST` auf `uni/tn-Shop`:\n\n`{\"fvTenant\": {\"attributes\": {\"name\": \"Shop\"}, \"children\": [{\"vzFilter\": {\"attributes\": {\"name\": \"https\"}, \"children\": [{\"vzEntry\": {\"attributes\": {\"name\": \"https\", \"dFromPort\": \"8443\", \"dToPort\": \"8443\"}}}]}}, {\"fvAp\": {\"attributes\": {\"name\": \"Webshop\"}, \"children\": [{\"fvAEPg\": {\"attributes\": {\"name\": \"Api\"}, \"children\": [{\"fvRsBd\": {\"attributes\": {\"tnFvBDName\": \"BD-App\"}}}, {\"fvRsCons\": {\"attributes\": {\"tnVzBrCPName\": \"web-to-app-https\"}}}]}}]}}]}}`",
+ "requirements": [
+  "Vor dem Change einen Sicherungspunkt der Konfiguration anlegen, Name beginnt mit **vor-CHG4711**.",
+  "Den Change genau wie vorbereitet einspielen.",
+  "Danach testen, ob web1 app1 weiterhin per HTTPS erreicht.",
+  "Ist der Change fehlerhaft, die Konfiguration vollständig auf den Sicherungspunkt zurücksetzen."
+ ],
+ "limits": [
+  "Ein Config Rollback setzt wie beim APIC nur die Konfiguration zurück, nicht die simulierte Welt (Hosts, Router).",
+  "Die Bewertung erkennt den eingespielten Change am Audit-Log, deshalb muss er über die REST-API oder die Oberfläche kommen."
+ ],
+ "hints": [
+  "**Konzept:** Ein Change ohne Rückweg ist ein Risiko. Der APIC kann jederzeit Snapshots der Konfiguration anlegen und auf sie zurücksetzen.",
+  "**Wo:** *Admin > Config Rollbacks*: „Create a snapshot now“ und „Rollback“. Den Change spielst du unter *Admin > Import/Export* (JSON-Datei) oder per REST ein.",
+  "**Prüfschritt:** Nach dem Change: Traffic Inspector web1 → app1 TCP 443. Was hat der Change außer der neuen EPG noch verändert? Das Audit-Log (*System > History*) zeigt jede Änderung.",
+  "**Lösung:** Snapshot vor-CHG4711 anlegen → Change per POST einspielen → HTTPS scheitert, weil der Change den Filter https auf Port 8443 ändert → Rollback auf vor-CHG4711. Die EPG Api verschwindet dabei mit, der Change muss korrigiert neu kommen."
+ ],
+ "cause": "Der Change ändert nebenbei den Filter https auf Port 8443.",
+ "config": [
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "infraInfra": {
+       "attributes": {},
+       "children": [
+        {
+         "fvnsVlanInstP": {
+          "attributes": {
+           "name": "VLAN-Pool-Server",
+           "allocMode": "static"
+          },
+          "children": [
+           {
+            "fvnsEncapBlk": {
+             "attributes": {
+              "from": "vlan-100",
+              "to": "vlan-199"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAttEntityP": {
+          "attributes": {
+           "name": "AAEP-Server"
+          },
+          "children": [
+           {
+            "infraRsDomP": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraFuncP": {
+          "attributes": {},
+          "children": [
+           {
+            "infraAccPortGrp": {
+             "attributes": {
+              "name": "IPG-Server-Access"
+             },
+             "children": [
+              {
+               "infraRsAttEntP": {
+                "attributes": {
+                 "tDn": "uni/infra/attentp-AAEP-Server"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAccPortP": {
+          "attributes": {
+           "name": "IntProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraHPortS": {
+             "attributes": {
+              "name": "Server-Ports",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraPortBlk": {
+                "attributes": {
+                 "name": "block2",
+                 "fromPort": "1",
+                 "toPort": "10"
+                }
+               }
+              },
+              {
+               "infraRsAccBaseGrp": {
+                "attributes": {
+                 "tDn": "uni/infra/funcprof/accportgrp-IPG-Server-Access"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraNodeP": {
+          "attributes": {
+           "name": "SwProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraLeafS": {
+             "attributes": {
+              "name": "101-102",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraNodeBlk": {
+                "attributes": {
+                 "name": "blk",
+                 "from_": "101",
+                 "to_": "102"
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "infraRsAccPortP": {
+             "attributes": {
+              "tDn": "uni/infra/accportprof-IntProf-Leaf101-102"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "physDomP": {
+       "attributes": {
+        "name": "PhysDom-Server"
+       },
+       "children": [
+        {
+         "infraRsVlanNs": {
+          "attributes": {
+           "tDn": "uni/infra/vlanns-[VLAN-Pool-Server]-static"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Shop"
+    },
+    "children": [
+     {
+      "fvCtx": {
+       "attributes": {
+        "name": "Prod"
+       }
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Web"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.10.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-App"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.20.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Webshop"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Web"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Web"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/1]",
+              "encap": "vlan-110",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "App"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-App"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/2]",
+              "encap": "vlan-120",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Shop"
+    },
+    "children": [
+     {
+      "vzFilter": {
+       "attributes": {
+        "name": "https"
+       },
+       "children": [
+        {
+         "vzEntry": {
+          "attributes": {
+           "name": "https",
+           "etherT": "ip",
+           "prot": "tcp",
+           "dFromPort": "443",
+           "dToPort": "443"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzBrCP": {
+       "attributes": {
+        "name": "web-to-app-https",
+        "scope": "context"
+       },
+       "children": [
+        {
+         "vzSubj": {
+          "attributes": {
+           "name": "subj",
+           "revFltPorts": "yes"
+          },
+          "children": [
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "https"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Webshop"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Web"
+          },
+          "children": [
+           {
+            "fvRsCons": {
+             "attributes": {
+              "tnVzBrCPName": "web-to-app-https"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "App"
+          },
+          "children": [
+           {
+            "fvRsProv": {
+             "attributes": {
+              "tnVzBrCPName": "web-to-app-https"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "hosts": [
+  {
+   "name": "web1",
+   "mac": "00:50:56:10:10:11",
+   "ip": "10.10.10.11/24",
+   "gw": "10.10.10.1",
+   "vlan": 110,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/1"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Webserver",
+   "services": [
+    "tcp/22"
+   ]
+  },
+  {
+   "name": "app1",
+   "mac": "00:50:56:10:20:11",
+   "ip": "10.10.20.11/24",
+   "gw": "10.10.20.1",
+   "vlan": 120,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/2"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Applikationsserver",
+   "services": [
+    "tcp/22",
+    "tcp/443"
+   ]
+  }
+ ],
+ "tasks": [],
+ "checks": [
+  {
+   "desc": "Sicherungspunkt vor-CHG4711 in diesem Lab angelegt",
+   "type": "snapshot",
+   "prefix": "vor-CHG4711"
+  },
+  {
+   "desc": "Change CHG-4711 wurde eingespielt (Audit-Log)",
+   "type": "audited",
+   "dn": "uni/tn-Shop/flt-https/e-https",
+   "contains": "8443"
+  },
+  {
+   "desc": "web1 → app1 HTTPS funktioniert",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "app1",
+   "proto": "tcp",
+   "port": 443,
+   "expect": true
+  },
+  {
+   "desc": "Change vollständig zurückgerollt (keine EPG Api)",
+   "type": "class",
+   "cls": "fvAEPg",
+   "under": "uni/tn-Shop/ap-Webshop/epg-Api",
+   "expect": false
+  },
+  {
+   "desc": "Least Privilege Web → App: nur tcp/443",
+   "type": "exposure",
+   "src": "web1",
+   "dst": "app1",
+   "allow": [
+    "tcp/443"
+   ],
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Was stellt ein Config Rollback wieder her?",
+   "options": [
+    "Nur die Konfiguration – gelernte Endpoints und die Außenwelt bleiben",
+    "Alles inklusive der Server",
+    "Nur den letzten Befehl",
+    "Nur die Contracts"
+   ],
+   "answer": 0,
+   "explain": "Der Rollback spielt den Konfigurationsstand des Snapshots ein; der operative Zustand wird daraus neu berechnet."
+  },
+  {
+   "id": "q2",
+   "q": "Warum den Snapshot vor dem Change und nicht danach?",
+   "options": [
+    "Danach enthält er schon den Fehler",
+    "Weil der APIC danach keine Snapshots mehr erlaubt",
+    "Das ist egal",
+    "Wegen der Lizenz"
+   ],
+   "answer": 0,
+   "explain": "Der Sicherungspunkt muss den letzten guten Stand zeigen."
+  }
+ ],
+ "solution": "1. *Admin > Config Rollbacks* → Snapshot **vor-CHG4711**.\n2. Change per `POST /api/mo/uni/tn-Shop.json`.\n3. Test web1 → app1 TCP 443 scheitert (Filter auf 8443).\n4. Rollback auf vor-CHG4711.",
+ "routers": [],
+ "vcenters": [],
+ "devices": [],
+ "aaa": [],
+ "switches": [],
+ "solutionConfig": [
+  [
+   "#snapshot",
+   {
+    "op": "create",
+    "name": "vor-CHG4711"
+   }
+  ],
+  [
+   "#change",
+   [
+    "uni/tn-Shop",
+    {
+     "fvTenant": {
+      "attributes": {
+       "name": "Shop"
+      },
+      "children": [
+       {
+        "vzFilter": {
+         "attributes": {
+          "name": "https"
+         },
+         "children": [
+          {
+           "vzEntry": {
+            "attributes": {
+             "name": "https",
+             "dFromPort": "8443",
+             "dToPort": "8443"
+            }
+           }
+          }
+         ]
+        }
+       },
+       {
+        "fvAp": {
+         "attributes": {
+          "name": "Webshop"
+         },
+         "children": [
+          {
+           "fvAEPg": {
+            "attributes": {
+             "name": "Api"
+            },
+            "children": [
+             {
+              "fvRsBd": {
+               "attributes": {
+                "tnFvBDName": "BD-App"
+               }
+              }
+             },
+             {
+              "fvRsCons": {
+               "attributes": {
+                "tnVzBrCPName": "web-to-app-https"
+               }
+              }
+             }
+            ]
+           }
+          }
+         ]
+        }
+       }
+      ]
+     }
+    }
+   ]
+  ],
+  [
+   "#snapshot",
+   {
+    "op": "rollback",
+    "name": "vor-CHG4711"
+   }
+  ]
+ ]
+}

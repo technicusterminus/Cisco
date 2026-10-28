@@ -334,7 +334,7 @@ class Sim:
         self.sim['settings'].update(lab.get('settings', {}))
         self.sim['lab'] = lid
         # Lab-Sitzung: Modus und erfasste Aktionen (Hinweise, Antworten) - aendern die Konfiguration nicht
-        self.sim['labSession'] = {'mode': mode, 'hints': 0, 'answers': {}, 'checks': 0}
+        self.sim['labSession'] = {'mode': mode, 'hints': 0, 'answers': {}, 'checks': 0, 'started': now_ts()}
         self.sim['ephist'] = json.loads(json.dumps(lab.get('ephist', {})))
         self._quiet = True
         try:
@@ -426,6 +426,19 @@ class Sim:
                     info = 'Ergebnis: %s (%s)%s' % (r['verdict'], r['reason'], ' - ' + bad['title'] if bad else '')
                 elif t == 'exposure':
                     ok, info = self.exposure_check(c)
+                elif t == 'snapshot':
+                    # Snapshot muss in dieser Lab-Sitzung angelegt worden sein (Name mit Praefix, nach dem Lab-Start)
+                    since = self.lab_session().get('started', '')
+                    snaps = [x for x in self.snapshots() if x['name'].startswith(c.get('prefix', '')) and (x['created'] or '') >= since]
+                    ok = bool(snaps)
+                    info = ('Snapshot %s vom %s' % (snaps[-1]['name'], snaps[-1]['created'][:19])) if snaps else 'kein Snapshot seit dem Lab-Start'
+                elif t == 'audited':
+                    # Wurde eine bestimmte Aenderung tatsaechlich ausgefuehrt? (Audit-Log seit dem Lab-Start)
+                    since = self.lab_session().get('started', '')
+                    hit = [x for x in self.sim.get('audit', []) if (x.get('created') or '') >= since and c['dn'] in x['affected']
+                           and c.get('contains', '') in x.get('changeSet', '')]
+                    ok = bool(hit) == c.get('expect', True)
+                    info = ('%d passende Einträge im Audit-Log' % len(hit)) if hit else 'nicht im Audit-Log'
                 elif t == 'endpoint':
                     hs = e.hosts.get(c['host'], {})
                     ok = bool(hs.get('learned') and (not c.get('epg') or hs.get('epg') == c['epg'])) == c.get('expect', True)

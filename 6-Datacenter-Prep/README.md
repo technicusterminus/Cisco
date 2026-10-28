@@ -176,8 +176,11 @@ Unter *Simulation > Labs & Stände* laden. Jedes Lab setzt die Konfiguration auf
 | 38 | Innerhalb einer EPG einschränken: Isolation und Intra-EPG-Contract (neues Format) | 20 min |
 | 39 | Preferred Group für eine Migration (neues Format) | 20 min |
 | 40 | IT-/OT-Segmentierung einer Fertigungslinie: fünf Zonen, laterale Bewegung verhindern (neues Format, didaktisch) | 60 min |
+| 41 | Routingfehler oder fehlender Contract? Externer Verkehr Schritt für Schritt (neues Format) | 25 min |
+| 42 | Fehlender Rückweg: nur ankündigen, was außen gebraucht wird (neues Format) | 20 min |
+| 43 | Change mit Snapshot absichern und zurückrollen (neues Format) | 20 min |
 
-**Neues Lab-Format** (Labs 02, 03, 04, 07 und 32 bis 40): Statt einer Klickanleitung gibt es Anforderungen. Der Rest im Überblick:
+**Neues Lab-Format** (Labs 02, 03, 04, 07 und 32 bis 43): Statt einer Klickanleitung gibt es Anforderungen. Der Rest im Überblick:
 
 - **Hinweise** in vier Stufen: Konzept, Objekte, Prüfschritt, Lösung. Die Oberfläche zählt, wie viele genutzt wurden.
 - **Bewertung** getrennt nach *Funktion* und *Sicherheit / Least Privilege*. Eine Permit-any-Abkürzung funktioniert zwar, besteht aber nicht.
