@@ -43,8 +43,8 @@ Untersucht wurden:
 | Ergebnis des Traffic-Tests nur `ok` + Text | keine maschinenlesbare Ursache, keine Policy-Referenz, keine Trennung „Pfad kaputt“ vs. „Policy“ | **behoben**: verdict, reason, location, policy, hint, path |
 | Kein Modell für Zieldienste | „Policy erlaubt“ wurde mit „Dienst erreichbar“ gleichgesetzt | **behoben**: Feld *Dienste*, `SERVICE_NOT_LISTENING`, getrennt vom Least-Privilege-Check |
 | Lab-Bewertung ohne Sicherheits-Kategorie | Ein Permit-any fiel nur auf, wenn zufällig ein negativer Test existierte | **behoben**: Kategorie `security`, Check `exposure` |
-| Labs sind Klickanleitungen | Die Lösung steht in der Aufgabe, wenig Transfer | für Lab 32 behoben, für die übrigen Labs offen (B-01) |
-| Hinweise einstufig, kein Prüfungsmodus | | **behoben** in der Engine. Lab 32 nutzt es, ältere Labs noch nicht |
+| Labs sind Klickanleitungen | Die Lösung steht in der Aufgabe, wenig Transfer | behoben für 02, 03, 04, 07 und die neuen Labs 32 bis 35; übrige Labs offen (B-01) |
+| Hinweise einstufig, kein Prüfungsmodus | | **behoben** in der Engine; genutzt von den Labs 02, 03, 04, 07, 32 bis 35 |
 | Lab-Generator nicht deterministisch (Zeitstempel in Lab 25) | Generierte Dateien änderten sich bei jedem Lauf | **behoben** |
 | Intra-EPG-Contracts nicht ausgewertet | Isolation + Intra-EPG-Contract blockiert falsch | offen (B-05) |
 | vzInTerm/vzOutTerm fehlen | „Apply Both Directions“ aus nicht modellierbar | offen (B-06) |
@@ -55,6 +55,6 @@ Untersucht wurden:
 
 1. **Der Abnahmefall als neues Lab-Format** (Lab 32): Anforderungen, Least Privilege, getrennte Bewertung, Hinweise, Prüfungsmodus. Er setzt das Muster für alle weiteren Labs. → *umgesetzt*
 2. **Traffic Inspector mit Ursache und angewandter Regel**: Hier entsteht der Wechsel vom VLAN/ACL-Denken zum Policy-Modell, wenn sichtbar wird „Routing grün, Policy rot, weil …“. → *umgesetzt*
-3. Bestehende Contract- und Access-Labs ins neue Format überführen (B-01). Die fehlenden Grundlagen-Labs 03, 04 und 13 aus dem Katalog ergänzen (B-02).
+3. Bestehende Contract- und Access-Labs ins neue Format überführen (B-01) und die fehlenden Grundlagen-Labs ergänzen. → *umgesetzt für 02, 03, 04, 07 sowie neu 33, 34, 35*
 4. Ereignisse für Endpoint Move und Link-Ausfall (B-03, B-04). Sie sind Voraussetzung für die Troubleshooting-Labs 15 bis 17.
 5. OT-Szenario (B-10).

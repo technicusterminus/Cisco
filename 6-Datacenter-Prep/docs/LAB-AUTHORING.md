@@ -7,7 +7,7 @@ Labs entstehen aus `Labs-Quelle/build_labs.py`. Den Generator startest du mit `p
 ```python
 lab(id='33-beispiel', title='33 Titel', topic='Policy / Contracts', level='Einstieg', duration='20 min',
     fabric='discovered',              # Ausgangszustand der Fabric: discovered | empty | factory
-    kind='requirements', modes=['guided', 'exam'],
+    kind='requirements', modes=['guided', 'exam'],   # kind 'troubleshooting' fuer Labs mit kaputtem Ausgangszustand
     prerequisites=['…'], tools=['…'], goals=['…'],
     intro='Szenario, ohne Lösung',      # Markdown
     requirements=['Was am Ende gelten muss', '… auch was verboten bleibt'],
@@ -36,7 +36,7 @@ Jede Prüfung hat `desc`, `type` und `category`. Die Kategorie ist `function` (S
 | `traffic` | `src`, `dst`, `proto`, `port`, `expect`, optional `reason` (Präfix, z. B. `POLICY_`), `via` | Connectivity-Engine. Mit `reason` zählt ein Block nur aus diesem Grund (z. B. „durch Policy“, nicht „Pfad kaputt“) |
 | `exposure` | `src`, `dst`, `allow` (z. B. `['tcp/443']`), optional `probes` | Least Privilege: Die Policy darf für keinen anderen typischen Dienst eine neue Verbindung erlauben. Gewertet wird die Policy-Entscheidung, unabhängig vom Dienstmodell |
 | `endpoint` | `host`, optional `epg` | Endpoint gelernt |
-| `exists` / `class` | `dn` bzw. `cls`, `attrs`, `under` | Objekt mit Attributen vorhanden. Nur verwenden, wenn die Aufgabe das Objekt wirklich verlangt, sonst lieber Verhalten prüfen |
+| `exists` / `class` | `dn` bzw. `cls`, `attrs`, `under`; bei `class` zusätzlich `expect` (False = darf es nicht geben) oder `max` (höchstens so viele) | Objekt mit Attributen vorhanden. Nur verwenden, wenn die Aufgabe das Objekt wirklich verlangt, sonst lieber Verhalten prüfen |
 | `nofaults` | `under`, optional `code` | keine Faults |
 | `router`, `learned`, `route`, `bfd`, `bgptimer` | siehe vorhandene Labs | externe Nachbarschaften und Routen |
 | weitere | `node`, `ntp`, `graph`, `login`, `rbac`, `firmware`, `job`, `mon`, `snmp`, `dhcp`, `loop`, `msite`, `ipnadj`, `inb`, `vmm`, `setup` | siehe `Sim.check_lab` |
@@ -50,7 +50,7 @@ Regeln für gute Prüfungen:
 
 ## Hinweise und Lösung
 
-- Der Aufgabentext (`intro`, `requirements`) nennt keine Objektnamen der Lösung. Der Test `test_description_does_not_contain_solution` prüft das für Lab 32.
+- Szenario (`intro`), Anforderungen und die **Beschreibungen der Prüfungen** sind ab Start sichtbar, auch im Prüfungsmodus. Sie nennen keine Lösung (keine Rollen wie „Web konsumiert“, keine falschen Werte aus dem Ausgangszustand). `TestRequirementLabs` prüft das für jedes Lab im neuen Format anhand einer Liste verbotener Begriffe. Neue Labs gehören in diese Liste.
 - Zu den Hinweisstufen:
   1. Konzept
   2. Objekte und Diagnoseebene

@@ -137,12 +137,12 @@ Unter *Simulation > Labs & Stände* laden. Jedes Lab setzt die Konfiguration auf
 |---|---|---|
 | 00 | Day 0: APIC-Ersteinrichtung mit Setup-Dialog | 20 min |
 | 01 | Fabric Discovery und BGP Route Reflector | 20 min |
-| 02 | Access Policies: vom VLAN-Pool zum Switch-Profil, Fault F0467 | 30 min |
-| 03 | Tenant, VRF, Bridge Domains und EPGs | 30 min |
-| 04 | Contracts, Filter und vzAny | 35 min |
+| 02 | Access Policies: vom VLAN zum Port, Fault F0467 (neues Format) | 30 min |
+| 03 | Tenant, VRF, Bridge Domains und EPGs (neues Format) | 30 min |
+| 04 | Contracts, Filter und vzAny (neues Format) | 35 min |
 | 05 | vPC mit LACP für einen Datenbankserver | 35 min |
 | 06 | L3Out mit OSPF ins WAN (MTU-Problem, MP-BGP) | 45 min |
-| 07 | Troubleshooting: sechs Tickets | 45 min |
+| 07 | Troubleshooting: sechs Tickets (neues Format) | 45 min |
 | 08 | Automatisierung über die REST-API | 30 min |
 | 09 | L3Out mit eBGP über Sub-Interface | 45 min |
 | 10 | OOB-Management und NTP | 30 min |
@@ -167,9 +167,12 @@ Unter *Simulation > Labs & Stände* laden. Jedes Lab setzt die Konfiguration auf
 | 29 | Multi-Pod mit Inter-Pod Network | 50 min |
 | 30 | Remote Leaf in der Filiale | 40 min |
 | 31 | Multi-Site mit dem Nexus Dashboard Orchestrator | 45 min |
-| 32 | **Least Privilege: HTTPS von WEB zu APP** (neues Format, auch als Prüfung) | 25 min |
+| 32 | **Least Privilege: HTTPS von WEB zu APP** (neues Format, Abnahmefall) | 25 min |
+| 33 | Zwei Endpoints in derselben EPG (neues Format) | 15 min |
+| 34 | Zwei EPGs in derselben Bridge Domain: Bridging ist nicht Policy (neues Format) | 20 min |
+| 35 | Falscher Port, falsche Richtung: eine kaputte Freigabe reparieren (neues Format) | 20 min |
 
-**Neues Lab-Format** (ab Lab 32): Statt einer Klickanleitung gibt es Anforderungen. Der Rest im Überblick:
+**Neues Lab-Format** (Labs 02, 03, 04, 07 und 32 bis 35): Statt einer Klickanleitung gibt es Anforderungen. Der Rest im Überblick:
 
 - **Hinweise** in vier Stufen: Konzept, Objekte, Prüfschritt, Lösung. Die Oberfläche zählt, wie viele genutzt wurden.
 - **Bewertung** getrennt nach *Funktion* und *Sicherheit / Least Privilege*. Eine Permit-any-Abkürzung funktioniert zwar, besteht aber nicht.

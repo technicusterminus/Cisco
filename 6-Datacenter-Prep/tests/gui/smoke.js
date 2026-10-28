@@ -41,7 +41,7 @@ const check = (ok, msg) => { console.log((ok ? '  ok   ' : '  FEHLER ') + msg); 
     await L('03').locator('.labrow-act button:has-text("Starten")').click(); await confirm();
     check(await p.evaluate(() => App.state.lab && App.state.lab.id) === '03-tenant-epg', 'Lab 03 gestartet');
     await p.click('.card.lab button:has-text("Lab prüfen")'); await p.waitForSelector('.trace-sum');
-    check(/von 8 Prüfungen/.test(await p.textContent('.trace-sum')), 'Lab-Prüfung läuft');
+    check(/von 9 Prüfungen/.test(await p.textContent('.trace-sum')), 'Lab-Prüfung läuft');
     await p.click('.card.lab button:has-text("Stand speichern")'); await p.waitForSelector('.modal');
     await p.fill('.modal input', 'mein-stand'); await confirm();
     await p.evaluate(() => App.go('sim', 'labs')); await p.waitForTimeout(600);

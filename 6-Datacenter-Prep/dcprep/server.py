@@ -379,8 +379,10 @@ class Sim:
                     ok = a is not None and all(a.get(k) == v for k, v in c.get('attrs', {}).items())
                 elif t == 'class':
                     dns = self.store.by_class(c['cls'])
-                    ok = any(all(self.store.attrs(d).get(k) == v for k, v in c.get('attrs', {}).items())
-                             and d.startswith(c.get('under', '')) for d in dns)
+                    hit = [d for d in dns if all(self.store.attrs(d).get(k) == v for k, v in c.get('attrs', {}).items())
+                           and d.startswith(c.get('under', ''))]
+                    ok = (len(hit) <= c['max']) if 'max' in c else bool(hit) == c.get('expect', True)
+                    info = ('%d vorhanden: %s' % (len(hit), ', '.join(hit[:3]))) if hit else 'keins vorhanden'
                 elif t == 'traffic':
                     r = trace.run(e, self.sim, c['src'], c['dst'], c.get('proto', 'icmp'), c.get('port', 0))
                     ok = r['ok'] == c.get('expect', True)

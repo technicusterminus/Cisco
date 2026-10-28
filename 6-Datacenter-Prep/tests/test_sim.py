@@ -966,7 +966,7 @@ class TestUsers(unittest.TestCase):
         self.assertIn('NurAnna', names(anna))
         self.req('POST', '/sim/labs/check', {}, anna)
         labs = {l['id']: l for l in self.req('GET', '/sim/labs?full=1', cookie=anna)[1]['labs']}
-        self.assertEqual(labs['03-tenant-epg']['progress']['total'], 8)
+        self.assertEqual(labs['03-tenant-epg']['progress']['total'], 9)  # Lab 03: 7 Funktions- und 2 Sicherheitspruefungen (Least Privilege dazu)
         self.assertFalse(labs['03-tenant-epg']['progress']['done'])
         self.req('POST', '/sim/labs/op', {'op': 'reset', 'id': '03-tenant-epg'}, anna)
         self.assertNotIn('NurAnna', names(anna))

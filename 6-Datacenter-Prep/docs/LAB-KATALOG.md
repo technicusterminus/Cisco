@@ -2,7 +2,7 @@
 
 Die Tabelle vergleicht den geplanten Lernpfad (26 Labs) mit den vorhandenen Lab-Dateien in `labs/`.
 
-**Format neu** (bisher nur Lab 32) heißt, das Lab hat:
+**Format neu** (Labs 02, 03, 04, 07 und 32 bis 35) heißt, das Lab hat:
 
 - Anforderungen statt Klickanleitung
 - vier Hinweisstufen
@@ -21,28 +21,28 @@ Startbar sind nur Labs, die es als Datei gibt. Die Spalte *Stand* gilt für die 
 | Soll | Thema | Vorhandenes Lab | Stand | Bemerkung |
 |---|---|---|---|---|
 | 01 | Fabric-Komponenten, physische und logische Sicht | 01 Fabric Discovery | teilweise | Discovery und Rollen, keine eigene Übung zur logischen Sicht |
-| 02 | Tenant, VRF, BD, Application Profile | 03 Tenant, VRF, BD, EPG | vollständig (alt) | |
-| 03 | Zwei Endpoints in derselben EPG | – | geplant | Engine: `POLICY_SAME_EPG`, getestet |
-| 04 | Zwei EPGs in derselben BD | – | geplant | Engine unterstützt es (Bridging + Implicit Deny) |
+| 02 | Tenant, VRF, BD, Application Profile | 03 Tenant, VRF, BD, EPG | vollständig (neu) | |
+| 03 | Zwei Endpoints in derselben EPG | **33 Zwei Endpoints in derselben EPG** | vollständig (neu) | Prüft auch: ohne Contract gelöst |
+| 04 | Zwei EPGs in derselben BD | **34 Zwei EPGs in derselben BD** | vollständig (neu) | Bridging grün, Policy rot; ICMP-Gegenrichtung als Lernpunkt |
 | 05 | Verschiedene BDs im selben VRF | 03, 32 | teilweise | Routing grün, Policy rot: im Traffic-Test von Lab 32 sichtbar |
-| 06 | Vollständige Access-Policy-Kette | 02 Access Policies | vollständig (alt) | |
-| 07 | Fehlende Domain-Zuordnung | 07 Troubleshooting (ein Ticket) | teilweise | F0467, `EP_NOT_LEARNED` |
-| 08 | VLAN außerhalb des Pools | 07 Troubleshooting | teilweise | |
-| 09 | Fehlerhaftes Static Path Binding | 07 Troubleshooting | teilweise | |
-| 10 | Consumer und Provider | 04, **32** | vollständig | Lab 32 im neuen Format |
+| 06 | Vollständige Access-Policy-Kette | 02 Access Policies | vollständig (neu) | Namen frei wählbar außer der Domain, Fremdgerät an freiem Port |
+| 07 | Fehlende Domain-Zuordnung | 02 Access Policies (Domain fehlt im Ausgangszustand) | teilweise (neu) | F0467, `EP_NOT_LEARNED`; ein eigenes Diagnose-Lab fehlt |
+| 08 | VLAN außerhalb des Pools | 07 Troubleshooting (Ticket 1) | teilweise (neu) | |
+| 09 | Fehlerhaftes Static Path Binding | 33 (fehlende Bindung), 07 (Ticket 2: Port nicht im Selector) | teilweise (neu) | falsches VLAN an der Bindung noch ohne Lab |
+| 10 | Consumer und Provider | 04, 32, 35 | vollständig (neu) | |
 | 11 | HTTPS erlauben, SSH blockieren | **32 Least Privilege** | **vollständig (neu)** | Abnahmefall, siehe `tests/test_acceptance.py` |
-| 12 | ICMP und TCP getrennt | 04, 32 | vollständig | |
-| 13 | Falscher Port, falsche Richtung | – | geplant | Engine: `POLICY_IMPLICIT_DENY`, `POLICY_REPLY_DENIED`, getestet |
+| 12 | ICMP und TCP getrennt | 04, 32, 34 | vollständig (neu) | |
+| 13 | Falscher Port, falsche Richtung | **35 Falscher Port, falsche Richtung** | vollständig (neu) | zwei unabhängige Fehler, permit any scheitert |
 | 14 | Intra-EPG Isolation | – | geplant | Engine vereinfacht: Intra-EPG-Contracts fehlen (B-05) |
-| 15 | Fehlendes Endpoint Learning | 07 Troubleshooting | teilweise | |
+| 15 | Fehlendes Endpoint Learning | 07 Troubleshooting (Ticket 5) | teilweise (neu) | |
 | 16 | Endpoint Move | – | geplant | **nicht unterstützt**, Engine-Arbeit nötig (B-03) |
 | 17 | Interface-Ausfall vs. Policy-Drop | – | geplant | Link-Zustand als Ereignis fehlt (B-04) |
-| 18 | Mehrere unabhängige Fehler | 07 Troubleshooting (sechs Tickets) | vollständig (alt) | |
+| 18 | Mehrere unabhängige Fehler | 07 Troubleshooting (sechs Tickets) | vollständig (neu) | mit Least-Privilege-Nebenbedingung |
 | 19 | Einfacher L3Out | 06 L3Out OSPF, 09 eBGP | vollständig (alt) | |
 | 20 | Routingfehler vs. fehlender External-EPG-Contract | 06, 09 | teilweise | Codes `ROUTE_MISSING`, `EXT_EPG_NO_MATCH`, `POLICY_*` |
 | 21 | Fehlender Rückweg | 06 | teilweise | `RETURN_ROUTE_MISSING` |
 | 22 | Preferred Group | – | geplant | Engine umgesetzt, ohne eigenes Lab |
-| 23 | vzAny | 04 Contracts und vzAny | vollständig (alt) | |
+| 23 | vzAny | 04 Contracts und vzAny | vollständig (neu) | Lösung pro EPG wird ebenfalls anerkannt (dokumentiert) |
 | 24 | Inter-VRF Shared Services | 13 Shared Services | vollständig (alt) | |
 | 25 | Fehlerhafte Änderung per Snapshot zurücksetzen | – (Config Rollback vorhanden, Lab 25 ist Export/Import) | geplant | |
 | 26 | IT-/OT-Segmentierung | – | geplant | Phase 4, mit negativen Tests für laterale Kommunikation |

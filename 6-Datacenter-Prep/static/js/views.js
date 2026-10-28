@@ -33,12 +33,17 @@ function traceCard(r) {
   const path = r.path;
   let strip = null;
   if (path) {
+    // Stationen nur so, wie der Pfad sie wirklich hat: gleicher Leaf = lokal, sonst ueber die Fabric
+    const sl = (path.srcLeafs || []).join(' / ') || '—', dl = (path.dstLeafs || []).join(' / ') || '—';
+    const local = path.dst && sl === dl;
+    const hops = local ? [['src', 'Host', path.src], ['srcLeaf', 'Leaf (lokal)', sl], ['dst', 'Host', path.dst]]
+      : [['src', 'Host', path.src], ['srcLeaf', 'Leaf', sl], ['fabric', 'Fabric', 'Spine (VXLAN)'], ['dstLeaf', 'Leaf', dl], ['dst', 'Host', path.dst || '—']];
     // Wo der Test endet (vereinfacht): Quelle, Leaf der Quelle (Gateway/Routing), Fabric, Ziel (Endpoint, Policy, Dienst)
-    const failAt = !bad ? -1 : bad.layer === 'endpoint' ? (/^Quelle/.test(bad.title) ? 0 : 4) : bad.layer === 'fabric' ? 2
-      : ['routing', 'forwarding'].includes(bad.layer) ? 1 : 4;
+    const failKey = !bad ? null : bad.layer === 'endpoint' ? (/^Quelle/.test(bad.title) ? 'src' : 'dst')
+      : bad.layer === 'fabric' ? (local ? 'srcLeaf' : 'fabric') : ['routing', 'forwarding'].includes(bad.layer) ? 'srcLeaf' : 'dst';
+    const failAt = failKey ? hops.findIndex(x => x[0] === failKey) : -1;
     const lbl = !bad ? '' : bad.layer === 'policy' ? '✖ Policy verwirft' : bad.layer === 'service' ? '✖ Dienst fehlt' : '✖ Drop hier';
-    const hops = [['Host', path.src], ['Leaf', (path.srcLeafs || []).join(' / ') || '—'], ['Fabric', 'Spine (VXLAN)'], ['Leaf', (path.dstLeafs || []).join(' / ') || '—'], ['Host', path.dst || '—']];
-    strip = h('div', { class: 'tpath', role: 'list', 'aria-label': 'Pfad' }, hops.map(([k, n], i) => {
+    strip = h('div', { class: 'tpath', role: 'list', 'aria-label': 'Pfad' }, hops.map(([, k, n], i) => {
       const st = failAt === -1 || i < failAt ? 'ok' : i === failAt ? 'bad' : 'off';
       return h('div', { class: 'thop ' + st, role: 'listitem' }, h('span', { class: 'muted small' }, k), h('b', null, n), h('span', { class: 'small' }, st === 'ok' ? '✔ ok' : st === 'bad' ? lbl : '– nicht erreicht'));
     }));

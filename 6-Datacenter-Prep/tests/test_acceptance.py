@@ -391,5 +391,149 @@ class TestOverHttp(unittest.TestCase):
         self.assertEqual(row['modes'], ['guided', 'exam'])
 
 
+class TestRequirementLabs(unittest.TestCase):
+    """Alle Labs im Anforderungsformat: Aufbau, keine Loesung im Aufgabentext, Abkuerzungen scheitern."""
+
+    LEAKS = {
+        '02-access-policies': ['AAEP', 'Attachable', 'Policy Group', 'Switch Profile', 'Interface Profile', 'VLAN Pool'],
+        '03-tenant-epg': ['Static Port', 'fvRsPathAtt', 'Domain-Zuordnung'],
+        '04-contracts': ['vzAny', 'EPG Collection', 'Consumer', 'Provider', 'Reverse', 'konsumiert'],
+        '07-troubleshooting': ['8080', 'Unicast Routing', 'BD-Bakup', 'Reverse', '149', 'Port Block'],
+        '32-https-least-privilege': ['Consumer', 'Provider', 'web-to-app-https', 'Reverse'],
+        '33-same-epg': ['Static Port', 'fvRsPathAtt'],
+        '34-two-epgs-same-bd': ['Consumer', 'Provider', 'admin-to-web'],
+        '35-port-and-direction': ['8443', 'Consumer', 'Provider', 'vertauscht', 'konsumiert'],
+    }
+
+    def setUp(self):
+        self.S = Sim(tempfile.mkdtemp(), 'admin')
+        self.S.sim['settings']['discoverySeconds'] = 0
+
+    def load(self, lid):
+        self.S.load_lab(lid)
+        return self.S.lab(lid)
+
+    def apply(self, *items):
+        for dn, body in items:
+            post(self.S.store, dn, body)
+        self.S.changed()
+
+    def result(self):
+        r = self.S.check_lab()
+        return r, {c['desc']: c['ok'] for c in r['checks']}
+
+    def test_structure_and_no_solution_in_text(self):
+        labs = [l for l in self.S.labs() if l.get('kind') in ('requirements', 'troubleshooting')]
+        self.assertEqual(sorted(l['id'] for l in labs), sorted(self.LEAKS))
+        for lab in labs:
+            with self.subTest(lab=lab['id']):
+                self.assertEqual(len(lab['hints']), 4)
+                self.assertEqual(lab['modes'], ['guided', 'exam'])
+                self.assertEqual(lab['tasks'], [])
+                self.assertTrue(lab['requirements'] and lab['goals'] and lab['limits'] and lab['cause'])
+                self.assertTrue(any(c.get('category') == 'security' for c in lab['checks']), 'Sicherheitspruefung fehlt')
+                for q in lab.get('questions', []):
+                    self.assertLess(q['answer'], len(q['options']))
+                # sichtbar ab Start: Szenario, Anforderungen und die Beschreibungen der Pruefungen
+                text = lab['intro'] + ' ' + ' '.join(lab['requirements']) + ' ' + ' '.join(c['desc'] for c in lab['checks'])
+                for word in self.LEAKS[lab['id']]:
+                    self.assertNotIn(word, text, '%s verraet die Loesung' % word)
+
+    def test_lab33_new_epg_plus_contract_is_not_the_solution(self):
+        self.load('33-same-epg')
+        self.apply(('uni', mo('fvTenant', {'name': 'Shop'},
+                              mo('vzFilter', {'name': 'any'}, mo('vzEntry', {'name': 'any'})),
+                              mo('vzBrCP', {'name': 'all'}, mo('vzSubj', {'name': 's'}, mo('vzRsSubjFiltAtt', {'tnVzFilterName': 'any'}))),
+                              mo('fvAp', {'name': 'Webshop'},
+                                 mo('fvAEPg', {'name': 'Web2'}, mo('fvRsBd', {'tnFvBDName': 'BD-Web'}), mo('fvRsDomAtt', {'tDn': 'uni/phys-PhysDom-Server'}),
+                                    mo('fvRsPathAtt', {'tDn': 'topology/pod-1/paths-102/pathep-[eth1/3]', 'encap': 'vlan-110'}),
+                                    mo('fvRsCons', {'tnVzBrCPName': 'all'})),
+                                 mo('fvAEPg', {'name': 'Web'}, mo('fvRsProv', {'tnVzBrCPName': 'all'}))))))
+        r, by = self.result()
+        self.assertTrue(by['web1 → web2 SSH (TCP 22)'], 'funktioniert ...')
+        self.assertFalse(by['web2 in EPG Web gelernt'], '... aber web2 ist nicht in der EPG Web')
+        self.assertFalse(by['Kein Contract im Tenant Shop'])
+
+    def test_lab34_bridging_ok_policy_denies_then_shortcuts_fail(self):
+        self.load('34-two-epgs-same-bd')
+        t = trace.run(self.S.engine, self.S.sim, 'adm1', 'web1', 'icmp')
+        self.assertEqual((t['verdict'], t['reason']), ('DROP', 'POLICY_IMPLICIT_DENY'))
+        titles = ' '.join(s['title'] for s in t['steps'] if s['ok'])
+        self.assertIn('ARP aufgeloest', titles)
+        self.assertIn('Layer-2-Forwarding', titles)
+        anyc = mo('fvTenant', {'name': 'Shop'}, mo('vzFilter', {'name': 'any'}, mo('vzEntry', {'name': 'any'})),
+                  mo('vzBrCP', {'name': 'all'}, mo('vzSubj', {'name': 's'}, mo('vzRsSubjFiltAtt', {'tnVzFilterName': 'any'}))),
+                  mo('fvAp', {'name': 'Webshop'}, mo('fvAEPg', {'name': 'Admin'}, mo('fvRsCons', {'tnVzBrCPName': 'all'})),
+                     mo('fvAEPg', {'name': 'Web'}, mo('fvRsProv', {'tnVzBrCPName': 'all'}))))
+        self.apply(('uni', anyc))
+        r, by = self.result()
+        self.assertEqual(r['categories']['function']['passed'], r['categories']['function']['total'])
+        self.assertFalse(by['Least Privilege Admin → Web: nur SSH und Ping'])
+        self.load('34-two-epgs-same-bd')
+        sol = json.loads(json.dumps(self.S.lab('34-two-epgs-same-bd')['solutionConfig'][0][1]))
+        ap = next(c for c in sol['fvTenant']['children'] if 'fvAp' in c)['fvAp']['children']
+        for e in ap:
+            k = e['fvAEPg']['children'][0]
+            rel = next(iter(k))
+            e['fvAEPg']['children'][0] = {('fvRsProv' if rel == 'fvRsCons' else 'fvRsCons'): k[rel]}
+        self.apply(('uni', sol))
+        r, by = self.result()
+        self.assertFalse(by['adm1 → web1 SSH'], 'vertauschte Rollen')
+
+    def test_lab35_two_independent_faults(self):
+        lab = self.load('35-port-and-direction')
+        t = trace.run(self.S.engine, self.S.sim, 'web1', 'app1', 'tcp', 443)
+        self.assertEqual(t['reason'], 'POLICY_IMPLICIT_DENY')
+        port_fix, roles_web, roles_app = lab['solutionConfig']
+        self.apply(port_fix)
+        self.assertEqual(trace.run(self.S.engine, self.S.sim, 'web1', 'app1', 'tcp', 443)['verdict'], 'DROP', 'nur Port behoben')
+        self.load('35-port-and-direction')
+        self.apply(roles_web, roles_app)
+        self.assertEqual(trace.run(self.S.engine, self.S.sim, 'web1', 'app1', 'tcp', 443)['verdict'], 'DROP', 'nur Rollen behoben')
+        self.apply(port_fix)
+        r, by = self.result()
+        self.assertEqual(r['passed'], r['total'])
+
+    def test_lab35_extra_permit_any_contract_fails(self):
+        self.load('35-port-and-direction')
+        self.apply(('uni', mo('fvTenant', {'name': 'Shop'}, mo('vzFilter', {'name': 'any'}, mo('vzEntry', {'name': 'any'})),
+                              mo('vzBrCP', {'name': 'quickfix'}, mo('vzSubj', {'name': 's'}, mo('vzRsSubjFiltAtt', {'tnVzFilterName': 'any'}))),
+                              mo('fvAp', {'name': 'Webshop'}, mo('fvAEPg', {'name': 'Web'}, mo('fvRsCons', {'tnVzBrCPName': 'quickfix'})),
+                                 mo('fvAEPg', {'name': 'App'}, mo('fvRsProv', {'tnVzBrCPName': 'quickfix'}))))))
+        r, by = self.result()
+        self.assertTrue(by['web1 → app1 HTTPS (TCP 443) funktioniert'])
+        self.assertFalse(by['Kein zusätzlicher Contract (höchstens einer im Tenant)'])
+        self.assertFalse(by['Least Privilege Web → App: nur tcp/443'])
+
+    def test_lab07_permit_any_for_ticket3_fails_security(self):
+        lab = self.load('07-troubleshooting')
+        for dn, body in lab['solutionConfig']:
+            if 'flt-http' in dn:
+                body = mo('vzEntry', {'etherT': 'unspecified', 'prot': 'unspecified', 'dFromPort': 'unspecified', 'dToPort': 'unspecified'})
+            self.apply((dn, body))
+        r, by = self.result()
+        self.assertTrue(by['Ticket 3+6: web1 → app1 TCP 80'])
+        self.assertFalse(by['Least Privilege Web → App: nur TCP 80 und Ping'])
+
+    def test_lab04_per_epg_provider_is_accepted(self):
+        lab = self.load('04-contracts')
+        base, vzany_contract = lab['solutionConfig'][0], lab['solutionConfig'][1]
+        self.apply(base, vzany_contract, ('uni/tn-Shop/ap-Webshop', mo('fvAp', {},
+            mo('fvAEPg', {'name': 'Web'}, mo('fvRsProv', {'tnVzBrCPName': 'mgmt-ssh'})),
+            mo('fvAEPg', {'name': 'App'}, mo('fvRsProv', {'tnVzBrCPName': 'mgmt-ssh'})),
+            mo('fvAEPg', {'name': 'Mgmt'}, mo('fvRsCons', {'tnVzBrCPName': 'mgmt-ssh'})))))
+        r, by = self.result()
+        self.assertEqual([k for k, v in by.items() if not v], [])
+
+    def test_lab02_binding_a_free_port_fails_security(self):
+        lab = self.load('02-access-policies')
+        self.apply(*[(dn, body) for dn, body in lab['solutionConfig']],
+                   ('uni/tn-Lab02/ap-AP1/epg-Server', mo('fvAEPg', {}, mo('fvRsPathAtt', {
+                       'tDn': 'topology/pod-1/paths-101/pathep-[eth1/5]', 'encap': 'vlan-100'}))))
+        r, by = self.result()
+        self.assertTrue(by['Ping h1 → h2'])
+        self.assertFalse(by['Fremdgerät h9 an leaf101 eth1/5 (ohne EPG-Bindung) bekommt keinen Zugang'])
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -1,0 +1,613 @@
+{
+ "id": "34-two-epgs-same-bd",
+ "title": "34 Zwei EPGs in derselben Bridge Domain",
+ "topic": "Policy / Grundlagen",
+ "level": "Einstieg",
+ "duration": "20 min",
+ "fabric": "discovered",
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 33"
+ ],
+ "tools": [
+  "Traffic-Test",
+  "Tenant Shop > Contracts",
+  "CLI: show zoning-rule"
+ ],
+ "goals": [
+  "Bridging und Policy getrennt betrachten: gleiches Subnetz heißt nicht „erlaubt“",
+  "Eine gerichtete Freigabe für einen Admin-Zugang bauen",
+  "Die Wirkung zustandsloser ICMP-Regeln erkennen"
+ ],
+ "intro": "Im Tenant **Shop** gibt es neben der EPG **Web** die EPG **Admin**. Beide liegen in **derselben Bridge Domain BD-Web** und im selben Subnetz 10.10.10.0/24. Das Admin-Notebook **adm1** (10.10.10.50, leaf101 eth1/4, VLAN 111) ist gelernt.\n\nTeste adm1 → web1 per Ping. Welche Schritte sind grün, wo endet der Test?",
+ "requirements": [
+  "adm1 erreicht web1 per **SSH (TCP 22)** und **Ping**.",
+  "web1 baut keine SSH-Verbindung zu adm1 auf.",
+  "Sonst ist zwischen Admin und Web nichts erlaubt."
+ ],
+ "limits": [
+  "ICMP wird nicht nach Type unterschieden (Echo Request/Reply). Eine ICMP-Regel in beide Richtungen erlaubt auch Pings in der Gegenrichtung – das ist hier ausdrücklich erlaubt."
+ ],
+ "hints": [
+  "**Konzept:** Gleiche Bridge Domain und gleiches Subnetz bedeuten nur, dass Layer 2 funktioniert (ARP, Bridging). Die EPG-Grenze ist trotzdem eine Policy-Grenze.",
+  "**Beteiligte Objekte:** Ein Filter für SSH, der vorhandene Filter **icmp** im Tenant common, ein Contract mit Subject und die Rollen an den EPGs Admin und Web.",
+  "**Prüfschritt:** Im Traffic-Test adm1 → web1 sind *ARP* und *Layer-2-Forwarding* grün, *Policy Anfrage* rot. Wer baut auf, wer bietet an? Danach web1 → adm1 TCP 22 testen.",
+  "**Lösung:** Filter ssh (tcp/22) → Contract admin-to-web mit den Filtern ssh und icmp → Admin konsumiert, Web stellt bereit."
+ ],
+ "cause": "Zwischen den EPGs Admin und Web gibt es keinen Contract. Bridging ist in Ordnung, die Policy verwirft (POLICY_IMPLICIT_DENY).",
+ "config": [
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "infraInfra": {
+       "attributes": {},
+       "children": [
+        {
+         "fvnsVlanInstP": {
+          "attributes": {
+           "name": "VLAN-Pool-Server",
+           "allocMode": "static"
+          },
+          "children": [
+           {
+            "fvnsEncapBlk": {
+             "attributes": {
+              "from": "vlan-100",
+              "to": "vlan-199"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAttEntityP": {
+          "attributes": {
+           "name": "AAEP-Server"
+          },
+          "children": [
+           {
+            "infraRsDomP": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraFuncP": {
+          "attributes": {},
+          "children": [
+           {
+            "infraAccPortGrp": {
+             "attributes": {
+              "name": "IPG-Server-Access"
+             },
+             "children": [
+              {
+               "infraRsAttEntP": {
+                "attributes": {
+                 "tDn": "uni/infra/attentp-AAEP-Server"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAccPortP": {
+          "attributes": {
+           "name": "IntProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraHPortS": {
+             "attributes": {
+              "name": "Server-Ports",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraPortBlk": {
+                "attributes": {
+                 "name": "block2",
+                 "fromPort": "1",
+                 "toPort": "10"
+                }
+               }
+              },
+              {
+               "infraRsAccBaseGrp": {
+                "attributes": {
+                 "tDn": "uni/infra/funcprof/accportgrp-IPG-Server-Access"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraNodeP": {
+          "attributes": {
+           "name": "SwProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraLeafS": {
+             "attributes": {
+              "name": "101-102",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraNodeBlk": {
+                "attributes": {
+                 "name": "blk",
+                 "from_": "101",
+                 "to_": "102"
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "infraRsAccPortP": {
+             "attributes": {
+              "tDn": "uni/infra/accportprof-IntProf-Leaf101-102"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "physDomP": {
+       "attributes": {
+        "name": "PhysDom-Server"
+       },
+       "children": [
+        {
+         "infraRsVlanNs": {
+          "attributes": {
+           "tDn": "uni/infra/vlanns-[VLAN-Pool-Server]-static"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Shop"
+    },
+    "children": [
+     {
+      "fvCtx": {
+       "attributes": {
+        "name": "Prod"
+       }
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Web"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.10.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-App"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.20.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Webshop"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Web"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Web"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/1]",
+              "encap": "vlan-110",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "App"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-App"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/2]",
+              "encap": "vlan-120",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Shop"
+    },
+    "children": [
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Webshop"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Admin"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Web"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/4]",
+              "encap": "vlan-111",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "hosts": [
+  {
+   "name": "web1",
+   "mac": "00:50:56:10:10:11",
+   "ip": "10.10.10.11/24",
+   "gw": "10.10.10.1",
+   "vlan": 110,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/1"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Webserver"
+  },
+  {
+   "name": "adm1",
+   "mac": "00:50:56:10:10:50",
+   "ip": "10.10.10.50/24",
+   "gw": "10.10.10.1",
+   "vlan": 111,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/4"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Admin-Notebook"
+  }
+ ],
+ "tasks": [],
+ "checks": [
+  {
+   "desc": "adm1 → web1 SSH",
+   "type": "traffic",
+   "src": "adm1",
+   "dst": "web1",
+   "proto": "tcp",
+   "port": 22,
+   "expect": true
+  },
+  {
+   "desc": "adm1 → web1 Ping",
+   "type": "traffic",
+   "src": "adm1",
+   "dst": "web1",
+   "proto": "icmp",
+   "expect": true
+  },
+  {
+   "desc": "web1 → adm1 SSH durch die Policy blockiert",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "adm1",
+   "proto": "tcp",
+   "port": 22,
+   "expect": false,
+   "reason": "POLICY_",
+   "category": "security"
+  },
+  {
+   "desc": "Least Privilege Admin → Web: nur SSH und Ping",
+   "type": "exposure",
+   "src": "adm1",
+   "dst": "web1",
+   "allow": [
+    "tcp/22",
+    "icmp"
+   ],
+   "category": "security"
+  },
+  {
+   "desc": "Least Privilege Web → Admin: höchstens Ping",
+   "type": "exposure",
+   "src": "web1",
+   "dst": "adm1",
+   "allow": [
+    "icmp"
+   ],
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "adm1 und web1 sind im selben Subnetz. Warum scheitert der Ping im Ausgangszustand?",
+   "options": [
+    "ARP wird nicht beantwortet",
+    "Die EPGs Admin und Web brauchen einen Contract, auch in derselben BD",
+    "Das Gateway fehlt",
+    "VLAN 111 ist nicht im Pool"
+   ],
+   "answer": 1,
+   "explain": "Bridging (Layer 2) funktioniert, die Policy-Entscheidung kommt danach."
+  },
+  {
+   "id": "q2",
+   "q": "Warum kann web1 nach der Lösung auch adm1 pingen?",
+   "options": [
+    "Weil Web auch Consumer ist",
+    "Weil die ICMP-Regel in der Gegenrichtung (ohne Ports) genauso passt",
+    "Weil ICMP in ACI nie gefiltert wird",
+    "Weil beide in derselben BD sind"
+   ],
+   "answer": 1,
+   "explain": "Das Subject erlaubt Provider → Consumer für denselben Filter. ICMP hat keine Ports, also passt auch ein Echo Request."
+  }
+ ],
+ "solution": "`POST /api/mo/uni.json` mit `{\"fvTenant\": {\"attributes\": {\"name\": \"Shop\"}, \"children\": [{\"vzFilter\": {\"attributes\": {\"name\": \"ssh\"}, \"children\": [{\"vzEntry\": {\"attributes\": {\"name\": \"ssh\", \"etherT\": \"ip\", \"prot\": \"tcp\", \"dFromPort\": \"22\", \"dToPort\": \"22\"}}}]}}, {\"vzBrCP\": {\"attributes\": {\"name\": \"admin-to-web\", \"scope\": \"context\"}, \"children\": [{\"vzSubj\": {\"attributes\": {\"name\": \"subj\", \"revFltPorts\": \"yes\"}, \"children\": [{\"vzRsSubjFiltAtt\": {\"attributes\": {\"tnVzFilterName\": \"ssh\"}}}, {\"vzRsSubjFiltAtt\": {\"attributes\": {\"tnVzFilterName\": \"icmp\"}}}]}}]}}, {\"fvAp\": {\"attributes\": {\"name\": \"Webshop\"}, \"children\": [{\"fvAEPg\": {\"attributes\": {\"name\": \"Admin\"}, \"children\": [{\"fvRsCons\": {\"attributes\": {\"tnVzBrCPName\": \"admin-to-web\"}}}]}}, {\"fvAEPg\": {\"attributes\": {\"name\": \"Web\"}, \"children\": [{\"fvRsProv\": {\"attributes\": {\"tnVzBrCPName\": \"admin-to-web\"}}}]}}]}}]}}`",
+ "routers": [],
+ "vcenters": [],
+ "devices": [],
+ "aaa": [],
+ "switches": [],
+ "solutionConfig": [
+  [
+   "uni",
+   {
+    "fvTenant": {
+     "attributes": {
+      "name": "Shop"
+     },
+     "children": [
+      {
+       "vzFilter": {
+        "attributes": {
+         "name": "ssh"
+        },
+        "children": [
+         {
+          "vzEntry": {
+           "attributes": {
+            "name": "ssh",
+            "etherT": "ip",
+            "prot": "tcp",
+            "dFromPort": "22",
+            "dToPort": "22"
+           }
+          }
+         }
+        ]
+       }
+      },
+      {
+       "vzBrCP": {
+        "attributes": {
+         "name": "admin-to-web",
+         "scope": "context"
+        },
+        "children": [
+         {
+          "vzSubj": {
+           "attributes": {
+            "name": "subj",
+            "revFltPorts": "yes"
+           },
+           "children": [
+            {
+             "vzRsSubjFiltAtt": {
+              "attributes": {
+               "tnVzFilterName": "ssh"
+              }
+             }
+            },
+            {
+             "vzRsSubjFiltAtt": {
+              "attributes": {
+               "tnVzFilterName": "icmp"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      },
+      {
+       "fvAp": {
+        "attributes": {
+         "name": "Webshop"
+        },
+        "children": [
+         {
+          "fvAEPg": {
+           "attributes": {
+            "name": "Admin"
+           },
+           "children": [
+            {
+             "fvRsCons": {
+              "attributes": {
+               "tnVzBrCPName": "admin-to-web"
+              }
+             }
+            }
+           ]
+          }
+         },
+         {
+          "fvAEPg": {
+           "attributes": {
+            "name": "Web"
+           },
+           "children": [
+            {
+             "fvRsProv": {
+              "attributes": {
+               "tnVzBrCPName": "admin-to-web"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  ]
+ ]
+}

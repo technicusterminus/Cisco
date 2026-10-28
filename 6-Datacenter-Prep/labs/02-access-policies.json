@@ -1,16 +1,48 @@
 {
  "id": "02-access-policies",
- "title": "02 Access Policies: vom VLAN-Pool zum Switch-Profil",
+ "title": "02 Access Policies: vom VLAN zum Port",
  "topic": "Access Policies",
  "level": "Einstieg",
  "duration": "30 min",
  "fabric": "discovered",
- "goals": [
-  "Die Kette VLAN Pool → Domain → AAEP → Policy Group → Interface-Profil → Switch-Profil bauen",
-  "Fault F0467 lesen und beheben",
-  "Endpoints in einer EPG lernen lassen"
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
  ],
- "intro": "Der Tenant **Lab02** ist schon fertig: EPG **Server** hängt an der Physical Domain **PhysDom-Server** und hat Static Ports auf leaf101 eth1/1 und leaf102 eth1/1 mit **vlan-100**. Die Hosts **h1** und **h2** sind angeschlossen. Trotzdem lernt die Fabric keine Endpoints, und die EPG zeigt Faults – denn die Access Policies fehlen.\n\nLege alles unter **Fabric > Access Policies** an. Achte genau auf die Namen: Die EPG verweist schon auf `PhysDom-Server`.",
+ "prerequisites": [
+  "Fabric ist registriert (Lab 01 oder Ausgangszustand „discovered“)"
+ ],
+ "tools": [
+  "Fabric > Access Policies",
+  "Tab Faults an der EPG",
+  "Traffic-Test",
+  "CLI auf dem Leaf: show vlan extended, show endpoint"
+ ],
+ "goals": [
+  "Verstehen, warum eine EPG mit Static Port allein noch keinen Endpoint lernt",
+  "Die Access-Policy-Kette vom VLAN bis zum physischen Port aufbauen",
+  "Fault F0467 lesen und als Diagnose nutzen"
+ ],
+ "intro": "Der Tenant **Lab02** ist fertig: Die EPG **Server** verweist auf die Physical Domain **PhysDom-Server** und hat Static Ports auf leaf101 eth1/1 und leaf102 eth1/1 mit **vlan-100**. Die Hosts **h1** (10.0.100.11) und **h2** (10.0.100.12) sind angeschlossen und senden mit VLAN 100.\n\nTrotzdem lernt die Fabric keinen Endpoint, und die EPG meldet einen Fault. Schau dir zuerst den Fault an und teste h1 → h2.",
+ "requirements": [
+  "h1 und h2 werden in der EPG Server gelernt und erreichen sich per Ping.",
+  "Die EPG Server meldet keinen F0467 mehr.",
+  "Die Physical Domain heißt **PhysDom-Server** (darauf verweist die EPG). Alle anderen Namen sind frei wählbar.",
+  "Freigeschaltet werden die Server-Ports 1-10 auf leaf101 und leaf102 und die VLANs 100-199.",
+  "An einem freien Server-Port (h9 an leaf101 eth1/5) darf niemand in die EPG Server kommen."
+ ],
+ "limits": [
+  "Die VLAN-Vergabe wird statisch modelliert; dynamische Pools gibt es nur für VMM.",
+  "Interface-Policies wie CDP, LLDP oder Link Level werden gespeichert, beeinflussen das Lernen aber nicht."
+ ],
+ "hints": [
+  "**Konzept:** Eine EPG sagt nur, *welches* VLAN auf *welchem* Port zu ihr gehört. Ob der Port dieses VLAN überhaupt benutzen darf, entscheiden die **Access Policies**. Über die Domain ist beides verbunden.",
+  "**Beteiligte Objekte:** VLAN Pool → Physical Domain → Attachable Access Entity Profile (AAEP) → Interface Policy Group → Interface Profile mit Port Selector → Switch Profile mit Leaf Selector. Die Domain verbindet Pool und EPG.",
+  "**Prüfschritt:** Der F0467 an der EPG nennt den Grund (z. B. *invalid-vlan* oder *invalid-path*). Unter **Fabric > Access Policies**: Pools > VLAN, Physical and External Domains, Policies > Global > AAEP, Interfaces > Leaf Interfaces > Policy Groups und Profiles, Switches > Leaf Switches > Profiles. Auf leaf101 `show vlan extended` – taucht vlan-100 auf?",
+  "**Lösung:** VLAN Pool (static, vlan-100 bis vlan-199) → Physical Domain **PhysDom-Server** mit dem Pool → AAEP mit der Domain → Leaf Access Port Policy Group mit dem AAEP → Interface Profile mit Port Selector 1/1-10 und der Policy Group → Switch Profile mit Leaf Selector 101-102 und dem Interface Profile. Das Interface Profile hängt am Switch Profile, nicht am Leaf Selector."
+ ],
+ "cause": "Im Ausgangszustand gibt es keine Access Policies: Die Domain PhysDom-Server existiert nicht, kein Pool, kein AAEP, kein Port ist freigeschaltet. Der Traffic-Test endet mit EP_NOT_LEARNED, die EPG meldet F0467.",
  "config": [
   {
    "fvTenant": {
@@ -133,65 +165,25 @@
    ],
    "bond": "none",
    "descr": ""
+  },
+  {
+   "name": "h9",
+   "mac": "00:50:56:02:00:09",
+   "ip": "10.0.100.19/24",
+   "gw": "10.0.100.1",
+   "vlan": 100,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/5"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Fremdgerät an einem freien Server-Port"
   }
  ],
- "tasks": [
-  {
-   "title": "Fault ansehen",
-   "text": "Öffne **Tenants > Lab02 > Application Profiles > AP1 > Application EPGs > Server** und dort den Tab **Faults**. Welcher Grund steht im Fault F0467?"
-  },
-  {
-   "title": "VLAN Pool",
-   "text": "**Pools > VLAN**: Pool **VLAN-Pool-Server**, *Static Allocation*, Encap Block vlan-100 bis vlan-199."
-  },
-  {
-   "title": "Physical Domain",
-   "text": "**Physical and External Domains > Physical Domains**: **PhysDom-Server** mit dem VLAN Pool."
-  },
-  {
-   "title": "AAEP",
-   "text": "**Policies > Global > Attachable Access Entity Profiles**: **AAEP-Server** mit der Domain PhysDom-Server."
-  },
-  {
-   "title": "Interface Policy Group",
-   "text": "**Interfaces > Leaf Interfaces > Policy Groups > Leaf Access Port**: **IPG-Server-Access** mit dem AAEP."
-  },
-  {
-   "title": "Interface Profile",
-   "text": "**Interfaces > Leaf Interfaces > Profiles**: **IntProf-Leaf101-102** mit einem Access Port Selector **Server-Ports** für die Ports 1/1-10 und der Policy Group."
-  },
-  {
-   "title": "Switch Profile",
-   "text": "**Switches > Leaf Switches > Profiles**: **SwProf-Leaf101-102** mit Leaf Selector für die Nodes 101-102 und dem Interface Profile.",
-   "hint": "Das Interface Profile hängt am Switch Profile, nicht am Leaf Selector."
-  },
-  {
-   "title": "Ergebnis prüfen",
-   "text": "Die Faults der EPG verschwinden, unter **Operational** stehen h1 und h2. Teste unter **Operations > Visibility & Troubleshooting** einen Ping von h1 nach h2. Auf leaf101: `show vlan extended`, `show endpoint`."
-  }
- ],
+ "tasks": [],
  "checks": [
-  {
-   "desc": "VLAN Pool VLAN-Pool-Server (static)",
-   "type": "exists",
-   "dn": "uni/infra/vlanns-[VLAN-Pool-Server]-static"
-  },
-  {
-   "desc": "Physical Domain PhysDom-Server",
-   "type": "exists",
-   "dn": "uni/phys-PhysDom-Server"
-  },
-  {
-   "desc": "AAEP-Server enthält PhysDom-Server",
-   "type": "exists",
-   "dn": "uni/infra/attentp-AAEP-Server/rsdomP-[uni/phys-PhysDom-Server]"
-  },
-  {
-   "desc": "Kein F0467 mehr im Tenant Lab02",
-   "type": "nofaults",
-   "under": "uni/tn-Lab02",
-   "code": "F0467"
-  },
   {
    "desc": "h1 in EPG Server gelernt",
    "type": "endpoint",
@@ -211,6 +203,65 @@
    "dst": "h2",
    "proto": "icmp",
    "expect": true
+  },
+  {
+   "desc": "Kein F0467 mehr im Tenant Lab02",
+   "type": "nofaults",
+   "under": "uni/tn-Lab02",
+   "code": "F0467"
+  },
+  {
+   "desc": "Physical Domain PhysDom-Server vorhanden",
+   "type": "exists",
+   "dn": "uni/phys-PhysDom-Server"
+  },
+  {
+   "desc": "Fremdgerät h9 an leaf101 eth1/5 (ohne EPG-Bindung) bekommt keinen Zugang",
+   "type": "traffic",
+   "src": "h9",
+   "dst": "h1",
+   "proto": "icmp",
+   "expect": false,
+   "reason": "EP_NOT_LEARNED",
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Warum hat der Static Port an der EPG allein nicht gereicht?",
+   "options": [
+    "Der Static Port war falsch geschrieben",
+    "Ohne Access Policies darf der Port das VLAN nicht benutzen – die Domain verbindet EPG und Pool",
+    "Es fehlte ein Contract",
+    "Die Bridge Domain hatte kein Subnetz"
+   ],
+   "answer": 1,
+   "explain": "Die EPG-Seite (Tenant) und die Port-Seite (Access Policies) werden über die Domain zusammengeführt. Fehlt die Port-Seite, meldet die EPG F0467 und lernt nichts."
+  },
+  {
+   "id": "q2",
+   "q": "Was verbindet der AAEP?",
+   "options": [
+    "VLAN Pool und Bridge Domain",
+    "Interface Policy Group und Domain(s)",
+    "Switch Profile und Leaf",
+    "EPG und Contract"
+   ],
+   "answer": 1,
+   "explain": "Der AAEP sagt, welche Domains (und damit VLANs) an den Ports einer Policy Group erlaubt sind."
+  },
+  {
+   "id": "q3",
+   "q": "h9 hängt an eth1/5, ein freigeschalteter Port, und sendet VLAN 100. Warum wird er trotzdem nicht gelernt?",
+   "options": [
+    "Die Access Policies erlauben nur VLAN und Port – erst die EPG-Bindung (Static Port) ordnet den Verkehr einer EPG zu",
+    "VLAN 100 ist nur auf leaf102 erlaubt",
+    "h9 hat die falsche IP",
+    "Ein Taboo Contract blockiert ihn"
+   ],
+   "answer": 0,
+   "explain": "Access Policies schalten frei, was ein Port darf. Die Zuordnung zu einer EPG kommt erst aus dem Tenant. Deshalb gehört eine Bindung nur an die Ports, an denen der Server wirklich hängt."
   }
  ],
  "solution": "Die komplette Kette als JSON (POST an /api/mo/uni.json):\n\n`{\"polUni\": {\"attributes\": {}, \"children\": [{\"infraInfra\": {\"attributes\": {}, \"children\": [{\"fvnsVlanInstP\": {\"attributes\": {\"name\": \"VLAN-Pool-Server\", \"allocMode\": \"static\"}, \"children\": [{\"fvnsEncapBlk\": {\"attributes\": {\"from\": \"vlan-100\", \"to\": \"vlan-199\"}}}]}}, {\"infraAttEntityP\": {\"attributes\": {\"name\": \"AAEP-Server\"}, \"children\": [{\"infraRsDomP\": {\"attributes\": {\"tDn\": \"uni/phys-PhysDom-Server\"}}}]}}, {\"infraFuncP\": {\"attributes\": {}, \"children\": [{\"infraAccPortGrp\": {\"attributes\": {\"name\": \"IPG-Server-Access\"}, \"children\": [{\"infraRsAttEntP\": {\"attributes\": {\"tDn\": \"uni/infra/attentp-AAEP-Server\"}}}]}}]}}, {\"infraAccPortP\": {\"attributes\": {\"name\": \"IntProf-Leaf101-102\"}, \"children\": [{\"infraHPortS\": {\"attributes\": {\"name\": \"Server-Ports\", \"type\": \"range\"}, \"children\": [{\"infraPortBlk\": {\"attributes\": {\"name\": \"block2\", \"fromPort\": \"1\", \"toPort\": \"10\"}}}, {\"infraRsAccBaseGrp\": {\"attributes\": {\"tDn\": \"uni/infra/funcprof/accportgrp-IPG-Server-Access\"}}}]}}]}}, {\"infraNodeP\": {\"attributes\": {\"name\": \"SwProf-Leaf101-102\"}, \"children\": [{\"infraLeafS\": {\"attributes\": {\"name\": \"101-102\", \"type\": \"range\"}, \"children\": [{\"infraNodeBlk\": {\"attributes\": {\"name\": \"blk\", \"from_\": \"101\", \"to_\": \"102\"}}}]}}, {\"infraRsAccPortP\": {\"attributes\": {\"tDn\": \"uni/infra/accportprof-IntProf-Leaf101-102\"}}}]}}]}}, {\"physDomP\": {\"attributes\": {\"name\": \"PhysDom-Server\"}, \"children\": [{\"infraRsVlanNs\": {\"attributes\": {\"tDn\": \"uni/infra/vlanns-[VLAN-Pool-Server]-static\"}}}]}}]}}`",

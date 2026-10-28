@@ -220,63 +220,93 @@ lab(id='01-fabric-discovery', title='01 Fabric Discovery und BGP Route Reflector
 # ----------------------------------------------------------------------------
 # Lab 02 - Access Policies
 # ----------------------------------------------------------------------------
-lab(id='02-access-policies', title='02 Access Policies: vom VLAN-Pool zum Switch-Profil', topic='Access Policies',
-    level='Einstieg', duration='30 min', fabric='discovered',
-    goals=['Die Kette VLAN Pool → Domain → AAEP → Policy Group → Interface-Profil → Switch-Profil bauen',
-           'Fault F0467 lesen und beheben', 'Endpoints in einer EPG lernen lassen'],
-    intro='Der Tenant **Lab02** ist schon fertig: EPG **Server** hängt an der Physical Domain **PhysDom-Server** und hat '
-          'Static Ports auf leaf101 eth1/1 und leaf102 eth1/1 mit **vlan-100**. Die Hosts **h1** und **h2** sind '
-          'angeschlossen. Trotzdem lernt die Fabric keine Endpoints, und die EPG zeigt Faults – denn die Access Policies fehlen.\n\n'
-          'Lege alles unter **Fabric > Access Policies** an. Achte genau auf die Namen: Die EPG verweist schon auf '
-          '`PhysDom-Server`.',
+lab(id='02-access-policies', title='02 Access Policies: vom VLAN zum Port', topic='Access Policies',
+    level='Einstieg', duration='30 min', fabric='discovered', kind='requirements', modes=['guided', 'exam'],
+    prerequisites=['Fabric ist registriert (Lab 01 oder Ausgangszustand „discovered“)'],
+    tools=['Fabric > Access Policies', 'Tab Faults an der EPG', 'Traffic-Test', 'CLI auf dem Leaf: show vlan extended, show endpoint'],
+    goals=['Verstehen, warum eine EPG mit Static Port allein noch keinen Endpoint lernt',
+           'Die Access-Policy-Kette vom VLAN bis zum physischen Port aufbauen', 'Fault F0467 lesen und als Diagnose nutzen'],
+    intro='Der Tenant **Lab02** ist fertig: Die EPG **Server** verweist auf die Physical Domain **PhysDom-Server** und hat Static Ports '
+          'auf leaf101 eth1/1 und leaf102 eth1/1 mit **vlan-100**. Die Hosts **h1** (10.0.100.11) und **h2** (10.0.100.12) sind '
+          'angeschlossen und senden mit VLAN 100.\n\nTrotzdem lernt die Fabric keinen Endpoint, und die EPG meldet einen Fault. '
+          'Schau dir zuerst den Fault an und teste h1 → h2.',
+    requirements=['h1 und h2 werden in der EPG Server gelernt und erreichen sich per Ping.',
+                  'Die EPG Server meldet keinen F0467 mehr.',
+                  'Die Physical Domain heißt **PhysDom-Server** (darauf verweist die EPG). Alle anderen Namen sind frei wählbar.',
+                  'Freigeschaltet werden die Server-Ports 1-10 auf leaf101 und leaf102 und die VLANs 100-199.',
+                  'An einem freien Server-Port (h9 an leaf101 eth1/5) darf niemand in die EPG Server kommen.'],
+    limits=['Die VLAN-Vergabe wird statisch modelliert; dynamische Pools gibt es nur für VMM.',
+            'Interface-Policies wie CDP, LLDP oder Link Level werden gespeichert, beeinflussen das Lernen aber nicht.'],
+    hints=['**Konzept:** Eine EPG sagt nur, *welches* VLAN auf *welchem* Port zu ihr gehört. Ob der Port dieses VLAN überhaupt '
+           'benutzen darf, entscheiden die **Access Policies**. Über die Domain ist beides verbunden.',
+           '**Beteiligte Objekte:** VLAN Pool → Physical Domain → Attachable Access Entity Profile (AAEP) → Interface Policy Group → '
+           'Interface Profile mit Port Selector → Switch Profile mit Leaf Selector. Die Domain verbindet Pool und EPG.',
+           '**Prüfschritt:** Der F0467 an der EPG nennt den Grund (z. B. *invalid-vlan* oder *invalid-path*). Unter '
+           '**Fabric > Access Policies**: Pools > VLAN, Physical and External Domains, Policies > Global > AAEP, '
+           'Interfaces > Leaf Interfaces > Policy Groups und Profiles, Switches > Leaf Switches > Profiles. Auf leaf101 '
+           '`show vlan extended` – taucht vlan-100 auf?',
+           '**Lösung:** VLAN Pool (static, vlan-100 bis vlan-199) → Physical Domain **PhysDom-Server** mit dem Pool → AAEP mit der '
+           'Domain → Leaf Access Port Policy Group mit dem AAEP → Interface Profile mit Port Selector 1/1-10 und der Policy Group → '
+           'Switch Profile mit Leaf Selector 101-102 und dem Interface Profile. Das Interface Profile hängt am Switch Profile, '
+           'nicht am Leaf Selector.'],
+    cause='Im Ausgangszustand gibt es keine Access Policies: Die Domain PhysDom-Server existiert nicht, kein Pool, kein AAEP, kein '
+          'Port ist freigeschaltet. Der Traffic-Test endet mit EP_NOT_LEARNED, die EPG meldet F0467.',
     config=[mo('fvTenant', {'name': 'Lab02'}, mo('fvCtx', {'name': 'VRF1'}), bd('BD-Server', 'VRF1', '10.0.100.1/24'),
                mo('fvAp', {'name': 'AP1'}, epg('Server', 'BD-Server', ports=[(path(101, 'eth1/1'), 100), (path(102, 'eth1/1'), 100)])))],
     hosts=[host('h1', '00:50:56:02:00:01', '10.0.100.11/24', '10.0.100.1', 100, [[L101, 'eth1/1']]),
-           host('h2', '00:50:56:02:00:02', '10.0.100.12/24', '10.0.100.1', 100, [[L102, 'eth1/1']])],
-    tasks=[
-        task('Fault ansehen', 'Öffne **Tenants > Lab02 > Application Profiles > AP1 > Application EPGs > Server** und '
-             'dort den Tab **Faults**. Welcher Grund steht im Fault F0467?'),
-        task('VLAN Pool', '**Pools > VLAN**: Pool **VLAN-Pool-Server**, *Static Allocation*, Encap Block vlan-100 bis vlan-199.'),
-        task('Physical Domain', '**Physical and External Domains > Physical Domains**: **PhysDom-Server** mit dem VLAN Pool.'),
-        task('AAEP', '**Policies > Global > Attachable Access Entity Profiles**: **AAEP-Server** mit der Domain PhysDom-Server.'),
-        task('Interface Policy Group', '**Interfaces > Leaf Interfaces > Policy Groups > Leaf Access Port**: '
-             '**IPG-Server-Access** mit dem AAEP.'),
-        task('Interface Profile', '**Interfaces > Leaf Interfaces > Profiles**: **IntProf-Leaf101-102** mit einem Access '
-             'Port Selector **Server-Ports** für die Ports 1/1-10 und der Policy Group.'),
-        task('Switch Profile', '**Switches > Leaf Switches > Profiles**: **SwProf-Leaf101-102** mit Leaf Selector für die Nodes '
-             '101-102 und dem Interface Profile.',
-             'Das Interface Profile hängt am Switch Profile, nicht am Leaf Selector.'),
-        task('Ergebnis prüfen', 'Die Faults der EPG verschwinden, unter **Operational** stehen h1 und h2. Teste unter '
-             '**Operations > Visibility & Troubleshooting** einen Ping von h1 nach h2. Auf leaf101: `show vlan extended`, `show endpoint`.'),
-    ],
-    checks=[check('VLAN Pool VLAN-Pool-Server (static)', 'exists', dn='uni/infra/vlanns-[VLAN-Pool-Server]-static'),
-            check('Physical Domain PhysDom-Server', 'exists', dn='uni/phys-PhysDom-Server'),
-            check('AAEP-Server enthält PhysDom-Server', 'exists', dn='uni/infra/attentp-AAEP-Server/rsdomP-[uni/phys-PhysDom-Server]'),
-            check('Kein F0467 mehr im Tenant Lab02', 'nofaults', under='uni/tn-Lab02', code='F0467'),
-            check('h1 in EPG Server gelernt', 'endpoint', host='h1', epg='uni/tn-Lab02/ap-AP1/epg-Server'),
+           host('h2', '00:50:56:02:00:02', '10.0.100.12/24', '10.0.100.1', 100, [[L102, 'eth1/1']]),
+           host('h9', '00:50:56:02:00:09', '10.0.100.19/24', '10.0.100.1', 100, [[L101, 'eth1/5']], descr='Fremdgerät an einem freien Server-Port')],
+    tasks=[],
+    checks=[check('h1 in EPG Server gelernt', 'endpoint', host='h1', epg='uni/tn-Lab02/ap-AP1/epg-Server'),
             check('h2 in EPG Server gelernt', 'endpoint', host='h2', epg='uni/tn-Lab02/ap-AP1/epg-Server'),
-            check('Ping h1 → h2', 'traffic', src='h1', dst='h2', proto='icmp', expect=True)],
+            check('Ping h1 → h2', 'traffic', src='h1', dst='h2', proto='icmp', expect=True),
+            check('Kein F0467 mehr im Tenant Lab02', 'nofaults', under='uni/tn-Lab02', code='F0467'),
+            check('Physical Domain PhysDom-Server vorhanden', 'exists', dn='uni/phys-PhysDom-Server'),
+            check('Fremdgerät h9 an leaf101 eth1/5 (ohne EPG-Bindung) bekommt keinen Zugang', 'traffic', src='h9', dst='h1', proto='icmp', expect=False,
+                  reason='EP_NOT_LEARNED', category='security')],
+    questions=[{'id': 'q1', 'q': 'Warum hat der Static Port an der EPG allein nicht gereicht?',
+                'options': ['Der Static Port war falsch geschrieben', 'Ohne Access Policies darf der Port das VLAN nicht benutzen – die Domain verbindet EPG und Pool',
+                            'Es fehlte ein Contract', 'Die Bridge Domain hatte kein Subnetz'],
+                'answer': 1, 'explain': 'Die EPG-Seite (Tenant) und die Port-Seite (Access Policies) werden über die Domain zusammengeführt. '
+                                        'Fehlt die Port-Seite, meldet die EPG F0467 und lernt nichts.'},
+               {'id': 'q2', 'q': 'Was verbindet der AAEP?',
+                'options': ['VLAN Pool und Bridge Domain', 'Interface Policy Group und Domain(s)', 'Switch Profile und Leaf', 'EPG und Contract'],
+                'answer': 1, 'explain': 'Der AAEP sagt, welche Domains (und damit VLANs) an den Ports einer Policy Group erlaubt sind.'},
+               {'id': 'q3', 'q': 'h9 hängt an eth1/5, ein freigeschalteter Port, und sendet VLAN 100. Warum wird er trotzdem nicht gelernt?',
+                'options': ['Die Access Policies erlauben nur VLAN und Port – erst die EPG-Bindung (Static Port) ordnet den Verkehr einer EPG zu',
+                            'VLAN 100 ist nur auf leaf102 erlaubt', 'h9 hat die falsche IP', 'Ein Taboo Contract blockiert ihn'],
+                'answer': 0, 'explain': 'Access Policies schalten frei, was ein Port darf. Die Zuordnung zu einer EPG kommt erst aus dem Tenant. '
+                                        'Deshalb gehört eine Bindung nur an die Ports, an denen der Server wirklich hängt.'}],
     solution='Die komplette Kette als JSON (POST an /api/mo/uni.json):\n\n`' + json.dumps(SERVER_ACCESS) + '`')
 
 # ----------------------------------------------------------------------------
 # Lab 03 - Tenant
 # ----------------------------------------------------------------------------
 lab(id='03-tenant-epg', title='03 Tenant, VRF, Bridge Domains und EPGs', topic='Tenant-Design', level='Einstieg',
-    duration='30 min', fabric='discovered',
-    goals=['Einen Tenant mit VRF, Bridge Domains und Subnetzen anlegen', 'EPGs mit Domain und Static Ports verbinden',
-           'Verstehen, dass zwischen EPGs ohne Contract nichts fließt'],
-    intro='Die Access Policies aus Lab 02 sind vorhanden (Ports 1/1-10 auf leaf101 und leaf102). Baue den Tenant '
-          'für einen Webshop. **web1** hängt an leaf101 eth1/1 und sendet mit VLAN 110, **app1** an leaf102 eth1/2 mit VLAN 120.',
-    config=[SERVER_ACCESS], hosts=[WEB1, APP1],
-    tasks=[
-        task('Tenant und VRF', 'Tenant **Shop**, darin VRF **Prod** (Policy Enforcement: Enforced).'),
-        task('Bridge Domains', '**BD-Web** mit Gateway **10.10.10.1/24** und **BD-App** mit **10.10.20.1/24**, beide im VRF Prod.'),
-        task('Application Profile und EPGs', 'AP **Webshop** mit den EPGs **Web** (BD-Web) und **App** (BD-App). '
-             'Beide bekommen die Physical Domain **PhysDom-Server**.'),
-        task('Static Ports', 'Web: leaf101 eth1/1, **vlan-110**, Trunk. App: leaf102 eth1/2, **vlan-120**, Trunk.'),
-        task('Testen', 'web1 kann sein Gateway 10.10.10.1 pingen. Ein Ping von web1 zu app1 scheitert – warum? '
-             'Schau dir auf leaf101 `show zoning-rule` an.'),
-    ],
+    duration='30 min', fabric='discovered', kind='requirements', modes=['guided', 'exam'],
+    prerequisites=['Lab 02: Access Policies'], tools=['Tenants > Add Tenant', 'Traffic-Test', 'CLI: show zoning-rule, show endpoint'],
+    goals=['Einen Tenant mit VRF, Bridge Domains und Subnetzen anlegen', 'Endpoints über die EPG an Ports und VLANs binden',
+           'Erleben, dass Routing zwischen EPGs ohne Contract an der Policy endet'],
+    intro='Die Access Policies sind vorhanden: Server-Ports 1-10 auf leaf101 und leaf102, VLANs 100-199, Physical Domain '
+          '**PhysDom-Server**. Baue den Tenant für einen Webshop.\n\n- **web1**: 10.10.10.11/24, Gateway 10.10.10.1, leaf101 eth1/1, '
+          'sendet mit VLAN 110\n- **app1**: 10.10.20.11/24, Gateway 10.10.20.1, leaf102 eth1/2, sendet mit VLAN 120',
+    requirements=['Namenskonvention: Tenant **Shop**, VRF **Prod**, Bridge Domains **BD-Web** und **BD-App**, Application Profile '
+                  '**Webshop**, EPGs **Web** und **App** (die folgenden Labs bauen darauf auf).',
+                  'web1 gehört zur EPG Web, app1 zur EPG App, beide werden gelernt.',
+                  'Beide Hosts erreichen ihr Default Gateway in der ACI.',
+                  'Zwischen Web und App gibt es noch keine Freigabe.'],
+    limits=['Policy Enforcement ist Ingress (Default), die Wirkung von Ingress/Egress wird nicht unterschieden.'],
+    hints=['**Konzept:** Ein Tenant enthält das Routing (VRF), die Layer-2-Domänen mit Gateways (Bridge Domains) und die '
+           'Sicherheitsgruppen (EPGs). Eine EPG ist kein VLAN: Das VLAN gilt nur am Port und ordnet den Verkehr dort der EPG zu.',
+           '**Beteiligte Objekte:** VRF, Bridge Domain mit Subnetz (= Gateway-IP), Application Profile, EPG mit Bridge Domain, '
+           'Domain-Zuordnung und Port-Bindung mit VLAN-Encap.',
+           '**Prüfschritt:** Nach dem Anlegen im Tab *Operational* der EPG nachsehen, ob der Host gelernt wird. Falls nicht: Fault '
+           'F0467 an der EPG lesen (fehlt die Domain? stimmt das VLAN?). Traffic-Test web1 → 10.10.10.1.',
+           '**Lösung:** Tenant Shop → VRF Prod → BD-Web (Subnetz 10.10.10.1/24) und BD-App (10.10.20.1/24) im VRF Prod → AP Webshop '
+           '→ EPG Web (BD-Web) und EPG App (BD-App), beide mit Domain PhysDom-Server → Static Ports: Web leaf101 eth1/1 vlan-110, '
+           'App leaf102 eth1/2 vlan-120. web1 → app1 bleibt blockiert: Implicit Deny, CLI `show zoning-rule` zeigt nur die Default-Regeln.'],
+    cause='Im Ausgangszustand gibt es den Tenant noch nicht.',
+    config=[SERVER_ACCESS], hosts=[WEB1, APP1], tasks=[],
     checks=[check('VRF Shop/Prod', 'exists', dn='uni/tn-Shop/ctx-Prod'),
             check('BD-Web mit 10.10.10.1/24 im VRF Prod', 'exists', dn='uni/tn-Shop/BD-BD-Web/subnet-[10.10.10.1/24]'),
             check('BD-App mit 10.10.20.1/24', 'exists', dn='uni/tn-Shop/BD-BD-App/subnet-[10.10.20.1/24]'),
@@ -284,7 +314,18 @@ lab(id='03-tenant-epg', title='03 Tenant, VRF, Bridge Domains und EPGs', topic='
             check('app1 gelernt in EPG App', 'endpoint', host='app1', epg='uni/tn-Shop/ap-Webshop/epg-App'),
             check('web1 pingt sein Gateway', 'traffic', src='web1', dst='10.10.10.1', expect=True),
             check('app1 pingt sein Gateway', 'traffic', src='app1', dst='10.10.20.1', expect=True),
-            check('web1 → app1 ist ohne Contract blockiert', 'traffic', src='web1', dst='app1', expect=False)],
+            check('web1 → app1 ist ohne Contract durch die Policy blockiert', 'traffic', src='web1', dst='app1', expect=False,
+                  reason='POLICY_', category='security'),
+            check('Least Privilege: noch keine Freigabe Web → App', 'exposure', src='web1', dst='app1', allow=[], category='security')],
+    questions=[{'id': 'q1', 'q': 'web1 erreicht sein Gateway, aber nicht app1. Woran liegt es?',
+                'options': ['Zwischen BD-Web und BD-App fehlt eine Route', 'Zwischen den EPGs Web und App gibt es keinen Contract',
+                            'app1 ist nicht gelernt', 'VLAN 110 und 120 sind nicht verbunden'],
+                'answer': 1, 'explain': 'Die Pervasive Route zwischen den BD-Subnetzen existiert im VRF. Der Traffic-Test zeigt das Routing grün '
+                                        'und endet an der Policy (Implicit Deny).'},
+               {'id': 'q2', 'q': 'Was stimmt für eine EPG?',
+                'options': ['Eine EPG ist dasselbe wie ein VLAN', 'Dasselbe VLAN kann an verschiedenen Ports zu verschiedenen EPGs gehören',
+                            'Eine Bridge Domain kann immer nur eine EPG haben', 'Jeder Tenant hat genau ein VRF'],
+                'answer': 1, 'explain': 'Die Zuordnung VLAN → EPG gilt pro Port (bzw. pro Leaf). Eine BD kann viele EPGs enthalten, ein Tenant viele VRFs.'}],
     solution='Tenant-JSON:\n\n`' + json.dumps(shop_tenant()) + '`\n\nOhne Contract greift im VRF der Implicit Deny '
              '(Zoning-Rule `any_any_any(21)` mit `deny,log`).')
 
@@ -294,32 +335,53 @@ lab(id='03-tenant-epg', title='03 Tenant, VRF, Bridge Domains und EPGs', topic='
 vzany_solution = [filt('ssh', {'name': 'ssh', 'etherT': 'ip', 'prot': 'tcp', 'dFromPort': '22', 'dToPort': '22'}),
                   contract('mgmt-ssh', ['ssh'])]
 lab(id='04-contracts', title='04 Contracts, Filter und vzAny', topic='Policy / Contracts', level='Mittel',
-    duration='35 min', fabric='discovered',
-    goals=['Filter und Contracts anlegen', 'Provider und Consumer richtig zuordnen',
-           'Reverse Filter Ports verstehen', 'vzAny für einen Contract an alle EPGs im VRF nutzen'],
-    intro='Der Tenant **Shop** aus Lab 03 steht. Zusätzlich gibt es die EPG **Mgmt** mit dem Jump-Host **jump1** '
-          '(10.10.40.11). Jetzt kommt die Policy.\n\n**Anforderungen:**\n- Web darf App auf **TCP 8080** und per **Ping** erreichen.\n'
-          '- App darf von sich aus keine Verbindung zu Web aufbauen.\n- jump1 soll **jede** EPG im VRF Prod per **SSH (TCP 22)** erreichen.',
-    config=[SERVER_ACCESS, shop_tenant(with_mgmt=True)], hosts=[WEB1, APP1, JUMP1],
-    tasks=[
-        task('Filter', 'Unter **Contracts > Filters** einen Filter **tcp-8080** mit einem Entry: EtherType IP, Protocol tcp, '
-             'Destination Port 8080.',
-             'Für Ping gibt es im Tenant common schon den Filter **icmp** – den kannst du direkt verwenden.'),
-        task('Contract', 'Contract **web-to-app** (Scope VRF) mit einem Subject, das die Filter tcp-8080 und icmp enthält.'),
-        task('Provider und Consumer', 'Die EPG **App** stellt den Dienst bereit (**Provided**), die EPG **Web** nutzt ihn '
-             '(**Consumed**). Am EPG unter **Contracts** hinzufügen.'),
-        task('Testen', 'web1 → app1: TCP 8080 und ICMP klappen, TCP 22 nicht. app1 → web1 auf TCP 8080 ist blockiert. '
-             'Auf leaf101: `show zoning-rule` – erkennst du die Regeln bi-dir und uni-dir-ignore?'),
-        task('vzAny', 'Filter **ssh** (tcp/22) und Contract **mgmt-ssh** anlegen. Unter **VRF Prod > EPG Collection for VRF** '
-             'den Contract als **Provided** eintragen, an der EPG **Mgmt** als **Consumed**.',
-             'vzAny steht für alle EPGs im VRF. Weil nur Mgmt konsumiert, darf Web trotzdem nicht per SSH zu App.'),
-    ],
+    duration='35 min', fabric='discovered', kind='requirements', modes=['guided', 'exam'],
+    prerequisites=['Lab 03', 'Lab 32 (Least Privilege) ist eine gute Vorübung'],
+    tools=['Tenant Shop > Contracts', 'VRF > EPG Collection for VRF', 'Traffic-Test', 'CLI: show zoning-rule'],
+    goals=['Filter, Contracts und Subjects passend zu mehreren Anforderungen bauen', 'Die Verbindungsrichtung in Rollen übersetzen',
+           'Eine Freigabe für alle EPGs eines VRF mit einer einzigen Beziehung bauen'],
+    intro='Der Tenant **Shop** aus Lab 03 steht. Zusätzlich gibt es die EPG **Mgmt** mit dem Jump-Host **jump1** (10.10.40.11). '
+          'Jetzt kommt die Policy.',
+    requirements=['web1 erreicht app1 auf **TCP 8080** und per **Ping**.',
+                  'app1 baut von sich aus keine Verbindung zu web1 auf.',
+                  'jump1 erreicht **jede** EPG im VRF Prod per **SSH (TCP 22)** – auch EPGs, die später dazukommen, ohne dass man sie '
+                  'einzeln anfassen muss.',
+                  'Sonst bleibt alles zu: Web nicht per SSH zu App, die EPGs nicht zu jump1.'],
+    limits=['ICMP wird nicht nach Type unterschieden: Ein ICMP-Filter in beide Richtungen erlaubt auch Pings in der Gegenrichtung.',
+            'Contract-Prioritäten sind vereinfacht (Deny vor Permit, keine Priority-Stufen).',
+            'Ob die SSH-Freigabe auch für künftige EPGs gilt, kann die Bewertung nicht prüfen. Eine Lösung mit Provider-Beziehung an '
+            'jeder einzelnen EPG wird ebenfalls als bestanden gewertet.'],
+    hints=['**Konzept:** Freigaben sind gerichtet: Wer den Dienst anbietet und wer ihn nutzt, entscheidet über die Regeln. Für '
+           '„alle EPGs eines VRF“ gibt es ein eigenes Objekt, das stellvertretend für alle EPGs steht.',
+           '**Beteiligte Objekte:** Filter (tcp/8080, tcp/22; für Ping gibt es im Tenant common den Filter **icmp**), zwei Contracts '
+           'mit Subject, die Rollen Consumer/Provider an den EPGs, und **vzAny** (*VRF > EPG Collection for VRF*).',
+           '**Prüfschritt:** Traffic-Test web1 → app1 TCP 8080 und app1 → web1 TCP 8080. In `show zoning-rule` auf leaf101 die '
+           'Richtungen *bi-dir* und *uni-dir-ignore* suchen. Für SSH: Wer baut die Verbindung auf – jump1 oder die anderen EPGs?',
+           '**Lösung:** Filter tcp-8080 → Contract web-to-app mit den Filtern tcp-8080 und icmp → Web konsumiert, App stellt bereit. '
+           'Filter ssh (tcp/22) → Contract mgmt-ssh → vzAny im VRF Prod **stellt bereit**, die EPG Mgmt **konsumiert**. Weil nur '
+           'Mgmt konsumiert, kommt Web nicht per SSH zu App.'],
+    cause='Im Ausgangszustand gibt es keinen Contract: alles zwischen den EPGs ist Implicit Deny.',
+    config=[SERVER_ACCESS, shop_tenant(with_mgmt=True)], hosts=[WEB1, APP1, JUMP1], tasks=[],
     checks=[check('web1 → app1 TCP 8080 erlaubt', 'traffic', src='web1', dst='app1', proto='tcp', port=8080, expect=True),
             check('web1 → app1 Ping erlaubt', 'traffic', src='web1', dst='app1', proto='icmp', expect=True),
-            check('web1 → app1 TCP 22 blockiert', 'traffic', src='web1', dst='app1', proto='tcp', port=22, expect=False),
-            check('app1 → web1 TCP 8080 blockiert (Provider baut nicht auf)', 'traffic', src='app1', dst='web1', proto='tcp', port=8080, expect=False),
             check('jump1 → web1 SSH erlaubt', 'traffic', src='jump1', dst='web1', proto='tcp', port=22, expect=True),
-            check('jump1 → app1 SSH erlaubt', 'traffic', src='jump1', dst='app1', proto='tcp', port=22, expect=True)],
+            check('jump1 → app1 SSH erlaubt', 'traffic', src='jump1', dst='app1', proto='tcp', port=22, expect=True),
+            check('web1 → app1 TCP 22 durch die Policy blockiert', 'traffic', src='web1', dst='app1', proto='tcp', port=22,
+                  expect=False, reason='POLICY_', category='security'),
+            check('app1 baut keine Verbindung zu web1 auf TCP 8080 auf', 'traffic', src='app1', dst='web1', proto='tcp', port=8080,
+                  expect=False, reason='POLICY_', category='security'),
+            check('Least Privilege Web → App: nur tcp/8080 und Ping', 'exposure', src='web1', dst='app1', allow=['tcp/8080', 'icmp'], category='security'),
+            check('Least Privilege jump1 → Web: nur SSH', 'exposure', src='jump1', dst='web1', allow=['tcp/22'], category='security'),
+            check('Web baut keine Verbindung zu jump1 auf', 'exposure', src='web1', dst='jump1', allow=[], category='security')],
+    questions=[{'id': 'q1', 'q': 'Warum darf web1 nach der Lösung nicht per SSH zu app1, obwohl vzAny den SSH-Contract bereitstellt?',
+                'options': ['Weil vzAny nur für neue EPGs gilt', 'Weil nur die EPG Mgmt den Contract konsumiert – Web ist kein Consumer',
+                            'Weil SSH grundsätzlich blockiert ist', 'Weil App eine andere BD hat'],
+                'answer': 1, 'explain': 'Eine Regel entsteht nur zwischen Consumer und Provider. vzAny stellt für alle EPGs bereit, konsumiert '
+                                        'aber nur Mgmt.'},
+               {'id': 'q2', 'q': 'Was zeigt `show zoning-rule` für den Contract web-to-app mit Reverse Filter Ports?',
+                'options': ['Eine Regel bi-dir (Consumer → Provider) und eine uni-dir-ignore (Antwort)', 'Nur eine Regel permit any',
+                            'Zwei Regeln deny', 'Gar nichts, Contracts erscheinen dort nicht'],
+                'answer': 0, 'explain': 'Die Gegenrichtung wird mit vertauschten Ports als eigene Regel programmiert.'}],
     solution='Contract web-to-app: `' + json.dumps(contract('web-to-app', ['tcp-8080', 'icmp'])) + '`\n\nvzAny: '
              '`POST /api/mo/uni/tn-Shop/ctx-Prod/any.json` mit `{"vzRsAnyToProv":{"attributes":{"tnVzBrCPName":"mgmt-ssh"}}}`, '
              'an der EPG Mgmt `fvRsCons` mit `tnVzBrCPName=mgmt-ssh`.')
@@ -428,44 +490,61 @@ ops_tenant = mo('fvTenant', {'name': 'Ops'},
                    epg('Files', 'BD-Backup', OD, [(path(102, 'eth1/12'), 130)]),
                    epg('Backup', 'BD-Bakup', OD, [(path(101, 'eth1/3'), 140)])))
 lab(id='07-troubleshooting', title='07 Troubleshooting: sechs Tickets', topic='Troubleshooting', level='Fortgeschritten',
-    duration='45 min', fabric='discovered',
+    duration='45 min', fabric='discovered', kind='troubleshooting', modes=['guided', 'exam'],
+    prerequisites=['Labs 02 bis 04'],
+    tools=['Tab Faults der EPGs', 'Traffic Inspector (Anfrage und Antwort getrennt)', 'EP Tracker',
+           'CLI: show endpoint, show vlan extended, show zoning-rule, show ip route vrf <Tenant:VRF>, moquery'],
     goals=['Faults gezielt lesen (F0467, unaufgelöste Relationen)', 'Mit Traffic-Test, CLI und EP Tracker eingrenzen',
-           'Typische Fehler in Access Policies, BDs und Contracts finden'],
-    intro='Im Tenant **Ops** laufen sechs Tickets auf. Ändere die Konfiguration so, dass alle Tickets gelöst sind. Die '
-          'Hosts sind richtig konfiguriert – der Fehler liegt immer in der ACI.\n\n'
+           'Mehrere unabhängige Fehler schrittweise beheben, ohne neue Lücken zu öffnen'],
+    intro='Im Tenant **Ops** laufen sechs Tickets auf. Die Hosts sind richtig konfiguriert – der Fehler liegt immer in der ACI.\n\n'
           '- web1: leaf101 eth1/1, VLAN 110, 10.20.10.11\n- app1: leaf102 eth1/1, VLAN 120, 10.20.20.11\n'
           '- pc1: leaf101 eth1/2, VLAN 150, 10.20.10.50\n- files1: leaf102 eth1/12, VLAN 130, 10.20.30.20\n'
           '- backup1: leaf101 eth1/3, VLAN 140, 10.20.30.11',
+    requirements=['Ticket 1: „Mein PC (pc1) bekommt keine Verbindung.“',
+                  'Ticket 2: „Der Fileserver files1 an leaf102 Port 12 ist nicht erreichbar.“',
+                  'Ticket 3: „web1 erreicht app1 nicht auf TCP 80.“ (Die Anwendung läuft auf Port 80.)',
+                  'Ticket 4: „app1 kann nicht einmal sein Gateway 10.20.20.1 pingen.“',
+                  'Ticket 5: „backup1 wird in der Fabric nicht gelernt.“',
+                  'Ticket 6: „Seit dem Fix für Ticket 3 kommt die Anfrage an, aber keine Antwort zurück.“',
+                  'Nebenbedingung: Die Freigabe Web → App bleibt auf TCP 80 und Ping beschränkt.'],
+    limits=['Faults erscheinen sofort (kein Soaking), sie verschwinden sofort nach der Behebung.'],
+    hints=['**Konzept:** Arbeite Schicht für Schicht: Wird der Endpoint gelernt (Access, Encap, BD)? Gibt es Gateway und Route? '
+           'Erlaubt die Policy Anfrage *und* Antwort? Der Traffic Inspector zeigt die erste Stelle, an der es scheitert.',
+           '**Wo suchen:** Tickets 1, 2, 5 → Fault an der EPG (F0467 bzw. unaufgelöste Relation) und `show endpoint`. '
+           'Ticket 4 → Bridge Domain und `show ip route vrf Ops:Ops`. Tickets 3 und 6 → Traffic Inspector web1 → app1 TCP 80, '
+           'Abschnitt *Angewandte Policy*.',
+           '**Prüfschritte:** Ticket 1: Welches VLAN nennt der F0467, welche VLANs enthält der Pool? Ticket 2: Deckt der Port '
+           'Selector Port 12 ab? Ticket 3: Welchen Ziel-Port hat der Filter? Ticket 4: Ist Routing in BD-App eingeschaltet? '
+           'Ticket 5: Auf welche BD zeigt die EPG Backup – gibt es die? Ticket 6: Passt die Antwort (Quell-Port 80) auf eine Regel?',
+           '**Lösung:** 1. Encap Block im VLAN-Pool-Ops bis vlan-199 erweitern. 2. Port Block 12 im Selector Ops-Ports ergänzen. '
+           '3. Filter http auf Ziel-Port 80. 4. Unicast Routing in BD-App einschalten. 5. EPG Backup auf BD-Backup zeigen lassen '
+           '(Tippfehler BD-Bakup). 6. Reverse Filter Ports am Subject einschalten.'],
+    cause='Sechs unabhängige Fehler: VLAN außerhalb des Pools, fehlender Port im Selector, falscher Filter-Port, Unicast Routing aus, '
+          'EPG zeigt auf nicht vorhandene BD, Subject ohne Reverse Filter Ports.',
     config=[ops_access, ops_tenant],
     hosts=[host('web1', '00:50:56:20:10:11', '10.20.10.11/24', '10.20.10.1', 110, [[L101, 'eth1/1']]),
            host('app1', '00:50:56:20:20:11', '10.20.20.11/24', '10.20.20.1', 120, [[L102, 'eth1/1']]),
            host('pc1', '00:50:56:20:10:50', '10.20.10.50/24', '10.20.10.1', 150, [[L101, 'eth1/2']]),
            host('files1', '00:50:56:20:30:20', '10.20.30.20/24', '10.20.30.1', 130, [[L102, 'eth1/12']]),
            host('backup1', '00:50:56:20:30:11', '10.20.30.11/24', '10.20.30.1', 140, [[L101, 'eth1/3']])],
-    tasks=[
-        task('Ticket 1', '„Mein PC (pc1) bekommt keine Verbindung."\n\n**Finden mit:** Tab *Faults* der EPG **Clients** '
-             '(oder `moquery -c faultInst -f \'fault.Inst.code=="F0467"\'` auf dem APIC).',
-             'Lies den Grund im F0467 genau: Welches VLAN, welcher Pool?'),
-        task('Ticket 2', '„Der Fileserver files1 an leaf102 Port 12 ist nicht erreichbar."\n\n**Finden mit:** Tab *Faults* der '
-             'EPG **Files**, danach die Access Port Selectors unter *Fabric > Access Policies*.',
-             'invalid-path heißt: Für diesen Port gibt es keine Access Policy mit der Domain.'),
-        task('Ticket 3', '„web1 erreicht app1 nicht auf TCP 80." (Die Anwendung läuft auf Port 80.)\n\n**Finden mit:** '
-             '*Operations > Visibility & Troubleshooting* (web1 → app1, TCP 80), danach `show zoning-rule` auf leaf101.'),
-        task('Ticket 4', '„app1 kann nicht einmal sein Gateway 10.20.20.1 pingen."\n\n**Finden mit:** Traffic-Test app1 → '
-             '10.20.20.1 und `show ip route vrf Ops:Ops` auf leaf102.'),
-        task('Ticket 5', '„backup1 wird in der Fabric nicht gelernt."\n\n**Finden mit:** Tab *Faults* der EPG **Backup** und '
-             '`show endpoint` auf leaf101.',
-             'Schau dir die Bridge-Domain-Zuordnung der EPG Backup genau an.'),
-        task('Ticket 6', '„Seit dem Fix für Ticket 3 kommt die Anfrage an, aber keine Antwort zurück."\n\n**Finden mit:** '
-             'Traffic-Test web1 → app1 TCP 80: Er zeigt Anfrage und Antwort getrennt.',
-             'Was regelt die Option *Reverse Filter Ports* am Subject?'),
-    ],
+    tasks=[],
     checks=[check('Ticket 1: pc1 gelernt', 'endpoint', host='pc1', epg='uni/tn-Ops/ap-Ops/epg-Clients'),
             check('Ticket 2: files1 gelernt', 'endpoint', host='files1', epg='uni/tn-Ops/ap-Ops/epg-Files'),
             check('Ticket 4: app1 pingt sein Gateway', 'traffic', src='app1', dst='10.20.20.1', expect=True),
             check('Ticket 5: backup1 gelernt', 'endpoint', host='backup1', epg='uni/tn-Ops/ap-Ops/epg-Backup'),
             check('Ticket 3+6: web1 → app1 TCP 80', 'traffic', src='web1', dst='app1', proto='tcp', port=80, expect=True),
-            check('Keine F0467-Faults mehr im Tenant Ops', 'nofaults', under='uni/tn-Ops', code='F0467')],
+            check('Keine F0467-Faults mehr im Tenant Ops', 'nofaults', under='uni/tn-Ops', code='F0467'),
+            check('Least Privilege Web → App: nur TCP 80 und Ping', 'exposure', src='web1', dst='app1', allow=['tcp/80', 'icmp'], category='security'),
+            check('app1 baut keine Verbindung zu web1 auf TCP 80 auf', 'traffic', src='app1', dst='web1', proto='tcp', port=80,
+                  expect=False, reason='POLICY_', category='security')],
+    questions=[{'id': 'q1', 'q': 'Ticket 6: Warum kam die Anfrage an, die Antwort aber nicht?',
+                'options': ['app1 war nicht gelernt', 'Ohne Reverse Filter Ports passt die Antwort mit Quell-Port 80 auf keine Regel',
+                            'Die Route zurück fehlte', 'Der Filter erlaubte nur UDP'],
+                'answer': 1, 'explain': 'Contracts sind zustandslos. Die Gegenrichtung braucht die vertauschten Ports.'},
+               {'id': 'q2', 'q': 'Woran erkennst du im Traffic Inspector, dass Ticket 4 kein Policy-Problem ist?',
+                'options': ['Der Test endet beim Gateway-Schritt, bevor eine Policy geprüft wird', 'Am Verdict ALLOW',
+                            'Am Fault F0467', 'Gar nicht'],
+                'answer': 0, 'explain': 'Die Reihenfolge zeigt die erste fehlerhafte Ebene: GATEWAY_INVALID, die Policy-Tabelle bleibt leer.'}],
     solution='1. VLAN Pool VLAN-Pool-Ops reicht nur bis 149, pc1 nutzt 150 → Encap Block erweitern (z. B. bis 199).\n'
              '2. Interface Selector Ops-Ports deckt nur 1/1-10 ab → Port 12 ergänzen (Port Block 12-12).\n'
              '3. Filter http hat Destination Port 8080 → auf 80 (http) ändern.\n'
@@ -1745,6 +1824,139 @@ lab(id='32-https-least-privilege', title='32 Least Privilege: HTTPS von WEB zu A
 
 
 # ----------------------------------------------------------------------------
+# Lab 33 - Zwei Endpoints in derselben EPG
+# ----------------------------------------------------------------------------
+WEB2 = host('web2', '00:50:56:10:10:12', '10.10.10.12/24', '10.10.10.1', 110, [[L102, 'eth1/3']], descr='zweiter Webserver')
+lab(id='33-same-epg', title='33 Zwei Endpoints in derselben EPG', topic='Policy / Grundlagen', level='Einstieg',
+    duration='15 min', fabric='discovered', kind='requirements', modes=['guided', 'exam'],
+    prerequisites=['Lab 03'], tools=['Traffic-Test', 'Tab Operational und Faults der EPG', 'CLI: show endpoint'],
+    goals=['Kommunikation innerhalb einer EPG von Kommunikation zwischen EPGs unterscheiden',
+           'Einen weiteren Endpoint an eine bestehende EPG binden'],
+    intro='Der Tenant **Shop** läuft (siehe Lab 03). Ein zweiter Webserver **web2** (10.10.10.12, Gateway 10.10.10.1) ist an '
+          '**leaf102 eth1/3** angeschlossen und sendet mit **VLAN 110**, genau wie web1. Er soll zur EPG **Web** gehören. '
+          'Im Moment erreicht ihn niemand.',
+    requirements=['web2 wird in der EPG Web gelernt.',
+                  'web1 und web2 erreichen sich gegenseitig auf allen Ports.',
+                  'Dafür wird kein Contract angelegt.',
+                  'web2 bekommt dadurch keinen Zugang zur EPG App.'],
+    limits=['Intra EPG Isolation ist in diesem Lab aus (Default).'],
+    hints=['**Konzept:** Innerhalb einer EPG gilt ohne Isolation alles als erlaubt – die EPG ist die Sicherheitsgruppe. Das '
+           'Problem liegt woanders: Ist web2 überhaupt in der EPG?',
+           '**Ebene:** Endpoint-Zuordnung. Ein Port und ein VLAN gehören erst dann zur EPG, wenn die EPG sie kennt.',
+           '**Prüfschritt:** Traffic-Test web1 → web2: Welcher Reason Code? Danach die Port-Bindungen der EPG Web ansehen – welche '
+           'Ports sind dort eingetragen?',
+           '**Lösung:** An der EPG Web einen Static Port für leaf102 eth1/3 mit vlan-110 anlegen. Die Access Policies erlauben Port 3 '
+           'und VLAN 110 bereits. Kein Contract nötig.'],
+    cause='Die EPG Web hat nur den Static Port von web1. web2 wird keiner EPG zugeordnet (EP_NOT_LEARNED).',
+    config=[SERVER_ACCESS, shop_tenant()], hosts=[WEB1, WEB2, APP1], tasks=[],
+    checks=[check('web2 in EPG Web gelernt', 'endpoint', host='web2', epg='uni/tn-Shop/ap-Webshop/epg-Web'),
+            check('web1 → web2 SSH (TCP 22)', 'traffic', src='web1', dst='web2', proto='tcp', port=22, expect=True),
+            check('web2 → web1 TCP 8443', 'traffic', src='web2', dst='web1', proto='tcp', port=8443, expect=True),
+            check('Kein Contract im Tenant Shop', 'class', cls='vzBrCP', under='uni/tn-Shop/', expect=False, category='security'),
+            check('web2 → app1 durch die Policy blockiert', 'traffic', src='web2', dst='app1', proto='icmp', expect=False,
+                  reason='POLICY_', category='security')],
+    questions=[{'id': 'q1', 'q': 'Warum braucht es zwischen web1 und web2 keinen Contract?',
+                'options': ['Weil beide in derselben Bridge Domain sind', 'Weil beide in derselben EPG sind (ohne Intra EPG Isolation)',
+                            'Weil beide dasselbe VLAN benutzen', 'Weil beide am selben Leaf hängen'],
+                'answer': 1, 'explain': 'Entscheidend ist die EPG, nicht BD, VLAN oder Leaf. Zwei EPGs in derselben BD brauchen sehr wohl einen Contract (Lab 34).'}],
+    solution='`POST /api/mo/uni/tn-Shop/ap-Webshop/epg-Web.json` mit `' + json.dumps(mo('fvAEPg', {}, mo('fvRsPathAtt', {
+        'tDn': path(102, 'eth1/3'), 'encap': 'vlan-110'}))) + '`')
+
+# ----------------------------------------------------------------------------
+# Lab 34 - Zwei EPGs in derselben Bridge Domain
+# ----------------------------------------------------------------------------
+ADM1 = host('adm1', '00:50:56:10:10:50', '10.10.10.50/24', '10.10.10.1', 111, [[L101, 'eth1/4']], descr='Admin-Notebook')
+ADMIN_EPG = mo('fvTenant', {'name': 'Shop'}, mo('fvAp', {'name': 'Webshop'}, epg('Admin', 'BD-Web', ports=[(path(101, 'eth1/4'), 111)])))
+SOL34 = mo('fvTenant', {'name': 'Shop'},
+           filt('ssh', {'name': 'ssh', 'etherT': 'ip', 'prot': 'tcp', 'dFromPort': '22', 'dToPort': '22'}),
+           contract('admin-to-web', ['ssh', 'icmp']),
+           mo('fvAp', {'name': 'Webshop'},
+              mo('fvAEPg', {'name': 'Admin'}, mo('fvRsCons', {'tnVzBrCPName': 'admin-to-web'})),
+              mo('fvAEPg', {'name': 'Web'}, mo('fvRsProv', {'tnVzBrCPName': 'admin-to-web'}))))
+lab(id='34-two-epgs-same-bd', title='34 Zwei EPGs in derselben Bridge Domain', topic='Policy / Grundlagen', level='Einstieg',
+    duration='20 min', fabric='discovered', kind='requirements', modes=['guided', 'exam'],
+    prerequisites=['Lab 33'], tools=['Traffic-Test', 'Tenant Shop > Contracts', 'CLI: show zoning-rule'],
+    goals=['Bridging und Policy getrennt betrachten: gleiches Subnetz heißt nicht „erlaubt“',
+           'Eine gerichtete Freigabe für einen Admin-Zugang bauen', 'Die Wirkung zustandsloser ICMP-Regeln erkennen'],
+    intro='Im Tenant **Shop** gibt es neben der EPG **Web** die EPG **Admin**. Beide liegen in **derselben Bridge Domain BD-Web** und '
+          'im selben Subnetz 10.10.10.0/24. Das Admin-Notebook **adm1** (10.10.10.50, leaf101 eth1/4, VLAN 111) ist gelernt.\n\n'
+          'Teste adm1 → web1 per Ping. Welche Schritte sind grün, wo endet der Test?',
+    requirements=['adm1 erreicht web1 per **SSH (TCP 22)** und **Ping**.',
+                  'web1 baut keine SSH-Verbindung zu adm1 auf.',
+                  'Sonst ist zwischen Admin und Web nichts erlaubt.'],
+    limits=['ICMP wird nicht nach Type unterschieden (Echo Request/Reply). Eine ICMP-Regel in beide Richtungen erlaubt auch Pings '
+            'in der Gegenrichtung – das ist hier ausdrücklich erlaubt.'],
+    hints=['**Konzept:** Gleiche Bridge Domain und gleiches Subnetz bedeuten nur, dass Layer 2 funktioniert (ARP, Bridging). '
+           'Die EPG-Grenze ist trotzdem eine Policy-Grenze.',
+           '**Beteiligte Objekte:** Ein Filter für SSH, der vorhandene Filter **icmp** im Tenant common, ein Contract mit Subject und '
+           'die Rollen an den EPGs Admin und Web.',
+           '**Prüfschritt:** Im Traffic-Test adm1 → web1 sind *ARP* und *Layer-2-Forwarding* grün, *Policy Anfrage* rot. Wer baut auf, '
+           'wer bietet an? Danach web1 → adm1 TCP 22 testen.',
+           '**Lösung:** Filter ssh (tcp/22) → Contract admin-to-web mit den Filtern ssh und icmp → Admin konsumiert, Web stellt bereit.'],
+    cause='Zwischen den EPGs Admin und Web gibt es keinen Contract. Bridging ist in Ordnung, die Policy verwirft (POLICY_IMPLICIT_DENY).',
+    config=[SERVER_ACCESS, shop_tenant(), ADMIN_EPG], hosts=[WEB1, ADM1], tasks=[],
+    checks=[check('adm1 → web1 SSH', 'traffic', src='adm1', dst='web1', proto='tcp', port=22, expect=True),
+            check('adm1 → web1 Ping', 'traffic', src='adm1', dst='web1', proto='icmp', expect=True),
+            check('web1 → adm1 SSH durch die Policy blockiert', 'traffic', src='web1', dst='adm1', proto='tcp', port=22,
+                  expect=False, reason='POLICY_', category='security'),
+            check('Least Privilege Admin → Web: nur SSH und Ping', 'exposure', src='adm1', dst='web1', allow=['tcp/22', 'icmp'], category='security'),
+            check('Least Privilege Web → Admin: höchstens Ping', 'exposure', src='web1', dst='adm1', allow=['icmp'], category='security')],
+    questions=[{'id': 'q1', 'q': 'adm1 und web1 sind im selben Subnetz. Warum scheitert der Ping im Ausgangszustand?',
+                'options': ['ARP wird nicht beantwortet', 'Die EPGs Admin und Web brauchen einen Contract, auch in derselben BD',
+                            'Das Gateway fehlt', 'VLAN 111 ist nicht im Pool'],
+                'answer': 1, 'explain': 'Bridging (Layer 2) funktioniert, die Policy-Entscheidung kommt danach.'},
+               {'id': 'q2', 'q': 'Warum kann web1 nach der Lösung auch adm1 pingen?',
+                'options': ['Weil Web auch Consumer ist', 'Weil die ICMP-Regel in der Gegenrichtung (ohne Ports) genauso passt',
+                            'Weil ICMP in ACI nie gefiltert wird', 'Weil beide in derselben BD sind'],
+                'answer': 1, 'explain': 'Das Subject erlaubt Provider → Consumer für denselben Filter. ICMP hat keine Ports, also passt auch ein Echo Request.'}],
+    solution='`POST /api/mo/uni.json` mit `' + json.dumps(SOL34) + '`')
+
+# ----------------------------------------------------------------------------
+# Lab 35 - Falscher Port und falsche Richtung (Troubleshooting)
+# ----------------------------------------------------------------------------
+BROKEN35 = mo('fvTenant', {'name': 'Shop'},
+              filt('https', {'name': 'https', 'etherT': 'ip', 'prot': 'tcp', 'dFromPort': '8443', 'dToPort': '8443'}),
+              contract('web-to-app-https', ['https']),
+              mo('fvAp', {'name': 'Webshop'},
+                 mo('fvAEPg', {'name': 'Web'}, mo('fvRsProv', {'tnVzBrCPName': 'web-to-app-https'})),
+                 mo('fvAEPg', {'name': 'App'}, mo('fvRsCons', {'tnVzBrCPName': 'web-to-app-https'}))))
+lab(id='35-port-and-direction', title='35 Falscher Port, falsche Richtung', topic='Policy / Troubleshooting', level='Mittel',
+    duration='20 min', fabric='discovered', kind='troubleshooting', modes=['guided', 'exam'],
+    prerequisites=['Lab 32'], tools=['Traffic Inspector (Abschnitt Angewandte Policy)', 'CLI: show zoning-rule, show zoning-filter'],
+    goals=['Einen vorhandenen, aber falschen Contract analysieren statt einen neuen zu bauen',
+           'Zwei unabhängige Fehler in derselben Freigabe nacheinander finden'],
+    intro='Ein Kollege hat für die Anwendung auf **app1** (HTTPS, tcp/443) eine Freigabe von **web1** gebaut: den Contract '
+          '**web-to-app-https**. Trotzdem meldet das Ticket: „web1 erreicht app1 per HTTPS nicht.“',
+    requirements=['web1 erreicht app1 per HTTPS (TCP 443).',
+                  'Die vorhandene Freigabe wird repariert; es entsteht kein zusätzlicher Contract.',
+                  'Least Privilege: Web → App nur tcp/443, App baut keine Verbindungen zu Web auf.'],
+    limits=['Contracts sind zustandslos; die Antwort braucht die umgekehrte Regel des Subjects.'],
+    hints=['**Konzept:** Eine Freigabe kann an zwei Stellen falsch sein: *was* sie erlaubt (Filter) und *in welche Richtung* (Rollen).',
+           '**Ebene:** Policy. Der Traffic Inspector zeigt für web1 → app1 tcp/443 die Entscheidung der Anfrage. '
+           '`show zoning-rule` zeigt, welche EPG (pcTag) als Quelle eingetragen ist.',
+           '**Prüfschritte:** Welchen Ziel-Port hat der Filter im Contract? Welche EPG ist Consumer, welche Provider? Behebe einen '
+           'Fehler, teste erneut – der zweite bleibt sichtbar.',
+           '**Lösung:** Filter-Entry auf Ziel-Port 443 ändern. Rollen tauschen: Web konsumiert, App stellt bereit '
+           '(alte Beziehungen löschen).'],
+    cause='Zwei Fehler: Filter auf Port 8443 statt 443, und die Rollen sind vertauscht (Web Provider, App Consumer).',
+    config=[SERVER_ACCESS, shop_tenant(), BROKEN35], hosts=[WEB32, APP32], tasks=[],
+    checks=[check('web1 → app1 HTTPS (TCP 443) funktioniert', 'traffic', src='web1', dst='app1', proto='tcp', port=443, expect=True),
+            check('Die vorhandene Freigabe web-to-app-https ist im Einsatz', 'exists', dn='uni/tn-Shop/ap-Webshop/epg-Web/rscons-web-to-app-https'),
+            check('Kein zusätzlicher Contract (höchstens einer im Tenant)', 'class', cls='vzBrCP', under='uni/tn-Shop/', max=1, category='security'),
+            check('Least Privilege Web → App: nur tcp/443', 'exposure', src='web1', dst='app1', allow=['tcp/443'], category='security'),
+            check('Least Privilege App → Web: keine neuen Verbindungen', 'exposure', src='app1', dst='web1', allow=[], category='security'),
+            check('web1 → app1 SSH bleibt blockiert', 'traffic', src='web1', dst='app1', proto='tcp', port=22, expect=False,
+                  reason='POLICY_', category='security')],
+    questions=[{'id': 'q1', 'q': 'Warum funktionierte HTTPS auch nicht, nachdem nur der Port auf 443 korrigiert war?',
+                'options': ['Weil die Rollen vertauscht waren: Die Regel erlaubt Verbindungen von App zu Web', 'Weil der Dienst nicht lief',
+                            'Weil ein Neustart nötig ist', 'Weil der Filter EtherType unspecified brauchte'],
+                'answer': 0, 'explain': 'Der Consumer baut auf. Mit Web als Provider passt die Anfrage von web1 (Ziel-Port 443) nur auf die '
+                                        'umgekehrte Regel – und die verlangt Quell-Port 443.'}],
+    solution='Filter-Entry: `POST /api/mo/uni/tn-Shop/flt-https/e-https.json` mit `{"vzEntry":{"attributes":{"dFromPort":"443","dToPort":"443"}}}`. '
+             'Rollen: an der EPG Web `fvRsProv` löschen und `fvRsCons` anlegen, an der EPG App umgekehrt.')
+
+
+# ----------------------------------------------------------------------------
 # Maschinenlesbare Musterloesungen (fuer die Tests: [URL-DN, Body])
 # ----------------------------------------------------------------------------
 BGP_RR = ['uni/fabric/bgpInstP-default', mo('bgpInstPol', {}, mo('bgpAsP', {'asn': '65001'}),
@@ -1871,6 +2083,13 @@ SOLUTIONS = {
                          ['#ndo', {'op': 'template', 'template': TPL31B}], ['#ndo', {'op': 'deploy', 'name': 'HAM-Local'}]],
     '14-l2out-migration': [['uni', L2ACC14], ['uni', L2OUT14], ['uni/tn-Shop/BD-BD-Migration', mo('fvBD', {'arpFlood': 'yes'})]],
     '32-https-least-privilege': [['uni', SOL32]],
+    '33-same-epg': [['uni/tn-Shop/ap-Webshop/epg-Web', mo('fvAEPg', {}, mo('fvRsPathAtt', {'tDn': path(102, 'eth1/3'), 'encap': 'vlan-110'}))]],
+    '34-two-epgs-same-bd': [['uni', SOL34]],
+    '35-port-and-direction': [['uni/tn-Shop/flt-https/e-https', mo('vzEntry', {'dFromPort': '443', 'dToPort': '443'})],
+                              ['uni/tn-Shop/ap-Webshop/epg-Web', mo('fvAEPg', {}, mo('fvRsProv', {'tnVzBrCPName': 'web-to-app-https', 'status': 'deleted'}),
+                                                                   mo('fvRsCons', {'tnVzBrCPName': 'web-to-app-https'}))],
+                              ['uni/tn-Shop/ap-Webshop/epg-App', mo('fvAEPg', {}, mo('fvRsCons', {'tnVzBrCPName': 'web-to-app-https', 'status': 'deleted'}),
+                                                                   mo('fvRsProv', {'tnVzBrCPName': 'web-to-app-https'}))]],
 }
 
 

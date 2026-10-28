@@ -1,0 +1,609 @@
+{
+ "id": "35-port-and-direction",
+ "title": "35 Falscher Port, falsche Richtung",
+ "topic": "Policy / Troubleshooting",
+ "level": "Mittel",
+ "duration": "20 min",
+ "fabric": "discovered",
+ "kind": "troubleshooting",
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 32"
+ ],
+ "tools": [
+  "Traffic Inspector (Abschnitt Angewandte Policy)",
+  "CLI: show zoning-rule, show zoning-filter"
+ ],
+ "goals": [
+  "Einen vorhandenen, aber falschen Contract analysieren statt einen neuen zu bauen",
+  "Zwei unabhängige Fehler in derselben Freigabe nacheinander finden"
+ ],
+ "intro": "Ein Kollege hat für die Anwendung auf **app1** (HTTPS, tcp/443) eine Freigabe von **web1** gebaut: den Contract **web-to-app-https**. Trotzdem meldet das Ticket: „web1 erreicht app1 per HTTPS nicht.“",
+ "requirements": [
+  "web1 erreicht app1 per HTTPS (TCP 443).",
+  "Die vorhandene Freigabe wird repariert; es entsteht kein zusätzlicher Contract.",
+  "Least Privilege: Web → App nur tcp/443, App baut keine Verbindungen zu Web auf."
+ ],
+ "limits": [
+  "Contracts sind zustandslos; die Antwort braucht die umgekehrte Regel des Subjects."
+ ],
+ "hints": [
+  "**Konzept:** Eine Freigabe kann an zwei Stellen falsch sein: *was* sie erlaubt (Filter) und *in welche Richtung* (Rollen).",
+  "**Ebene:** Policy. Der Traffic Inspector zeigt für web1 → app1 tcp/443 die Entscheidung der Anfrage. `show zoning-rule` zeigt, welche EPG (pcTag) als Quelle eingetragen ist.",
+  "**Prüfschritte:** Welchen Ziel-Port hat der Filter im Contract? Welche EPG ist Consumer, welche Provider? Behebe einen Fehler, teste erneut – der zweite bleibt sichtbar.",
+  "**Lösung:** Filter-Entry auf Ziel-Port 443 ändern. Rollen tauschen: Web konsumiert, App stellt bereit (alte Beziehungen löschen)."
+ ],
+ "cause": "Zwei Fehler: Filter auf Port 8443 statt 443, und die Rollen sind vertauscht (Web Provider, App Consumer).",
+ "config": [
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "infraInfra": {
+       "attributes": {},
+       "children": [
+        {
+         "fvnsVlanInstP": {
+          "attributes": {
+           "name": "VLAN-Pool-Server",
+           "allocMode": "static"
+          },
+          "children": [
+           {
+            "fvnsEncapBlk": {
+             "attributes": {
+              "from": "vlan-100",
+              "to": "vlan-199"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAttEntityP": {
+          "attributes": {
+           "name": "AAEP-Server"
+          },
+          "children": [
+           {
+            "infraRsDomP": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraFuncP": {
+          "attributes": {},
+          "children": [
+           {
+            "infraAccPortGrp": {
+             "attributes": {
+              "name": "IPG-Server-Access"
+             },
+             "children": [
+              {
+               "infraRsAttEntP": {
+                "attributes": {
+                 "tDn": "uni/infra/attentp-AAEP-Server"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAccPortP": {
+          "attributes": {
+           "name": "IntProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraHPortS": {
+             "attributes": {
+              "name": "Server-Ports",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraPortBlk": {
+                "attributes": {
+                 "name": "block2",
+                 "fromPort": "1",
+                 "toPort": "10"
+                }
+               }
+              },
+              {
+               "infraRsAccBaseGrp": {
+                "attributes": {
+                 "tDn": "uni/infra/funcprof/accportgrp-IPG-Server-Access"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraNodeP": {
+          "attributes": {
+           "name": "SwProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraLeafS": {
+             "attributes": {
+              "name": "101-102",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraNodeBlk": {
+                "attributes": {
+                 "name": "blk",
+                 "from_": "101",
+                 "to_": "102"
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "infraRsAccPortP": {
+             "attributes": {
+              "tDn": "uni/infra/accportprof-IntProf-Leaf101-102"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "physDomP": {
+       "attributes": {
+        "name": "PhysDom-Server"
+       },
+       "children": [
+        {
+         "infraRsVlanNs": {
+          "attributes": {
+           "tDn": "uni/infra/vlanns-[VLAN-Pool-Server]-static"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Shop"
+    },
+    "children": [
+     {
+      "fvCtx": {
+       "attributes": {
+        "name": "Prod"
+       }
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Web"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.10.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-App"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.20.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Webshop"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Web"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Web"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/1]",
+              "encap": "vlan-110",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "App"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-App"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/2]",
+              "encap": "vlan-120",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Shop"
+    },
+    "children": [
+     {
+      "vzFilter": {
+       "attributes": {
+        "name": "https"
+       },
+       "children": [
+        {
+         "vzEntry": {
+          "attributes": {
+           "name": "https",
+           "etherT": "ip",
+           "prot": "tcp",
+           "dFromPort": "8443",
+           "dToPort": "8443"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzBrCP": {
+       "attributes": {
+        "name": "web-to-app-https",
+        "scope": "context"
+       },
+       "children": [
+        {
+         "vzSubj": {
+          "attributes": {
+           "name": "subj",
+           "revFltPorts": "yes"
+          },
+          "children": [
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "https"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Webshop"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Web"
+          },
+          "children": [
+           {
+            "fvRsProv": {
+             "attributes": {
+              "tnVzBrCPName": "web-to-app-https"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "App"
+          },
+          "children": [
+           {
+            "fvRsCons": {
+             "attributes": {
+              "tnVzBrCPName": "web-to-app-https"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "hosts": [
+  {
+   "name": "web1",
+   "mac": "00:50:56:10:10:11",
+   "ip": "10.10.10.11/24",
+   "gw": "10.10.10.1",
+   "vlan": 110,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/1"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Webserver",
+   "services": [
+    "tcp/22"
+   ]
+  },
+  {
+   "name": "app1",
+   "mac": "00:50:56:10:20:11",
+   "ip": "10.10.20.11/24",
+   "gw": "10.10.20.1",
+   "vlan": 120,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/2"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Applikationsserver",
+   "services": [
+    "tcp/22",
+    "tcp/443"
+   ]
+  }
+ ],
+ "tasks": [],
+ "checks": [
+  {
+   "desc": "web1 → app1 HTTPS (TCP 443) funktioniert",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "app1",
+   "proto": "tcp",
+   "port": 443,
+   "expect": true
+  },
+  {
+   "desc": "Die vorhandene Freigabe web-to-app-https ist im Einsatz",
+   "type": "exists",
+   "dn": "uni/tn-Shop/ap-Webshop/epg-Web/rscons-web-to-app-https"
+  },
+  {
+   "desc": "Kein zusätzlicher Contract (höchstens einer im Tenant)",
+   "type": "class",
+   "cls": "vzBrCP",
+   "under": "uni/tn-Shop/",
+   "max": 1,
+   "category": "security"
+  },
+  {
+   "desc": "Least Privilege Web → App: nur tcp/443",
+   "type": "exposure",
+   "src": "web1",
+   "dst": "app1",
+   "allow": [
+    "tcp/443"
+   ],
+   "category": "security"
+  },
+  {
+   "desc": "Least Privilege App → Web: keine neuen Verbindungen",
+   "type": "exposure",
+   "src": "app1",
+   "dst": "web1",
+   "allow": [],
+   "category": "security"
+  },
+  {
+   "desc": "web1 → app1 SSH bleibt blockiert",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "app1",
+   "proto": "tcp",
+   "port": 22,
+   "expect": false,
+   "reason": "POLICY_",
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Warum funktionierte HTTPS auch nicht, nachdem nur der Port auf 443 korrigiert war?",
+   "options": [
+    "Weil die Rollen vertauscht waren: Die Regel erlaubt Verbindungen von App zu Web",
+    "Weil der Dienst nicht lief",
+    "Weil ein Neustart nötig ist",
+    "Weil der Filter EtherType unspecified brauchte"
+   ],
+   "answer": 0,
+   "explain": "Der Consumer baut auf. Mit Web als Provider passt die Anfrage von web1 (Ziel-Port 443) nur auf die umgekehrte Regel – und die verlangt Quell-Port 443."
+  }
+ ],
+ "solution": "Filter-Entry: `POST /api/mo/uni/tn-Shop/flt-https/e-https.json` mit `{\"vzEntry\":{\"attributes\":{\"dFromPort\":\"443\",\"dToPort\":\"443\"}}}`. Rollen: an der EPG Web `fvRsProv` löschen und `fvRsCons` anlegen, an der EPG App umgekehrt.",
+ "routers": [],
+ "vcenters": [],
+ "devices": [],
+ "aaa": [],
+ "switches": [],
+ "solutionConfig": [
+  [
+   "uni/tn-Shop/flt-https/e-https",
+   {
+    "vzEntry": {
+     "attributes": {
+      "dFromPort": "443",
+      "dToPort": "443"
+     }
+    }
+   }
+  ],
+  [
+   "uni/tn-Shop/ap-Webshop/epg-Web",
+   {
+    "fvAEPg": {
+     "attributes": {},
+     "children": [
+      {
+       "fvRsProv": {
+        "attributes": {
+         "tnVzBrCPName": "web-to-app-https",
+         "status": "deleted"
+        }
+       }
+      },
+      {
+       "fvRsCons": {
+        "attributes": {
+         "tnVzBrCPName": "web-to-app-https"
+        }
+       }
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "uni/tn-Shop/ap-Webshop/epg-App",
+   {
+    "fvAEPg": {
+     "attributes": {},
+     "children": [
+      {
+       "fvRsCons": {
+        "attributes": {
+         "tnVzBrCPName": "web-to-app-https",
+         "status": "deleted"
+        }
+       }
+      },
+      {
+       "fvRsProv": {
+        "attributes": {
+         "tnVzBrCPName": "web-to-app-https"
+        }
+       }
+      }
+     ]
+    }
+   }
+  ]
+ ]
+}

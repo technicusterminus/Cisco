@@ -1,0 +1,470 @@
+{
+ "id": "33-same-epg",
+ "title": "33 Zwei Endpoints in derselben EPG",
+ "topic": "Policy / Grundlagen",
+ "level": "Einstieg",
+ "duration": "15 min",
+ "fabric": "discovered",
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 03"
+ ],
+ "tools": [
+  "Traffic-Test",
+  "Tab Operational und Faults der EPG",
+  "CLI: show endpoint"
+ ],
+ "goals": [
+  "Kommunikation innerhalb einer EPG von Kommunikation zwischen EPGs unterscheiden",
+  "Einen weiteren Endpoint an eine bestehende EPG binden"
+ ],
+ "intro": "Der Tenant **Shop** läuft (siehe Lab 03). Ein zweiter Webserver **web2** (10.10.10.12, Gateway 10.10.10.1) ist an **leaf102 eth1/3** angeschlossen und sendet mit **VLAN 110**, genau wie web1. Er soll zur EPG **Web** gehören. Im Moment erreicht ihn niemand.",
+ "requirements": [
+  "web2 wird in der EPG Web gelernt.",
+  "web1 und web2 erreichen sich gegenseitig auf allen Ports.",
+  "Dafür wird kein Contract angelegt.",
+  "web2 bekommt dadurch keinen Zugang zur EPG App."
+ ],
+ "limits": [
+  "Intra EPG Isolation ist in diesem Lab aus (Default)."
+ ],
+ "hints": [
+  "**Konzept:** Innerhalb einer EPG gilt ohne Isolation alles als erlaubt – die EPG ist die Sicherheitsgruppe. Das Problem liegt woanders: Ist web2 überhaupt in der EPG?",
+  "**Ebene:** Endpoint-Zuordnung. Ein Port und ein VLAN gehören erst dann zur EPG, wenn die EPG sie kennt.",
+  "**Prüfschritt:** Traffic-Test web1 → web2: Welcher Reason Code? Danach die Port-Bindungen der EPG Web ansehen – welche Ports sind dort eingetragen?",
+  "**Lösung:** An der EPG Web einen Static Port für leaf102 eth1/3 mit vlan-110 anlegen. Die Access Policies erlauben Port 3 und VLAN 110 bereits. Kein Contract nötig."
+ ],
+ "cause": "Die EPG Web hat nur den Static Port von web1. web2 wird keiner EPG zugeordnet (EP_NOT_LEARNED).",
+ "config": [
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "infraInfra": {
+       "attributes": {},
+       "children": [
+        {
+         "fvnsVlanInstP": {
+          "attributes": {
+           "name": "VLAN-Pool-Server",
+           "allocMode": "static"
+          },
+          "children": [
+           {
+            "fvnsEncapBlk": {
+             "attributes": {
+              "from": "vlan-100",
+              "to": "vlan-199"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAttEntityP": {
+          "attributes": {
+           "name": "AAEP-Server"
+          },
+          "children": [
+           {
+            "infraRsDomP": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraFuncP": {
+          "attributes": {},
+          "children": [
+           {
+            "infraAccPortGrp": {
+             "attributes": {
+              "name": "IPG-Server-Access"
+             },
+             "children": [
+              {
+               "infraRsAttEntP": {
+                "attributes": {
+                 "tDn": "uni/infra/attentp-AAEP-Server"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAccPortP": {
+          "attributes": {
+           "name": "IntProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraHPortS": {
+             "attributes": {
+              "name": "Server-Ports",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraPortBlk": {
+                "attributes": {
+                 "name": "block2",
+                 "fromPort": "1",
+                 "toPort": "10"
+                }
+               }
+              },
+              {
+               "infraRsAccBaseGrp": {
+                "attributes": {
+                 "tDn": "uni/infra/funcprof/accportgrp-IPG-Server-Access"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraNodeP": {
+          "attributes": {
+           "name": "SwProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraLeafS": {
+             "attributes": {
+              "name": "101-102",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraNodeBlk": {
+                "attributes": {
+                 "name": "blk",
+                 "from_": "101",
+                 "to_": "102"
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "infraRsAccPortP": {
+             "attributes": {
+              "tDn": "uni/infra/accportprof-IntProf-Leaf101-102"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "physDomP": {
+       "attributes": {
+        "name": "PhysDom-Server"
+       },
+       "children": [
+        {
+         "infraRsVlanNs": {
+          "attributes": {
+           "tDn": "uni/infra/vlanns-[VLAN-Pool-Server]-static"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Shop"
+    },
+    "children": [
+     {
+      "fvCtx": {
+       "attributes": {
+        "name": "Prod"
+       }
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Web"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.10.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-App"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.20.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Webshop"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Web"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Web"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/1]",
+              "encap": "vlan-110",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "App"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-App"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/2]",
+              "encap": "vlan-120",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "hosts": [
+  {
+   "name": "web1",
+   "mac": "00:50:56:10:10:11",
+   "ip": "10.10.10.11/24",
+   "gw": "10.10.10.1",
+   "vlan": 110,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/1"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Webserver"
+  },
+  {
+   "name": "web2",
+   "mac": "00:50:56:10:10:12",
+   "ip": "10.10.10.12/24",
+   "gw": "10.10.10.1",
+   "vlan": 110,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/3"
+    ]
+   ],
+   "bond": "none",
+   "descr": "zweiter Webserver"
+  },
+  {
+   "name": "app1",
+   "mac": "00:50:56:10:20:11",
+   "ip": "10.10.20.11/24",
+   "gw": "10.10.20.1",
+   "vlan": 120,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/2"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Applikationsserver"
+  }
+ ],
+ "tasks": [],
+ "checks": [
+  {
+   "desc": "web2 in EPG Web gelernt",
+   "type": "endpoint",
+   "host": "web2",
+   "epg": "uni/tn-Shop/ap-Webshop/epg-Web"
+  },
+  {
+   "desc": "web1 → web2 SSH (TCP 22)",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "web2",
+   "proto": "tcp",
+   "port": 22,
+   "expect": true
+  },
+  {
+   "desc": "web2 → web1 TCP 8443",
+   "type": "traffic",
+   "src": "web2",
+   "dst": "web1",
+   "proto": "tcp",
+   "port": 8443,
+   "expect": true
+  },
+  {
+   "desc": "Kein Contract im Tenant Shop",
+   "type": "class",
+   "cls": "vzBrCP",
+   "under": "uni/tn-Shop/",
+   "expect": false,
+   "category": "security"
+  },
+  {
+   "desc": "web2 → app1 durch die Policy blockiert",
+   "type": "traffic",
+   "src": "web2",
+   "dst": "app1",
+   "proto": "icmp",
+   "expect": false,
+   "reason": "POLICY_",
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Warum braucht es zwischen web1 und web2 keinen Contract?",
+   "options": [
+    "Weil beide in derselben Bridge Domain sind",
+    "Weil beide in derselben EPG sind (ohne Intra EPG Isolation)",
+    "Weil beide dasselbe VLAN benutzen",
+    "Weil beide am selben Leaf hängen"
+   ],
+   "answer": 1,
+   "explain": "Entscheidend ist die EPG, nicht BD, VLAN oder Leaf. Zwei EPGs in derselben BD brauchen sehr wohl einen Contract (Lab 34)."
+  }
+ ],
+ "solution": "`POST /api/mo/uni/tn-Shop/ap-Webshop/epg-Web.json` mit `{\"fvAEPg\": {\"attributes\": {}, \"children\": [{\"fvRsPathAtt\": {\"attributes\": {\"tDn\": \"topology/pod-1/paths-102/pathep-[eth1/3]\", \"encap\": \"vlan-110\"}}}]}}`",
+ "routers": [],
+ "vcenters": [],
+ "devices": [],
+ "aaa": [],
+ "switches": [],
+ "solutionConfig": [
+  [
+   "uni/tn-Shop/ap-Webshop/epg-Web",
+   {
+    "fvAEPg": {
+     "attributes": {},
+     "children": [
+      {
+       "fvRsPathAtt": {
+        "attributes": {
+         "tDn": "topology/pod-1/paths-102/pathep-[eth1/3]",
+         "encap": "vlan-110"
+        }
+       }
+      }
+     ]
+    }
+   }
+  ]
+ ]
+}
