@@ -295,7 +295,8 @@ class TestL3Out(Base):
 class TestRest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.S, cls.httpd = serve('127.0.0.1', 0, tempfile.mkdtemp(), 'secret')
+        cls.hub, cls.httpd = serve('127.0.0.1', 0, tempfile.mkdtemp(), 'secret')
+        cls.S = cls.hub.sim('standard')
         cls.port = cls.httpd.server_address[1]
         threading.Thread(target=cls.httpd.serve_forever, daemon=True).start()
 
@@ -654,7 +655,8 @@ class TestServiceGraph(Base):
 class TestSecurity(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.S, cls.httpd = serve('127.0.0.1', 0, tempfile.mkdtemp(), 'secret')
+        cls.hub, cls.httpd = serve('127.0.0.1', 0, tempfile.mkdtemp(), 'secret')
+        cls.S = cls.hub.sim('standard')
         cls.port = cls.httpd.server_address[1]
         threading.Thread(target=cls.httpd.serve_forever, daemon=True).start()
 
@@ -888,3 +890,91 @@ class TestScale(Base):
         self.assertEqual((res['passed'], res['total']), (2, 2), res)
         rep = coverage.report(self.st, 'uni/tn-T')
         self.assertGreater(rep['byLevel']['ausgewertet'], 10)
+
+
+class TestUsers(unittest.TestCase):
+    """Benutzerverwaltung: getrennte Welten, Rechte, Lab-Speicherstaende und Zuruecksetzen."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.hub, self.httpd = serve('127.0.0.1', 0, self.dir, 'admin', discovery=0)
+        self.port = self.httpd.server_address[1]
+        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+
+    def tearDown(self):
+        self.httpd.shutdown()
+
+    def req(self, method, path, body=None, cookie=None):
+        r = urllib.request.Request('http://127.0.0.1:%d%s' % (self.port, path), method=method,
+                                   data=json.dumps(body).encode() if body is not None else None)
+        if cookie:
+            r.add_header('Cookie', cookie)
+        try:
+            with urllib.request.urlopen(r) as resp:
+                return resp.status, json.loads(resp.read() or b'null'), resp.headers
+        except urllib.error.HTTPError as e:
+            return e.code, json.loads(e.read() or b'null'), e.headers
+
+    def login(self, name, pwd=''):
+        s, j, h = self.req('POST', '/dp/login', {'name': name, 'password': pwd})
+        if s != 200:
+            return None
+        dp = h['Set-Cookie'].split(';')[0]
+        s, j, h = self.req('POST', '/api/aaaLogin.json', {'aaaUser': {'attributes': {'name': 'admin', 'pwd': 'admin'}}}, dp)
+        return dp + '; APIC-cookie=' + j['imdata'][0]['aaaLogin']['attributes']['token']
+
+    def test_users_worlds_and_lab_saves(self):
+        s, j, _ = self.req('GET', '/dp/users')
+        self.assertEqual([(u['name'], u['role']) for u in j['users']], [('standard', 'verwalter')])
+        self.assertEqual(self.req('POST', '/dp/users', {'op': 'create', 'name': 'Anna', 'password': 'geheim1'})[0], 200)
+        self.assertEqual(self.req('POST', '/dp/users', {'op': 'create', 'name': 'anna'})[0], 400)
+        self.assertIsNone(self.login('Anna', 'falsch'))
+        anna, std = self.login('Anna', 'geheim1'), self.login('standard')
+        # Getrennte Welten
+        self.req('POST', '/sim/labs/op', {'op': 'resume', 'id': '03-tenant-epg'}, anna)
+        self.assertEqual(self.req('GET', '/sim/state', cookie=anna)[1]['lab']['id'], '03-tenant-epg')
+        self.assertIsNone(self.req('GET', '/sim/state', cookie=std)[1]['lab'])
+        self.req('POST', '/api/mo/uni.json', {'fvTenant': {'attributes': {'name': 'NurAnna'}}}, anna)
+        names = lambda ck: [x['fvTenant']['attributes']['name'] for x in self.req('GET', '/api/class/fvTenant.json', cookie=ck)[1]['imdata']]
+        self.assertIn('NurAnna', names(anna))
+        self.assertNotIn('NurAnna', names(std))
+        # Rechte: Anna ist kein Verwalter
+        self.assertEqual(self.req('POST', '/dp/users', {'op': 'delete', 'name': 'standard'}, anna)[0], 403)
+        self.assertEqual(self.req('POST', '/dp/users', {'op': 'delete', 'name': 'Tippfehler'}, std)[0], 404)
+        # Lab-Speicherstaende: speichern, Labwechsel sichert automatisch, fortsetzen, zuruecksetzen
+        self.req('POST', '/sim/saves', {'op': 'save', 'name': 'lab03-mitte'}, anna)
+        self.req('POST', '/sim/labs/op', {'op': 'resume', 'id': '04-contracts'}, anna)
+        labs = {l['id']: l for l in self.req('GET', '/sim/labs?full=1', cookie=anna)[1]['labs']}
+        self.assertEqual(sorted(x['name'] for x in labs['03-tenant-epg']['saves']), ['auto-03-tenant-epg', 'lab03-mitte'])
+        self.req('POST', '/sim/labs/op', {'op': 'resume', 'id': '03-tenant-epg'}, anna)
+        self.assertIn('NurAnna', names(anna))
+        self.req('POST', '/sim/labs/check', {}, anna)
+        labs = {l['id']: l for l in self.req('GET', '/sim/labs?full=1', cookie=anna)[1]['labs']}
+        self.assertEqual(labs['03-tenant-epg']['progress']['total'], 8)
+        self.assertFalse(labs['03-tenant-epg']['progress']['done'])
+        self.req('POST', '/sim/labs/op', {'op': 'reset', 'id': '03-tenant-epg'}, anna)
+        self.assertNotIn('NurAnna', names(anna))
+        labs = {l['id']: l for l in self.req('GET', '/sim/labs?full=1', cookie=anna)[1]['labs']}
+        self.assertEqual([x['name'] for x in labs['03-tenant-epg']['saves']], ['lab03-mitte'])
+        self.req('POST', '/sim/labs/op', {'op': 'purge', 'id': '03-tenant-epg', 'progress': True}, anna)
+        labs = {l['id']: l for l in self.req('GET', '/sim/labs?full=1', cookie=anna)[1]['labs']}
+        self.assertEqual((labs['03-tenant-epg']['saves'], labs['03-tenant-epg']['progress']), ([], None))
+        # Welt zuruecksetzen und Benutzer loeschen
+        self.assertEqual(self.req('POST', '/dp/users', {'op': 'reset'}, anna)[0], 200)
+        anna = self.login('Anna', 'geheim1')
+        self.assertIsNone(self.req('GET', '/sim/state', cookie=anna)[1]['lab'])
+        s, j, h = self.req('POST', '/dp/users', {'op': 'delete'}, anna)
+        self.assertIn('Max-Age=0', h['Set-Cookie'])
+        self.assertEqual([u['name'] for u in self.req('GET', '/dp/users')[1]['users']], ['standard'])
+        self.assertFalse(os.path.exists(os.path.join(self.dir, 'users', 'anna')))
+
+    def test_migration_of_old_state(self):
+        from dcprep.users import Hub
+        d = tempfile.mkdtemp()
+        with open(os.path.join(d, 'state.json'), 'w') as f:
+            f.write('{}')
+        os.makedirs(os.path.join(d, 'saves'))
+        hub = Hub(d)
+        self.assertEqual(list(hub.data['users']), ['standard'])
+        self.assertTrue(os.path.exists(os.path.join(d, 'users', 'standard', 'state.json')))
+        self.assertFalse(os.path.exists(os.path.join(d, 'state.json')))

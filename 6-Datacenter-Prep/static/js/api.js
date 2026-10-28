@@ -29,6 +29,7 @@ const API = {
       throw new ApiError('net', 'Keine Verbindung zum Simulator (' + e.message + ')');
     }
     if (!quiet) this.record({ ts: new Date(), method, url, body, status: r.status, resp: j, ms: Math.round(performance.now() - t0) });
+    if (r.status === 401 && j && j.imdata && j.imdata[0] && j.imdata[0].error && j.imdata[0].error.attributes.code === 'DCP-NOUSER' && typeof Launcher !== 'undefined') Launcher.show('Bitte anmelden.');
     if (r.status === 403 && this.onAuthLost && !url.includes('aaaLogin')) this.onAuthLost();
     if (!r.ok) {
       const e = j && j.imdata && j.imdata[0] && j.imdata[0].error;
