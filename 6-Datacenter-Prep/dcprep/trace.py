@@ -4,23 +4,100 @@ import ipaddress
 from .engine import ip_of, net_of, EPHEMERAL
 
 
+# Reason Codes sind simulator-spezifisch (keine Cisco-Codes). Je Code: Diagnose-Ebene und naechster Pruefschritt.
+REASONS = {
+    'ALLOWED': ('ok', 'Anfrage und Antwort kommen an.'),
+    'INPUT_INVALID': ('input', 'Quelle und Ziel als simulierten Host, Router oder IP-Adresse angeben.'),
+    'INPUT_PORT_MISSING': ('input', 'Fuer TCP/UDP einen Ziel-Port angeben.'),
+    'EP_NOT_LEARNED': ('endpoint', 'Access-Kette pruefen: Port, VLAN im Pool, Domain an EPG und AAEP, Static Path mit passender Encap '
+                       '(Endpoint Explorer, Faults F0467).'),
+    'L2_LOOP': ('l2', 'Schleife beseitigen: MCP und Endpoint Loop Protection pruefen.'),
+    'L2_DIFFERENT_BD': ('l2', 'Gleiches Subnetz in verschiedenen BDs: Adressplan oder BD-Zuordnung der EPGs pruefen.'),
+    'ARP_UNRESOLVED': ('l2', 'ARP Flooding oder Unicast Routing mit BD-Subnetz pruefen.'),
+    'GATEWAY': ('l3', 'BD-Subnetz (Gateway-IP), Unicast Routing und Default Gateway des Hosts pruefen.'),
+    'IP_NOT_LEARNED': ('l3', 'Liegt die Host-IP in einem BD-Subnetz? Ist Unicast Routing an?'),
+    'ROUTE_LEAK_MISSING': ('l3', 'Shared Services: Contract-Scope, Provider-Subnetz an der EPG und Consumer-Subnetz "Shared between VRFs".'),
+    'NO_ROUTE': ('l3', 'Ziel-Subnetz im BD bzw. Route ueber den L3Out pruefen (show ip route vrf ...).'),
+    'FABRIC_PATH_DOWN': ('fabric', 'Spine-Zustand, Uplinks bzw. IPN/WAN pruefen (Fabric > Inventory).'),
+    'POLICY_IMPLICIT_DENY': ('policy', 'Contract zwischen den EPGs anlegen: Consumer an der Quelle, Provider am Ziel, Filter fuer genau '
+                             'diesen Dienst (show zoning-rule).'),
+    'POLICY_DENY_FILTER': ('policy', 'Ein Deny-Filter im Contract trifft den Verkehr - Subject und Filter-Aktion pruefen.'),
+    'POLICY_TABOO': ('policy', 'Ein Taboo Contract an der Ziel-EPG sperrt den Verkehr.'),
+    'POLICY_INTRA_EPG_ISOLATION': ('policy', 'Intra-EPG-Isolation an der EPG ist aktiv.'),
+    'POLICY_ESG_EPG': ('policy', 'ESG und EPG koennen keinen Contract miteinander haben.'),
+    'POLICY_REPLY_DENY': ('policy', 'Die Antwort passt auf keine Regel: Reverse Filter Ports am Subject pruefen.'),
+    'POLICY_UNSUPPORTED': ('policy', 'Die Konfiguration nutzt ein Feature, das der Simulator nicht auswertet (siehe Referenzprofil).'),
+    'SERVICE_GRAPH': ('service-graph', 'Service Graph, PBR Policy und Firewall-Regelwerk pruefen.'),
+    'SERVICE_UNAVAILABLE': ('service', 'Das Netz laesst den Verkehr durch, aber am Ziel laeuft kein Dienst auf diesem Port.'),
+    'EXT_CLASSIFICATION': ('external', 'External EPG mit passendem Subnetz ("External Subnets for the External EPG") anlegen.'),
+    'EXT_ROUTER': ('external', 'Externer Router: kennt er das Ziel-Netz?'),
+    'EXT_NO_RETURN_ROUTE': ('external', 'Rueckweg: BD-Subnetz "Advertised Externally", BD mit L3Out verknuepfen, Route am Router pruefen.'),
+    'REMOTE_SITE': ('fabric', 'Multi-Site/Remote-Pfad pruefen (ISN, Stretch, Contracts).'),
+    'OTHER': ('other', 'Den ersten fehlgeschlagenen Schritt im Detail ansehen.'),
+}
+UNRESOLVED = {'INPUT_INVALID', 'INPUT_PORT_MISSING', 'POLICY_UNSUPPORTED'}
+POLICY_CODES = {'implicit-deny': 'POLICY_IMPLICIT_DENY', 'contract-deny': 'POLICY_DENY_FILTER', 'taboo': 'POLICY_TABOO',
+                'intra-epg-isolation': 'POLICY_INTRA_EPG_ISOLATION', 'esg-epg': 'POLICY_ESG_EPG', 'unsupported': 'POLICY_UNSUPPORTED'}
+_PREFIX = [('Layer 2', 'L2_DIFFERENT_BD'), ('ARP', 'ARP_UNRESOLVED'), ('Gateway', 'GATEWAY'), ('IP-Learning', 'IP_NOT_LEARNED'),
+           ('Route Leaking', 'ROUTE_LEAK_MISSING'), ('Routing', 'NO_ROUTE'), ('Route auf', 'NO_ROUTE'), ('Fabric', 'FABRIC_PATH_DOWN'),
+           ('Multi-Pod', 'FABRIC_PATH_DOWN'), ('Remote Leaf', 'FABRIC_PATH_DOWN'), ('Service Graph', 'SERVICE_GRAPH'),
+           ('PBR', 'SERVICE_GRAPH'), ('Firewall', 'SERVICE_GRAPH'), ('Rueckweg per PBR', 'SERVICE_GRAPH'),
+           ('Klassifizierung', 'EXT_CLASSIFICATION'), ('Externer Router', 'EXT_ROUTER'), ('Rueckweg', 'EXT_NO_RETURN_ROUTE'),
+           ('Ziel', 'EXT_ROUTER')]
+
+
+def infer_code(title):
+    for pre, code in _PREFIX:
+        if title.startswith(pre):
+            return code
+    return 'OTHER'
+
+
 class Trace:
     def __init__(self):
         self.steps = []
         self.ok = True
         self.woken = []
+        self.refs = []
+        self.policy = []
 
-    def step(self, ok, title, detail=''):
-        self.steps.append({'ok': ok, 'title': title, 'detail': detail})
+    def ref(self, *dns):
+        for dn in dns:
+            if dn and dn not in self.refs:
+                self.refs.append(dn)
+
+    def step(self, ok, title, detail='', code=None, refs=()):
+        st = {'ok': ok, 'title': title, 'detail': detail}
+        if ok is False:
+            st['code'] = code or infer_code(title)
+        if refs:
+            st['refs'] = [r for r in refs if r]
+            self.ref(*refs)
+        self.steps.append(st)
         if ok is False:
             self.ok = False
         return ok is not False
 
     def result(self, summary=None):
+        bad = next(((i, s) for i, s in enumerate(self.steps) if s['ok'] is False), None)
+        code = bad[1]['code'] if bad else 'ALLOWED'
+        verdict = 'UNRESOLVED' if code in UNRESOLVED else ('ALLOW' if self.ok else 'DROP')
+        layer, hint = REASONS.get(code, REASONS['OTHER'])
         if summary is None:
-            summary = 'Erfolgreich: Anfrage und Antwort kommen an.' if self.ok else \
-                'Fehlgeschlagen: siehe ersten roten Schritt.'
-        return {'ok': self.ok, 'summary': summary, 'steps': self.steps, 'woken': self.woken if self.ok else []}
+            summary = {'ALLOW': 'Erfolgreich: Anfrage und Antwort kommen an.',
+                       'DROP': 'Blockiert bei "%s".' % (bad[1]['title'] if bad else ''),
+                       'UNRESOLVED': 'Nicht bewertbar: %s' % (bad[1]['detail'] if bad else '')}[verdict]
+        return {'ok': self.ok and verdict == 'ALLOW', 'verdict': verdict, 'reason': code, 'summary': summary,
+                'explanation': (bad[1]['title'] + (': ' + bad[1]['detail'] if bad[1]['detail'] else '')) if bad else summary,
+                'failedAt': {'step': bad[0] + 1, 'title': bad[1]['title'], 'layer': layer} if bad else None,
+                'hint': hint if bad else None, 'policy': self.policy, 'refs': self.refs,
+                'steps': self.steps, 'woken': self.woken if self.ok else []}
+
+
+def unresolved(code, text):
+    t = Trace()
+    t.step(False, 'Eingabe', text, code=code)
+    return t.result(text)
 
 
 def _hosts(eng, sim):
@@ -94,10 +171,10 @@ def _host_checks(eng, t, ep, role):
         hs = dict(hs, learned=True, silent_dst=role != 'Quelle')
     if not hs or not hs['learned']:
         reasons = (hs or {}).get('reasons') or ['Host ist mit keinem aktiven Leaf verbunden']
-        t.step(False, '%s %s: Endpoint nicht gelernt' % (role, h['name']), '; '.join(reasons))
+        t.step(False, '%s %s: Endpoint nicht gelernt' % (role, h['name']), '; '.join(reasons), code='EP_NOT_LEARNED')
         return None
     if hs.get('storm'):
-        t.step(False, '%s %s: Layer-2-Schleife im BD %s' % (role, h['name'], eng.short(hs['bd'])), hs['storm'])
+        t.step(False, '%s %s: Layer-2-Schleife im BD %s' % (role, h['name'], eng.short(hs['bd'])), hs['storm'], code='L2_LOOP')
         return None
     c = eng.cls[hs.get('esg') or hs['epg']]
     if hs.get('esg') or hs.get('base'):
@@ -110,7 +187,8 @@ def _host_checks(eng, t, ep, role):
         return hs, c
     t.step(True, '%s %s gelernt in EPG %s' % (role, h['name'], eng.short(hs['epg'])),
            'MAC %s, %s, %s, BD %s, VRF %s' % (h['mac'].upper(), hs['encap'], eng.path_label(hs['path']),
-                                              eng.short(hs['bd']), eng.short(hs['vrf'])))
+                                              eng.short(hs['bd']), eng.short(hs['vrf'])),
+           refs=(hs.get('esg') or hs['epg'], hs['bd'], hs['vrf']))
     return hs, c
 
 
@@ -205,9 +283,40 @@ def _gw_ok(eng, t, h, hs, who):
     return True
 
 
-def _policy(eng, t, s, d, proto, port, label_s, label_d):
+def _decision(eng, t, phase):
+    d = dict(getattr(eng, 'last_decision', None) or {})
+    d['phase'] = phase
+    t.policy.append(d)
+    refs = [d.get(k) for k in ('contract', 'subject', 'filter', 'entry', 'taboo', 'epg', 'vrf')]
+    return d, refs
+
+
+def _service_available(t, host, proto, port, label):
+    """Hoert am Ziel ein Dienst? Hosts ohne Dienstliste gelten als 'alle Ports offen' (dokumentierte Vereinfachung)."""
+    if host is None:
+        return True
+    if proto == 'icmp':
+        if host.get('icmp', True):
+            return True
+        t.step(False, 'Zieldienst auf %s' % label, 'Der Host beantwortet kein ICMP (Echo Reply abgeschaltet)', code='SERVICE_UNAVAILABLE')
+        return False
+    svc = host.get('services')
+    if svc is None:
+        t.step(None, 'Zieldienst auf %s nicht modelliert' % label, 'Host ohne Dienstliste: Der Simulator nimmt an, dass %s/%d offen ist'
+               % (proto, port))
+        return True
+    if '%s/%d' % (proto, port) in [x.strip().lower() for x in svc]:
+        t.step(True, 'Zieldienst %s/%d auf %s erreichbar' % (proto, port, label))
+        return True
+    t.step(False, 'Zieldienst auf %s' % label, 'Die Fabric laesst %s/%d durch, aber auf %s laeuft dort kein Dienst (offen: %s)'
+           % (proto, port, label, ', '.join(svc) or 'keiner'), code='SERVICE_UNAVAILABLE')
+    return False
+
+
+def _policy(eng, t, s, d, proto, port, label_s, label_d, dst_host=None):
     dport = port if proto in ('tcp', 'udp') else None
     act, why = eng.packet(s, d, proto, EPHEMERAL if dport else None, dport, 'syn')
+    dec, refs = _decision(eng, t, 'Anfrage')
     if act == 'permit':
         eng.count(s['dn'], 'txPkts')
         eng.count(d['dn'], 'rxPkts')
@@ -215,17 +324,22 @@ def _policy(eng, t, s, d, proto, port, label_s, label_d):
         eng.count(s['dn'], 'txPkts')
         eng.count(d['dn'], 'dropPkts')
     t.step(act == 'permit', 'Policy Anfrage %s -> %s (%s%s)' % (label_s, label_d, proto,
-                                                            '/%d' % port if dport else ''), why)
+                                                            '/%d' % port if dport else ''), why,
+           code=POLICY_CODES.get(dec.get('kind'), 'POLICY_IMPLICIT_DENY'), refs=refs)
     if act != 'permit':
         return False
     hit = getattr(eng, 'last_hit', None)
     g = getattr(eng, 'graphs', {}).get(hit[0]) if hit else None
     if g is not None and not _service(eng, t, g, hit[1], proto, port):
         return False
+    if not _service_available(t, dst_host, proto, port, label_d):
+        return False
     act, why = eng.packet(d, s, proto, dport, EPHEMERAL if dport else None, 'ack')
+    dec, refs = _decision(eng, t, 'Antwort')
     eng.count(d['dn'], 'txPkts')
     eng.count(s['dn'], 'rxPkts' if act == 'permit' else 'dropPkts')
-    t.step(act == 'permit', 'Policy Antwort %s -> %s' % (label_d, label_s), why)
+    t.step(act == 'permit', 'Policy Antwort %s -> %s' % (label_d, label_s), why,
+           code='POLICY_UNSUPPORTED' if dec.get('kind') == 'unsupported' else 'POLICY_REPLY_DENY', refs=refs)
     return act == 'permit'
 
 
@@ -336,7 +450,7 @@ def run(eng, sim, src, dst, proto='icmp', port=0):
     proto = proto if proto in ('icmp', 'tcp', 'udp') else 'icmp'
     port = int(port or 0)
     if proto in ('tcp', 'udp') and not port:
-        return {'ok': False, 'summary': 'Fuer TCP/UDP bitte einen Ziel-Port angeben.', 'steps': []}
+        return unresolved('INPUT_PORT_MISSING', 'Fuer TCP/UDP bitte einen Ziel-Port angeben.')
     S = _resolve(eng, sim, src)
     D = _resolve(eng, sim, dst)
     if S is not None and S['kind'] == 'ext':
@@ -345,9 +459,9 @@ def run(eng, sim, src, dst, proto='icmp', port=0):
         if r_:
             S = {'kind': 'router', 'r': r_, 'ip': S['ip']}
     if S is None or S['kind'] not in ('host', 'router'):
-        return {'ok': False, 'summary': 'Quelle muss ein simulierter Host oder externer Router sein.', 'steps': []}
+        return unresolved('INPUT_INVALID', 'Quelle muss ein simulierter Host oder externer Router sein.')
     if D is None:
-        return {'ok': False, 'summary': 'Ziel unbekannt: Hostname, Routername oder IP-Adresse angeben.', 'steps': []}
+        return unresolved('INPUT_INVALID', 'Ziel unbekannt: Hostname, Routername oder IP-Adresse angeben.')
 
     if S['kind'] == 'router':
         return _from_router(eng, sim, t, S, D, proto, port)
@@ -414,7 +528,7 @@ def run(eng, sim, src, dst, proto='icmp', port=0):
                                                               '/'.join(eng.nodes[n]['name'] for n in dhs['nodes'])))
             if not _gw_ok(eng, t, dh, dhs, 'Ziel (fuer die Antwort)'):
                 return t.result()
-        if not _policy(eng, t, sc, dc, proto, port, sh['name'], dh['name']):
+        if not _policy(eng, t, sc, dc, proto, port, sh['name'], dh['name'], dst_host=dh):
             return t.result()
         return t.result()
 

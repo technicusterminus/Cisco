@@ -1,6 +1,6 @@
 # Datacenter Prep
 
-Eine Trainingsumgebung für Cisco ACI mit simuliertem APIC, der wie ein echter APIC reagiert. Die Oberfläche hat dieselbe Struktur wie die APIC-GUI (Menüs, Untermenüs, Navigationsbaum, Tabs, Rechtsklick-Menüs und Wizards), die REST-API spricht das APIC-Format, und eine Policy-Engine rechnet nach jeder Änderung aus, was in der Fabric passiert: Discovery, Deployment auf den Leafs, gelernte Endpoints, OSPF- und BGP-Nachbarschaften, Routen, Zoning-Rules und Faults.
+Eine Trainingsumgebung für Cisco ACI mit simuliertem APIC. Er ist kein echter APIC und keine Nexus-Emulation, sondern ein didaktischer Simulator: Was er fachlich umsetzt, was er vereinfacht und was fehlt, steht im [Referenzprofil](docs/REFERENZPROFIL.md). Die Oberfläche hat dieselbe Struktur wie die APIC-GUI (Menüs, Untermenüs, Navigationsbaum, Tabs, Rechtsklick-Menüs und Wizards), die REST-API spricht das APIC-Format, und eine Policy-Engine rechnet nach jeder Änderung aus, was in der Fabric passiert: Discovery, Deployment auf den Leafs, gelernte Endpoints, OSPF- und BGP-Nachbarschaften, Routen, Zoning-Rules und Faults.
 
 Er läuft ohne Installation mit Python 3.8 oder neuer, ohne zusätzliche Pakete, offline im Browser.
 
@@ -34,11 +34,26 @@ Mit Docker: `docker build -t dcprep .` und `docker run -d -p 8080:8080 -v dcprep
 
 Beim ersten Start ist die Fabric fertig registriert und leer konfiguriert. Unter *Simulation > Einstellungen* lässt sie sich zurücksetzen: auf „Fabric leer“ zum Üben der Discovery oder auf den **Werkszustand (Day 0)**. Dann startet der APIC mit dem Setup-Dialog an der Konsole (Fabric-Name, Controller-Anzahl, Pod-ID, TEP-Pool, Infra-VLAN, GIPo, OOB, Admin-Passwort), und GUI und REST-API sind erst danach erreichbar. Dasselbe erreichst du in der APIC-CLI mit `acidiag touch clean` und `acidiag reboot`. Lab 00 führt durch diesen Ablauf.
 
+## Dokumentation
+
+| Dokument | Inhalt |
+|---|---|
+| [Referenzprofil](docs/REFERENZPROFIL.md) | Dokumentationsbasis (APIC 6.0), Status jeder Funktion, Defaultwerte, Determinismus |
+| [Regelbasis](docs/REGELBASIS.md) | Regeln der Connectivity-Engine mit Quelle und Test, Diagnosemodell, Reason Codes |
+| [Architektur](docs/ARCHITEKTUR.md) | Schichten, gemeinsamer Zustand, Persistenz, Sicherheit |
+| [Labs schreiben](docs/LAB-AUTHORING.md) | Lab-Format, Prüftypen, Kategorien, Hinweise |
+| [Backlog](docs/BACKLOG.md) | Gap-Analyse, Lab-Katalog mit Stand, priorisierte nächste Schritte |
+| [Entwicklung](ENTWICKLUNG.md) | Konventionen und Prüfkommandos |
+
+## Traffic Inspector
+
+*Operations > Visibility & Troubleshooting* prüft einen Fluss (Quelle, Ziel, ICMP/TCP/UDP, Port) Schritt für Schritt: Endpoint gelernt, Bridging oder Routing, Gateway, Fabric-Pfad, Policy für die Anfrage, Zieldienst, Policy für die Antwort, bei externen Zielen Klassifizierung und Rückweg. Das Ergebnis ist **ALLOW**, **DROP** oder **UNRESOLVED** (nicht bewertbar, z. B. bei einer Funktion, die der Simulator nicht auswertet), mit Reason Code, Fehlerort, angewendeter Regel (Contract, Subject, Filter, Entry, Richtung) und nächstem Prüfschritt. Dieselbe Auswertung nutzen Testmatrix und Lab-Bewertung.
+
 ## Was simuliert wird
 
 **Fabric:** 1 APIC, 2 Spines (N9K-C9332C), 4 Leafs (N9K-C93180YC-FX). Uplinks eth1/49 und eth1/50, der APIC hängt an leaf101 und leaf102 auf eth1/48.
 
-| Bereich | Verhalten wie beim APIC |
+| Bereich | Was ausgewertet wird |
 |---|---|
 | Fabric Discovery | Switches erscheinen per LLDP der Reihe nach unter *Nodes Pending Registration* (erst die Leafs am APIC, dann die Spines, dann die übrigen Leafs). Nach der Registrierung sind sie erst *discovering*, dann *active*. |
 | Access Policies | Die Kette VLAN Pool → Domain → AAEP → Policy Group → Interface Profile → Switch Profile wird pro Port aufgelöst, inklusive Static/Dynamic Allocation, PC und vPC mit Explicit Protection Group. |
@@ -167,12 +182,15 @@ Unter *Simulation > Labs* laden. Jedes Lab setzt die Konfiguration auf einen Sta
 | 29 | Multi-Pod mit Inter-Pod Network | 50 min |
 | 30 | Remote Leaf in der Filiale | 40 min |
 | 31 | Multi-Site mit dem Nexus Dashboard Orchestrator | 45 min |
+| 32 | Least Privilege: HTTPS von WEB zu APP (Funktion und Sicherheit getrennt bewertet) | 25 min |
 
 Die Lab-Dateien entstehen aus `Labs-Quelle/build_labs.py` (`python3 Labs-Quelle/build_labs.py`). Die Tests prüfen für jedes Lab, dass es ohne Lösung nicht bestanden und mit Musterlösung vollständig bestanden ist.
 
+Die Prüfungen bewerten den Endzustand, nicht die Klickfolge. Lab 32 zeigt das neue Format: Prüfungen nach **Funktion** und **Sicherheit** getrennt, Negativtests (anderer Port, ICMP, Gegenrichtung, laterale EPG) und eine Least-Privilege-Prüfung, an der ein Permit-any-Contract scheitert. Dazu vier gestufte Hinweise (Konzept, Objekte, Prüfschritt, Lösung) und ein **Prüfungsmodus** ohne Hinweise und Musterlösung. Ältere Labs bekommen das schrittweise (siehe [Backlog](docs/BACKLOG.md)).
+
 ## REST-API und Automatisierung
 
-Die API entspricht dem APIC:
+Die API folgt im dokumentierten Teilumfang dem APIC-Format. Vollständige Kompatibilität wird nicht behauptet:
 
 - `POST /api/aaaLogin.json`, `aaaRefresh.json`, `aaaLogout.json`, Cookie `APIC-cookie`
 - `GET /api/mo/<dn>.json` und `/api/class/<klasse>.json`, auch mit `/api/node/...` und Klassen unter einem DN (`/api/node/class/topology/pod-1/node-101/l1PhysIf.json`)
@@ -268,7 +286,8 @@ Nicht simuliert: VMM für Kubernetes, Microsoft und OpenStack, vPC über Pods hi
 | `dcprep/coverage.py` | Abdeckungsbericht |
 | `dcprep/ops.py` | Betriebsthemen: Firmware-Upgrade, MCP und Schleifen, DHCP Relay, Monitoring, Config Export/Import |
 | `dcprep/engine.py` | Policy-Engine: Discovery, Access Policies, Deployment, Endpoints, L3Out, Contracts, Faults |
-| `dcprep/trace.py` | Traffic-Test |
+| `dcprep/trace.py` | Traffic-Test: Verdikt, Reason Codes, angewendete Policy |
+| `dcprep/assess.py` | Lab-Bewertung: Kategorien, Least Privilege, Hinweise, Prüfungsmodus |
 | `dcprep/cli.py` | CLI-Emulation |
 | `start.py`, `start.bat` | Startdatei (Windows: Doppelklick auf `start.bat`) |
 | `dcprep/users.py` | Benutzer, Sitzungen, getrennte Übungswelten |
@@ -276,7 +295,8 @@ Nicht simuliert: VMM für Kubernetes, Microsoft und OpenStack, vPC über Pods hi
 | `static/` | Weboberfläche (ohne Build-Schritt): `app.js` Navigation und Tabs, `specs.js` Formulare, Wizards und Baumstruktur je Klasse, `forms.js` Steuerelemente und Wizard, `views*.js` Spezialseiten, `visore.html` |
 | `labs/`, `Labs-Quelle/` | Lab-Dateien und ihr Generator |
 | `beispiele/` | Ansible, curl, Python, Terraform |
-| `tests/` | `python3 -m unittest discover -s tests` |
+| `tests/` | `python3 -m unittest discover -s tests`; Browser-E2E: `python3 tests/e2e_browser.py` |
+| `docs/` | Referenzprofil, Regelbasis, Architektur, Lab-Authoring, Backlog |
 
 > Kein offizielles Cisco-Material. Cisco, ACI, APIC und Nexus sind Marken von Cisco Systems, Inc.
 

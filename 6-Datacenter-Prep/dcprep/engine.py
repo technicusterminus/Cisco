@@ -2221,13 +2221,24 @@ class Engine(OpsMixin, PodMixin, SiteMixin):
             return False
         return True
 
+    def _decide(self, action, kind, why, **refs):
+        """Merkt sich die letzte Policy-Entscheidung strukturiert (fuer Traffic Inspector und Lab-Bewertung)."""
+        self.last_decision = dict(refs, action=action, kind=kind, text=why)
+        return action, why
+
     def packet(self, s, d, proto, sport, dport, flags):
-        """Entscheidet ein einzelnes Paket von Klasse s nach Klasse d."""
+        """Entscheidet ein einzelnes Paket von Klasse s nach Klasse d.
+
+        Rueckgabe wie bisher (Aktion, Begruendung); die strukturierte Entscheidung steht danach in
+        self.last_decision (kind, contract, subject, filter, entry, direction).
+        """
         self.last_hit = None
+        self.last_decision = None
         vrf = s['vrf']
         va = self.A(vrf) or {}
         if va.get('pcEnfPref') == 'unenforced':
-            return 'permit', 'VRF %s steht auf "unenforced" - keine Policy-Pruefung' % self.short(vrf)
+            return self._decide('permit', 'unenforced-vrf', 'VRF %s steht auf "unenforced" - keine Policy-Pruefung' % self.short(vrf),
+                                vrf=vrf)
         for tb in self._rs_targets(d['dn'], 'fvRsProtBy'):
             for ts in self.kids(tb, 'vzTSubj'):
                 for rd in self.kids(ts, 'vzRsDenyRule'):
@@ -2236,19 +2247,20 @@ class Engine(OpsMixin, PodMixin, SiteMixin):
                         continue
                     for e in self.kids(rda['tDn'], 'vzEntry'):
                         if self._entry_match(self.A(e), proto, sport, dport, flags, False):
-                            return 'deny', 'Taboo Contract %s (Filter %s) schuetzt %s' % (
-                                self.short(tb), self.A(rda['tDn'])['name'], self.short(d['dn']))
+                            return self._decide('deny', 'taboo', 'Taboo Contract %s (Filter %s) schuetzt %s' % (
+                                self.short(tb), self.A(rda['tDn'])['name'], self.short(d['dn'])), taboo=tb, filter=rda['tDn'], entry=e)
         if (s['kind'] == 'esg') != (d['kind'] == 'esg') and 'epg' in (s['kind'], d['kind']):
-            return 'deny', 'Contracts zwischen einer ESG und einer EPG werden nicht unterstuetzt - beide Seiten muessen ESGs sein ' \
-                           '(oder ein External EPG)'
+            return self._decide('deny', 'esg-epg', 'Contracts zwischen einer ESG und einer EPG werden nicht unterstuetzt - beide '
+                                'Seiten muessen ESGs sein (oder ein External EPG)')
         if s['dn'] == d['dn']:
             if s.get('isolation'):
-                return 'deny', 'Intra-EPG-Isolation ist aktiv'
-            return 'permit', 'Quelle und Ziel in derselben EPG - kein Contract noetig'
+                return self._decide('deny', 'intra-epg-isolation', 'Intra-EPG-Isolation ist aktiv', epg=s['dn'])
+            return self._decide('permit', 'same-epg', 'Quelle und Ziel in derselben EPG - kein Contract noetig', epg=s['dn'])
         anya = self.A(vrf + '/any') or {}
         if anya.get('prefGrMemb') == 'enabled' and s['pref'] and d['pref']:
-            return 'permit', 'Beide sind Mitglied der Preferred Group'
+            return self._decide('permit', 'preferred-group', 'Beide sind Mitglied der Preferred Group', vrf=vrf)
         hits = []
+        unsupported = []
         for brc, rel in self.contracts.items():
             s_cons = s['dn'] in rel['cons'] or vrf in rel['cons_any']
             s_prov = s['dn'] in rel['prov'] or vrf in rel['prov_any']
@@ -2266,6 +2278,10 @@ class Engine(OpsMixin, PodMixin, SiteMixin):
                 continue
             for subj in self.kids(brc, 'vzSubj'):
                 sa = self.A(subj)
+                if self.kids(subj, 'vzInTerm') or self.kids(subj, 'vzOutTerm'):
+                    # "Apply Both Directions" aus: getrennte Filter je Richtung - wertet der Simulator nicht aus
+                    unsupported.append(subj)
+                    continue
                 for rf in self.kids(subj, 'vzRsSubjFiltAtt'):
                     rfa = self.A(rf)
                     if rfa['state'] != 'formed':
@@ -2274,19 +2290,70 @@ class Engine(OpsMixin, PodMixin, SiteMixin):
                         ea = self.A(e)
                         where = '%s / %s / %s / %s' % (self.short(brc), sa['name'], self.A(rfa['tDn'])['name'],
                                                        ea['name'])
+                        ref = {'contract': brc, 'subject': subj, 'filter': rfa['tDn'], 'entry': e}
                         if fwd and self._entry_match(ea, proto, sport, dport, flags, False):
-                            hits.append((rfa['action'], where + ' (Consumer -> Provider)', subj, 'c2p'))
+                            hits.append((rfa['action'], where + ' (Consumer -> Provider)', subj, 'c2p', ref))
                         if rev and self._entry_match(ea, proto, sport, dport, flags, sa['revFltPorts'] == 'yes'):
                             hits.append((rfa['action'], where + ' (Provider -> Consumer%s)'
-                                         % (', Ports getauscht' if sa['revFltPorts'] == 'yes' else ''), subj, 'p2c'))
+                                         % (', Ports getauscht' if sa['revFltPorts'] == 'yes' else ''), subj, 'p2c', ref))
         deny = [h for h in hits if h[0] == 'deny']
         if deny:
-            return 'deny', 'Deny-Filter: ' + deny[0][1]
+            return self._decide('deny', 'contract-deny', 'Deny-Filter: ' + deny[0][1], direction=deny[0][3], **deny[0][4])
         if hits:
             # gleiche Prioritaet: Deny vor Redirect vor Permit
             redir = [h for h in hits if (getattr(self, 'graphs', {}).get(h[2]) or {}).get('state') == 'applied']
             h0 = redir[0] if redir else hits[0]
             self.last_hit = (h0[2], h0[3])
-            return 'permit', 'Contract: ' + h0[1]
-        return 'deny', 'Implicit Deny: kein Contract mit passendem Filter zwischen %s und %s' % (
-            self.short(s['dn']), self.short(d['dn']))
+            return self._decide('permit', 'contract', 'Contract: ' + h0[1], direction=h0[3], **h0[4])
+        if unsupported:
+            return self._decide('deny', 'unsupported', 'Subject %s nutzt getrennte Filter je Richtung ("Apply Both Directions" aus, '
+                                'vzInTerm/vzOutTerm). Das wertet der Simulator nicht aus - Ergebnis nicht belastbar.'
+                                % self.short(unsupported[0]), subject=unsupported[0])
+        return self._decide('deny', 'implicit-deny', 'Implicit Deny: kein Contract mit passendem Filter zwischen %s und %s' % (
+            self.short(s['dn']), self.short(d['dn'])))
+
+    # ------------------------------------------------------------------
+    # Least Privilege: welche Filter-Eintraege erlauben ueberhaupt Verkehr?
+    # ------------------------------------------------------------------
+    def permit_scope(self, s, d):
+        """Alles, was Verkehr von Klasse s (Consumer-Seite) zu Klasse d erlaubt, unabhaengig vom einzelnen Paket.
+
+        Liefert eine Liste von Dicts: {'kind': 'entry'|'blanket', 'text', ...}. 'blanket' sind pauschale Freigaben
+        (unenforced VRF, Preferred Group, gleiche EPG ohne Isolation). Taboos und Deny-Filter werden hier nicht
+        verrechnet - die Pruefung bewertet, was der Contract freigibt.
+        """
+        out = []
+        vrf = s['vrf']
+        if (self.A(vrf) or {}).get('pcEnfPref') == 'unenforced':
+            out.append({'kind': 'blanket', 'text': 'VRF %s ist unenforced (alles erlaubt)' % self.short(vrf)})
+        if s['dn'] == d['dn'] and not s.get('isolation'):
+            out.append({'kind': 'blanket', 'text': 'gleiche EPG %s (ohne Contract erlaubt)' % self.short(s['dn'])})
+        anya = self.A(vrf + '/any') or {}
+        if anya.get('prefGrMemb') == 'enabled' and s['pref'] and d['pref']:
+            out.append({'kind': 'blanket', 'text': 'Preferred Group im VRF %s (alles erlaubt)' % self.short(vrf)})
+        for brc, rel in self.contracts.items():
+            s_cons = s['dn'] in rel['cons'] or vrf in rel['cons_any']
+            d_prov = d['dn'] in rel['prov'] or d['vrf'] in rel['prov_any']
+            s_prov = s['dn'] in rel['prov'] or vrf in rel['prov_any']
+            d_cons = d['dn'] in rel['cons'] or d['vrf'] in rel['cons_any']
+            if not ((s_cons and d_prov) or (s_prov and d_cons)):
+                continue
+            ca = self.A(brc)
+            if ca['scope'] == 'application-profile' and (s['ap'] is None or s['ap'] != d['ap']):
+                continue
+            if ca['scope'] == 'context' and s['vrf'] != d['vrf']:
+                continue
+            if ca['scope'] == 'tenant' and s['tenant'] != d['tenant']:
+                continue
+            for subj in self.kids(brc, 'vzSubj'):
+                for rf in self.kids(subj, 'vzRsSubjFiltAtt'):
+                    rfa = self.A(rf)
+                    if rfa['state'] != 'formed' or rfa['action'] == 'deny':
+                        continue
+                    for e in self.kids(rfa['tDn'], 'vzEntry'):
+                        ea = self.A(e)
+                        out.append({'kind': 'entry', 'contract': brc, 'subject': subj, 'filter': rfa['tDn'], 'entry': e,
+                                    'consumer_is_src': s_cons and d_prov, 'attrs': dict(ea),
+                                    'text': '%s / %s / %s / %s' % (self.short(brc), self.A(subj)['name'],
+                                                                   self.A(rfa['tDn'])['name'], ea['name'])})
+        return out
