@@ -46,9 +46,9 @@ Untersucht wurden:
 | Labs sind Klickanleitungen | Die Lösung steht in der Aufgabe, wenig Transfer | behoben für 02, 03, 04, 07 und die neuen Labs 32 bis 35; übrige Labs offen (B-01) |
 | Hinweise einstufig, kein Prüfungsmodus | | **behoben** in der Engine; genutzt von den Labs 02, 03, 04, 07, 32 bis 35 |
 | Lab-Generator nicht deterministisch (Zeitstempel in Lab 25) | Generierte Dateien änderten sich bei jedem Lauf | **behoben** |
-| Intra-EPG-Contracts nicht ausgewertet | Isolation + Intra-EPG-Contract blockiert falsch | offen (B-05) |
+| Intra-EPG-Contracts nicht ausgewertet | Verkehr innerhalb einer EPG ließ sich nur ganz oder gar nicht erlauben | **behoben**: `fvRsIntraEpg` wird ausgewertet, Lab 38 |
 | vzInTerm/vzOutTerm fehlen | „Apply Both Directions“ aus nicht modellierbar | offen (B-06) |
-| Endpoint Move nicht als Ereignis | Lab 16 nicht möglich | offen (B-03) |
+| Endpoint Move und Link-Ausfall nicht als Ereignis | Labs 16, 17 nicht möglich, Link-Probleme erschienen als EP_NOT_LEARNED | **behoben**: Events S9101–S9103, Endpoint-Verlauf, Codes LINK_DOWN/PORT_ADMIN_DOWN, Labs 36 und 37 |
 | Prioritäten zwischen vzAny, EPG-Regeln und Taboo vereinfacht | mögliche Fehlaussagen bei überlappenden Regeln | offen, zuerst gegen echtes ACI prüfen |
 
 ## 4. Was zuerst den größten Lernnutzen bringt
@@ -56,5 +56,5 @@ Untersucht wurden:
 1. **Der Abnahmefall als neues Lab-Format** (Lab 32): Anforderungen, Least Privilege, getrennte Bewertung, Hinweise, Prüfungsmodus. Er setzt das Muster für alle weiteren Labs. → *umgesetzt*
 2. **Traffic Inspector mit Ursache und angewandter Regel**: Hier entsteht der Wechsel vom VLAN/ACL-Denken zum Policy-Modell, wenn sichtbar wird „Routing grün, Policy rot, weil …“. → *umgesetzt*
 3. Bestehende Contract- und Access-Labs ins neue Format überführen (B-01) und die fehlenden Grundlagen-Labs ergänzen. → *umgesetzt für 02, 03, 04, 07 sowie neu 33, 34, 35*
-4. Ereignisse für Endpoint Move und Link-Ausfall (B-03, B-04). Sie sind Voraussetzung für die Troubleshooting-Labs 15 bis 17.
-5. OT-Szenario (B-10).
+4. Ereignisse für Endpoint Move und Link-Ausfall als Grundlage der Troubleshooting-Labs. → *umgesetzt (Labs 36, 37)*
+5. OT-Szenario. → *umgesetzt (Lab 40)*

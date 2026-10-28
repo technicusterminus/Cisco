@@ -46,7 +46,18 @@ POLICY_HINTS = {
     'POLICY_DENY_RULE': 'Ein Filter mit Aktion Deny passt. Subjects und Filter-Aktionen im Contract pruefen.',
     'POLICY_TABOO': 'Ein Taboo Contract an der Ziel-EPG verbietet diesen Verkehr.',
     'POLICY_INTRA_EPG_ISOLATION': 'An der EPG ist Intra EPG Isolation "enforced" - Endpoints derselben EPG duerfen nicht miteinander sprechen.',
+    'POLICY_INTRA_EPG_CONTRACT_DENY': 'An der EPG haengt ein Intra-EPG-Contract: Innerhalb der EPG gilt nur noch, was seine Filter erlauben.',
     'POLICY_ESG_EPG_MIX': 'Contracts zwischen ESG und EPG gibt es nicht; beide Seiten muessen ESGs sein.',
+}
+
+
+# Physische Ursachen, wenn kein Link eines Hosts nutzbar ist
+PHYS_HINTS = {
+    'LINK_DOWN': 'Kein Link am Leaf-Port: Kabel, Transceiver oder NIC des Hosts pruefen. Das ist kein Konfigurationsfehler der ACI '
+                 '(CLI: show interface ethX/Y, Fabric > Inventory > Interfaces).',
+    'PORT_ADMIN_DOWN': 'Der Port ist in der ACI deaktiviert (Fabric > Inventory > Disabled Interfaces, fabricRsOosPath). Wieder aktivieren.',
+    'PORT_ERR_DISABLED': 'Der Port ist error-disabled (z. B. durch MCP). Ursache beseitigen, dann den Port wieder aktivieren.',
+    'SWITCH_INACTIVE': 'Der Leaf ist nicht aktiv (Discovery, Upgrade oder nicht registriert). Fabric > Inventory pruefen.',
 }
 
 
@@ -175,7 +186,15 @@ def _host_checks(eng, t, ep, role):
         hs = dict(hs, learned=True, silent_dst=role != 'Quelle')
     if not hs or not hs['learned']:
         reasons = (hs or {}).get('reasons') or ['Host ist mit keinem aktiven Leaf verbunden']
-        t.step(False, '%s %s: Endpoint nicht gelernt' % (role, h['name']), '; '.join(reasons))
+        codes = (hs or {}).get('codes') or []
+        if codes and not hs.get('legs'):
+            # kein einziger Link nutzbar: physische Ursache statt Access-/EPG-Problem
+            c = codes[0]
+            t.step(False, '%s %s: Link nicht nutzbar' % (role, h['name']), '; '.join(reasons), code=c,
+                   hint=PHYS_HINTS.get(c))
+            t.steps[-1]['layer'] = 'physical'
+        else:
+            t.step(False, '%s %s: Endpoint nicht gelernt' % (role, h['name']), '; '.join(reasons))
         return None
     if hs.get('storm'):
         t.step(False, '%s %s: Layer-2-Schleife im BD %s' % (role, h['name'], eng.short(hs['bd'])), hs['storm'])

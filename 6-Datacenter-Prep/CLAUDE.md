@@ -8,6 +8,7 @@ Didaktischer Cisco-ACI-Simulator: Python-Standardbibliothek im Backend, Vanilla-
 python3 -m unittest discover -s tests          # Unit-, Integrations- und Abnahmetests (Python)
 node tests/gui/smoke.js                        # GUI: Startseite, Labs & Stände, Benutzer (braucht Playwright)
 node tests/gui/acceptance.js                   # GUI: Abnahmefall Lab 32 von Start bis Reset
+node tests/gui/troubleshooting.js              # GUI: Endpoint-Verlauf, Link-Ausfall, Labs 36/37
 for f in static/js/*.js; do node --check $f; done   # Syntax des Frontends
 python3 Labs-Quelle/build_labs.py              # labs/*.json neu erzeugen (deterministisch)
 python3 start.py --no-browser                  # Start (Port 8080, belegt -> nächster freier)

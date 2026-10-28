@@ -1,0 +1,775 @@
+{
+ "id": "37-link-or-policy",
+ "title": "37 Interface-Ausfall oder Policy-Drop?",
+ "topic": "Fabric / Troubleshooting",
+ "level": "Mittel",
+ "duration": "25 min",
+ "fabric": "discovered",
+ "kind": "troubleshooting",
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Labs 32 und 36"
+ ],
+ "tools": [
+  "Traffic Inspector",
+  "Fabric > Inventory (Interfaces, Disabled Interfaces)",
+  "EP Tracker",
+  "CLI: show interface, show endpoint, show zoning-rule"
+ ],
+ "goals": [
+  "Physische Ursachen (Link, deaktivierter Port) von Policy-Drops unterscheiden",
+  "Nur beheben, was in der ACI liegt",
+  "Eine Freigabe mit Least Privilege ergänzen"
+ ],
+ "intro": "Drei Tickets kommen gleichzeitig rein. Alle Hosts sind richtig konfiguriert.\n\n- web1: leaf101 eth1/1, VLAN 110 · web3: leaf101 eth1/7, VLAN 110 (EPG Web)\n- app1: leaf102 eth1/2, VLAN 120 (EPG App)\n- jump1: leaf101 eth1/5, VLAN 140 (EPG Mgmt)",
+ "requirements": [
+  "Ticket 1: „web1 erreicht app1 nicht auf TCP 8080.“ – beheben.",
+  "Ticket 2: „jump1 kommt per SSH nicht auf web1.“ – beheben, jump1 darf nur SSH zu Web.",
+  "Ticket 3: „web3 ist nicht erreichbar.“ – Ursache klären. Liegt sie nicht in der ACI, nichts an der Konfiguration ändern und die Frage unten beantworten."
+ ],
+ "limits": [
+  "Physische Ausfälle (Kabel, NIC) sind in der Simulation Ereignisse am Host (simulator-spezifisch).",
+  "Disabled Interfaces werden wie beim APIC über die Out-of-Service-Policy (fabricRsOosPath) modelliert."
+ ],
+ "hints": [
+  "**Konzept:** Bevor man an Contracts dreht: Ist der Host überhaupt gelernt, und hat sein Port Link? Ein Policy-Drop setzt einen gelernten Endpoint voraus.",
+  "**Ebene:** Der Reason Code im Traffic Inspector trennt die Fälle: LINK_DOWN und PORT_ADMIN_DOWN sind physisch, POLICY_* ist die Policy.",
+  "**Prüfschritte:** Ticket 1: Traffic-Test web1 → app1 TCP 8080 und Fabric > Inventory > Disabled Interfaces. Ticket 2: Traffic-Test jump1 → web1 TCP 22, Abschnitt Angewandte Policy. Ticket 3: Traffic-Test web1 → web3 und EP Tracker web3.",
+  "**Lösung:** Ticket 1: leaf102 eth1/2 wieder aktivieren (Disabled Interface entfernen). Ticket 2: Filter ssh (tcp/22) und Contract, Web stellt bereit, Mgmt konsumiert. Ticket 3: kein Link am Port (Kabel/NIC) – außerhalb der ACI, Vor-Ort-Team."
+ ],
+ "cause": "Ticket 1: Port leaf102 eth1/2 ist deaktiviert (PORT_ADMIN_DOWN). Ticket 2: kein Contract zwischen Mgmt und Web (POLICY_IMPLICIT_DENY). Ticket 3: kein Link am Port von web3 (LINK_DOWN).",
+ "config": [
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "infraInfra": {
+       "attributes": {},
+       "children": [
+        {
+         "fvnsVlanInstP": {
+          "attributes": {
+           "name": "VLAN-Pool-Server",
+           "allocMode": "static"
+          },
+          "children": [
+           {
+            "fvnsEncapBlk": {
+             "attributes": {
+              "from": "vlan-100",
+              "to": "vlan-199"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAttEntityP": {
+          "attributes": {
+           "name": "AAEP-Server"
+          },
+          "children": [
+           {
+            "infraRsDomP": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraFuncP": {
+          "attributes": {},
+          "children": [
+           {
+            "infraAccPortGrp": {
+             "attributes": {
+              "name": "IPG-Server-Access"
+             },
+             "children": [
+              {
+               "infraRsAttEntP": {
+                "attributes": {
+                 "tDn": "uni/infra/attentp-AAEP-Server"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAccPortP": {
+          "attributes": {
+           "name": "IntProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraHPortS": {
+             "attributes": {
+              "name": "Server-Ports",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraPortBlk": {
+                "attributes": {
+                 "name": "block2",
+                 "fromPort": "1",
+                 "toPort": "10"
+                }
+               }
+              },
+              {
+               "infraRsAccBaseGrp": {
+                "attributes": {
+                 "tDn": "uni/infra/funcprof/accportgrp-IPG-Server-Access"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraNodeP": {
+          "attributes": {
+           "name": "SwProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraLeafS": {
+             "attributes": {
+              "name": "101-102",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraNodeBlk": {
+                "attributes": {
+                 "name": "blk",
+                 "from_": "101",
+                 "to_": "102"
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "infraRsAccPortP": {
+             "attributes": {
+              "tDn": "uni/infra/accportprof-IntProf-Leaf101-102"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "physDomP": {
+       "attributes": {
+        "name": "PhysDom-Server"
+       },
+       "children": [
+        {
+         "infraRsVlanNs": {
+          "attributes": {
+           "tDn": "uni/infra/vlanns-[VLAN-Pool-Server]-static"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Shop"
+    },
+    "children": [
+     {
+      "fvCtx": {
+       "attributes": {
+        "name": "Prod"
+       }
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Web"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.10.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-App"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.20.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Mgmt"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.40.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Webshop"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Web"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Web"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/1]",
+              "encap": "vlan-110",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsCons": {
+             "attributes": {
+              "tnVzBrCPName": "web-to-app"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "App"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-App"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/2]",
+              "encap": "vlan-120",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsProv": {
+             "attributes": {
+              "tnVzBrCPName": "web-to-app"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Mgmt"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Mgmt"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/5]",
+              "encap": "vlan-140",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzFilter": {
+       "attributes": {
+        "name": "tcp-8080"
+       },
+       "children": [
+        {
+         "vzEntry": {
+          "attributes": {
+           "name": "tcp-8080",
+           "etherT": "ip",
+           "prot": "tcp",
+           "dFromPort": "8080",
+           "dToPort": "8080"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzBrCP": {
+       "attributes": {
+        "name": "web-to-app",
+        "scope": "context"
+       },
+       "children": [
+        {
+         "vzSubj": {
+          "attributes": {
+           "name": "subj",
+           "revFltPorts": "yes"
+          },
+          "children": [
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "tcp-8080"
+             }
+            }
+           },
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "icmp"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Shop"
+    },
+    "children": [
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Webshop"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Web"
+          },
+          "children": [
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/7]",
+              "encap": "vlan-110",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fabricInst": {
+    "attributes": {},
+    "children": [
+     {
+      "fabricOOServicePol": {
+       "attributes": {},
+       "children": [
+        {
+         "fabricRsOosPath": {
+          "attributes": {
+           "tDn": "topology/pod-1/paths-102/pathep-[eth1/2]"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "hosts": [
+  {
+   "name": "web1",
+   "mac": "00:50:56:10:10:11",
+   "ip": "10.10.10.11/24",
+   "gw": "10.10.10.1",
+   "vlan": 110,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/1"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Webserver"
+  },
+  {
+   "name": "app1",
+   "mac": "00:50:56:10:20:11",
+   "ip": "10.10.20.11/24",
+   "gw": "10.10.20.1",
+   "vlan": 120,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/2"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Applikationsserver"
+  },
+  {
+   "name": "jump1",
+   "mac": "00:50:56:10:40:11",
+   "ip": "10.10.40.11/24",
+   "gw": "10.10.40.1",
+   "vlan": 140,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/5"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Jump-Host der Admins"
+  },
+  {
+   "name": "web3",
+   "mac": "00:50:56:10:10:13",
+   "ip": "10.10.10.13/24",
+   "gw": "10.10.10.1",
+   "vlan": 110,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/7"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Webserver",
+   "linkdown": true
+  }
+ ],
+ "tasks": [],
+ "checks": [
+  {
+   "desc": "Ticket 1: web1 → app1 TCP 8080",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "app1",
+   "proto": "tcp",
+   "port": 8080,
+   "expect": true
+  },
+  {
+   "desc": "Ticket 2: jump1 → web1 SSH",
+   "type": "traffic",
+   "src": "jump1",
+   "dst": "web1",
+   "proto": "tcp",
+   "port": 22,
+   "expect": true
+  },
+  {
+   "desc": "Least Privilege jump1 → Web: nur SSH",
+   "type": "exposure",
+   "src": "jump1",
+   "dst": "web1",
+   "allow": [
+    "tcp/22"
+   ],
+   "category": "security"
+  },
+  {
+   "desc": "Web baut keine Verbindungen zu jump1 auf",
+   "type": "exposure",
+   "src": "web1",
+   "dst": "jump1",
+   "allow": [],
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Ticket 3: Was ist die Ursache bei web3?",
+   "options": [
+    "Fehlender Contract zwischen Web und Web",
+    "Kein Link am Leaf-Port (Kabel oder NIC) – außerhalb der ACI-Konfiguration",
+    "Der Port ist in der ACI deaktiviert",
+    "Das VLAN fehlt im Pool"
+   ],
+   "answer": 1,
+   "explain": "Der Traffic Inspector meldet LINK_DOWN: Der Port hat keinen Link. web1 und web3 sind in derselben EPG, ein Contract wäre nicht nötig."
+  },
+  {
+   "id": "q2",
+   "q": "Ticket 1: Woran erkennst du, dass es kein Policy-Problem war?",
+   "options": [
+    "Der Test endet beim Ziel-Endpoint mit PORT_ADMIN_DOWN, die Policy wird gar nicht geprüft",
+    "An einem Fault F0467",
+    "Der Contract fehlte",
+    "Gar nicht"
+   ],
+   "answer": 0,
+   "explain": "Ohne gelernten Endpoint kommt die Policy-Entscheidung nicht zustande. Die Tabelle „Angewandte Policy“ bleibt leer."
+  }
+ ],
+ "solution": "Ticket 1: `POST /api/mo/uni/fabric/outofsvc.json` mit `{\"fabricOOServicePol\":{\"attributes\":{},\"children\":[{\"fabricRsOosPath\":{\"attributes\":{\"tDn\":\"topology/pod-1/paths-102/pathep-[eth1/2]\",\"status\":\"deleted\"}}}]}}`.\n\nTicket 2: `{\"fvTenant\": {\"attributes\": {\"name\": \"Shop\"}, \"children\": [{\"vzFilter\": {\"attributes\": {\"name\": \"ssh\"}, \"children\": [{\"vzEntry\": {\"attributes\": {\"name\": \"ssh\", \"etherT\": \"ip\", \"prot\": \"tcp\", \"dFromPort\": \"22\", \"dToPort\": \"22\"}}}]}}, {\"vzBrCP\": {\"attributes\": {\"name\": \"mgmt-ssh-web\", \"scope\": \"context\"}, \"children\": [{\"vzSubj\": {\"attributes\": {\"name\": \"subj\", \"revFltPorts\": \"yes\"}, \"children\": [{\"vzRsSubjFiltAtt\": {\"attributes\": {\"tnVzFilterName\": \"ssh\"}}}]}}]}}, {\"fvAp\": {\"attributes\": {\"name\": \"Webshop\"}, \"children\": [{\"fvAEPg\": {\"attributes\": {\"name\": \"Web\"}, \"children\": [{\"fvRsProv\": {\"attributes\": {\"tnVzBrCPName\": \"mgmt-ssh-web\"}}}]}}, {\"fvAEPg\": {\"attributes\": {\"name\": \"Mgmt\"}, \"children\": [{\"fvRsCons\": {\"attributes\": {\"tnVzBrCPName\": \"mgmt-ssh-web\"}}}]}}]}}]}}`",
+ "routers": [],
+ "vcenters": [],
+ "devices": [],
+ "aaa": [],
+ "switches": [],
+ "solutionConfig": [
+  [
+   "uni/fabric/outofsvc",
+   {
+    "fabricOOServicePol": {
+     "attributes": {},
+     "children": [
+      {
+       "fabricRsOosPath": {
+        "attributes": {
+         "tDn": "topology/pod-1/paths-102/pathep-[eth1/2]",
+         "status": "deleted"
+        }
+       }
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "uni",
+   {
+    "fvTenant": {
+     "attributes": {
+      "name": "Shop"
+     },
+     "children": [
+      {
+       "vzFilter": {
+        "attributes": {
+         "name": "ssh"
+        },
+        "children": [
+         {
+          "vzEntry": {
+           "attributes": {
+            "name": "ssh",
+            "etherT": "ip",
+            "prot": "tcp",
+            "dFromPort": "22",
+            "dToPort": "22"
+           }
+          }
+         }
+        ]
+       }
+      },
+      {
+       "vzBrCP": {
+        "attributes": {
+         "name": "mgmt-ssh-web",
+         "scope": "context"
+        },
+        "children": [
+         {
+          "vzSubj": {
+           "attributes": {
+            "name": "subj",
+            "revFltPorts": "yes"
+           },
+           "children": [
+            {
+             "vzRsSubjFiltAtt": {
+              "attributes": {
+               "tnVzFilterName": "ssh"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      },
+      {
+       "fvAp": {
+        "attributes": {
+         "name": "Webshop"
+        },
+        "children": [
+         {
+          "fvAEPg": {
+           "attributes": {
+            "name": "Web"
+           },
+           "children": [
+            {
+             "fvRsProv": {
+              "attributes": {
+               "tnVzBrCPName": "mgmt-ssh-web"
+              }
+             }
+            }
+           ]
+          }
+         },
+         {
+          "fvAEPg": {
+           "attributes": {
+            "name": "Mgmt"
+           },
+           "children": [
+            {
+             "fvRsCons": {
+              "attributes": {
+               "tnVzBrCPName": "mgmt-ssh-web"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  ]
+ ]
+}

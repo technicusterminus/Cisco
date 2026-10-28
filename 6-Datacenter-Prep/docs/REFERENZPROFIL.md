@@ -26,10 +26,11 @@ Status-Begriffe in dieser Datei:
 | Access Policies: VLAN-Pool, Domain, AAEP, Policy Group, Interface-/Switch-Profil, Static Path | umgesetzt + getestet | Die Kette wird vollständig ausgewertet. Fehlt ein Glied, wird der Endpoint nicht gelernt, und es gibt einen Fault |
 | vPC, Port-Channel, LACP | umgesetzt | Explicit Protection Group, LACP-Partnerzustand |
 | Endpoint Learning (MAC/IP, EPG, Leaf, Interface) | umgesetzt + getestet | stille Hosts, ARP Flooding/Glean, Limit IP Learning |
-| Endpoint Move als Ereignis | **nicht unterstützt** | Ein Host lässt sich umstecken, ein eigenes Move-Ereignis mit History gibt es nicht (Backlog B-03) |
+| Endpoint Move als Ereignis | umgesetzt + getestet | Umstecken eines Hosts ergibt Ereignis S9101 (gebundener Port) bzw. Verlust und neues Lernen. Endpoint-Verlauf je Host im EP Tracker. Event-Codes S91xx sind simulator-spezifisch |
+| Link-Ausfall, deaktivierter Port | umgesetzt + getestet | Kabel/NIC-Ausfall als simulator-spezifisches Host-Ereignis (`LINK_DOWN`, Events S9102/S9103). Disabled Interface wie beim APIC über `fabricRsOosPath` (`PORT_ADMIN_DOWN`) |
 | Contracts, Subjects, Filter, Consumer/Provider | umgesetzt + getestet | zustandslos, Reverse Filter Ports, Stateful-ACK, Scope, Deny-Aktion |
 | Subject ohne „Apply Both Directions“ (vzInTerm/vzOutTerm) | **nicht unterstützt** | Die Klassen gibt es im Modell nicht |
-| Intra-EPG Isolation | vereinfacht | „enforced“ verbietet allen Verkehr innerhalb der EPG. Intra-EPG-Contracts (`fvRsIntraEpg`) werden gespeichert, aber nicht ausgewertet (Backlog B-05) |
+| Intra-EPG Isolation und Intra-EPG-Contract | umgesetzt + getestet | „enforced“ verbietet allen Verkehr innerhalb der EPG. Ein Intra-EPG-Contract (`fvRsIntraEpg`) erlaubt innerhalb der EPG nur, was seine Filter zulassen (`POLICY_INTRA_EPG_CONTRACT`, `_DENY`). Kombination mit Isolation: Der Contract gilt – nicht gegen die Doku geprüft. Erscheint nicht in `show zoning-rule` |
 | Preferred Group, vzAny, VRF unenforced, Taboo | umgesetzt | eigene Labs 04 und 11; Prioritäten vereinfacht (Deny vor Permit, keine Priority-Stufen) |
 | ESG, uSeg EPG | umgesetzt | Lab 23 |
 | Inter-VRF / Shared Services | umgesetzt | Lab 13: Shared-Subnetze und Contract-Scope |
@@ -47,7 +48,7 @@ Status-Begriffe in dieser Datei:
 Ein Test `src → dst, Protokoll, Port` durchläuft diese Schritte (`trace.py`). Die Reihenfolge ist ein **didaktisches Diagnosemodell**, keine Hardware-Pipeline.
 
 1. Quelle und Ziel auflösen (Host, Router, IP, Gateway) → sonst `UNRESOLVED / INPUT_INVALID`
-2. Endpoint der Quelle gelernt (prüft Link, Access-Kette, Encap im Pool, Domain an der EPG) → `EP_NOT_LEARNED`
+2. Endpoint der Quelle gelernt. Ist kein Link des Hosts nutzbar → `LINK_DOWN`, `PORT_ADMIN_DOWN`, `PORT_ERR_DISABLED`, `SWITCH_INACTIVE` (Ebene *physical*). Sonst prüft der Schritt Access-Kette, Encap im Pool und Domain an der EPG → `EP_NOT_LEARNED`
 3. Endpoint des Ziels gelernt → `EP_NOT_LEARNED`
 4. Bridging (gleiches Subnetz): gleiche BD, ARP → `L2_DIFFERENT_BD`, `ARP_UNRESOLVED`
 5. Routing (anderes Subnetz): Gateway, BD-Subnetz, VRF, Leaking → `GATEWAY_INVALID`, `ROUTE_MISSING`, `INTERVRF_LEAK_MISSING`
@@ -92,7 +93,7 @@ Jede Regel nennt die Quelle (Dokument) und ihren Status. Die Testreferenz zeigt,
 | # | Regel | Quelle | Status | Test |
 |---|---|---|---|---|
 | R-01 | Zwischen zwei verschiedenen EPGs ohne passenden Contract wird verworfen (Whitelist, Implicit Deny). | Security Config Guide, *Contracts* | umgesetzt + getestet | `test_acceptance.TestStartState` |
-| R-02 | Innerhalb einer EPG ist Verkehr ohne Contract erlaubt, außer bei Intra EPG Isolation „enforced“. | Security Config Guide, *Intra-EPG Isolation* | umgesetzt + getestet (Isolation vereinfacht) | `TestConnectivityCases` |
+| R-02 | Innerhalb einer EPG ist Verkehr ohne Contract erlaubt. Intra EPG Isolation „enforced“ verbietet ihn, ein Intra-EPG-Contract erlaubt nur seine Filter. | Security Config Guide, *Intra-EPG Isolation*, *Intra-EPG Contracts* | umgesetzt + getestet | `TestConnectivityCases`, `TestSegmentationLabs` |
 | R-03 | Der Consumer baut auf, der Provider bietet den Dienst an. Ein Filter-Entry gilt Consumer → Provider wie definiert. | Contract Guide | umgesetzt + getestet | `test_swapped_roles_fail_function` |
 | R-04 | Contracts sind zustandslos. Mit *Reverse Filter Ports* erlaubt das Subject die Gegenrichtung mit vertauschten Ports. Ohne die Option passt die Antwort nicht. | Contract Guide, *Subject* | umgesetzt + getestet | `test_without_reverse_filter_ports_reply_is_dropped` |
 | R-05 | *Stateful* am Entry: Provider → Consumer nur TCP mit ACK. | Contract Guide, *Filter Entry* | umgesetzt + getestet (ohne Sequenznummern) | `test_stateful_entry_blocks_provider_syn_from_service_port` |
@@ -107,4 +108,4 @@ Jede Regel nennt die Quelle (Dokument) und ihren Status. Die Testreferenz zeigt,
 | R-14 | Zwischen VRFs braucht es Contract mit passendem Scope und Subnetze „Shared between VRFs“. | L3 Networking Config Guide, *Shared Services* | umgesetzt | Lab 13 |
 | R-15 | External EPG klassifiziert per Subnetz mit „External Subnets for the External EPG“ (Longest Prefix Match). Der Rückweg braucht ein exportiertes BD-Subnetz (Advertised Externally) beim externen Router. | L3 Networking Config Guide | umgesetzt | Labs 06, 09, 15 |
 
-Unsicherheiten, die beim Abgleich zuerst geprüft werden sollten: R-08 (Prioritäten zwischen vzAny-, EPG- und Taboo-Regeln), R-13 (welche Protokolle das Pervasive Gateway beantwortet), R-02 (Intra-EPG-Contracts) und die Fault-Codes außer F0467.
+Unsicherheiten, die beim Abgleich zuerst geprüft werden sollten: R-08 (Prioritäten zwischen vzAny-, EPG- und Taboo-Regeln), R-13 (welche Protokolle das Pervasive Gateway beantwortet), R-02 (Kombination aus Isolation und Intra-EPG-Contract) und die Fault-Codes außer F0467.

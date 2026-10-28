@@ -16,9 +16,6 @@ Alle Punkte sind offen. Erledigt ist, was in `docs/GAP-ANALYSE.md` als „behobe
 
 | # | Punkt | Begründung |
 |---|---|---|
-| B-03 | Endpoint Move als Ereignis: Host umstecken → Ereignis mit altem und neuem Ort, Lernzustand, History im Endpoint Explorer | Soll-Lab 16 |
-| B-04 | Link-Ausfall als Ereignis (Interface admin/oper down) mit Code `LINK_DOWN` im Traffic-Test | Soll-Lab 17: Interface-Ausfall vs. Policy-Drop |
-| B-05 | Intra-EPG-Contracts (`fvRsIntraEpg`) bei Isolation auswerten | fachlich unvollständig |
 | B-07 | Simulierte Uhr statt Wanduhr für Discovery, Upgrades und Fault-Lebenszyklus (soaking → raised → retaining) | Determinismus |
 | B-13 | Diagnoseprozess erfassen: ausgeführte Traffic-Tests und CLI-Befehle je Lab-Sitzung protokollieren und anzeigen, ohne die Denkweise zu „bewerten“ | optionaler Troubleshooting-Modus |
 | B-14 | CLI-Ausgabe als „verifiziert“ oder „simulator-spezifisch“ kennzeichnen; bei nicht unterstützten Befehlen einen Diagnoseweg vorschlagen | Ehrlichkeit des Terminals |
@@ -28,8 +25,7 @@ Alle Punkte sind offen. Erledigt ist, was in `docs/GAP-ANALYSE.md` als „behobe
 | # | Punkt |
 |---|---|
 | B-06 | Subjects ohne „Apply Both Directions“ (vzInTerm/vzOutTerm) |
-| B-10 | OT-Szenario (Soll-Lab 26): Zonen Engineering, Applikation, Monitoring, Management; nur definierte Beziehungen; Monitoring getrennt von Admin; negative Tests für laterale Kommunikation. Didaktisch, ohne Sicherheitsgarantie |
-| B-15 | Soll-Labs 20, 21, 22, 25 im neuen Format (External EPG vs. Routing, Rückweg, Preferred Group, Snapshot-Rollback) |
+| B-15 | Soll-Labs 20, 21, 25 im neuen Format (External EPG vs. Routing, Rückweg, Snapshot-Rollback) |
 | B-16 | Contract-Prioritäten (vzAny vs. EPG vs. Taboo, Priority-Stufen) nach Abgleich mit echtem ACI präzisieren |
 | B-17 | Fault-Codes gegen die Fault Reference prüfen (heute belegt: F0467) |
 

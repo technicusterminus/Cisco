@@ -1,0 +1,647 @@
+{
+ "id": "36-endpoint-move",
+ "title": "36 Endpoint Move nachvollziehen",
+ "topic": "Endpoints / Troubleshooting",
+ "level": "Mittel",
+ "duration": "25 min",
+ "fabric": "discovered",
+ "kind": "troubleshooting",
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 33"
+ ],
+ "tools": [
+  "EP Tracker mit Endpoint-Verlauf",
+  "Traffic Inspector",
+  "Faults der EPG",
+  "CLI: show endpoint"
+ ],
+ "goals": [
+  "Den Endpoint-Verlauf lesen: wo war ein Host, wo ist er jetzt",
+  "Verstehen, dass ACI Endpoints dort lernt, wo ihr Verkehr ankommt",
+  "Alte Port-Bindungen nach einem Umzug als Sicherheitsrisiko erkennen"
+ ],
+ "intro": "Gestern Abend wurde der Applikationsserver **app2** (10.10.20.12, VLAN 120, EPG **App**) in ein anderes Rack umgebaut. Seitdem meldet das Ticket: „web1 erreicht app2 nicht mehr auf TCP 8080.“ An app2 selbst wurde nichts geändert.\n\nFinde heraus, wo app2 vorher war und wo er jetzt angeschlossen ist.",
+ "requirements": [
+  "web1 erreicht app2 wieder auf TCP 8080.",
+  "app2 wird an seinem neuen Anschluss in der EPG App gelernt; app1 bleibt erreichbar.",
+  "Nach dem Umzug darf am alten Anschluss niemand mehr Zugang zur EPG App bekommen."
+ ],
+ "limits": [
+  "Der Verlauf vor dem Lab-Start ist vorgegeben (Szenario). Neue Einträge entstehen, sobald du etwas änderst.",
+  "Event-Codes S9101 bis S9103 sind simulator-spezifisch."
+ ],
+ "hints": [
+  "**Konzept:** Die ACI lernt einen Endpoint dort, wo sein Verkehr ankommt – auf einem Port mit einer Bindung an die EPG. Zieht ein Server um, muss der neue Port zur EPG gehören. Was passiert mit der alten Bindung?",
+  "**Ebene:** Endpoint-Zuordnung und Port-Bindungen der EPG App. Der EP Tracker zeigt den Verlauf von app2.",
+  "**Prüfschritt:** EP Tracker: Suche nach „app2“ – wo wurde er zuletzt gelernt? Simulation > Topologie & Hosts: Wo hängt app2 jetzt? Danach: Wer ist heute am alten Port gelernt (`show endpoint` auf dem Leaf)?",
+  "**Lösung:** An der EPG App einen Static Port für leaf102 eth1/7 mit vlan-120 anlegen und den alten Static Port leaf101 eth1/6 löschen. Sonst landet jedes Gerät, das dort mit VLAN 120 sendet, in der EPG App."
+ ],
+ "cause": "app2 hängt jetzt an leaf102 eth1/7, die EPG App hat dort keine Bindung (EP_NOT_LEARNED). Die alte Bindung leaf101 eth1/6 besteht weiter – dort ist inzwischen ein fremdes Notebook in der EPG App gelandet.",
+ "config": [
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "infraInfra": {
+       "attributes": {},
+       "children": [
+        {
+         "fvnsVlanInstP": {
+          "attributes": {
+           "name": "VLAN-Pool-Server",
+           "allocMode": "static"
+          },
+          "children": [
+           {
+            "fvnsEncapBlk": {
+             "attributes": {
+              "from": "vlan-100",
+              "to": "vlan-199"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAttEntityP": {
+          "attributes": {
+           "name": "AAEP-Server"
+          },
+          "children": [
+           {
+            "infraRsDomP": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraFuncP": {
+          "attributes": {},
+          "children": [
+           {
+            "infraAccPortGrp": {
+             "attributes": {
+              "name": "IPG-Server-Access"
+             },
+             "children": [
+              {
+               "infraRsAttEntP": {
+                "attributes": {
+                 "tDn": "uni/infra/attentp-AAEP-Server"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAccPortP": {
+          "attributes": {
+           "name": "IntProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraHPortS": {
+             "attributes": {
+              "name": "Server-Ports",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraPortBlk": {
+                "attributes": {
+                 "name": "block2",
+                 "fromPort": "1",
+                 "toPort": "10"
+                }
+               }
+              },
+              {
+               "infraRsAccBaseGrp": {
+                "attributes": {
+                 "tDn": "uni/infra/funcprof/accportgrp-IPG-Server-Access"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraNodeP": {
+          "attributes": {
+           "name": "SwProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraLeafS": {
+             "attributes": {
+              "name": "101-102",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraNodeBlk": {
+                "attributes": {
+                 "name": "blk",
+                 "from_": "101",
+                 "to_": "102"
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "infraRsAccPortP": {
+             "attributes": {
+              "tDn": "uni/infra/accportprof-IntProf-Leaf101-102"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "physDomP": {
+       "attributes": {
+        "name": "PhysDom-Server"
+       },
+       "children": [
+        {
+         "infraRsVlanNs": {
+          "attributes": {
+           "tDn": "uni/infra/vlanns-[VLAN-Pool-Server]-static"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Shop"
+    },
+    "children": [
+     {
+      "fvCtx": {
+       "attributes": {
+        "name": "Prod"
+       }
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Web"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.10.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-App"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.20.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Webshop"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Web"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Web"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/1]",
+              "encap": "vlan-110",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsCons": {
+             "attributes": {
+              "tnVzBrCPName": "web-to-app"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "App"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-App"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/2]",
+              "encap": "vlan-120",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsProv": {
+             "attributes": {
+              "tnVzBrCPName": "web-to-app"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzFilter": {
+       "attributes": {
+        "name": "tcp-8080"
+       },
+       "children": [
+        {
+         "vzEntry": {
+          "attributes": {
+           "name": "tcp-8080",
+           "etherT": "ip",
+           "prot": "tcp",
+           "dFromPort": "8080",
+           "dToPort": "8080"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzBrCP": {
+       "attributes": {
+        "name": "web-to-app",
+        "scope": "context"
+       },
+       "children": [
+        {
+         "vzSubj": {
+          "attributes": {
+           "name": "subj",
+           "revFltPorts": "yes"
+          },
+          "children": [
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "tcp-8080"
+             }
+            }
+           },
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "icmp"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Shop"
+    },
+    "children": [
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Webshop"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "App"
+          },
+          "children": [
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/6]",
+              "encap": "vlan-120",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "hosts": [
+  {
+   "name": "web1",
+   "mac": "00:50:56:10:10:11",
+   "ip": "10.10.10.11/24",
+   "gw": "10.10.10.1",
+   "vlan": 110,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/1"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Webserver"
+  },
+  {
+   "name": "app1",
+   "mac": "00:50:56:10:20:11",
+   "ip": "10.10.20.11/24",
+   "gw": "10.10.20.1",
+   "vlan": 120,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/2"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Applikationsserver"
+  },
+  {
+   "name": "app2",
+   "mac": "00:50:56:10:20:12",
+   "ip": "10.10.20.12/24",
+   "gw": "10.10.20.1",
+   "vlan": 120,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/7"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Applikationsserver (umgezogen)"
+  },
+  {
+   "name": "pc-x",
+   "mac": "00:50:56:66:00:01",
+   "ip": "10.10.20.99/24",
+   "gw": "10.10.20.1",
+   "vlan": 120,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/6"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Notebook am frei gewordenen Port"
+  }
+ ],
+ "tasks": [],
+ "ephist": {
+  "app2": [
+   {
+    "ts": "2026-10-27T09:12:44.000+00:00",
+    "event": "learned",
+    "where": "leaf101 eth1/6",
+    "epg": "uni/tn-Shop/ap-Webshop/epg-App",
+    "encap": "vlan-120",
+    "detail": ""
+   },
+   {
+    "ts": "2026-10-27T18:40:02.000+00:00",
+    "event": "linkdown",
+    "where": "-",
+    "epg": null,
+    "encap": null,
+    "detail": "LINK_DOWN"
+   },
+   {
+    "ts": "2026-10-27T18:40:02.000+00:00",
+    "event": "lost",
+    "where": "leaf101 eth1/6",
+    "epg": "uni/tn-Shop/ap-Webshop/epg-App",
+    "encap": null,
+    "detail": "leaf101 eth1/6: kein Link"
+   },
+   {
+    "ts": "2026-10-27T19:05:31.000+00:00",
+    "event": "linkup",
+    "where": "-",
+    "epg": null,
+    "encap": null,
+    "detail": ""
+   }
+  ],
+  "pc-x": [
+   {
+    "ts": "2026-10-28T08:05:10.000+00:00",
+    "event": "learned",
+    "where": "leaf101 eth1/6",
+    "epg": "uni/tn-Shop/ap-Webshop/epg-App",
+    "encap": "vlan-120",
+    "detail": ""
+   }
+  ]
+ },
+ "checks": [
+  {
+   "desc": "app2 in EPG App gelernt",
+   "type": "endpoint",
+   "host": "app2",
+   "epg": "uni/tn-Shop/ap-Webshop/epg-App"
+  },
+  {
+   "desc": "web1 → app2 TCP 8080",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "app2",
+   "proto": "tcp",
+   "port": 8080,
+   "expect": true
+  },
+  {
+   "desc": "web1 → app1 TCP 8080 funktioniert weiterhin",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "app1",
+   "proto": "tcp",
+   "port": 8080,
+   "expect": true
+  },
+  {
+   "desc": "Am alten Anschluss kommt niemand mehr in die EPG App",
+   "type": "endpoint",
+   "host": "pc-x",
+   "epg": "uni/tn-Shop/ap-Webshop/epg-App",
+   "category": "security",
+   "expect": false
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Warum wurde app2 nach dem Umbau nicht mehr gelernt, obwohl VLAN und IP gleich blieben?",
+   "options": [
+    "Der neue Port hat keine Bindung an die EPG App",
+    "app2 brauchte eine neue IP",
+    "Der Contract galt nur für den alten Port",
+    "Endpoints werden nur einmal pro Tag gelernt"
+   ],
+   "answer": 0,
+   "explain": "Die EPG-Zuordnung hängt an Port und VLAN. Ein neuer Port braucht eine eigene Bindung."
+  },
+  {
+   "id": "q2",
+   "q": "Warum ist die alte Bindung gefährlich?",
+   "options": [
+    "Sie verbraucht zu viel TCAM",
+    "Jedes Gerät, das dort mit VLAN 120 sendet, landet in der EPG App und erbt ihre Freigaben",
+    "Sie verhindert das Lernen am neuen Port",
+    "Sie ist nicht gefährlich"
+   ],
+   "answer": 1,
+   "explain": "Genau das ist pc-x passiert: Das Notebook ist in der EPG App gelandet und könnte deren Contracts nutzen."
+  }
+ ],
+ "solution": "`POST /api/mo/uni/tn-Shop/ap-Webshop/epg-App.json` mit `{\"fvAEPg\": {\"attributes\": {}, \"children\": [{\"fvRsPathAtt\": {\"attributes\": {\"tDn\": \"topology/pod-1/paths-102/pathep-[eth1/7]\", \"encap\": \"vlan-120\"}}}, {\"fvRsPathAtt\": {\"attributes\": {\"tDn\": \"topology/pod-1/paths-101/pathep-[eth1/6]\", \"status\": \"deleted\"}}}]}}`",
+ "routers": [],
+ "vcenters": [],
+ "devices": [],
+ "aaa": [],
+ "switches": [],
+ "solutionConfig": [
+  [
+   "uni/tn-Shop/ap-Webshop/epg-App",
+   {
+    "fvAEPg": {
+     "attributes": {},
+     "children": [
+      {
+       "fvRsPathAtt": {
+        "attributes": {
+         "tDn": "topology/pod-1/paths-102/pathep-[eth1/7]",
+         "encap": "vlan-120"
+        }
+       }
+      },
+      {
+       "fvRsPathAtt": {
+        "attributes": {
+         "tDn": "topology/pod-1/paths-101/pathep-[eth1/6]",
+         "status": "deleted"
+        }
+       }
+      }
+     ]
+    }
+   }
+  ]
+ ]
+}

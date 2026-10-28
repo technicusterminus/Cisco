@@ -1957,6 +1957,308 @@ lab(id='35-port-and-direction', title='35 Falscher Port, falsche Richtung', topi
 
 
 # ----------------------------------------------------------------------------
+# Lab 36 - Endpoint Move nachvollziehen
+# ----------------------------------------------------------------------------
+APP2 = host('app2', '00:50:56:10:20:12', '10.10.20.12/24', '10.10.20.1', 120, [[L102, 'eth1/7']], descr='Applikationsserver (umgezogen)')
+PCX = host('pc-x', '00:50:56:66:00:01', '10.10.20.99/24', '10.10.20.1', 120, [[L101, 'eth1/6']], descr='Notebook am frei gewordenen Port')
+OLD36 = mo('fvTenant', {'name': 'Shop'}, mo('fvAp', {'name': 'Webshop'}, mo('fvAEPg', {'name': 'App'},
+           mo('fvRsPathAtt', {'tDn': path(101, 'eth1/6'), 'encap': 'vlan-120', 'mode': 'regular'}))))
+lab(id='36-endpoint-move', title='36 Endpoint Move nachvollziehen', topic='Endpoints / Troubleshooting', level='Mittel',
+    duration='25 min', fabric='discovered', kind='troubleshooting', modes=['guided', 'exam'],
+    prerequisites=['Lab 33'], tools=['EP Tracker mit Endpoint-Verlauf', 'Traffic Inspector', 'Faults der EPG', 'CLI: show endpoint'],
+    goals=['Den Endpoint-Verlauf lesen: wo war ein Host, wo ist er jetzt', 'Verstehen, dass ACI Endpoints dort lernt, wo ihr Verkehr ankommt',
+           'Alte Port-Bindungen nach einem Umzug als Sicherheitsrisiko erkennen'],
+    intro='Gestern Abend wurde der Applikationsserver **app2** (10.10.20.12, VLAN 120, EPG **App**) in ein anderes Rack umgebaut. '
+          'Seitdem meldet das Ticket: „web1 erreicht app2 nicht mehr auf TCP 8080.“ An app2 selbst wurde nichts geändert.\n\n'
+          'Finde heraus, wo app2 vorher war und wo er jetzt angeschlossen ist.',
+    requirements=['web1 erreicht app2 wieder auf TCP 8080.',
+                  'app2 wird an seinem neuen Anschluss in der EPG App gelernt; app1 bleibt erreichbar.',
+                  'Nach dem Umzug darf am alten Anschluss niemand mehr Zugang zur EPG App bekommen.'],
+    limits=['Der Verlauf vor dem Lab-Start ist vorgegeben (Szenario). Neue Einträge entstehen, sobald du etwas änderst.',
+            'Event-Codes S9101 bis S9103 sind simulator-spezifisch.'],
+    hints=['**Konzept:** Die ACI lernt einen Endpoint dort, wo sein Verkehr ankommt – auf einem Port mit einer Bindung an die EPG. '
+           'Zieht ein Server um, muss der neue Port zur EPG gehören. Was passiert mit der alten Bindung?',
+           '**Ebene:** Endpoint-Zuordnung und Port-Bindungen der EPG App. Der EP Tracker zeigt den Verlauf von app2.',
+           '**Prüfschritt:** EP Tracker: Suche nach „app2“ – wo wurde er zuletzt gelernt? Simulation > Topologie & Hosts: Wo hängt app2 '
+           'jetzt? Danach: Wer ist heute am alten Port gelernt (`show endpoint` auf dem Leaf)?',
+           '**Lösung:** An der EPG App einen Static Port für leaf102 eth1/7 mit vlan-120 anlegen und den alten Static Port '
+           'leaf101 eth1/6 löschen. Sonst landet jedes Gerät, das dort mit VLAN 120 sendet, in der EPG App.'],
+    cause='app2 hängt jetzt an leaf102 eth1/7, die EPG App hat dort keine Bindung (EP_NOT_LEARNED). Die alte Bindung leaf101 eth1/6 '
+          'besteht weiter – dort ist inzwischen ein fremdes Notebook in der EPG App gelandet.',
+    config=[SERVER_ACCESS, shop_tenant(with_contracts=True), OLD36], hosts=[WEB1, APP1, APP2, PCX], tasks=[],
+    ephist={'app2': [{'ts': '2026-10-27T09:12:44.000+00:00', 'event': 'learned', 'where': 'leaf101 eth1/6', 'epg': 'uni/tn-Shop/ap-Webshop/epg-App',
+                      'encap': 'vlan-120', 'detail': ''},
+                     {'ts': '2026-10-27T18:40:02.000+00:00', 'event': 'linkdown', 'where': '-', 'epg': None, 'encap': None, 'detail': 'LINK_DOWN'},
+                     {'ts': '2026-10-27T18:40:02.000+00:00', 'event': 'lost', 'where': 'leaf101 eth1/6', 'epg': 'uni/tn-Shop/ap-Webshop/epg-App',
+                      'encap': None, 'detail': 'leaf101 eth1/6: kein Link'},
+                     {'ts': '2026-10-27T19:05:31.000+00:00', 'event': 'linkup', 'where': '-', 'epg': None, 'encap': None, 'detail': ''}],
+            'pc-x': [{'ts': '2026-10-28T08:05:10.000+00:00', 'event': 'learned', 'where': 'leaf101 eth1/6', 'epg': 'uni/tn-Shop/ap-Webshop/epg-App',
+                      'encap': 'vlan-120', 'detail': ''}]},
+    checks=[check('app2 in EPG App gelernt', 'endpoint', host='app2', epg='uni/tn-Shop/ap-Webshop/epg-App'),
+            check('web1 → app2 TCP 8080', 'traffic', src='web1', dst='app2', proto='tcp', port=8080, expect=True),
+            check('web1 → app1 TCP 8080 funktioniert weiterhin', 'traffic', src='web1', dst='app1', proto='tcp', port=8080, expect=True),
+            check('Am alten Anschluss kommt niemand mehr in die EPG App', 'endpoint', host='pc-x', epg='uni/tn-Shop/ap-Webshop/epg-App',
+                  category='security', expect=False)],
+    questions=[{'id': 'q1', 'q': 'Warum wurde app2 nach dem Umbau nicht mehr gelernt, obwohl VLAN und IP gleich blieben?',
+                'options': ['Der neue Port hat keine Bindung an die EPG App', 'app2 brauchte eine neue IP', 'Der Contract galt nur für den alten Port',
+                            'Endpoints werden nur einmal pro Tag gelernt'],
+                'answer': 0, 'explain': 'Die EPG-Zuordnung hängt an Port und VLAN. Ein neuer Port braucht eine eigene Bindung.'},
+               {'id': 'q2', 'q': 'Warum ist die alte Bindung gefährlich?',
+                'options': ['Sie verbraucht zu viel TCAM', 'Jedes Gerät, das dort mit VLAN 120 sendet, landet in der EPG App und erbt ihre Freigaben',
+                            'Sie verhindert das Lernen am neuen Port', 'Sie ist nicht gefährlich'],
+                'answer': 1, 'explain': 'Genau das ist pc-x passiert: Das Notebook ist in der EPG App gelandet und könnte deren Contracts nutzen.'}],
+    solution='`POST /api/mo/uni/tn-Shop/ap-Webshop/epg-App.json` mit `' + json.dumps(mo('fvAEPg', {},
+        mo('fvRsPathAtt', {'tDn': path(102, 'eth1/7'), 'encap': 'vlan-120'}),
+        mo('fvRsPathAtt', {'tDn': path(101, 'eth1/6'), 'status': 'deleted'}))) + '`')
+
+# ----------------------------------------------------------------------------
+# Lab 37 - Interface-Ausfall oder Policy-Drop?
+# ----------------------------------------------------------------------------
+WEB3 = dict(host('web3', '00:50:56:10:10:13', '10.10.10.13/24', '10.10.10.1', 110, [[L101, 'eth1/7']], descr='Webserver'), linkdown=True)
+START37 = [mo('fvTenant', {'name': 'Shop'}, mo('fvAp', {'name': 'Webshop'}, mo('fvAEPg', {'name': 'Web'},
+              mo('fvRsPathAtt', {'tDn': path(101, 'eth1/7'), 'encap': 'vlan-110', 'mode': 'regular'})))),
+           mo('fabricInst', {}, mo('fabricOOServicePol', {}, mo('fabricRsOosPath', {'tDn': path(102, 'eth1/2')})))]
+SOL37 = mo('fvTenant', {'name': 'Shop'},
+           filt('ssh', {'name': 'ssh', 'etherT': 'ip', 'prot': 'tcp', 'dFromPort': '22', 'dToPort': '22'}),
+           contract('mgmt-ssh-web', ['ssh']),
+           mo('fvAp', {'name': 'Webshop'},
+              mo('fvAEPg', {'name': 'Web'}, mo('fvRsProv', {'tnVzBrCPName': 'mgmt-ssh-web'})),
+              mo('fvAEPg', {'name': 'Mgmt'}, mo('fvRsCons', {'tnVzBrCPName': 'mgmt-ssh-web'}))))
+lab(id='37-link-or-policy', title='37 Interface-Ausfall oder Policy-Drop?', topic='Fabric / Troubleshooting', level='Mittel',
+    duration='25 min', fabric='discovered', kind='troubleshooting', modes=['guided', 'exam'],
+    prerequisites=['Labs 32 und 36'], tools=['Traffic Inspector', 'Fabric > Inventory (Interfaces, Disabled Interfaces)', 'EP Tracker',
+                                           'CLI: show interface, show endpoint, show zoning-rule'],
+    goals=['Physische Ursachen (Link, deaktivierter Port) von Policy-Drops unterscheiden', 'Nur beheben, was in der ACI liegt',
+           'Eine Freigabe mit Least Privilege ergänzen'],
+    intro='Drei Tickets kommen gleichzeitig rein. Alle Hosts sind richtig konfiguriert.\n\n'
+          '- web1: leaf101 eth1/1, VLAN 110 · web3: leaf101 eth1/7, VLAN 110 (EPG Web)\n- app1: leaf102 eth1/2, VLAN 120 (EPG App)\n'
+          '- jump1: leaf101 eth1/5, VLAN 140 (EPG Mgmt)',
+    requirements=['Ticket 1: „web1 erreicht app1 nicht auf TCP 8080.“ – beheben.',
+                  'Ticket 2: „jump1 kommt per SSH nicht auf web1.“ – beheben, jump1 darf nur SSH zu Web.',
+                  'Ticket 3: „web3 ist nicht erreichbar.“ – Ursache klären. Liegt sie nicht in der ACI, nichts an der Konfiguration ändern '
+                  'und die Frage unten beantworten.'],
+    limits=['Physische Ausfälle (Kabel, NIC) sind in der Simulation Ereignisse am Host (simulator-spezifisch).',
+            'Disabled Interfaces werden wie beim APIC über die Out-of-Service-Policy (fabricRsOosPath) modelliert.'],
+    hints=['**Konzept:** Bevor man an Contracts dreht: Ist der Host überhaupt gelernt, und hat sein Port Link? Ein Policy-Drop setzt '
+           'einen gelernten Endpoint voraus.',
+           '**Ebene:** Der Reason Code im Traffic Inspector trennt die Fälle: LINK_DOWN und PORT_ADMIN_DOWN sind physisch, POLICY_* ist '
+           'die Policy.',
+           '**Prüfschritte:** Ticket 1: Traffic-Test web1 → app1 TCP 8080 und Fabric > Inventory > Disabled Interfaces. Ticket 2: '
+           'Traffic-Test jump1 → web1 TCP 22, Abschnitt Angewandte Policy. Ticket 3: Traffic-Test web1 → web3 und EP Tracker web3.',
+           '**Lösung:** Ticket 1: leaf102 eth1/2 wieder aktivieren (Disabled Interface entfernen). Ticket 2: Filter ssh (tcp/22) und Contract, '
+           'Web stellt bereit, Mgmt konsumiert. Ticket 3: kein Link am Port (Kabel/NIC) – außerhalb der ACI, Vor-Ort-Team.'],
+    cause='Ticket 1: Port leaf102 eth1/2 ist deaktiviert (PORT_ADMIN_DOWN). Ticket 2: kein Contract zwischen Mgmt und Web '
+          '(POLICY_IMPLICIT_DENY). Ticket 3: kein Link am Port von web3 (LINK_DOWN).',
+    config=[SERVER_ACCESS, shop_tenant(with_contracts=True, with_mgmt=True)] + START37, hosts=[WEB1, APP1, JUMP1, WEB3], tasks=[],
+    checks=[check('Ticket 1: web1 → app1 TCP 8080', 'traffic', src='web1', dst='app1', proto='tcp', port=8080, expect=True),
+            check('Ticket 2: jump1 → web1 SSH', 'traffic', src='jump1', dst='web1', proto='tcp', port=22, expect=True),
+            check('Least Privilege jump1 → Web: nur SSH', 'exposure', src='jump1', dst='web1', allow=['tcp/22'], category='security'),
+            check('Web baut keine Verbindungen zu jump1 auf', 'exposure', src='web1', dst='jump1', allow=[], category='security')],
+    questions=[{'id': 'q1', 'q': 'Ticket 3: Was ist die Ursache bei web3?',
+                'options': ['Fehlender Contract zwischen Web und Web', 'Kein Link am Leaf-Port (Kabel oder NIC) – außerhalb der ACI-Konfiguration',
+                            'Der Port ist in der ACI deaktiviert', 'Das VLAN fehlt im Pool'],
+                'answer': 1, 'explain': 'Der Traffic Inspector meldet LINK_DOWN: Der Port hat keinen Link. web1 und web3 sind in derselben EPG, '
+                                        'ein Contract wäre nicht nötig.'},
+               {'id': 'q2', 'q': 'Ticket 1: Woran erkennst du, dass es kein Policy-Problem war?',
+                'options': ['Der Test endet beim Ziel-Endpoint mit PORT_ADMIN_DOWN, die Policy wird gar nicht geprüft',
+                            'An einem Fault F0467', 'Der Contract fehlte', 'Gar nicht'],
+                'answer': 0, 'explain': 'Ohne gelernten Endpoint kommt die Policy-Entscheidung nicht zustande. Die Tabelle „Angewandte Policy“ bleibt leer.'}],
+    solution='Ticket 1: `POST /api/mo/uni/fabric/outofsvc.json` mit `{"fabricOOServicePol":{"attributes":{},"children":[{"fabricRsOosPath":'
+             '{"attributes":{"tDn":"topology/pod-1/paths-102/pathep-[eth1/2]","status":"deleted"}}}]}}`.\n\nTicket 2: `' + json.dumps(SOL37) + '`')
+
+
+# ----------------------------------------------------------------------------
+# Lab 38 - Intra-EPG Isolation und Intra-EPG-Contract
+# ----------------------------------------------------------------------------
+WEB2B = mo('fvTenant', {'name': 'Shop'}, mo('fvAp', {'name': 'Webshop'}, mo('fvAEPg', {'name': 'Web'},
+           mo('fvRsPathAtt', {'tDn': path(102, 'eth1/3'), 'encap': 'vlan-110', 'mode': 'regular'}))))
+SOL38 = mo('fvTenant', {'name': 'Shop'},
+           filt('cluster-sync', {'name': 'sync', 'etherT': 'ip', 'prot': 'tcp', 'dFromPort': '9100', 'dToPort': '9100'}),
+           contract('web-intra', ['cluster-sync']),
+           mo('fvAp', {'name': 'Webshop'}, mo('fvAEPg', {'name': 'Web'}, mo('fvRsIntraEpg', {'tnVzBrCPName': 'web-intra'}))))
+lab(id='38-intra-epg', title='38 Innerhalb einer EPG einschränken', topic='Policy / Mikrosegmentierung', level='Mittel',
+    duration='20 min', fabric='discovered', kind='requirements', modes=['guided', 'exam'],
+    prerequisites=['Labs 33 und 32'], tools=['EPG > Policy (Intra EPG Isolation)', 'EPG > Contracts', 'Traffic-Test'],
+    goals=['Verstehen, dass eine EPG ohne weitere Maßnahmen intern alles erlaubt',
+           'Zwei Werkzeuge vergleichen: alles verbieten oder gezielt erlauben', 'Laterale Bewegung innerhalb einer Gruppe begrenzen'],
+    intro='In der EPG **Web** laufen zwei Webserver: **web1** (leaf101 eth1/1) und **web2** (leaf102 eth1/3). Sie gleichen ihre Sitzungen '
+          'über **TCP 9100** ab. Die Security-Abteilung möchte, dass ein kompromittierter Webserver den anderen nicht angreifen kann.\n\n'
+          'Teste web1 → web2 auf TCP 22: Im Moment ist alles offen.',
+    requirements=['web1 und web2 erreichen sich gegenseitig auf **TCP 9100**.',
+                  'Sonst ist zwischen den Webservern nichts erlaubt – kein SSH, kein Ping.',
+                  'Beide bleiben in der EPG Web; web1 erreicht app1 weiterhin auf TCP 8080.'],
+    limits=['Regeln für Verkehr innerhalb einer EPG erscheinen in diesem Simulator nicht in `show zoning-rule`.',
+            'Werden Isolation und ein Contract für die EPG kombiniert, wertet der Simulator den Contract. Das Zusammenspiel ist nicht '
+            'gegen die Cisco-Dokumentation geprüft.'],
+    hints=['**Konzept:** Innerhalb einer EPG ist ohne weitere Konfiguration alles erlaubt. Es gibt zwei Werkzeuge: alles innerhalb der '
+           'EPG verbieten – oder genau festlegen, was innerhalb der EPG erlaubt ist.',
+           '**Beteiligte Objekte:** Die EPG-Option *Intra EPG Isolation* (verbietet alles) und der **Intra-EPG Contract** an der EPG '
+           '(erlaubt nur, was seine Filter zulassen). Dazu ein Filter für TCP 9100.',
+           '**Prüfschritt:** Probiere zuerst nur *Intra EPG Isolation: Enforced* – was passiert mit TCP 9100? Danach im Traffic Inspector '
+           'auf den Code achten: POLICY_INTRA_EPG_ISOLATION oder POLICY_INTRA_EPG_CONTRACT_DENY.',
+           '**Lösung:** Filter tcp/9100 → Contract (z. B. web-intra) → an der EPG Web als *Intra-EPG Contract* hinzufügen. Isolation '
+           'allein reicht nicht, weil sie auch TCP 9100 verbietet.'],
+    cause='Ohne Isolation und ohne Intra-EPG-Contract ist innerhalb der EPG Web alles erlaubt (POLICY_SAME_EPG).',
+    config=[SERVER_ACCESS, shop_tenant(with_contracts=True), WEB2B], hosts=[WEB1, WEB2, APP1], tasks=[],
+    checks=[check('web1 → web2 TCP 9100', 'traffic', src='web1', dst='web2', proto='tcp', port=9100, expect=True),
+            check('web2 → web1 TCP 9100', 'traffic', src='web2', dst='web1', proto='tcp', port=9100, expect=True),
+            check('web2 bleibt in der EPG Web', 'endpoint', host='web2', epg='uni/tn-Shop/ap-Webshop/epg-Web'),
+            check('web1 → app1 TCP 8080 weiterhin', 'traffic', src='web1', dst='app1', proto='tcp', port=8080, expect=True),
+            check('web1 → web2 SSH durch die Policy blockiert', 'traffic', src='web1', dst='web2', proto='tcp', port=22, expect=False,
+                  reason='POLICY_', category='security'),
+            check('Least Privilege web1 → web2: nur TCP 9100', 'exposure', src='web1', dst='web2', allow=['tcp/9100'], category='security'),
+            check('Least Privilege web2 → web1: nur TCP 9100', 'exposure', src='web2', dst='web1', allow=['tcp/9100'], category='security')],
+    questions=[{'id': 'q1', 'q': 'Was ist der Unterschied zwischen Intra EPG Isolation und einem Intra-EPG Contract?',
+                'options': ['Isolation verbietet allen Verkehr innerhalb der EPG, der Contract erlaubt gezielt einzelne Dienste',
+                            'Beides ist dasselbe', 'Isolation gilt nur für ICMP', 'Der Contract gilt nur zwischen verschiedenen EPGs'],
+                'answer': 0, 'explain': 'Isolation ist ein Ein/Aus-Schalter. Der Intra-EPG Contract macht die EPG zur Whitelist für Verkehr innerhalb der Gruppe.'},
+               {'id': 'q2', 'q': 'Warum nicht einfach jeden Webserver in eine eigene EPG legen?',
+                'options': ['Das geht technisch nicht', 'Die Gruppe hat dieselbe Rolle und dieselben Freigaben nach außen – getrennte EPGs '
+                            'verdoppeln Contracts und Pflege', 'EPGs dürfen nur einen Endpoint haben', 'Weil dann das VLAN fehlt'],
+                'answer': 1, 'explain': 'Die EPG beschreibt die Rolle. Intra-EPG-Regeln begrenzen die Gruppe intern, ohne das Rollenmodell aufzubrechen.'}],
+    solution='`POST /api/mo/uni.json` mit `' + json.dumps(SOL38) + '`')
+
+# ----------------------------------------------------------------------------
+# Lab 39 - Preferred Group
+# ----------------------------------------------------------------------------
+lab(id='39-preferred-group', title='39 Preferred Group für eine Migration', topic='Policy / Contracts', level='Mittel',
+    duration='20 min', fabric='discovered', kind='requirements', modes=['guided', 'exam'],
+    prerequisites=['Lab 04'], tools=['VRF > EPG Collection for VRF', 'EPG > Policy', 'Traffic-Test'],
+    goals=['Eine Gruppe von EPGs ohne einzelne Contracts frei kommunizieren lassen', 'Erkennen, dass Nicht-Mitglieder geschützt bleiben',
+           'Die Grenze zwischen „schnell funktionierend“ und Least Privilege bewusst ziehen'],
+    intro='Der Webshop wird aus einem alten Netz migriert. Welche Ports Web und App untereinander brauchen, weiß noch niemand – für die '
+          'Übergangszeit sollen sie sich frei erreichen. Die EPG **Mgmt** mit **jump1** bleibt dagegen streng getrennt.',
+    requirements=['web1 und app1 erreichen sich gegenseitig auf allen Ports, ohne dass dafür Contracts angelegt werden.',
+                  'Mgmt bleibt außen vor: Web und App erreichen jump1 nicht, jump1 erreicht Web und App nicht.',
+                  'Die Policy im VRF bleibt eingeschaltet (kein VRF-weites „alles erlauben“).'],
+    limits=['Prioritäten zwischen Preferred Group, vzAny und EPG-Contracts sind vereinfacht.'],
+    hints=['**Konzept:** Es gibt eine Mitgliedschaft auf VRF-Ebene: Mitglieder sprechen untereinander ohne Contract, für Nicht-Mitglieder '
+           'gilt weiter das Whitelist-Modell.',
+           '**Beteiligte Objekte:** Die Einstellung *Preferred Group Member* am VRF (*EPG Collection for VRF*) und an jeder EPG.',
+           '**Prüfschritt:** Nach dem Einschalten am VRF web1 → app1 testen – noch blockiert? Dann fehlt die Mitgliedschaft der EPGs. '
+           'Im Traffic Inspector heißt der Code danach POLICY_PREFERRED_GROUP.',
+           '**Lösung:** VRF Prod → EPG Collection for VRF → Preferred Group Member *Enabled*. EPGs Web und App → *Preferred Group Member: '
+           'Include*. Mgmt bleibt *Exclude*.'],
+    cause='Zwischen den EPGs gibt es keine Contracts und keine Preferred Group: alles Implicit Deny.',
+    config=[SERVER_ACCESS, shop_tenant(with_mgmt=True)], hosts=[WEB1, APP1, JUMP1], tasks=[],
+    checks=[check('web1 → app1 TCP 1433', 'traffic', src='web1', dst='app1', proto='tcp', port=1433, expect=True),
+            check('app1 → web1 TCP 22', 'traffic', src='app1', dst='web1', proto='tcp', port=22, expect=True),
+            check('web1 → app1 Ping', 'traffic', src='web1', dst='app1', proto='icmp', expect=True),
+            check('Ohne Contracts gelöst', 'class', cls='vzBrCP', under='uni/tn-Shop/', max=0),
+            check('Policy im VRF Prod bleibt eingeschaltet', 'exists', dn='uni/tn-Shop/ctx-Prod', attrs={'pcEnfPref': 'enforced'}, category='security'),
+            check('web1 → jump1 durch die Policy blockiert', 'traffic', src='web1', dst='jump1', proto='icmp', expect=False, reason='POLICY_', category='security'),
+            check('Least Privilege jump1 → App: nichts', 'exposure', src='jump1', dst='app1', allow=[], category='security')],
+    questions=[{'id': 'q1', 'q': 'Was gilt für eine EPG, die nicht Mitglied der Preferred Group ist?',
+                'options': ['Sie braucht weiterhin Contracts – zu Mitgliedern wie zu anderen', 'Sie darf alles', 'Sie wird isoliert, auch intern',
+                            'Sie verliert ihre Endpoints'],
+                'answer': 0, 'explain': 'Die Preferred Group öffnet nur zwischen Mitgliedern.'},
+               {'id': 'q2', 'q': 'Warum ist die Preferred Group nur eine Übergangslösung?',
+                'options': ['Sie ist langsam', 'Zwischen den Mitgliedern gilt kein Least Privilege mehr – das widerspricht dem Whitelist-Modell',
+                            'Sie funktioniert nur 30 Tage', 'Sie kostet Lizenzen'],
+                'answer': 1, 'explain': 'Sie ist praktisch für Migrationen. Danach sollten die benötigten Flüsse als Contracts gebaut werden.'}],
+    solution='`POST /api/mo/uni/tn-Shop.json` mit `' + json.dumps(mo('fvTenant', {}, mo('fvCtx', {'name': 'Prod'}, mo('vzAny', {'prefGrMemb': 'enabled'})),
+        mo('fvAp', {'name': 'Webshop'}, mo('fvAEPg', {'name': 'Web', 'prefGrMemb': 'include'}), mo('fvAEPg', {'name': 'App', 'prefGrMemb': 'include'})))) + '`')
+
+# ----------------------------------------------------------------------------
+# Lab 40 - IT-/OT-Segmentierung (didaktisches Beispiel)
+# ----------------------------------------------------------------------------
+OT_HOSTS = [host('eng1', '00:50:56:50:10:11', '10.50.10.11/24', '10.50.10.1', 150, [[L101, 'eth1/1']], descr='Engineering-Workstation'),
+            host('scada1', '00:50:56:50:20:11', '10.50.20.11/24', '10.50.20.1', 160, [[L101, 'eth1/2']], descr='SCADA-/HMI-Server'),
+            host('plc1', '00:50:56:50:30:11', '10.50.30.11/24', '10.50.30.1', 170, [[L102, 'eth1/1']], descr='Steuerung Linie 1'),
+            host('plc2', '00:50:56:50:30:12', '10.50.30.12/24', '10.50.30.1', 170, [[L102, 'eth1/2']], descr='Steuerung Linie 2'),
+            host('mon1', '00:50:56:50:40:11', '10.50.40.11/24', '10.50.40.1', 180, [[L101, 'eth1/3']], descr='Monitoring'),
+            host('adm1', '00:50:56:50:50:11', '10.50.50.11/24', '10.50.50.1', 190, [[L101, 'eth1/4']], descr='Admin-Jump-Host')]
+for h_, svc in zip(OT_HOSTS, (['tcp/22', 'udp/161'], ['tcp/22', 'tcp/443', 'udp/161'], ['tcp/502', 'tcp/44818', 'udp/161'],
+                              ['tcp/502', 'tcp/44818', 'udp/161'], ['tcp/22'], ['tcp/22'])):
+    h_['services'] = svc
+OT_TENANT = mo('fvTenant', {'name': 'Werk'}, mo('fvCtx', {'name': 'OT'}),
+               bd('BD-ENG', 'OT', '10.50.10.1/24'), bd('BD-SCADA', 'OT', '10.50.20.1/24'), bd('BD-PLC', 'OT', '10.50.30.1/24'),
+               bd('BD-MON', 'OT', '10.50.40.1/24'), bd('BD-MGMT', 'OT', '10.50.50.1/24'),
+               mo('fvAp', {'name': 'Linie1'},
+                  epg('ENG', 'BD-ENG', ports=[(path(101, 'eth1/1'), 150)]), epg('SCADA', 'BD-SCADA', ports=[(path(101, 'eth1/2'), 160)]),
+                  epg('PLC', 'BD-PLC', ports=[(path(102, 'eth1/1'), 170), (path(102, 'eth1/2'), 170)]),
+                  epg('MON', 'BD-MON', ports=[(path(101, 'eth1/3'), 180)]), epg('MGMT', 'BD-MGMT', ports=[(path(101, 'eth1/4'), 190)])))
+SOL40 = mo('fvTenant', {'name': 'Werk'},
+           filt('modbus', {'name': 'modbus', 'etherT': 'ip', 'prot': 'tcp', 'dFromPort': '502', 'dToPort': '502'}),
+           filt('enip', {'name': 'enip', 'etherT': 'ip', 'prot': 'tcp', 'dFromPort': '44818', 'dToPort': '44818'}),
+           filt('snmp', {'name': 'snmp', 'etherT': 'ip', 'prot': 'udp', 'dFromPort': '161', 'dToPort': '161'}),
+           filt('ssh', {'name': 'ssh', 'etherT': 'ip', 'prot': 'tcp', 'dFromPort': '22', 'dToPort': '22'}),
+           contract('scada-to-plc', ['modbus']), contract('eng-to-plc', ['enip']),
+           contract('monitoring', ['snmp', 'icmp']), contract('admin-ssh', ['ssh']),
+           mo('fvAp', {'name': 'Linie1'},
+              mo('fvAEPg', {'name': 'SCADA'}, mo('fvRsCons', {'tnVzBrCPName': 'scada-to-plc'}), mo('fvRsProv', {'tnVzBrCPName': 'monitoring'}),
+                 mo('fvRsProv', {'tnVzBrCPName': 'admin-ssh'})),
+              mo('fvAEPg', {'name': 'ENG'}, mo('fvRsCons', {'tnVzBrCPName': 'eng-to-plc'}), mo('fvRsProv', {'tnVzBrCPName': 'monitoring'}),
+                 mo('fvRsProv', {'tnVzBrCPName': 'admin-ssh'})),
+              mo('fvAEPg', {'name': 'PLC', 'pcEnfPref': 'enforced'}, mo('fvRsProv', {'tnVzBrCPName': 'scada-to-plc'}),
+                 mo('fvRsProv', {'tnVzBrCPName': 'eng-to-plc'}), mo('fvRsProv', {'tnVzBrCPName': 'monitoring'})),
+              mo('fvAEPg', {'name': 'MON'}, mo('fvRsCons', {'tnVzBrCPName': 'monitoring'})),
+              mo('fvAEPg', {'name': 'MGMT'}, mo('fvRsCons', {'tnVzBrCPName': 'admin-ssh'}))))
+lab(id='40-it-ot-segmentation', title='40 IT-/OT-Segmentierung einer Fertigungslinie', topic='Policy / Praxis', level='Fortgeschritten',
+    duration='60 min', fabric='discovered', kind='requirements', modes=['guided', 'exam'],
+    prerequisites=['Labs 32, 34 und 38'], tools=['Tenant Werk > Contracts', 'EPG > Policy', 'Traffic Inspector', 'Testmatrix (Simulation)'],
+    goals=['Eine Kommunikationsmatrix in Contracts übersetzen', 'Monitoring-Zugriffe von administrativen Zugriffen trennen',
+           'Laterale Kommunikation verhindern – auch innerhalb einer Zone', 'Zeigen, dass „alles funktioniert“ nicht Least Privilege ist'],
+    intro='Eine Fertigungslinie im Tenant **Werk** (VRF **OT**) hat fünf Zonen, jede als eigene EPG mit eigener Bridge Domain:\n\n'
+          '- **ENG**: eng1, Engineering-Workstation\n- **SCADA**: scada1, SCADA-/HMI-Server\n- **PLC**: plc1, plc2, Steuerungen\n'
+          '- **MON**: mon1, Monitoring\n- **MGMT**: adm1, Admin-Jump-Host\n\nIm Moment darf keine Zone mit einer anderen sprechen.',
+    requirements=['SCADA → PLC: **Modbus/TCP** (tcp/502).',
+                  'ENG → PLC: **EtherNet/IP** (tcp/44818) für die Programmierung.',
+                  'MON → ENG, SCADA und PLC: **SNMP** (udp/161) und **Ping** – nur lesend, keine Administrationsprotokolle.',
+                  'MGMT → ENG und SCADA: **SSH** (tcp/22). Kein direkter Zugriff von MGMT auf die Steuerungen.',
+                  'Keine laterale Kommunikation: Die Steuerungen sprechen nicht miteinander, bauen keine Verbindungen auf, ENG und SCADA '
+                  'sprechen nicht miteinander.',
+                  'Alles andere bleibt zu.'],
+    limits=['**Didaktisches Beispiel ohne Sicherheits- oder Verfügbarkeitsgarantie.** Reale OT-Netze folgen einem Zonen- und '
+            'Conduit-Modell (z. B. IEC 62443) und brauchen zusätzlich OT-Firewalls mit Protokollprüfung (z. B. Modbus-Funktionscodes). '
+            'ACI-Filter prüfen nur Layer 3/4.',
+            'Contracts sind zustandslos; ICMP erlaubt auch die Gegenrichtung (Ping der Steuerung zurück zum Monitoring).'],
+    hints=['**Konzept:** Jede Zeile der Matrix ist ein gerichteter Fluss: Wer baut auf (Consumer), wer bietet an (Provider), welcher '
+           'Dienst (Filter). Gleiche Dienste für mehrere Ziele lassen sich in einem Contract bündeln. Laterale Bewegung *innerhalb* einer '
+           'Zone ist ein eigenes Thema (Lab 38).',
+           '**Beteiligte Objekte:** Filter modbus, enip, snmp, ssh (Ping: Filter icmp aus common), vier Contracts nach Zweck, Consumer- und '
+           'Provider-Beziehungen der fünf EPGs, Intra EPG Isolation für die EPG PLC.',
+           '**Prüfschritt:** Baue zuerst die Funktion, prüfe dann jede verbotene Richtung: plc1 → plc2, plc1 → scada1, mon1 → scada1 TCP 22, '
+           'adm1 → plc1, eng1 → scada1. Die Testmatrix (Simulation > Testmatrix) zeigt alle Zonen auf einen Blick.',
+           '**Lösung:** Contracts scada-to-plc (modbus: SCADA konsumiert, PLC stellt bereit), eng-to-plc (enip: ENG konsumiert, PLC stellt '
+           'bereit), monitoring (snmp + icmp: MON konsumiert, ENG, SCADA, PLC stellen bereit), admin-ssh (ssh: MGMT konsumiert, ENG und '
+           'SCADA stellen bereit). EPG PLC: Intra EPG Isolation *Enforced*.'],
+    cause='Ohne Contracts ist zwischen den Zonen alles blockiert, innerhalb der Zone PLC aber alles offen.',
+    config=[SERVER_ACCESS, OT_TENANT], hosts=OT_HOSTS, tasks=[],
+    checks=[check('SCADA → plc1 Modbus', 'traffic', src='scada1', dst='plc1', proto='tcp', port=502, expect=True),
+            check('SCADA → plc2 Modbus', 'traffic', src='scada1', dst='plc2', proto='tcp', port=502, expect=True),
+            check('ENG → plc1 EtherNet/IP', 'traffic', src='eng1', dst='plc1', proto='tcp', port=44818, expect=True),
+            check('MON → plc2 SNMP', 'traffic', src='mon1', dst='plc2', proto='udp', port=161, expect=True),
+            check('MON → SCADA SNMP', 'traffic', src='mon1', dst='scada1', proto='udp', port=161, expect=True),
+            check('MON → ENG Ping', 'traffic', src='mon1', dst='eng1', proto='icmp', expect=True),
+            check('MGMT → SCADA SSH', 'traffic', src='adm1', dst='scada1', proto='tcp', port=22, expect=True),
+            check('MGMT → ENG SSH', 'traffic', src='adm1', dst='eng1', proto='tcp', port=22, expect=True),
+            check('SCADA → PLC: nur Modbus', 'exposure', src='scada1', dst='plc1', allow=['tcp/502'], category='security'),
+            check('ENG → PLC: nur EtherNet/IP', 'exposure', src='eng1', dst='plc2', allow=['tcp/44818'], category='security'),
+            check('MON → PLC: nur SNMP und Ping', 'exposure', src='mon1', dst='plc1', allow=['udp/161', 'icmp'], category='security'),
+            check('MON → SCADA: nur SNMP und Ping (kein SSH)', 'exposure', src='mon1', dst='scada1', allow=['udp/161', 'icmp'], category='security'),
+            check('MGMT → SCADA: nur SSH', 'exposure', src='adm1', dst='scada1', allow=['tcp/22'], category='security'),
+            check('MGMT → PLC: nichts', 'exposure', src='adm1', dst='plc1', allow=[], category='security'),
+            check('Keine laterale Kommunikation plc1 → plc2', 'exposure', src='plc1', dst='plc2', allow=[], category='security'),
+            check('Steuerung baut nichts zu SCADA auf', 'exposure', src='plc1', dst='scada1', allow=[], category='security'),
+            check('ENG und SCADA getrennt (ENG → SCADA)', 'exposure', src='eng1', dst='scada1', allow=[], category='security'),
+            check('ENG und SCADA getrennt (SCADA → ENG)', 'exposure', src='scada1', dst='eng1', allow=[], category='security')],
+    questions=[{'id': 'q1', 'q': 'Warum bekommen Monitoring und Administration getrennte Contracts?',
+                'options': ['Weil ACI nur einen Filter pro Contract erlaubt', 'Damit ein kompromittiertes Monitoring keine Administrationsrechte hat '
+                            '(SNMP lesen ≠ SSH)', 'Wegen der Performance', 'Das ist egal'],
+                'answer': 1, 'explain': 'Trennung nach Zweck: Wer nur beobachten muss, bekommt keine Werkzeuge zum Ändern.'},
+               {'id': 'q2', 'q': 'Warum Intra EPG Isolation für die Zone PLC?',
+                'options': ['Damit eine kompromittierte Steuerung die andere nicht erreicht (laterale Bewegung)', 'Damit Modbus schneller ist',
+                            'Weil sonst SCADA die Steuerungen nicht erreicht', 'Weil Steuerungen kein IP sprechen'],
+                'answer': 0, 'explain': 'Zwischen Zonen schützen Contracts, innerhalb der Zone braucht es eine eigene Maßnahme.'},
+               {'id': 'q3', 'q': 'Ein Kollege verbindet alle Zonen mit einem Contract „permit any“. Was stimmt?',
+                'options': ['Alle Funktionstests sind grün, die Least-Privilege-Prüfungen scheitern', 'Nichts funktioniert mehr',
+                            'Das ist Least Privilege, weil alles geht', 'ACI lehnt so einen Contract ab'],
+                'answer': 0, 'explain': '„Alles funktioniert“ ist nicht dasselbe wie „nur das Nötige ist erlaubt“.'}],
+    solution='`POST /api/mo/uni.json` mit `' + json.dumps(SOL40) + '`')
+
+
+# ----------------------------------------------------------------------------
 # Maschinenlesbare Musterloesungen (fuer die Tests: [URL-DN, Body])
 # ----------------------------------------------------------------------------
 BGP_RR = ['uni/fabric/bgpInstP-default', mo('bgpInstPol', {}, mo('bgpAsP', {'asn': '65001'}),
@@ -2085,6 +2387,15 @@ SOLUTIONS = {
     '32-https-least-privilege': [['uni', SOL32]],
     '33-same-epg': [['uni/tn-Shop/ap-Webshop/epg-Web', mo('fvAEPg', {}, mo('fvRsPathAtt', {'tDn': path(102, 'eth1/3'), 'encap': 'vlan-110'}))]],
     '34-two-epgs-same-bd': [['uni', SOL34]],
+    '36-endpoint-move': [['uni/tn-Shop/ap-Webshop/epg-App', mo('fvAEPg', {}, mo('fvRsPathAtt', {'tDn': path(102, 'eth1/7'), 'encap': 'vlan-120'}),
+                                                                  mo('fvRsPathAtt', {'tDn': path(101, 'eth1/6'), 'status': 'deleted'}))]],
+    '37-link-or-policy': [['uni/fabric/outofsvc', mo('fabricOOServicePol', {}, mo('fabricRsOosPath', {'tDn': path(102, 'eth1/2'), 'status': 'deleted'}))],
+                          ['uni', SOL37]],
+    '38-intra-epg': [['uni', SOL38]],
+    '39-preferred-group': [['uni/tn-Shop', mo('fvTenant', {}, mo('fvCtx', {'name': 'Prod'}, mo('vzAny', {'prefGrMemb': 'enabled'})),
+                                              mo('fvAp', {'name': 'Webshop'}, mo('fvAEPg', {'name': 'Web', 'prefGrMemb': 'include'}),
+                                                 mo('fvAEPg', {'name': 'App', 'prefGrMemb': 'include'})))]],
+    '40-it-ot-segmentation': [['uni', SOL40]],
     '35-port-and-direction': [['uni/tn-Shop/flt-https/e-https', mo('vzEntry', {'dFromPort': '443', 'dToPort': '443'})],
                               ['uni/tn-Shop/ap-Webshop/epg-Web', mo('fvAEPg', {}, mo('fvRsProv', {'tnVzBrCPName': 'web-to-app-https', 'status': 'deleted'}),
                                                                    mo('fvRsCons', {'tnVzBrCPName': 'web-to-app-https'}))],

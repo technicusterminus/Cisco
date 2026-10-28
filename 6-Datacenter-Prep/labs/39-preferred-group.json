@@ -1,0 +1,589 @@
+{
+ "id": "39-preferred-group",
+ "title": "39 Preferred Group für eine Migration",
+ "topic": "Policy / Contracts",
+ "level": "Mittel",
+ "duration": "20 min",
+ "fabric": "discovered",
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 04"
+ ],
+ "tools": [
+  "VRF > EPG Collection for VRF",
+  "EPG > Policy",
+  "Traffic-Test"
+ ],
+ "goals": [
+  "Eine Gruppe von EPGs ohne einzelne Contracts frei kommunizieren lassen",
+  "Erkennen, dass Nicht-Mitglieder geschützt bleiben",
+  "Die Grenze zwischen „schnell funktionierend“ und Least Privilege bewusst ziehen"
+ ],
+ "intro": "Der Webshop wird aus einem alten Netz migriert. Welche Ports Web und App untereinander brauchen, weiß noch niemand – für die Übergangszeit sollen sie sich frei erreichen. Die EPG **Mgmt** mit **jump1** bleibt dagegen streng getrennt.",
+ "requirements": [
+  "web1 und app1 erreichen sich gegenseitig auf allen Ports, ohne dass dafür Contracts angelegt werden.",
+  "Mgmt bleibt außen vor: Web und App erreichen jump1 nicht, jump1 erreicht Web und App nicht.",
+  "Die Policy im VRF bleibt eingeschaltet (kein VRF-weites „alles erlauben“)."
+ ],
+ "limits": [
+  "Prioritäten zwischen Preferred Group, vzAny und EPG-Contracts sind vereinfacht."
+ ],
+ "hints": [
+  "**Konzept:** Es gibt eine Mitgliedschaft auf VRF-Ebene: Mitglieder sprechen untereinander ohne Contract, für Nicht-Mitglieder gilt weiter das Whitelist-Modell.",
+  "**Beteiligte Objekte:** Die Einstellung *Preferred Group Member* am VRF (*EPG Collection for VRF*) und an jeder EPG.",
+  "**Prüfschritt:** Nach dem Einschalten am VRF web1 → app1 testen – noch blockiert? Dann fehlt die Mitgliedschaft der EPGs. Im Traffic Inspector heißt der Code danach POLICY_PREFERRED_GROUP.",
+  "**Lösung:** VRF Prod → EPG Collection for VRF → Preferred Group Member *Enabled*. EPGs Web und App → *Preferred Group Member: Include*. Mgmt bleibt *Exclude*."
+ ],
+ "cause": "Zwischen den EPGs gibt es keine Contracts und keine Preferred Group: alles Implicit Deny.",
+ "config": [
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "infraInfra": {
+       "attributes": {},
+       "children": [
+        {
+         "fvnsVlanInstP": {
+          "attributes": {
+           "name": "VLAN-Pool-Server",
+           "allocMode": "static"
+          },
+          "children": [
+           {
+            "fvnsEncapBlk": {
+             "attributes": {
+              "from": "vlan-100",
+              "to": "vlan-199"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAttEntityP": {
+          "attributes": {
+           "name": "AAEP-Server"
+          },
+          "children": [
+           {
+            "infraRsDomP": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraFuncP": {
+          "attributes": {},
+          "children": [
+           {
+            "infraAccPortGrp": {
+             "attributes": {
+              "name": "IPG-Server-Access"
+             },
+             "children": [
+              {
+               "infraRsAttEntP": {
+                "attributes": {
+                 "tDn": "uni/infra/attentp-AAEP-Server"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAccPortP": {
+          "attributes": {
+           "name": "IntProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraHPortS": {
+             "attributes": {
+              "name": "Server-Ports",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraPortBlk": {
+                "attributes": {
+                 "name": "block2",
+                 "fromPort": "1",
+                 "toPort": "10"
+                }
+               }
+              },
+              {
+               "infraRsAccBaseGrp": {
+                "attributes": {
+                 "tDn": "uni/infra/funcprof/accportgrp-IPG-Server-Access"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraNodeP": {
+          "attributes": {
+           "name": "SwProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraLeafS": {
+             "attributes": {
+              "name": "101-102",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraNodeBlk": {
+                "attributes": {
+                 "name": "blk",
+                 "from_": "101",
+                 "to_": "102"
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "infraRsAccPortP": {
+             "attributes": {
+              "tDn": "uni/infra/accportprof-IntProf-Leaf101-102"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "physDomP": {
+       "attributes": {
+        "name": "PhysDom-Server"
+       },
+       "children": [
+        {
+         "infraRsVlanNs": {
+          "attributes": {
+           "tDn": "uni/infra/vlanns-[VLAN-Pool-Server]-static"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Shop"
+    },
+    "children": [
+     {
+      "fvCtx": {
+       "attributes": {
+        "name": "Prod"
+       }
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Web"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.10.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-App"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.20.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Mgmt"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.40.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Webshop"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Web"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Web"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/1]",
+              "encap": "vlan-110",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "App"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-App"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/2]",
+              "encap": "vlan-120",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Mgmt"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Mgmt"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/5]",
+              "encap": "vlan-140",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "hosts": [
+  {
+   "name": "web1",
+   "mac": "00:50:56:10:10:11",
+   "ip": "10.10.10.11/24",
+   "gw": "10.10.10.1",
+   "vlan": 110,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/1"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Webserver"
+  },
+  {
+   "name": "app1",
+   "mac": "00:50:56:10:20:11",
+   "ip": "10.10.20.11/24",
+   "gw": "10.10.20.1",
+   "vlan": 120,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/2"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Applikationsserver"
+  },
+  {
+   "name": "jump1",
+   "mac": "00:50:56:10:40:11",
+   "ip": "10.10.40.11/24",
+   "gw": "10.10.40.1",
+   "vlan": 140,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/5"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Jump-Host der Admins"
+  }
+ ],
+ "tasks": [],
+ "checks": [
+  {
+   "desc": "web1 → app1 TCP 1433",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "app1",
+   "proto": "tcp",
+   "port": 1433,
+   "expect": true
+  },
+  {
+   "desc": "app1 → web1 TCP 22",
+   "type": "traffic",
+   "src": "app1",
+   "dst": "web1",
+   "proto": "tcp",
+   "port": 22,
+   "expect": true
+  },
+  {
+   "desc": "web1 → app1 Ping",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "app1",
+   "proto": "icmp",
+   "expect": true
+  },
+  {
+   "desc": "Ohne Contracts gelöst",
+   "type": "class",
+   "cls": "vzBrCP",
+   "under": "uni/tn-Shop/",
+   "max": 0
+  },
+  {
+   "desc": "Policy im VRF Prod bleibt eingeschaltet",
+   "type": "exists",
+   "dn": "uni/tn-Shop/ctx-Prod",
+   "attrs": {
+    "pcEnfPref": "enforced"
+   },
+   "category": "security"
+  },
+  {
+   "desc": "web1 → jump1 durch die Policy blockiert",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "jump1",
+   "proto": "icmp",
+   "expect": false,
+   "reason": "POLICY_",
+   "category": "security"
+  },
+  {
+   "desc": "Least Privilege jump1 → App: nichts",
+   "type": "exposure",
+   "src": "jump1",
+   "dst": "app1",
+   "allow": [],
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Was gilt für eine EPG, die nicht Mitglied der Preferred Group ist?",
+   "options": [
+    "Sie braucht weiterhin Contracts – zu Mitgliedern wie zu anderen",
+    "Sie darf alles",
+    "Sie wird isoliert, auch intern",
+    "Sie verliert ihre Endpoints"
+   ],
+   "answer": 0,
+   "explain": "Die Preferred Group öffnet nur zwischen Mitgliedern."
+  },
+  {
+   "id": "q2",
+   "q": "Warum ist die Preferred Group nur eine Übergangslösung?",
+   "options": [
+    "Sie ist langsam",
+    "Zwischen den Mitgliedern gilt kein Least Privilege mehr – das widerspricht dem Whitelist-Modell",
+    "Sie funktioniert nur 30 Tage",
+    "Sie kostet Lizenzen"
+   ],
+   "answer": 1,
+   "explain": "Sie ist praktisch für Migrationen. Danach sollten die benötigten Flüsse als Contracts gebaut werden."
+  }
+ ],
+ "solution": "`POST /api/mo/uni/tn-Shop.json` mit `{\"fvTenant\": {\"attributes\": {}, \"children\": [{\"fvCtx\": {\"attributes\": {\"name\": \"Prod\"}, \"children\": [{\"vzAny\": {\"attributes\": {\"prefGrMemb\": \"enabled\"}}}]}}, {\"fvAp\": {\"attributes\": {\"name\": \"Webshop\"}, \"children\": [{\"fvAEPg\": {\"attributes\": {\"name\": \"Web\", \"prefGrMemb\": \"include\"}}}, {\"fvAEPg\": {\"attributes\": {\"name\": \"App\", \"prefGrMemb\": \"include\"}}}]}}]}}`",
+ "routers": [],
+ "vcenters": [],
+ "devices": [],
+ "aaa": [],
+ "switches": [],
+ "solutionConfig": [
+  [
+   "uni/tn-Shop",
+   {
+    "fvTenant": {
+     "attributes": {},
+     "children": [
+      {
+       "fvCtx": {
+        "attributes": {
+         "name": "Prod"
+        },
+        "children": [
+         {
+          "vzAny": {
+           "attributes": {
+            "prefGrMemb": "enabled"
+           }
+          }
+         }
+        ]
+       }
+      },
+      {
+       "fvAp": {
+        "attributes": {
+         "name": "Webshop"
+        },
+        "children": [
+         {
+          "fvAEPg": {
+           "attributes": {
+            "name": "Web",
+            "prefGrMemb": "include"
+           }
+          }
+         },
+         {
+          "fvAEPg": {
+           "attributes": {
+            "name": "App",
+            "prefGrMemb": "include"
+           }
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  ]
+ ]
+}

@@ -1,0 +1,1189 @@
+{
+ "id": "40-it-ot-segmentation",
+ "title": "40 IT-/OT-Segmentierung einer Fertigungslinie",
+ "topic": "Policy / Praxis",
+ "level": "Fortgeschritten",
+ "duration": "60 min",
+ "fabric": "discovered",
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Labs 32, 34 und 38"
+ ],
+ "tools": [
+  "Tenant Werk > Contracts",
+  "EPG > Policy",
+  "Traffic Inspector",
+  "Testmatrix (Simulation)"
+ ],
+ "goals": [
+  "Eine Kommunikationsmatrix in Contracts übersetzen",
+  "Monitoring-Zugriffe von administrativen Zugriffen trennen",
+  "Laterale Kommunikation verhindern – auch innerhalb einer Zone",
+  "Zeigen, dass „alles funktioniert“ nicht Least Privilege ist"
+ ],
+ "intro": "Eine Fertigungslinie im Tenant **Werk** (VRF **OT**) hat fünf Zonen, jede als eigene EPG mit eigener Bridge Domain:\n\n- **ENG**: eng1, Engineering-Workstation\n- **SCADA**: scada1, SCADA-/HMI-Server\n- **PLC**: plc1, plc2, Steuerungen\n- **MON**: mon1, Monitoring\n- **MGMT**: adm1, Admin-Jump-Host\n\nIm Moment darf keine Zone mit einer anderen sprechen.",
+ "requirements": [
+  "SCADA → PLC: **Modbus/TCP** (tcp/502).",
+  "ENG → PLC: **EtherNet/IP** (tcp/44818) für die Programmierung.",
+  "MON → ENG, SCADA und PLC: **SNMP** (udp/161) und **Ping** – nur lesend, keine Administrationsprotokolle.",
+  "MGMT → ENG und SCADA: **SSH** (tcp/22). Kein direkter Zugriff von MGMT auf die Steuerungen.",
+  "Keine laterale Kommunikation: Die Steuerungen sprechen nicht miteinander, bauen keine Verbindungen auf, ENG und SCADA sprechen nicht miteinander.",
+  "Alles andere bleibt zu."
+ ],
+ "limits": [
+  "**Didaktisches Beispiel ohne Sicherheits- oder Verfügbarkeitsgarantie.** Reale OT-Netze folgen einem Zonen- und Conduit-Modell (z. B. IEC 62443) und brauchen zusätzlich OT-Firewalls mit Protokollprüfung (z. B. Modbus-Funktionscodes). ACI-Filter prüfen nur Layer 3/4.",
+  "Contracts sind zustandslos; ICMP erlaubt auch die Gegenrichtung (Ping der Steuerung zurück zum Monitoring)."
+ ],
+ "hints": [
+  "**Konzept:** Jede Zeile der Matrix ist ein gerichteter Fluss: Wer baut auf (Consumer), wer bietet an (Provider), welcher Dienst (Filter). Gleiche Dienste für mehrere Ziele lassen sich in einem Contract bündeln. Laterale Bewegung *innerhalb* einer Zone ist ein eigenes Thema (Lab 38).",
+  "**Beteiligte Objekte:** Filter modbus, enip, snmp, ssh (Ping: Filter icmp aus common), vier Contracts nach Zweck, Consumer- und Provider-Beziehungen der fünf EPGs, Intra EPG Isolation für die EPG PLC.",
+  "**Prüfschritt:** Baue zuerst die Funktion, prüfe dann jede verbotene Richtung: plc1 → plc2, plc1 → scada1, mon1 → scada1 TCP 22, adm1 → plc1, eng1 → scada1. Die Testmatrix (Simulation > Testmatrix) zeigt alle Zonen auf einen Blick.",
+  "**Lösung:** Contracts scada-to-plc (modbus: SCADA konsumiert, PLC stellt bereit), eng-to-plc (enip: ENG konsumiert, PLC stellt bereit), monitoring (snmp + icmp: MON konsumiert, ENG, SCADA, PLC stellen bereit), admin-ssh (ssh: MGMT konsumiert, ENG und SCADA stellen bereit). EPG PLC: Intra EPG Isolation *Enforced*."
+ ],
+ "cause": "Ohne Contracts ist zwischen den Zonen alles blockiert, innerhalb der Zone PLC aber alles offen.",
+ "config": [
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "infraInfra": {
+       "attributes": {},
+       "children": [
+        {
+         "fvnsVlanInstP": {
+          "attributes": {
+           "name": "VLAN-Pool-Server",
+           "allocMode": "static"
+          },
+          "children": [
+           {
+            "fvnsEncapBlk": {
+             "attributes": {
+              "from": "vlan-100",
+              "to": "vlan-199"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAttEntityP": {
+          "attributes": {
+           "name": "AAEP-Server"
+          },
+          "children": [
+           {
+            "infraRsDomP": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraFuncP": {
+          "attributes": {},
+          "children": [
+           {
+            "infraAccPortGrp": {
+             "attributes": {
+              "name": "IPG-Server-Access"
+             },
+             "children": [
+              {
+               "infraRsAttEntP": {
+                "attributes": {
+                 "tDn": "uni/infra/attentp-AAEP-Server"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAccPortP": {
+          "attributes": {
+           "name": "IntProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraHPortS": {
+             "attributes": {
+              "name": "Server-Ports",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraPortBlk": {
+                "attributes": {
+                 "name": "block2",
+                 "fromPort": "1",
+                 "toPort": "10"
+                }
+               }
+              },
+              {
+               "infraRsAccBaseGrp": {
+                "attributes": {
+                 "tDn": "uni/infra/funcprof/accportgrp-IPG-Server-Access"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraNodeP": {
+          "attributes": {
+           "name": "SwProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraLeafS": {
+             "attributes": {
+              "name": "101-102",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraNodeBlk": {
+                "attributes": {
+                 "name": "blk",
+                 "from_": "101",
+                 "to_": "102"
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "infraRsAccPortP": {
+             "attributes": {
+              "tDn": "uni/infra/accportprof-IntProf-Leaf101-102"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "physDomP": {
+       "attributes": {
+        "name": "PhysDom-Server"
+       },
+       "children": [
+        {
+         "infraRsVlanNs": {
+          "attributes": {
+           "tDn": "uni/infra/vlanns-[VLAN-Pool-Server]-static"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Werk"
+    },
+    "children": [
+     {
+      "fvCtx": {
+       "attributes": {
+        "name": "OT"
+       }
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-ENG"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "OT"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.50.10.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-SCADA"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "OT"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.50.20.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-PLC"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "OT"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.50.30.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-MON"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "OT"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.50.40.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-MGMT"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "OT"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.50.50.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Linie1"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "ENG"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-ENG"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/1]",
+              "encap": "vlan-150",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "SCADA"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-SCADA"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/2]",
+              "encap": "vlan-160",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "PLC"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-PLC"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/1]",
+              "encap": "vlan-170",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/2]",
+              "encap": "vlan-170",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "MON"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-MON"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/3]",
+              "encap": "vlan-180",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "MGMT"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-MGMT"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/4]",
+              "encap": "vlan-190",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "hosts": [
+  {
+   "name": "eng1",
+   "mac": "00:50:56:50:10:11",
+   "ip": "10.50.10.11/24",
+   "gw": "10.50.10.1",
+   "vlan": 150,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/1"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Engineering-Workstation",
+   "services": [
+    "tcp/22",
+    "udp/161"
+   ]
+  },
+  {
+   "name": "scada1",
+   "mac": "00:50:56:50:20:11",
+   "ip": "10.50.20.11/24",
+   "gw": "10.50.20.1",
+   "vlan": 160,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/2"
+    ]
+   ],
+   "bond": "none",
+   "descr": "SCADA-/HMI-Server",
+   "services": [
+    "tcp/22",
+    "tcp/443",
+    "udp/161"
+   ]
+  },
+  {
+   "name": "plc1",
+   "mac": "00:50:56:50:30:11",
+   "ip": "10.50.30.11/24",
+   "gw": "10.50.30.1",
+   "vlan": 170,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/1"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Steuerung Linie 1",
+   "services": [
+    "tcp/502",
+    "tcp/44818",
+    "udp/161"
+   ]
+  },
+  {
+   "name": "plc2",
+   "mac": "00:50:56:50:30:12",
+   "ip": "10.50.30.12/24",
+   "gw": "10.50.30.1",
+   "vlan": 170,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/2"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Steuerung Linie 2",
+   "services": [
+    "tcp/502",
+    "tcp/44818",
+    "udp/161"
+   ]
+  },
+  {
+   "name": "mon1",
+   "mac": "00:50:56:50:40:11",
+   "ip": "10.50.40.11/24",
+   "gw": "10.50.40.1",
+   "vlan": 180,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/3"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Monitoring",
+   "services": [
+    "tcp/22"
+   ]
+  },
+  {
+   "name": "adm1",
+   "mac": "00:50:56:50:50:11",
+   "ip": "10.50.50.11/24",
+   "gw": "10.50.50.1",
+   "vlan": 190,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/4"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Admin-Jump-Host",
+   "services": [
+    "tcp/22"
+   ]
+  }
+ ],
+ "tasks": [],
+ "checks": [
+  {
+   "desc": "SCADA → plc1 Modbus",
+   "type": "traffic",
+   "src": "scada1",
+   "dst": "plc1",
+   "proto": "tcp",
+   "port": 502,
+   "expect": true
+  },
+  {
+   "desc": "SCADA → plc2 Modbus",
+   "type": "traffic",
+   "src": "scada1",
+   "dst": "plc2",
+   "proto": "tcp",
+   "port": 502,
+   "expect": true
+  },
+  {
+   "desc": "ENG → plc1 EtherNet/IP",
+   "type": "traffic",
+   "src": "eng1",
+   "dst": "plc1",
+   "proto": "tcp",
+   "port": 44818,
+   "expect": true
+  },
+  {
+   "desc": "MON → plc2 SNMP",
+   "type": "traffic",
+   "src": "mon1",
+   "dst": "plc2",
+   "proto": "udp",
+   "port": 161,
+   "expect": true
+  },
+  {
+   "desc": "MON → SCADA SNMP",
+   "type": "traffic",
+   "src": "mon1",
+   "dst": "scada1",
+   "proto": "udp",
+   "port": 161,
+   "expect": true
+  },
+  {
+   "desc": "MON → ENG Ping",
+   "type": "traffic",
+   "src": "mon1",
+   "dst": "eng1",
+   "proto": "icmp",
+   "expect": true
+  },
+  {
+   "desc": "MGMT → SCADA SSH",
+   "type": "traffic",
+   "src": "adm1",
+   "dst": "scada1",
+   "proto": "tcp",
+   "port": 22,
+   "expect": true
+  },
+  {
+   "desc": "MGMT → ENG SSH",
+   "type": "traffic",
+   "src": "adm1",
+   "dst": "eng1",
+   "proto": "tcp",
+   "port": 22,
+   "expect": true
+  },
+  {
+   "desc": "SCADA → PLC: nur Modbus",
+   "type": "exposure",
+   "src": "scada1",
+   "dst": "plc1",
+   "allow": [
+    "tcp/502"
+   ],
+   "category": "security"
+  },
+  {
+   "desc": "ENG → PLC: nur EtherNet/IP",
+   "type": "exposure",
+   "src": "eng1",
+   "dst": "plc2",
+   "allow": [
+    "tcp/44818"
+   ],
+   "category": "security"
+  },
+  {
+   "desc": "MON → PLC: nur SNMP und Ping",
+   "type": "exposure",
+   "src": "mon1",
+   "dst": "plc1",
+   "allow": [
+    "udp/161",
+    "icmp"
+   ],
+   "category": "security"
+  },
+  {
+   "desc": "MON → SCADA: nur SNMP und Ping (kein SSH)",
+   "type": "exposure",
+   "src": "mon1",
+   "dst": "scada1",
+   "allow": [
+    "udp/161",
+    "icmp"
+   ],
+   "category": "security"
+  },
+  {
+   "desc": "MGMT → SCADA: nur SSH",
+   "type": "exposure",
+   "src": "adm1",
+   "dst": "scada1",
+   "allow": [
+    "tcp/22"
+   ],
+   "category": "security"
+  },
+  {
+   "desc": "MGMT → PLC: nichts",
+   "type": "exposure",
+   "src": "adm1",
+   "dst": "plc1",
+   "allow": [],
+   "category": "security"
+  },
+  {
+   "desc": "Keine laterale Kommunikation plc1 → plc2",
+   "type": "exposure",
+   "src": "plc1",
+   "dst": "plc2",
+   "allow": [],
+   "category": "security"
+  },
+  {
+   "desc": "Steuerung baut nichts zu SCADA auf",
+   "type": "exposure",
+   "src": "plc1",
+   "dst": "scada1",
+   "allow": [],
+   "category": "security"
+  },
+  {
+   "desc": "ENG und SCADA getrennt (ENG → SCADA)",
+   "type": "exposure",
+   "src": "eng1",
+   "dst": "scada1",
+   "allow": [],
+   "category": "security"
+  },
+  {
+   "desc": "ENG und SCADA getrennt (SCADA → ENG)",
+   "type": "exposure",
+   "src": "scada1",
+   "dst": "eng1",
+   "allow": [],
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Warum bekommen Monitoring und Administration getrennte Contracts?",
+   "options": [
+    "Weil ACI nur einen Filter pro Contract erlaubt",
+    "Damit ein kompromittiertes Monitoring keine Administrationsrechte hat (SNMP lesen ≠ SSH)",
+    "Wegen der Performance",
+    "Das ist egal"
+   ],
+   "answer": 1,
+   "explain": "Trennung nach Zweck: Wer nur beobachten muss, bekommt keine Werkzeuge zum Ändern."
+  },
+  {
+   "id": "q2",
+   "q": "Warum Intra EPG Isolation für die Zone PLC?",
+   "options": [
+    "Damit eine kompromittierte Steuerung die andere nicht erreicht (laterale Bewegung)",
+    "Damit Modbus schneller ist",
+    "Weil sonst SCADA die Steuerungen nicht erreicht",
+    "Weil Steuerungen kein IP sprechen"
+   ],
+   "answer": 0,
+   "explain": "Zwischen Zonen schützen Contracts, innerhalb der Zone braucht es eine eigene Maßnahme."
+  },
+  {
+   "id": "q3",
+   "q": "Ein Kollege verbindet alle Zonen mit einem Contract „permit any“. Was stimmt?",
+   "options": [
+    "Alle Funktionstests sind grün, die Least-Privilege-Prüfungen scheitern",
+    "Nichts funktioniert mehr",
+    "Das ist Least Privilege, weil alles geht",
+    "ACI lehnt so einen Contract ab"
+   ],
+   "answer": 0,
+   "explain": "„Alles funktioniert“ ist nicht dasselbe wie „nur das Nötige ist erlaubt“."
+  }
+ ],
+ "solution": "`POST /api/mo/uni.json` mit `{\"fvTenant\": {\"attributes\": {\"name\": \"Werk\"}, \"children\": [{\"vzFilter\": {\"attributes\": {\"name\": \"modbus\"}, \"children\": [{\"vzEntry\": {\"attributes\": {\"name\": \"modbus\", \"etherT\": \"ip\", \"prot\": \"tcp\", \"dFromPort\": \"502\", \"dToPort\": \"502\"}}}]}}, {\"vzFilter\": {\"attributes\": {\"name\": \"enip\"}, \"children\": [{\"vzEntry\": {\"attributes\": {\"name\": \"enip\", \"etherT\": \"ip\", \"prot\": \"tcp\", \"dFromPort\": \"44818\", \"dToPort\": \"44818\"}}}]}}, {\"vzFilter\": {\"attributes\": {\"name\": \"snmp\"}, \"children\": [{\"vzEntry\": {\"attributes\": {\"name\": \"snmp\", \"etherT\": \"ip\", \"prot\": \"udp\", \"dFromPort\": \"161\", \"dToPort\": \"161\"}}}]}}, {\"vzFilter\": {\"attributes\": {\"name\": \"ssh\"}, \"children\": [{\"vzEntry\": {\"attributes\": {\"name\": \"ssh\", \"etherT\": \"ip\", \"prot\": \"tcp\", \"dFromPort\": \"22\", \"dToPort\": \"22\"}}}]}}, {\"vzBrCP\": {\"attributes\": {\"name\": \"scada-to-plc\", \"scope\": \"context\"}, \"children\": [{\"vzSubj\": {\"attributes\": {\"name\": \"subj\", \"revFltPorts\": \"yes\"}, \"children\": [{\"vzRsSubjFiltAtt\": {\"attributes\": {\"tnVzFilterName\": \"modbus\"}}}]}}]}}, {\"vzBrCP\": {\"attributes\": {\"name\": \"eng-to-plc\", \"scope\": \"context\"}, \"children\": [{\"vzSubj\": {\"attributes\": {\"name\": \"subj\", \"revFltPorts\": \"yes\"}, \"children\": [{\"vzRsSubjFiltAtt\": {\"attributes\": {\"tnVzFilterName\": \"enip\"}}}]}}]}}, {\"vzBrCP\": {\"attributes\": {\"name\": \"monitoring\", \"scope\": \"context\"}, \"children\": [{\"vzSubj\": {\"attributes\": {\"name\": \"subj\", \"revFltPorts\": \"yes\"}, \"children\": [{\"vzRsSubjFiltAtt\": {\"attributes\": {\"tnVzFilterName\": \"snmp\"}}}, {\"vzRsSubjFiltAtt\": {\"attributes\": {\"tnVzFilterName\": \"icmp\"}}}]}}]}}, {\"vzBrCP\": {\"attributes\": {\"name\": \"admin-ssh\", \"scope\": \"context\"}, \"children\": [{\"vzSubj\": {\"attributes\": {\"name\": \"subj\", \"revFltPorts\": \"yes\"}, \"children\": [{\"vzRsSubjFiltAtt\": {\"attributes\": {\"tnVzFilterName\": \"ssh\"}}}]}}]}}, {\"fvAp\": {\"attributes\": {\"name\": \"Linie1\"}, \"children\": [{\"fvAEPg\": {\"attributes\": {\"name\": \"SCADA\"}, \"children\": [{\"fvRsCons\": {\"attributes\": {\"tnVzBrCPName\": \"scada-to-plc\"}}}, {\"fvRsProv\": {\"attributes\": {\"tnVzBrCPName\": \"monitoring\"}}}, {\"fvRsProv\": {\"attributes\": {\"tnVzBrCPName\": \"admin-ssh\"}}}]}}, {\"fvAEPg\": {\"attributes\": {\"name\": \"ENG\"}, \"children\": [{\"fvRsCons\": {\"attributes\": {\"tnVzBrCPName\": \"eng-to-plc\"}}}, {\"fvRsProv\": {\"attributes\": {\"tnVzBrCPName\": \"monitoring\"}}}, {\"fvRsProv\": {\"attributes\": {\"tnVzBrCPName\": \"admin-ssh\"}}}]}}, {\"fvAEPg\": {\"attributes\": {\"name\": \"PLC\", \"pcEnfPref\": \"enforced\"}, \"children\": [{\"fvRsProv\": {\"attributes\": {\"tnVzBrCPName\": \"scada-to-plc\"}}}, {\"fvRsProv\": {\"attributes\": {\"tnVzBrCPName\": \"eng-to-plc\"}}}, {\"fvRsProv\": {\"attributes\": {\"tnVzBrCPName\": \"monitoring\"}}}]}}, {\"fvAEPg\": {\"attributes\": {\"name\": \"MON\"}, \"children\": [{\"fvRsCons\": {\"attributes\": {\"tnVzBrCPName\": \"monitoring\"}}}]}}, {\"fvAEPg\": {\"attributes\": {\"name\": \"MGMT\"}, \"children\": [{\"fvRsCons\": {\"attributes\": {\"tnVzBrCPName\": \"admin-ssh\"}}}]}}]}}]}}`",
+ "routers": [],
+ "vcenters": [],
+ "devices": [],
+ "aaa": [],
+ "switches": [],
+ "solutionConfig": [
+  [
+   "uni",
+   {
+    "fvTenant": {
+     "attributes": {
+      "name": "Werk"
+     },
+     "children": [
+      {
+       "vzFilter": {
+        "attributes": {
+         "name": "modbus"
+        },
+        "children": [
+         {
+          "vzEntry": {
+           "attributes": {
+            "name": "modbus",
+            "etherT": "ip",
+            "prot": "tcp",
+            "dFromPort": "502",
+            "dToPort": "502"
+           }
+          }
+         }
+        ]
+       }
+      },
+      {
+       "vzFilter": {
+        "attributes": {
+         "name": "enip"
+        },
+        "children": [
+         {
+          "vzEntry": {
+           "attributes": {
+            "name": "enip",
+            "etherT": "ip",
+            "prot": "tcp",
+            "dFromPort": "44818",
+            "dToPort": "44818"
+           }
+          }
+         }
+        ]
+       }
+      },
+      {
+       "vzFilter": {
+        "attributes": {
+         "name": "snmp"
+        },
+        "children": [
+         {
+          "vzEntry": {
+           "attributes": {
+            "name": "snmp",
+            "etherT": "ip",
+            "prot": "udp",
+            "dFromPort": "161",
+            "dToPort": "161"
+           }
+          }
+         }
+        ]
+       }
+      },
+      {
+       "vzFilter": {
+        "attributes": {
+         "name": "ssh"
+        },
+        "children": [
+         {
+          "vzEntry": {
+           "attributes": {
+            "name": "ssh",
+            "etherT": "ip",
+            "prot": "tcp",
+            "dFromPort": "22",
+            "dToPort": "22"
+           }
+          }
+         }
+        ]
+       }
+      },
+      {
+       "vzBrCP": {
+        "attributes": {
+         "name": "scada-to-plc",
+         "scope": "context"
+        },
+        "children": [
+         {
+          "vzSubj": {
+           "attributes": {
+            "name": "subj",
+            "revFltPorts": "yes"
+           },
+           "children": [
+            {
+             "vzRsSubjFiltAtt": {
+              "attributes": {
+               "tnVzFilterName": "modbus"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      },
+      {
+       "vzBrCP": {
+        "attributes": {
+         "name": "eng-to-plc",
+         "scope": "context"
+        },
+        "children": [
+         {
+          "vzSubj": {
+           "attributes": {
+            "name": "subj",
+            "revFltPorts": "yes"
+           },
+           "children": [
+            {
+             "vzRsSubjFiltAtt": {
+              "attributes": {
+               "tnVzFilterName": "enip"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      },
+      {
+       "vzBrCP": {
+        "attributes": {
+         "name": "monitoring",
+         "scope": "context"
+        },
+        "children": [
+         {
+          "vzSubj": {
+           "attributes": {
+            "name": "subj",
+            "revFltPorts": "yes"
+           },
+           "children": [
+            {
+             "vzRsSubjFiltAtt": {
+              "attributes": {
+               "tnVzFilterName": "snmp"
+              }
+             }
+            },
+            {
+             "vzRsSubjFiltAtt": {
+              "attributes": {
+               "tnVzFilterName": "icmp"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      },
+      {
+       "vzBrCP": {
+        "attributes": {
+         "name": "admin-ssh",
+         "scope": "context"
+        },
+        "children": [
+         {
+          "vzSubj": {
+           "attributes": {
+            "name": "subj",
+            "revFltPorts": "yes"
+           },
+           "children": [
+            {
+             "vzRsSubjFiltAtt": {
+              "attributes": {
+               "tnVzFilterName": "ssh"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      },
+      {
+       "fvAp": {
+        "attributes": {
+         "name": "Linie1"
+        },
+        "children": [
+         {
+          "fvAEPg": {
+           "attributes": {
+            "name": "SCADA"
+           },
+           "children": [
+            {
+             "fvRsCons": {
+              "attributes": {
+               "tnVzBrCPName": "scada-to-plc"
+              }
+             }
+            },
+            {
+             "fvRsProv": {
+              "attributes": {
+               "tnVzBrCPName": "monitoring"
+              }
+             }
+            },
+            {
+             "fvRsProv": {
+              "attributes": {
+               "tnVzBrCPName": "admin-ssh"
+              }
+             }
+            }
+           ]
+          }
+         },
+         {
+          "fvAEPg": {
+           "attributes": {
+            "name": "ENG"
+           },
+           "children": [
+            {
+             "fvRsCons": {
+              "attributes": {
+               "tnVzBrCPName": "eng-to-plc"
+              }
+             }
+            },
+            {
+             "fvRsProv": {
+              "attributes": {
+               "tnVzBrCPName": "monitoring"
+              }
+             }
+            },
+            {
+             "fvRsProv": {
+              "attributes": {
+               "tnVzBrCPName": "admin-ssh"
+              }
+             }
+            }
+           ]
+          }
+         },
+         {
+          "fvAEPg": {
+           "attributes": {
+            "name": "PLC",
+            "pcEnfPref": "enforced"
+           },
+           "children": [
+            {
+             "fvRsProv": {
+              "attributes": {
+               "tnVzBrCPName": "scada-to-plc"
+              }
+             }
+            },
+            {
+             "fvRsProv": {
+              "attributes": {
+               "tnVzBrCPName": "eng-to-plc"
+              }
+             }
+            },
+            {
+             "fvRsProv": {
+              "attributes": {
+               "tnVzBrCPName": "monitoring"
+              }
+             }
+            }
+           ]
+          }
+         },
+         {
+          "fvAEPg": {
+           "attributes": {
+            "name": "MON"
+           },
+           "children": [
+            {
+             "fvRsCons": {
+              "attributes": {
+               "tnVzBrCPName": "monitoring"
+              }
+             }
+            }
+           ]
+          }
+         },
+         {
+          "fvAEPg": {
+           "attributes": {
+            "name": "MGMT"
+           },
+           "children": [
+            {
+             "fvRsCons": {
+              "attributes": {
+               "tnVzBrCPName": "admin-ssh"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  ]
+ ]
+}
