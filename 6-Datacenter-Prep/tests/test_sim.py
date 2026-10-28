@@ -8,7 +8,8 @@ import unittest
 import urllib.request
 import urllib.error
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, BASE_DIR)
 
 from dcprep.server import Sim, serve  # noqa: E402
 from dcprep.model import post, AciError  # noqa: E402
@@ -314,6 +315,21 @@ class TestRest(unittest.TestCase):
                 return resp.status, json.loads(resp.read() or b'null'), resp.headers
         except urllib.error.HTTPError as e:
             return e.code, json.loads(e.read() or b'null'), e.headers
+
+    def test_abgleich_script_against_itself(self):
+        """werkzeuge/abgleich.py: Simulator gegen sich selbst muss vollstaendig gleich sein und raeumt auf."""
+        import subprocess
+        import sys
+        out = tempfile.mkdtemp()
+        url = 'http://127.0.0.1:%d' % self.port
+        r = subprocess.run([sys.executable, os.path.join(BASE_DIR, 'werkzeuge', 'abgleich.py'), '--sim', url, '--sim-password', 'secret',
+                            '--apic', url, '--apic-password', 'secret', '--write', '--fault-wait', '0', '--out', out],
+                           capture_output=True, text=True, timeout=120)
+        self.assertEqual(r.returncode, 0, r.stdout[-2000:] + r.stderr[-2000:])
+        self.assertIn('0 abweichend', r.stdout)
+        with open(os.path.join(out, 'abgleich-rohdaten.json'), encoding='utf-8') as f:
+            self.assertGreater(len(json.load(f)['ergebnisse']), 60)
+        self.assertNotIn('uni/tn-DCP-Abgleich', self.S.store.objs)
 
     def test_flow(self):
         s, j, _ = self.req('GET', '/api/class/fvTenant.json')
@@ -950,7 +966,7 @@ class TestUsers(unittest.TestCase):
         self.assertIn('NurAnna', names(anna))
         self.req('POST', '/sim/labs/check', {}, anna)
         labs = {l['id']: l for l in self.req('GET', '/sim/labs?full=1', cookie=anna)[1]['labs']}
-        self.assertEqual(labs['03-tenant-epg']['progress']['total'], 8)
+        self.assertEqual(labs['03-tenant-epg']['progress']['total'], 9)  # Lab 03: 7 Funktions- und 2 Sicherheitspruefungen (Least Privilege dazu)
         self.assertFalse(labs['03-tenant-epg']['progress']['done'])
         self.req('POST', '/sim/labs/op', {'op': 'reset', 'id': '03-tenant-epg'}, anna)
         self.assertNotIn('NurAnna', names(anna))

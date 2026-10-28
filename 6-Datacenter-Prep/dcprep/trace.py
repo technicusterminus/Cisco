@@ -4,23 +4,104 @@ import ipaddress
 from .engine import ip_of, net_of, EPHEMERAL
 
 
+# Reason Codes: maschinenlesbare Ursache eines DROP. Die Codes sind simulator-spezifisch (keine Cisco-Codes),
+# die Reihenfolge der Pruefschritte ist ein didaktisches Diagnosemodell, keine Hardware-Pipeline.
+# (Praefix des Schritt-Titels, Code, Ebene, naechster Diagnoseschritt)
+STEP_CODES = [
+    ('Policy Anfrage', None, 'policy', None),
+    ('Policy Antwort', 'POLICY_REPLY_DENIED', 'policy',
+     'Rueckweg: Subject-Option "Reverse Filter Ports" und die Filter-Ports pruefen; ohne Reverse passt die Antwort (Quell-Port = Dienst-Port) nicht.'),
+    ('Zieldienst', 'SERVICE_NOT_LISTENING', 'service', 'Auf dem Ziel-Host laeuft kein Dienst auf diesem Port (Simulation > Topologie & Hosts, Feld Dienste).'),
+    ('Endpoint nicht gelernt', 'EP_NOT_LEARNED', 'endpoint',
+     'Access-Kette pruefen: Static Port, VLAN-Encap im Pool, Domain an der EPG, AAEP, Interface Policy Group, Interface-/Switch-Profil, Link.'),
+    ('Layer-2-Schleife', 'L2_LOOP', 'endpoint', 'MCP und Legacy-Switches pruefen (Fabric > Access Policies > MCP Instance Policy).'),
+    ('Route Leaking', 'INTERVRF_LEAK_MISSING', 'routing', 'Shared-Subnetze am Provider und Consumer sowie den Contract-Scope pruefen.'),
+    ('Gateway', 'GATEWAY_INVALID', 'routing', 'BD: Unicast Routing, Subnetz/Gateway-IP und das Default Gateway des Hosts vergleichen.'),
+    ('IP-Learning', 'EP_IP_NOT_LEARNED', 'endpoint', 'BD-Option "Limit IP Learning to Subnet" und das BD-Subnetz pruefen.'),
+    ('Service Graph', 'SERVICE_GRAPH_NOT_APPLIED', 'policy', 'Operations > Service Graph: Rendering-Zustand und Fehlermeldungen pruefen.'),
+    ('PBR', 'PBR_DEST_INVALID', 'policy', 'PBR Policy: Ziel-IP und MAC des Firewall-Interfaces pruefen.'),
+    ('Firewall', 'FIREWALL_DENY', 'service', 'Regelwerk und Interfaces der simulierten Firewall pruefen.'),
+    ('Rueckweg per PBR', 'PBR_RETURN_INVALID', 'policy', 'PBR Policy am Provider-Connector pruefen.'),
+    ('Remote Leaf', 'FABRIC_PATH_DOWN', 'fabric', 'Fabric > Inventory: Zustand der Switches und Links pruefen.'),
+    ('Fabric', 'FABRIC_PATH_DOWN', 'fabric', 'Fabric > Inventory: Spines und Fabric-Links pruefen.'),
+    ('Multi-Pod', 'FABRIC_PATH_DOWN', 'fabric', 'IPN-Adjacencies und Spine-Uplinks pruefen.'),
+    ('Layer 2', 'L2_DIFFERENT_BD', 'forwarding', 'Subnetzmaske des Hosts und BD-Zuordnung der EPGs vergleichen.'),
+    ('ARP', 'ARP_UNRESOLVED', 'forwarding', 'BD-Optionen ARP Flooding und Unicast Routing pruefen, ist das Ziel ein stiller Host?'),
+    ('Routing', 'ROUTE_MISSING', 'routing', 'Routing-Tabelle des Leafs (CLI: show ip route vrf ...) und L3Out-Nachbarschaft pruefen.'),
+    ('Route auf Border Leaf', 'ROUTE_MISSING', 'routing', 'Routen auf dem Border Leaf und die L3Out-Nachbarschaft pruefen.'),
+    ('Klassifizierung', 'EXT_EPG_NO_MATCH', 'policy', 'External EPG: Subnetz mit "External Subnets for the External EPG" pruefen.'),
+    ('Rueckweg', 'RETURN_ROUTE_MISSING', 'routing',
+     'BD-Subnetz "Advertised Externally", BD mit L3Out verknuepft, Export-Route-Control und Route des externen Routers pruefen.'),
+    ('Externer Router', 'EXTERNAL_UNREACHABLE', 'external', 'Netze des simulierten externen Routers pruefen.'),
+    ('Router', 'EXTERNAL_UNREACHABLE', 'external', 'Link, Nachbarschaft und Routen des externen Routers pruefen.'),
+    ('VRF', 'VRF_MISMATCH', 'routing', 'VRF des BD und des L3Out vergleichen.'),
+    ('Policy', 'POLICY_TRANSIT_DENIED', 'policy', 'Fuer Transit Routing braucht jedes L3Out ein eigenes External EPG mit Contract.'),
+    ('Ziel', 'DEST_INVALID', 'input', None),
+]
+
+# Codes der Policy-Entscheidung (engine.packet) mit naechstem Diagnoseschritt
+POLICY_HINTS = {
+    'POLICY_IMPLICIT_DENY': 'Zwischen den beiden EPGs gibt es keinen Contract mit passendem Filter. Contract, Subject, Filter-Entry '
+                            '(Protokoll, Ports) und die Rollen Consumer/Provider pruefen; CLI: show zoning-rule.',
+    'POLICY_DENY_RULE': 'Ein Filter mit Aktion Deny passt. Subjects und Filter-Aktionen im Contract pruefen.',
+    'POLICY_TABOO': 'Ein Taboo Contract an der Ziel-EPG verbietet diesen Verkehr.',
+    'POLICY_INTRA_EPG_ISOLATION': 'An der EPG ist Intra EPG Isolation "enforced" - Endpoints derselben EPG duerfen nicht miteinander sprechen.',
+    'POLICY_ESG_EPG_MIX': 'Contracts zwischen ESG und EPG gibt es nicht; beide Seiten muessen ESGs sein.',
+}
+
+
 class Trace:
     def __init__(self):
         self.steps = []
         self.ok = True
         self.woken = []
+        self.policy = []
+        self.path = None
 
-    def step(self, ok, title, detail=''):
-        self.steps.append({'ok': ok, 'title': title, 'detail': detail})
+    def step(self, ok, title, detail='', code=None, refs=None, hint=None):
+        st = {'ok': ok, 'title': title, 'detail': detail}
         if ok is False:
             self.ok = False
+            for pre, c, layer, h in STEP_CODES:
+                if title.startswith(pre) or (' ' + pre) in title:
+                    code, st['layer'], hint = code or c, layer, hint or h
+                    break
+            st['code'] = code or 'CHECK_FAILED'
+            if hint:
+                st['hint'] = hint
+        elif code:
+            st['code'] = code
+        if refs:
+            st['refs'] = [r for r in refs if r]
+        self.steps.append(st)
         return ok is not False
 
     def result(self, summary=None):
         if summary is None:
             summary = 'Erfolgreich: Anfrage und Antwort kommen an.' if self.ok else \
                 'Fehlgeschlagen: siehe ersten roten Schritt.'
-        return {'ok': self.ok, 'summary': summary, 'steps': self.steps, 'woken': self.woken if self.ok else []}
+        out = {'ok': self.ok, 'summary': summary, 'steps': self.steps, 'woken': self.woken if self.ok else [],
+               'policy': self.policy, 'path': self.path}
+        return finish(out)
+
+
+def finish(r):
+    """Ergebnis vereinheitlichen: verdict ALLOW / DROP / UNRESOLVED, reason (Code), location, hint."""
+    if 'verdict' in r:
+        return r
+    bad = next((s for s in r.get('steps', []) if s['ok'] is False), None)
+    if r.get('ok'):
+        r.update(verdict='ALLOW', reason='ALLOWED', location=None, hint=None)
+    elif bad:
+        r.update(verdict='DROP', reason=bad.get('code', 'CHECK_FAILED'), location=bad['title'], layer=bad.get('layer'),
+                 explain=bad['detail'], hint=bad.get('hint'))
+        if bad.get('code') == 'DEST_INVALID':
+            r['verdict'] = 'UNRESOLVED'
+    else:
+        r.update(verdict='UNRESOLVED', reason='INPUT_INVALID', location=None, explain=r.get('summary'), hint=None)
+    r.setdefault('steps', [])
+    r.setdefault('policy', [])
+    return r
 
 
 def _hosts(eng, sim):
@@ -205,27 +286,45 @@ def _gw_ok(eng, t, h, hs, who):
     return True
 
 
-def _policy(eng, t, s, d, proto, port, label_s, label_d):
+def _policy(eng, t, s, d, proto, port, label_s, label_d, dst_host=None):
     dport = port if proto in ('tcp', 'udp') else None
     act, why = eng.packet(s, d, proto, EPHEMERAL if dport else None, dport, 'syn')
+    code, rule = getattr(eng, 'last_code', None), getattr(eng, 'last_rule', None)
     if act == 'permit':
         eng.count(s['dn'], 'txPkts')
         eng.count(d['dn'], 'rxPkts')
     else:
         eng.count(s['dn'], 'txPkts')
         eng.count(d['dn'], 'dropPkts')
-    t.step(act == 'permit', 'Policy Anfrage %s -> %s (%s%s)' % (label_s, label_d, proto,
-                                                            '/%d' % port if dport else ''), why)
+    flow = '%s%s' % (proto, '/%d' % port if dport else '')
+    t.policy.append({'direction': 'request', 'from': s['dn'], 'to': d['dn'], 'flow': flow, 'sport': EPHEMERAL if dport else None,
+                     'dport': dport, 'action': act, 'code': code, 'rule': rule, 'text': why})
+    t.step(act == 'permit', 'Policy Anfrage %s -> %s (%s)' % (label_s, label_d, flow), why,
+           code=code, refs=[s['dn'], d['dn'], (rule or {}).get('contract')], hint=POLICY_HINTS.get(code))
     if act != 'permit':
         return False
     hit = getattr(eng, 'last_hit', None)
     g = getattr(eng, 'graphs', {}).get(hit[0]) if hit else None
     if g is not None and not _service(eng, t, g, hit[1], proto, port):
         return False
+    if dst_host is not None and dport and dst_host.get('services') is not None:
+        svc = '%s/%d' % (proto, port)
+        if svc not in [x.strip().lower() for x in dst_host['services']]:
+            t.step(False, 'Zieldienst auf %s' % dst_host['name'],
+                   'Netz und Policy lassen das Paket durch, aber auf %s laeuft kein Dienst %s (laufende Dienste: %s). '
+                   'Ein echter Host antwortet mit TCP RST bzw. ICMP Port Unreachable - simulator-spezifisches Dienstmodell.'
+                   % (dst_host['name'], svc, ', '.join(dst_host['services']) or 'keine'), refs=[d['dn']])
+            return False
+        t.step(True, 'Zieldienst %s auf %s' % (svc, dst_host['name']), 'Dienst laeuft (simulator-spezifisches Dienstmodell)')
     act, why = eng.packet(d, s, proto, dport, EPHEMERAL if dport else None, 'ack')
+    code, rule = getattr(eng, 'last_code', None), getattr(eng, 'last_rule', None)
     eng.count(d['dn'], 'txPkts')
     eng.count(s['dn'], 'rxPkts' if act == 'permit' else 'dropPkts')
-    t.step(act == 'permit', 'Policy Antwort %s -> %s' % (label_d, label_s), why)
+    t.policy.append({'direction': 'reply', 'from': d['dn'], 'to': s['dn'], 'flow': flow, 'sport': dport, 'dport': EPHEMERAL if dport else None,
+                     'action': act, 'code': code, 'rule': rule, 'text': why})
+    t.step(act == 'permit', 'Policy Antwort %s -> %s' % (label_d, label_s), why,
+           code='POLICY_REPLY_DENIED' if act != 'permit' else code, refs=[d['dn'], s['dn'], (rule or {}).get('contract')],
+           hint=None if act == 'permit' else 'Die Anfrage war erlaubt, die Antwort nicht. ' + STEP_CODES[1][3])
     return act == 'permit'
 
 
@@ -332,6 +431,11 @@ def _spines(eng, t, a, b, flood=False):
 
 
 def run(eng, sim, src, dst, proto='icmp', port=0):
+    """Traffic-Test von src nach dst. Ergebnis mit verdict, reason, location, steps, policy (siehe finish)."""
+    return finish(_run(eng, sim, src, dst, proto, port))
+
+
+def _run(eng, sim, src, dst, proto='icmp', port=0):
     t = Trace()
     proto = proto if proto in ('icmp', 'tcp', 'udp') else 'icmp'
     port = int(port or 0)
@@ -358,6 +462,8 @@ def run(eng, sim, src, dst, proto='icmp', port=0):
     shs, sc = r
     sh = S['h']
     snet = net_of(sh['ip'])
+    leafs = lambda hs: [eng.nodes[n]['name'] for n in hs.get('nodes', []) if n in eng.nodes]
+    t.path = {'src': sh['name'], 'srcLeafs': leafs(shs), 'srcEpg': shs['epg']}
 
     if D['kind'] == 'host':
         r = _host_checks(eng, t, D, 'Ziel')
@@ -365,6 +471,7 @@ def run(eng, sim, src, dst, proto='icmp', port=0):
             return t.result()
         dhs, dc = r
         dh = D['h']
+        t.path.update(dst=dh['name'], dstLeafs=leafs(dhs), dstEpg=dhs['epg'])
         if D['ip'] in snet:
             if shs['bd'] != dhs['bd']:
                 t.step(False, 'Layer 2', 'Ziel liegt im selben IP-Subnetz, aber in einer anderen Bridge Domain '
@@ -414,7 +521,7 @@ def run(eng, sim, src, dst, proto='icmp', port=0):
                                                               '/'.join(eng.nodes[n]['name'] for n in dhs['nodes'])))
             if not _gw_ok(eng, t, dh, dhs, 'Ziel (fuer die Antwort)'):
                 return t.result()
-        if not _policy(eng, t, sc, dc, proto, port, sh['name'], dh['name']):
+        if not _policy(eng, t, sc, dc, proto, port, sh['name'], dh['name'], dst_host=dh):
             return t.result()
         return t.result()
 
@@ -556,7 +663,7 @@ def _from_router(eng, sim, t, S, D, proto, port):
         return t.result()
     t.step(True, 'Klassifizierung', 'Quelle %s gehoert zum External EPG %s' % (src_ip, eng.short(cl[1])))
     sc = eng.cls[cl[1]]
-    if not _policy(eng, t, sc, dc, proto, port, r['name'], dh['name']):
+    if not _policy(eng, t, sc, dc, proto, port, r['name'], dh['name'], dst_host=dh):
         return t.result()
     if not _gw_ok(eng, t, dh, dhs, 'Ziel (fuer die Antwort)'):
         return t.result()

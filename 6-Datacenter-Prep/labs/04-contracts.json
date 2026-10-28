@@ -5,13 +5,45 @@
  "level": "Mittel",
  "duration": "35 min",
  "fabric": "discovered",
- "goals": [
-  "Filter und Contracts anlegen",
-  "Provider und Consumer richtig zuordnen",
-  "Reverse Filter Ports verstehen",
-  "vzAny für einen Contract an alle EPGs im VRF nutzen"
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
  ],
- "intro": "Der Tenant **Shop** aus Lab 03 steht. Zusätzlich gibt es die EPG **Mgmt** mit dem Jump-Host **jump1** (10.10.40.11). Jetzt kommt die Policy.\n\n**Anforderungen:**\n- Web darf App auf **TCP 8080** und per **Ping** erreichen.\n- App darf von sich aus keine Verbindung zu Web aufbauen.\n- jump1 soll **jede** EPG im VRF Prod per **SSH (TCP 22)** erreichen.",
+ "prerequisites": [
+  "Lab 03",
+  "Lab 32 (Least Privilege) ist eine gute Vorübung"
+ ],
+ "tools": [
+  "Tenant Shop > Contracts",
+  "VRF > EPG Collection for VRF",
+  "Traffic-Test",
+  "CLI: show zoning-rule"
+ ],
+ "goals": [
+  "Filter, Contracts und Subjects passend zu mehreren Anforderungen bauen",
+  "Die Verbindungsrichtung in Rollen übersetzen",
+  "Eine Freigabe für alle EPGs eines VRF mit einer einzigen Beziehung bauen"
+ ],
+ "intro": "Der Tenant **Shop** aus Lab 03 steht. Zusätzlich gibt es die EPG **Mgmt** mit dem Jump-Host **jump1** (10.10.40.11). Jetzt kommt die Policy.",
+ "requirements": [
+  "web1 erreicht app1 auf **TCP 8080** und per **Ping**.",
+  "app1 baut von sich aus keine Verbindung zu web1 auf.",
+  "jump1 erreicht **jede** EPG im VRF Prod per **SSH (TCP 22)** – auch EPGs, die später dazukommen, ohne dass man sie einzeln anfassen muss.",
+  "Sonst bleibt alles zu: Web nicht per SSH zu App, die EPGs nicht zu jump1."
+ ],
+ "limits": [
+  "ICMP wird nicht nach Type unterschieden: Ein ICMP-Filter in beide Richtungen erlaubt auch Pings in der Gegenrichtung.",
+  "Contract-Prioritäten sind vereinfacht (Deny vor Permit, keine Priority-Stufen).",
+  "Ob die SSH-Freigabe auch für künftige EPGs gilt, kann die Bewertung nicht prüfen. Eine Lösung mit Provider-Beziehung an jeder einzelnen EPG wird ebenfalls als bestanden gewertet."
+ ],
+ "hints": [
+  "**Konzept:** Freigaben sind gerichtet: Wer den Dienst anbietet und wer ihn nutzt, entscheidet über die Regeln. Für „alle EPGs eines VRF“ gibt es ein eigenes Objekt, das stellvertretend für alle EPGs steht.",
+  "**Beteiligte Objekte:** Filter (tcp/8080, tcp/22; für Ping gibt es im Tenant common den Filter **icmp**), zwei Contracts mit Subject, die Rollen Consumer/Provider an den EPGs, und **vzAny** (*VRF > EPG Collection for VRF*).",
+  "**Prüfschritt:** Traffic-Test web1 → app1 TCP 8080 und app1 → web1 TCP 8080. In `show zoning-rule` auf leaf101 die Richtungen *bi-dir* und *uni-dir-ignore* suchen. Für SSH: Wer baut die Verbindung auf – jump1 oder die anderen EPGs?",
+  "**Lösung:** Filter tcp-8080 → Contract web-to-app mit den Filtern tcp-8080 und icmp → Web konsumiert, App stellt bereit. Filter ssh (tcp/22) → Contract mgmt-ssh → vzAny im VRF Prod **stellt bereit**, die EPG Mgmt **konsumiert**. Weil nur Mgmt konsumiert, kommt Web nicht per SSH zu App."
+ ],
+ "cause": "Im Ausgangszustand gibt es keinen Contract: alles zwischen den EPGs ist Implicit Deny.",
  "config": [
   {
    "polUni": {
@@ -411,30 +443,7 @@
    "descr": "Jump-Host der Admins"
   }
  ],
- "tasks": [
-  {
-   "title": "Filter",
-   "text": "Unter **Contracts > Filters** einen Filter **tcp-8080** mit einem Entry: EtherType IP, Protocol tcp, Destination Port 8080.",
-   "hint": "Für Ping gibt es im Tenant common schon den Filter **icmp** – den kannst du direkt verwenden."
-  },
-  {
-   "title": "Contract",
-   "text": "Contract **web-to-app** (Scope VRF) mit einem Subject, das die Filter tcp-8080 und icmp enthält."
-  },
-  {
-   "title": "Provider und Consumer",
-   "text": "Die EPG **App** stellt den Dienst bereit (**Provided**), die EPG **Web** nutzt ihn (**Consumed**). Am EPG unter **Contracts** hinzufügen."
-  },
-  {
-   "title": "Testen",
-   "text": "web1 → app1: TCP 8080 und ICMP klappen, TCP 22 nicht. app1 → web1 auf TCP 8080 ist blockiert. Auf leaf101: `show zoning-rule` – erkennst du die Regeln bi-dir und uni-dir-ignore?"
-  },
-  {
-   "title": "vzAny",
-   "text": "Filter **ssh** (tcp/22) und Contract **mgmt-ssh** anlegen. Unter **VRF Prod > EPG Collection for VRF** den Contract als **Provided** eintragen, an der EPG **Mgmt** als **Consumed**.",
-   "hint": "vzAny steht für alle EPGs im VRF. Weil nur Mgmt konsumiert, darf Web trotzdem nicht per SSH zu App."
-  }
- ],
+ "tasks": [],
  "checks": [
   {
    "desc": "web1 → app1 TCP 8080 erlaubt",
@@ -454,24 +463,6 @@
    "expect": true
   },
   {
-   "desc": "web1 → app1 TCP 22 blockiert",
-   "type": "traffic",
-   "src": "web1",
-   "dst": "app1",
-   "proto": "tcp",
-   "port": 22,
-   "expect": false
-  },
-  {
-   "desc": "app1 → web1 TCP 8080 blockiert (Provider baut nicht auf)",
-   "type": "traffic",
-   "src": "app1",
-   "dst": "web1",
-   "proto": "tcp",
-   "port": 8080,
-   "expect": false
-  },
-  {
    "desc": "jump1 → web1 SSH erlaubt",
    "type": "traffic",
    "src": "jump1",
@@ -488,6 +479,83 @@
    "proto": "tcp",
    "port": 22,
    "expect": true
+  },
+  {
+   "desc": "web1 → app1 TCP 22 durch die Policy blockiert",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "app1",
+   "proto": "tcp",
+   "port": 22,
+   "expect": false,
+   "reason": "POLICY_",
+   "category": "security"
+  },
+  {
+   "desc": "app1 baut keine Verbindung zu web1 auf TCP 8080 auf",
+   "type": "traffic",
+   "src": "app1",
+   "dst": "web1",
+   "proto": "tcp",
+   "port": 8080,
+   "expect": false,
+   "reason": "POLICY_",
+   "category": "security"
+  },
+  {
+   "desc": "Least Privilege Web → App: nur tcp/8080 und Ping",
+   "type": "exposure",
+   "src": "web1",
+   "dst": "app1",
+   "allow": [
+    "tcp/8080",
+    "icmp"
+   ],
+   "category": "security"
+  },
+  {
+   "desc": "Least Privilege jump1 → Web: nur SSH",
+   "type": "exposure",
+   "src": "jump1",
+   "dst": "web1",
+   "allow": [
+    "tcp/22"
+   ],
+   "category": "security"
+  },
+  {
+   "desc": "Web baut keine Verbindung zu jump1 auf",
+   "type": "exposure",
+   "src": "web1",
+   "dst": "jump1",
+   "allow": [],
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Warum darf web1 nach der Lösung nicht per SSH zu app1, obwohl vzAny den SSH-Contract bereitstellt?",
+   "options": [
+    "Weil vzAny nur für neue EPGs gilt",
+    "Weil nur die EPG Mgmt den Contract konsumiert – Web ist kein Consumer",
+    "Weil SSH grundsätzlich blockiert ist",
+    "Weil App eine andere BD hat"
+   ],
+   "answer": 1,
+   "explain": "Eine Regel entsteht nur zwischen Consumer und Provider. vzAny stellt für alle EPGs bereit, konsumiert aber nur Mgmt."
+  },
+  {
+   "id": "q2",
+   "q": "Was zeigt `show zoning-rule` für den Contract web-to-app mit Reverse Filter Ports?",
+   "options": [
+    "Eine Regel bi-dir (Consumer → Provider) und eine uni-dir-ignore (Antwort)",
+    "Nur eine Regel permit any",
+    "Zwei Regeln deny",
+    "Gar nichts, Contracts erscheinen dort nicht"
+   ],
+   "answer": 0,
+   "explain": "Die Gegenrichtung wird mit vertauschten Ports als eigene Regel programmiert."
   }
  ],
  "solution": "Contract web-to-app: `{\"vzBrCP\": {\"attributes\": {\"name\": \"web-to-app\", \"scope\": \"context\"}, \"children\": [{\"vzSubj\": {\"attributes\": {\"name\": \"subj\", \"revFltPorts\": \"yes\"}, \"children\": [{\"vzRsSubjFiltAtt\": {\"attributes\": {\"tnVzFilterName\": \"tcp-8080\"}}}, {\"vzRsSubjFiltAtt\": {\"attributes\": {\"tnVzFilterName\": \"icmp\"}}}]}}]}}`\n\nvzAny: `POST /api/mo/uni/tn-Shop/ctx-Prod/any.json` mit `{\"vzRsAnyToProv\":{\"attributes\":{\"tnVzBrCPName\":\"mgmt-ssh\"}}}`, an der EPG Mgmt `fvRsCons` mit `tnVzBrCPName=mgmt-ssh`.",

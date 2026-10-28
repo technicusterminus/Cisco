@@ -13,7 +13,6 @@ import ipaddress
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs, unquote
 
-from . import model
 from .model import AciError, CLASSES, rn_of, Store, post as mit_post, delete as mit_delete, now_ts
 from .query import run_query
 from .engine import Engine, ip_of
@@ -274,10 +273,14 @@ class Sim:
     def lab(self, lid):
         return next((l for l in self.labs() if l['id'] == lid), None)
 
-    def load_lab(self, lid, autosave=True):
+    def load_lab(self, lid, autosave=True, mode=None):
         lab = self.lab(lid)
         if not lab:
             raise AciError(404, 'Lab %s nicht gefunden' % lid)
+        modes = lab.get('modes') or ['guided']
+        mode = mode or modes[0]
+        if mode not in modes:
+            raise AciError(400, 'Modus %s gibt es fuer dieses Lab nicht (moeglich: %s)' % (mode, ', '.join(modes)))
         if autosave:
             self.autosave_lab()
         self.reset(lab.get('fabric', 'discovered'))
@@ -304,10 +307,57 @@ class Sim:
             self.sim[k] = json.loads(json.dumps(v))
         self.sim['settings'].update(lab.get('settings', {}))
         self.sim['lab'] = lid
+        # Lab-Sitzung: Modus und erfasste Aktionen (Hinweise, Antworten) - aendern die Konfiguration nicht
+        self.sim['labSession'] = {'mode': mode, 'hints': 0, 'answers': {}, 'checks': 0}
         self.changed()
         return lab
 
-    def check_lab(self):
+    def lab_session(self):
+        return self.sim.get('labSession') or {'mode': 'guided', 'hints': 0, 'answers': {}, 'checks': 0}
+
+    def lab_public(self, lab):
+        """Lab fuer die Oberflaeche: im Pruefungsmodus ohne Hinweise und Loesung, Fragen ohne Antwort."""
+        if not lab:
+            return None
+        ses = self.lab_session()
+        exam = ses['mode'] == 'exam'
+        out = {k: lab.get(k) for k in ('id', 'title', 'intro', 'goals', 'level', 'topic', 'prerequisites', 'tools', 'limits', 'requirements')}
+        out['mode'] = ses['mode']
+        out['modes'] = lab.get('modes') or ['guided']
+        out['tasks'] = [{k: v for k, v in t.items() if not (exam and k == 'hint')} for t in lab.get('tasks', [])]
+        hints = lab.get('hints') or []
+        out['hintCount'] = 0 if exam else len(hints)
+        out['hints'] = [] if exam else hints[:ses['hints']]
+        out['solution'] = None if exam else lab.get('solution')
+        out['questions'] = [{k: q[k] for k in ('id', 'q', 'options')} for q in lab.get('questions', [])]
+        out['answers'] = {k: {'choice': v, 'ok': v == next((q['answer'] for q in lab.get('questions', []) if q['id'] == k), None),
+                              'explain': None if exam else next((q.get('explain') for q in lab.get('questions', []) if q['id'] == k), None)}
+                          for k, v in ses['answers'].items()}
+        return out
+
+    def lab_hint(self, level):
+        lab = self.lab(self.sim.get('lab'))
+        if not lab:
+            raise AciError(400, 'Kein Lab aktiv')
+        ses = self.lab_session()
+        if ses['mode'] == 'exam':
+            raise AciError(403, 'Im Pruefungsmodus gibt es keine Hinweise', 403)
+        hints = lab.get('hints') or []
+        ses['hints'] = max(ses['hints'], min(int(level), len(hints)))
+        self.sim['labSession'] = ses
+        return {'hints': hints[:ses['hints']], 'used': ses['hints'], 'count': len(hints)}
+
+    def lab_answer(self, qid, choice):
+        lab = self.lab(self.sim.get('lab'))
+        q = next((x for x in (lab or {}).get('questions', []) if x['id'] == qid), None)
+        if not q:
+            raise AciError(404, 'Frage %s gibt es nicht' % qid, 404)
+        ses = self.lab_session()
+        ses['answers'][qid] = int(choice)
+        self.sim['labSession'] = ses
+        return self.lab_public(lab)['answers'][qid]
+
+    def check_lab(self, count=True):
         lab = self.lab(self.sim.get('lab'))
         if not lab:
             return None
@@ -329,16 +379,22 @@ class Sim:
                     ok = a is not None and all(a.get(k) == v for k, v in c.get('attrs', {}).items())
                 elif t == 'class':
                     dns = self.store.by_class(c['cls'])
-                    ok = any(all(self.store.attrs(d).get(k) == v for k, v in c.get('attrs', {}).items())
-                             and d.startswith(c.get('under', '')) for d in dns)
+                    hit = [d for d in dns if all(self.store.attrs(d).get(k) == v for k, v in c.get('attrs', {}).items())
+                           and d.startswith(c.get('under', ''))]
+                    ok = (len(hit) <= c['max']) if 'max' in c else bool(hit) == c.get('expect', True)
+                    info = ('%d vorhanden: %s' % (len(hit), ', '.join(hit[:3]))) if hit else 'keins vorhanden'
                 elif t == 'traffic':
                     r = trace.run(e, self.sim, c['src'], c['dst'], c.get('proto', 'icmp'), c.get('port', 0))
                     ok = r['ok'] == c.get('expect', True)
                     if ok and c.get('via'):
                         ok = any(c['via'] in (s_['title'] + ' ' + s_['detail']) for s_ in r['steps'])
+                    if ok and c.get('reason') and not r['ok']:
+                        # Blockiert, aber aus dem geforderten Grund? (z. B. 'POLICY_' = durch Policy, nicht durch einen kaputten Pfad)
+                        ok = r['reason'].startswith(c['reason'])
                     bad = next((s for s in r['steps'] if s['ok'] is False), None)
-                    info = 'Ergebnis: %s%s' % ('erreichbar' if r['ok'] else 'blockiert',
-                                               ' - ' + bad['title'] if bad else '')
+                    info = 'Ergebnis: %s (%s)%s' % (r['verdict'], r['reason'], ' - ' + bad['title'] if bad else '')
+                elif t == 'exposure':
+                    ok, info = self.exposure_check(c)
                 elif t == 'endpoint':
                     hs = e.hosts.get(c['host'], {})
                     ok = hs.get('learned') and (not c.get('epg') or hs.get('epg') == c['epg'])
@@ -463,11 +519,48 @@ class Sim:
                     info = 'Hold Time: %s' % tm.get('hold')
             except (KeyError, ValueError) as ex:
                 info = 'Pruefung fehlerhaft: %s' % ex
-            res.append({'desc': c['desc'], 'ok': bool(ok), 'info': info})
-        out = {'id': lab['id'], 'title': lab['title'], 'checks': res,
+            res.append({'desc': c['desc'], 'ok': bool(ok), 'info': info, 'category': c.get('category', 'function')})
+        ses = self.lab_session()
+        ses['checks'] = ses.get('checks', 0) + (1 if count else 0)
+        self.sim['labSession'] = ses
+        cats = {}
+        for r in res:
+            k = cats.setdefault(r['category'], {'passed': 0, 'total': 0})
+            k['total'] += 1
+            k['passed'] += 1 if r['ok'] else 0
+        qs = lab.get('questions', [])
+        und = {'correct': sum(1 for q in qs if ses['answers'].get(q['id']) == q['answer']), 'answered': len(ses['answers']), 'total': len(qs)}
+        if ses['mode'] == 'exam':
+            for r in res:
+                r['info'] = ''
+        out = {'id': lab['id'], 'title': lab['title'], 'checks': res, 'categories': cats, 'understanding': und,
+               'mode': ses['mode'], 'hintsUsed': ses['hints'], 'checkRuns': ses['checks'],
                'passed': sum(1 for r in res if r['ok']), 'total': len(res)}
         self.record_progress(out)
         return out
+
+    # Standard-Proben fuer Least Privilege: typische Dienste, die zwischen zwei Zonen nicht offen sein sollten
+    EXPOSURE_PROBES = ['icmp', 'tcp/20', 'tcp/21', 'tcp/22', 'tcp/23', 'tcp/25', 'tcp/53', 'tcp/80', 'tcp/135', 'tcp/139', 'tcp/443',
+                       'tcp/445', 'tcp/502', 'tcp/1433', 'tcp/3306', 'tcp/3389', 'tcp/5900', 'tcp/8080', 'tcp/8443', 'tcp/44818',
+                       'udp/53', 'udp/69', 'udp/123', 'udp/161', 'udp/443', 'udp/514', 'udp/47808']
+
+    def exposure_check(self, c):
+        """Least Privilege: von src nach dst darf eine neue Verbindung nur fuer die Fluesse in 'allow' durch die Policy kommen.
+        Gewertet wird die Policy-Entscheidung fuer die Anfrage (dieselbe Engine wie der Traffic-Test), unabhaengig davon,
+        ob auf dem Ziel ein Dienst laeuft."""
+        allow = {x.lower() for x in c.get('allow', [])}
+        probes = c.get('probes') or self.EXPOSURE_PROBES
+        open_ = []
+        for pr in probes:
+            if pr.lower() in allow:
+                continue
+            proto, _, port = pr.partition('/')
+            r = trace.run(self.engine, self.sim, c['src'], c['dst'], proto, int(port or 0))
+            if any(p['direction'] == 'request' and p['action'] == 'permit' for p in r['policy']):
+                open_.append(pr)
+        if open_:
+            return False, 'Zusaetzlich offen: %s (geprueft: %d typische Dienste)' % (', '.join(open_), len(probes))
+        return True, 'Nur %s offen (geprueft: %d typische Dienste)' % (', '.join(sorted(allow)) or 'nichts', len(probes))
 
     # -------------------------------------------------------------- Fortschritt
     def progress(self):
@@ -540,7 +633,7 @@ class Sim:
     def save_blob(self, descr=''):
         """Kompletter Zustand: Konfiguration, simulierte Welt, Setup, Lab und Fortschritt."""
         lab = self.lab(self.sim.get('lab')) if self.sim.get('lab') else None
-        chk = self.check_lab() if lab else None
+        chk = self.check_lab(count=False) if lab else None
         return {'kind': 'datacenter-prep-save', 'version': self.SAVE_VERSION, 'created': now_ts(), 'descr': descr,
                 'lab': lab['id'] if lab else None, 'labTitle': lab['title'] if lab else None,
                 'progress': [chk['passed'], chk['total']] if chk else None,
@@ -631,12 +724,13 @@ class Sim:
                 self.load_blob(self.read_save(pick['name']))
                 return {'ok': True, 'loaded': pick['name']}
             if lid:
-                self.load_lab(lid, autosave=False)
+                self.load_lab(lid, autosave=False, mode=b.get('mode'))
             else:
                 self.reset('discovered', keep_sim=False)
                 self.save()
             return {'ok': True, 'loaded': None}
         if op == 'reset':
+            mode = b.get('mode') or (self.lab_session()['mode'] if self.sim.get('lab') == lid else None)
             if self.sim.get('lab') != lid:
                 self.autosave_lab()
             for x in self.lab_saves(lid):
@@ -647,7 +741,7 @@ class Sim:
                 if p.pop(lid, None) is not None:
                     self._write_progress(p)
             if lid:
-                self.load_lab(lid, autosave=False)
+                self.load_lab(lid, autosave=False, mode=mode)
             else:
                 self.reset('discovered')
                 self.save()
@@ -759,6 +853,15 @@ class Sim:
                  'descr': h.get('descr', ''), 'silent': bool(h.get('silent'))}
         if h.get('dhcp'):
             clean['dhcp'] = True
+        svc = h.get('services')
+        if isinstance(svc, str):
+            svc = [x for x in re.split(r'[\s,;]+', svc) if x]
+        if svc:
+            for x in svc:
+                m = re.match(r'^(tcp|udp)/(\d{1,5})$', str(x).strip().lower())
+                if not m or not 1 <= int(m.group(2)) <= 65535:
+                    raise AciError(400, 'Dienst ungueltig: "%s" (Format tcp/443 oder udp/53)' % x)
+            clean['services'] = sorted({str(x).strip().lower() for x in svc}, key=lambda x: (x.split('/')[0], int(x.split('/')[1])))
         if scopes:
             clean['dhcpd'] = scopes
         self.sim['woken'] = [n for n in self.sim.get('woken', []) if n != clean['name']]
@@ -1171,7 +1274,7 @@ class Sim:
                 'upgrading': any(not u.get('done') for u in self.sim.get('upgrades', [])),
                 'graphs': [{k: g[k] for k in ('dn', 'brc', 'graph', 'state', 'reasons', 'node', 'dev')}
                            for g in getattr(e, 'graphs', {}).values()],
-                'lab': {k: lab.get(k) for k in ('id', 'title', 'intro', 'tasks', 'goals', 'solution')} if lab else None,
+                'lab': self.lab_public(lab),
                 'nextEvent': e.next_event}
 
 
@@ -1435,7 +1538,7 @@ def make_handler(hub):
                 with S.lock:
                     return self.send(200, sorted(S.store.attrs(d)['name'] for d in S.store.by_class('aaaLoginDomain')))
             user, tok_ = self.auth()
-            if method == 'POST' and rest not in ('traffic', 'cli', 'labs/check'):
+            if method == 'POST' and rest not in ('traffic', 'cli', 'labs/check', 'labs/hint', 'labs/answer'):
                 with S.lock:
                     if not aaa.is_admin(S.roles_of(user, tok_)):
                         raise AciError(403, 'Access denied: Die Simulation darf nur ein Benutzer mit admin-Rolle in der Domain all aendern', 403)
@@ -1606,7 +1709,8 @@ def make_handler(hub):
                     prog, saves = S.progress(), S.saves()
                     out = []
                     for l in S.labs():
-                        row = {k: l.get(k) for k in ('id', 'title', 'level', 'duration', 'goals', 'topic', 'fabric')}
+                        row = {k: l.get(k) for k in ('id', 'title', 'level', 'duration', 'goals', 'topic', 'fabric', 'kind')}
+                        row['modes'] = l.get('modes') or ['guided']
                         row['progress'] = prog.get(l['id'])
                         row['saves'] = [x for x in saves if x.get('lab') == l['id']]
                         row['auto'] = S.auto_name(l['id'])
@@ -1618,10 +1722,14 @@ def make_handler(hub):
                 if rest == 'labs/op':
                     return self.send(200, S.lab_op(b))
                 if rest == 'labs/load':
-                    lab = S.load_lab(b.get('id'))
+                    lab = S.load_lab(b.get('id'), mode=b.get('mode'))
                     return self.send(200, {'ok': True, 'title': lab['title']})
                 if rest == 'labs/check':
                     return self.send(200, S.check_lab() or {'checks': []})
+                if rest == 'labs/hint':
+                    return self.send(200, S.lab_hint(b.get('level', 1)))
+                if rest == 'labs/answer':
+                    return self.send(200, S.lab_answer(b.get('id'), b.get('choice')))
                 if rest == 'reset':
                     S.reset(b.get('mode', 'discovered'))
                     S.save()

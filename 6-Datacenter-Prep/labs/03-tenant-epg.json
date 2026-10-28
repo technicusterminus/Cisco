@@ -5,12 +5,41 @@
  "level": "Einstieg",
  "duration": "30 min",
  "fabric": "discovered",
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 02: Access Policies"
+ ],
+ "tools": [
+  "Tenants > Add Tenant",
+  "Traffic-Test",
+  "CLI: show zoning-rule, show endpoint"
+ ],
  "goals": [
   "Einen Tenant mit VRF, Bridge Domains und Subnetzen anlegen",
-  "EPGs mit Domain und Static Ports verbinden",
-  "Verstehen, dass zwischen EPGs ohne Contract nichts fließt"
+  "Endpoints über die EPG an Ports und VLANs binden",
+  "Erleben, dass Routing zwischen EPGs ohne Contract an der Policy endet"
  ],
- "intro": "Die Access Policies aus Lab 02 sind vorhanden (Ports 1/1-10 auf leaf101 und leaf102). Baue den Tenant für einen Webshop. **web1** hängt an leaf101 eth1/1 und sendet mit VLAN 110, **app1** an leaf102 eth1/2 mit VLAN 120.",
+ "intro": "Die Access Policies sind vorhanden: Server-Ports 1-10 auf leaf101 und leaf102, VLANs 100-199, Physical Domain **PhysDom-Server**. Baue den Tenant für einen Webshop.\n\n- **web1**: 10.10.10.11/24, Gateway 10.10.10.1, leaf101 eth1/1, sendet mit VLAN 110\n- **app1**: 10.10.20.11/24, Gateway 10.10.20.1, leaf102 eth1/2, sendet mit VLAN 120",
+ "requirements": [
+  "Namenskonvention: Tenant **Shop**, VRF **Prod**, Bridge Domains **BD-Web** und **BD-App**, Application Profile **Webshop**, EPGs **Web** und **App** (die folgenden Labs bauen darauf auf).",
+  "web1 gehört zur EPG Web, app1 zur EPG App, beide werden gelernt.",
+  "Beide Hosts erreichen ihr Default Gateway in der ACI.",
+  "Zwischen Web und App gibt es noch keine Freigabe."
+ ],
+ "limits": [
+  "Policy Enforcement ist Ingress (Default), die Wirkung von Ingress/Egress wird nicht unterschieden."
+ ],
+ "hints": [
+  "**Konzept:** Ein Tenant enthält das Routing (VRF), die Layer-2-Domänen mit Gateways (Bridge Domains) und die Sicherheitsgruppen (EPGs). Eine EPG ist kein VLAN: Das VLAN gilt nur am Port und ordnet den Verkehr dort der EPG zu.",
+  "**Beteiligte Objekte:** VRF, Bridge Domain mit Subnetz (= Gateway-IP), Application Profile, EPG mit Bridge Domain, Domain-Zuordnung und Port-Bindung mit VLAN-Encap.",
+  "**Prüfschritt:** Nach dem Anlegen im Tab *Operational* der EPG nachsehen, ob der Host gelernt wird. Falls nicht: Fault F0467 an der EPG lesen (fehlt die Domain? stimmt das VLAN?). Traffic-Test web1 → 10.10.10.1.",
+  "**Lösung:** Tenant Shop → VRF Prod → BD-Web (Subnetz 10.10.10.1/24) und BD-App (10.10.20.1/24) im VRF Prod → AP Webshop → EPG Web (BD-Web) und EPG App (BD-App), beide mit Domain PhysDom-Server → Static Ports: Web leaf101 eth1/1 vlan-110, App leaf102 eth1/2 vlan-120. web1 → app1 bleibt blockiert: Implicit Deny, CLI `show zoning-rule` zeigt nur die Default-Regeln."
+ ],
+ "cause": "Im Ausgangszustand gibt es den Tenant noch nicht.",
  "config": [
   {
    "polUni": {
@@ -202,28 +231,7 @@
    "descr": "Applikationsserver"
   }
  ],
- "tasks": [
-  {
-   "title": "Tenant und VRF",
-   "text": "Tenant **Shop**, darin VRF **Prod** (Policy Enforcement: Enforced)."
-  },
-  {
-   "title": "Bridge Domains",
-   "text": "**BD-Web** mit Gateway **10.10.10.1/24** und **BD-App** mit **10.10.20.1/24**, beide im VRF Prod."
-  },
-  {
-   "title": "Application Profile und EPGs",
-   "text": "AP **Webshop** mit den EPGs **Web** (BD-Web) und **App** (BD-App). Beide bekommen die Physical Domain **PhysDom-Server**."
-  },
-  {
-   "title": "Static Ports",
-   "text": "Web: leaf101 eth1/1, **vlan-110**, Trunk. App: leaf102 eth1/2, **vlan-120**, Trunk."
-  },
-  {
-   "title": "Testen",
-   "text": "web1 kann sein Gateway 10.10.10.1 pingen. Ein Ping von web1 zu app1 scheitert – warum? Schau dir auf leaf101 `show zoning-rule` an."
-  }
- ],
+ "tasks": [],
  "checks": [
   {
    "desc": "VRF Shop/Prod",
@@ -267,11 +275,47 @@
    "expect": true
   },
   {
-   "desc": "web1 → app1 ist ohne Contract blockiert",
+   "desc": "web1 → app1 ist ohne Contract durch die Policy blockiert",
    "type": "traffic",
    "src": "web1",
    "dst": "app1",
-   "expect": false
+   "expect": false,
+   "reason": "POLICY_",
+   "category": "security"
+  },
+  {
+   "desc": "Least Privilege: noch keine Freigabe Web → App",
+   "type": "exposure",
+   "src": "web1",
+   "dst": "app1",
+   "allow": [],
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "web1 erreicht sein Gateway, aber nicht app1. Woran liegt es?",
+   "options": [
+    "Zwischen BD-Web und BD-App fehlt eine Route",
+    "Zwischen den EPGs Web und App gibt es keinen Contract",
+    "app1 ist nicht gelernt",
+    "VLAN 110 und 120 sind nicht verbunden"
+   ],
+   "answer": 1,
+   "explain": "Die Pervasive Route zwischen den BD-Subnetzen existiert im VRF. Der Traffic-Test zeigt das Routing grün und endet an der Policy (Implicit Deny)."
+  },
+  {
+   "id": "q2",
+   "q": "Was stimmt für eine EPG?",
+   "options": [
+    "Eine EPG ist dasselbe wie ein VLAN",
+    "Dasselbe VLAN kann an verschiedenen Ports zu verschiedenen EPGs gehören",
+    "Eine Bridge Domain kann immer nur eine EPG haben",
+    "Jeder Tenant hat genau ein VRF"
+   ],
+   "answer": 1,
+   "explain": "Die Zuordnung VLAN → EPG gilt pro Port (bzw. pro Leaf). Eine BD kann viele EPGs enthalten, ein Tenant viele VRFs."
   }
  ],
  "solution": "Tenant-JSON:\n\n`{\"fvTenant\": {\"attributes\": {\"name\": \"Shop\"}, \"children\": [{\"fvCtx\": {\"attributes\": {\"name\": \"Prod\"}}}, {\"fvBD\": {\"attributes\": {\"name\": \"BD-Web\"}, \"children\": [{\"fvRsCtx\": {\"attributes\": {\"tnFvCtxName\": \"Prod\"}}}, {\"fvSubnet\": {\"attributes\": {\"ip\": \"10.10.10.1/24\", \"scope\": \"private\"}}}]}}, {\"fvBD\": {\"attributes\": {\"name\": \"BD-App\"}, \"children\": [{\"fvRsCtx\": {\"attributes\": {\"tnFvCtxName\": \"Prod\"}}}, {\"fvSubnet\": {\"attributes\": {\"ip\": \"10.10.20.1/24\", \"scope\": \"private\"}}}]}}, {\"fvAp\": {\"attributes\": {\"name\": \"Webshop\"}, \"children\": [{\"fvAEPg\": {\"attributes\": {\"name\": \"Web\"}, \"children\": [{\"fvRsBd\": {\"attributes\": {\"tnFvBDName\": \"BD-Web\"}}}, {\"fvRsDomAtt\": {\"attributes\": {\"tDn\": \"uni/phys-PhysDom-Server\"}}}, {\"fvRsPathAtt\": {\"attributes\": {\"tDn\": \"topology/pod-1/paths-101/pathep-[eth1/1]\", \"encap\": \"vlan-110\", \"mode\": \"regular\"}}}]}}, {\"fvAEPg\": {\"attributes\": {\"name\": \"App\"}, \"children\": [{\"fvRsBd\": {\"attributes\": {\"tnFvBDName\": \"BD-App\"}}}, {\"fvRsDomAtt\": {\"attributes\": {\"tDn\": \"uni/phys-PhysDom-Server\"}}}, {\"fvRsPathAtt\": {\"attributes\": {\"tDn\": \"topology/pod-1/paths-102/pathep-[eth1/2]\", \"encap\": \"vlan-120\", \"mode\": \"regular\"}}}]}}]}}]}}`\n\nOhne Contract greift im VRF der Implicit Deny (Zoning-Rule `any_any_any(21)` mit `deny,log`).",

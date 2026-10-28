@@ -6,9 +6,8 @@ lokalen APIC mit annotation=orchestrator:msc; die zweite Site (DC-HAM) ist simul
 """
 import ipaddress
 import re
-import time
 
-from .model import AciError, post as mit_post, delete as mit_delete, now_ts
+from .model import AciError, post as mit_post, now_ts
 
 ANNOT = 'orchestrator:msc'
 ISN_MIN_MTU = 9150
