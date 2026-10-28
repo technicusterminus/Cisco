@@ -338,8 +338,7 @@ Object.assign(Views, {
 
   async flowDetail(src, dst, proto, port) {
     const r = await API.post('/sim/traffic', { src, dst, proto, port });
-    modal(src + ' → ' + dst + ' (' + proto + (port ? '/' + port : '') + ')', h('div', null, h('p', null, h('b', null, r.summary)),
-      table([{ l: '', w: '24px', f: s => s.ok === false ? '✗' : s.ok ? '✓' : 'ℹ' }, { l: 'Schritt', f: s => s.title }, { l: 'Detail', f: s => s.detail }], r.steps)), null, { wide: true });
+    modal(src + ' → ' + dst + ' (' + proto + (port ? '/' + port : '') + ')', traceCard(r), null, { wide: true });
   },
 
   expectDialog(x, after) {

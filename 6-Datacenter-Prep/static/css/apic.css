@@ -282,3 +282,12 @@ table.mx td.mxc.ok { background: #e6f5ec; color: #1b7a3d; } table.mx td.mxc.bad 
 .labrow-act { display: flex; gap: 6px; flex-wrap: wrap; }
 .labsaves { padding: 0 12px 12px; border-top: 1px solid var(--line); }
 .pill.acc { background: #d7ecf6; color: #0d5f82; }
+
+/* Connectivity-Ergebnis: Verdikt immer als Text, Farbe nur zusaetzlich */
+.trace.unres .trace-sum { color: var(--warn, #9a6700); }
+.trace .verdict { display: inline-block; padding: 1px 8px; border-radius: 4px; border: 1px solid currentColor; font-family: ui-monospace, monospace; }
+.trace .trace-meta { margin: 6px 0 8px; padding: 6px 8px; border-left: 3px solid var(--line, #ccc); }
+.trace .trace-meta ul { margin: 4px 0 0; padding-left: 18px; }
+.trace li.info::marker { color: var(--muted, #777); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.lab .hints .card.note { margin: 8px 0; }

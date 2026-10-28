@@ -18,6 +18,27 @@ function md(text) {
   return h('div', { class: 'md', html: out.join('') });
 }
 
+/* Ergebnis der Connectivity-Engine anzeigen: Verdikt als Text (nicht nur Farbe), Reason Code, Fehlerort, Policy, Hinweis */
+const VERDICT = { ALLOW: ['✔', 'ALLOW', 'ok'], DROP: ['✖', 'DROP', 'bad'], UNRESOLVED: ['?', 'UNRESOLVED', 'unres'] };
+function policyLine(p) {
+  const short = dn => (dn || '').split('/').pop().replace(/^(brc|subj|flt|e)-/, '');
+  const rule = p.contract ? [p.contract, p.subject, p.filter, p.entry].filter(Boolean).map(short).join(' › ') + (p.direction ? ' (' + (p.direction === 'c2p' ? 'Consumer → Provider' : 'Provider → Consumer') + ')' : '') : (p.text || '');
+  return h('li', null, h('b', null, p.phase + ': '), h('span', { class: 'pill ' + (p.action === 'permit' ? 'ok' : 'bad') }, p.action === 'permit' ? 'permit' : 'deny'), ' ', h('code', null, p.kind || '—'), ' ', rule);
+}
+function traceCard(r) {
+  const v = VERDICT[r.verdict] || VERDICT[r.ok ? 'ALLOW' : 'DROP'];
+  return h('div', { class: 'card trace ' + v[2], role: 'status' },
+    h('div', { class: 'trace-sum' }, h('span', { class: 'verdict ' + v[2] }, v[0] + ' ' + v[1]), ' ', r.summary),
+    r.reason && r.reason !== 'ALLOWED' ? h('div', { class: 'trace-meta' },
+      h('div', null, h('b', null, 'Reason Code: '), h('code', null, r.reason), r.failedAt ? h('span', { class: 'muted' }, ' · Schritt ' + r.failedAt.step + ', Ebene ' + r.failedAt.layer) : null),
+      r.explanation ? h('div', null, h('b', null, 'Ursache: '), r.explanation) : null,
+      r.hint ? h('div', null, h('b', null, 'Nächster Prüfschritt: '), r.hint) : null) : null,
+    r.policy && r.policy.length ? h('div', { class: 'trace-meta' }, h('b', null, 'Angewendete Policy'), h('ul', null, r.policy.map(policyLine))) : null,
+    h('ol', null, (r.steps || []).map(s => h('li', { class: s.ok === false ? 'bad' : s.ok ? 'ok' : 'info' },
+      h('span', { class: 'sr' }, s.ok === false ? 'Fehler: ' : s.ok ? 'OK: ' : 'Info: '), h('b', null, s.title), s.code ? h('code', { class: 'muted' }, ' ' + s.code) : null,
+      s.detail ? h('div', { class: 'muted' }, s.detail) : null))));
+}
+
 const leafNodes = () => (App.state.nodes || []).filter(n => n.role === 'leaf');
 const nodeName = serial => { const n = (App.state.nodes || []).find(x => x.serial === serial); return n ? (n.name ? n.name + ' (' + n.id + ')' : serial) : serial; };
 const randMac = () => '00:50:56:' + [0, 0, 0].map(() => Math.floor(Math.random() * 256).toString(16).padStart(2, '0')).join(':').toUpperCase();
@@ -341,8 +362,7 @@ const Views = {
     const run = async () => {
       try {
         const r = await API.sim('traffic', { src: srcSel.value, dst: dstSel.value === '__ip' ? ip.value : dstSel.value, proto: proto.value, port: Number(port.value || 0) });
-        clear(out).appendChild(h('div', { class: 'card trace ' + (r.ok ? 'ok' : 'bad') }, h('div', { class: 'trace-sum' }, r.ok ? '✔ ' : '✖ ', r.summary),
-          h('ol', null, r.steps.map(s => h('li', { class: s.ok === false ? 'bad' : s.ok ? 'ok' : 'info' }, h('b', null, s.title), s.detail ? h('div', { class: 'muted' }, s.detail) : null)))));
+        clear(out).appendChild(traceCard(r));
       } catch (e) { errToast(e); }
     };
     w.appendChild(paneHead('Visibility & Troubleshooting', 'Traffic zwischen Endpoints testen – Schritt für Schritt durch die Fabric'));
@@ -694,22 +714,40 @@ const Views = {
 
   labCard(cur, onReset) {
     const res = h('div');
+    const exam = cur.mode === 'exam';
+    const CAT = ['functional', 'security', 'understanding', 'diagnosis'];
     const check = async () => {
       const r = await API.sim('labs/check');
-      clear(res).appendChild(h('div', { class: 'card trace ' + (r.passed === r.total ? 'ok' : 'bad') },
-        h('div', { class: 'trace-sum' }, r.passed === r.total ? '✔ Alle Prüfungen bestanden!' : r.passed + ' von ' + r.total + ' Prüfungen bestanden'),
-        h('ol', null, r.checks.map(c => h('li', { class: c.ok ? 'ok' : 'bad' }, h('b', null, c.desc), c.info ? h('div', { class: 'muted' }, c.info) : null)))));
+      const all = r.passed === r.total;
+      const groups = CAT.filter(c => r.categories && r.categories[c]).map(c => {
+        const g = r.categories[c];
+        return h('div', null, h('h4', null, g.label + ': ' + g.passed + ' / ' + g.total + (g.passed === g.total ? ' ✔' : ' ✖')),
+          h('ol', null, r.checks.filter(x => x.category === c).map(x => h('li', { class: x.ok ? 'ok' : 'bad' },
+            h('span', { class: 'sr' }, x.ok ? 'bestanden: ' : 'nicht bestanden: '), h('b', null, x.desc), x.info ? h('div', { class: 'muted' }, x.info) : null))));
+      });
+      clear(res).appendChild(h('div', { class: 'card trace ' + (all ? 'ok' : 'bad'), role: 'status' },
+        h('div', { class: 'trace-sum' }, all ? '✔ Alle Prüfungen bestanden!' : r.passed + ' von ' + r.total + ' Prüfungen bestanden'), ...groups));
     };
+    const hintBox = h('div', { class: 'hints' });
+    const drawHints = list => clear(hintBox).appendChild(h('div', null, list.map(x => h('div', { class: 'card note' }, h('b', null, 'Hinweis ' + x.level + (x.title ? ' – ' + x.title : '')), md(x.text)))));
+    if (cur.hints && cur.hints.length) drawHints(cur.hints);
+    const nextHint = async () => { const r = await API.sim('labs/hint', {}); drawHints(r.hints); if (r.level >= r.total) hintBtn.disabled = true; hintBtn.textContent = 'Hinweis (' + Math.min(r.level + 1, r.total) + ' / ' + r.total + ')'; };
+    const shown = (cur.hints || []).length;
+    const hintBtn = h('button', { class: 'btn', disabled: shown >= (cur.hintsTotal || 0), onclick: () => nextHint().catch(errToast) }, 'Hinweis (' + Math.min(shown + 1, cur.hintsTotal || 0) + ' / ' + (cur.hintsTotal || 0) + ')');
+    const setMode = async m => { await API.sim('labs/mode', { mode: m }); await App.refreshState(); toast(m === 'exam' ? 'Prüfungsmodus: keine Hinweise und keine Lösung' : 'Geführter Modus'); App.go('sim', 'labs'); };
     const sol = h('div', { style: { display: 'none' } }, md(cur.solution || 'Keine Musterlösung hinterlegt.'));
-    return h('div', { class: 'card lab' }, h('div', { class: 'card-h' }, 'Aktuelles Lab: ' + cur.title),
+    return h('div', { class: 'card lab' }, h('div', { class: 'card-h' }, 'Aktuelles Lab: ' + cur.title, ' ', h('span', { class: 'pill ' + (exam ? 'warn' : 'acc') }, exam ? 'Prüfungsmodus' : 'Geführt')),
       md(cur.intro || ''),
       cur.goals && cur.goals.length ? h('div', null, h('h4', null, 'Lernziele'), h('ul', null, cur.goals.map(g => h('li', null, g)))) : null,
       h('h4', null, 'Aufgaben'),
       h('ol', { class: 'tasks' }, (cur.tasks || []).map(t => h('li', null, h('b', null, t.title), md(t.text), t.hint ? h('details', null, h('summary', null, 'Tipp'), md(t.hint)) : null))),
+      cur.limits ? h('details', null, h('summary', null, 'Grenzen dieses Szenarios'), md(cur.limits)) : null,
       h('div', { class: 'formbtns' }, h('button', { class: 'btn', onclick: () => Saves.saveDialog() }, '💾 Stand speichern'),
         h('button', { class: 'btn', onclick: onReset }, '↺ Auf Default zurücksetzen'),
-        h('button', { class: 'btn', onclick: () => { sol.style.display = sol.style.display ? '' : 'none'; } }, 'Lösung zeigen/verbergen'),
-        h('button', { class: 'btn primary', onclick: check }, '✔ Lab prüfen')), sol, res);
+        exam ? null : (cur.hintsTotal ? hintBtn : null),
+        exam ? null : h('button', { class: 'btn', onclick: () => { sol.style.display = sol.style.display ? '' : 'none'; } }, 'Lösung zeigen/verbergen'),
+        h('button', { class: 'btn', onclick: () => setMode(exam ? 'guided' : 'exam').catch(errToast) }, exam ? 'Geführter Modus' : 'Prüfungsmodus'),
+        h('button', { class: 'btn primary', onclick: () => check().catch(errToast) }, '✔ Lab prüfen')), exam ? null : hintBox, exam ? null : sol, res);
   },
 
   labResetDialog(id, title, op) {
