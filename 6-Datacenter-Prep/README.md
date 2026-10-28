@@ -1,6 +1,6 @@
 # Datacenter Prep
 
-Eine Trainingsumgebung für Cisco ACI mit simuliertem APIC, der wie ein echter APIC reagiert. Die Oberfläche hat dieselbe Struktur wie die APIC-GUI (Menüs, Untermenüs, Navigationsbaum, Tabs, Rechtsklick-Menüs und Wizards), die REST-API spricht das APIC-Format, und eine Policy-Engine rechnet nach jeder Änderung aus, was in der Fabric passiert: Discovery, Deployment auf den Leafs, gelernte Endpoints, OSPF- und BGP-Nachbarschaften, Routen, Zoning-Rules und Faults.
+Eine didaktische Trainingsumgebung für Cisco ACI. Ein simulierter APIC bildet das Verhalten eines APIC im dokumentierten Umfang nach. Er ist kein echter APIC, keine Nexus-Emulation und nicht vollständig kompatibel (siehe [Referenzprofil](docs/REFERENZPROFIL.md)). Die Oberfläche hat dieselbe Struktur wie die APIC-GUI (Menüs, Untermenüs, Navigationsbaum, Tabs, Rechtsklick-Menüs und Wizards), die REST-API spricht das APIC-Format, und eine Policy-Engine rechnet nach jeder Änderung aus, was in der Fabric passiert: Discovery, Deployment auf den Leafs, gelernte Endpoints, OSPF- und BGP-Nachbarschaften, Routen, Zoning-Rules und Faults.
 
 Er läuft ohne Installation mit Python 3.8 oder neuer, ohne zusätzliche Pakete, offline im Browser.
 
@@ -167,6 +167,25 @@ Unter *Simulation > Labs & Stände* laden. Jedes Lab setzt die Konfiguration auf
 | 29 | Multi-Pod mit Inter-Pod Network | 50 min |
 | 30 | Remote Leaf in der Filiale | 40 min |
 | 31 | Multi-Site mit dem Nexus Dashboard Orchestrator | 45 min |
+| 32 | **Least Privilege: HTTPS von WEB zu APP** (neues Format, auch als Prüfung) | 25 min |
+
+**Neues Lab-Format** (ab Lab 32): Statt einer Klickanleitung gibt es Anforderungen. Der Rest im Überblick:
+
+- **Hinweise** in vier Stufen: Konzept, Objekte, Prüfschritt, Lösung. Die Oberfläche zählt, wie viele genutzt wurden.
+- **Bewertung** getrennt nach *Funktion* und *Sicherheit / Least Privilege*. Eine Permit-any-Abkürzung funktioniert zwar, besteht aber nicht.
+- **Verständnisfragen** werden getrennt gezählt.
+- **Geführter Modus** oder **Prüfungsmodus** (ohne Hinweise, Lösung und Diagnosetexte), wählbar beim Start.
+
+Den Stand gegenüber dem geplanten Lernpfad zeigt [docs/LAB-KATALOG.md](docs/LAB-KATALOG.md), wie man Labs schreibt [docs/LAB-AUTHORING.md](docs/LAB-AUTHORING.md).
+
+**Traffic Inspector** (*Operations > Visibility & Troubleshooting*): Jeder Test liefert ein Ergebnis aus der gemeinsamen Connectivity-Engine, dieselbe, die auch die Labs bewertet:
+
+- **ALLOW**, **DROP** oder **UNRESOLVED**
+- maschinenlesbarer Reason Code (z. B. `POLICY_IMPLICIT_DENY`, `POLICY_REPLY_DENIED`, `EP_NOT_LEARNED`, `SERVICE_NOT_LISTENING`)
+- Fehlerort, Erklärung und nächster Diagnoseschritt
+- angewandte Regel für Anfrage und Antwort (Contract, Filter, Richtung) und der Pfad über die Leafs
+
+Reason Codes und das Dienstmodell der Hosts (Feld *Dienste*) sind simulator-spezifisch.
 
 Die Lab-Dateien entstehen aus `Labs-Quelle/build_labs.py` (`python3 Labs-Quelle/build_labs.py`). Die Tests prüfen für jedes Lab, dass es ohne Lösung nicht bestanden und mit Musterlösung vollständig bestanden ist.
 
@@ -266,7 +285,7 @@ Das Verhalten ist nachgebildet und nicht gegen einen echten APIC geprüft. Dafü
 
 ## Grenzen
 
-Nicht simuliert: VMM für Kubernetes, Microsoft und OpenStack, vPC über Pods hinweg, Remote-Leaf-vPC, Stretched Fabric, GOLF und SR-MPLS, die vollständige NDO-Oberfläche (der NDO ist vereinfacht, die zweite Site hat nur feste Endpoints), Service Graphs ohne PBR (Firewall als Gateway), Managed Devices (Device Packages), Set Rules und Route-Profile mit Community/Tag, Multicast, Custom QoS Policies und die Wirkung von QoS auf den Datenverkehr, SNMPv3, Scheduler für Exporte und Upgrades, DHCP über L3Out. Die Pakete fließen nicht wirklich: Der Traffic-Test berechnet anhand von Konfiguration und Zustand, ob ein Paket und seine Antwort ankommen würden, und begründet jeden Schritt.
+Nicht simuliert: VMM für Kubernetes, Microsoft und OpenStack, vPC über Pods hinweg, Remote-Leaf-vPC, Stretched Fabric, GOLF und SR-MPLS, die vollständige NDO-Oberfläche (der NDO ist vereinfacht, die zweite Site hat nur feste Endpoints), Service Graphs ohne PBR (Firewall als Gateway), Managed Devices (Device Packages), Set Rules und Route-Profile mit Community/Tag, Multicast, Custom QoS Policies und die Wirkung von QoS auf den Datenverkehr, SNMPv3, Scheduler für Exporte und Upgrades, DHCP über L3Out. Nicht unterstützt sind außerdem Endpoint Move als Ereignis, Subjects ohne „Apply Both Directions“ und Intra-EPG-Contracts (siehe [Backlog](docs/BACKLOG.md)). Die Pakete fließen nicht wirklich: Der Traffic-Test berechnet anhand von Konfiguration und Zustand, ob ein Paket und seine Antwort ankommen würden, und begründet jeden Schritt.
 
 ## Aufbau des Ordners
 
@@ -289,7 +308,9 @@ Nicht simuliert: VMM für Kubernetes, Microsoft und OpenStack, vPC über Pods hi
 | `labs/`, `Labs-Quelle/` | Lab-Dateien und ihr Generator |
 | `beispiele/` | Ansible, curl, Python, Terraform |
 | `werkzeuge/` | `abgleich.py` und `ABGLEICH.md`: Abgleich mit echtem ACI |
-| `tests/` | `python3 -m unittest discover -s tests`, GUI-Test mit `node tests/gui/smoke.js` (braucht Playwright) |
+| `tests/` | `python3 -m unittest discover -s tests` (Unit, Integration, Abnahmefall `test_acceptance.py`), GUI: `node tests/gui/smoke.js` und `node tests/gui/acceptance.js` (brauchen Playwright) |
+| `docs/` | [Architektur](docs/ARCHITEKTUR.md), [Referenzprofil und Regelbasis](docs/REFERENZPROFIL.md), [Lab-Katalog](docs/LAB-KATALOG.md), [Labs schreiben](docs/LAB-AUTHORING.md), [Gap-Analyse](docs/GAP-ANALYSE.md), [Backlog](docs/BACKLOG.md) |
+| `CLAUDE.md` | Projektkonventionen und Prüfkommandos |
 
 > Kein offizielles Cisco-Material. Cisco, ACI, APIC und Nexus sind Marken von Cisco Systems, Inc.
 

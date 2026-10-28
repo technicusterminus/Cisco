@@ -1314,6 +1314,10 @@ def _backup25():
     base_config(st, 'admin')
     mpost(st, 'uni', shop_tenant(with_contracts=True))
     rows = [r for r in st.dump_config() if r[0] == 'uni/tn-Shop' or r[0].startswith('uni/tn-Shop/')]
+    for r in rows:  # fester Zeitstempel, damit der Generator deterministisch bleibt
+        for x in r[1:]:
+            if isinstance(x, dict) and 'modTs' in x:
+                x['modTs'] = '2026-10-26T22:59:58.000+00:00'
     return {'size': '18 KB', 'export': {'kind': 'aci-config-export', 'created': '2026-10-26T23:00:04.000+00:00', 'target': 'uni/tn-Shop',
                                         'secure': False, 'key': '', 'policy': 'Shop-Nightly', 'rows': rows, 'version': '6.0(5h)',
                                         'counters': dict(st.counters)}}
@@ -1656,6 +1660,91 @@ lab(id='31-multisite-ndo', title='31 Multi-Site mit dem Nexus Dashboard Orchestr
 
 
 # ----------------------------------------------------------------------------
+# Lab 32 - Abnahmefall: HTTPS mit Least Privilege (neues Lab-Format)
+#   Anforderungen statt Klick-Anleitung, gestufte Hinweise, Pruefungsmodus,
+#   Bewertung getrennt nach Funktion und Sicherheit, Verstaendnisfragen.
+# ----------------------------------------------------------------------------
+WEB32 = dict(WEB1, services=['tcp/22'])
+APP32 = dict(APP1, services=['tcp/22', 'tcp/443'])
+SOL32 = mo('fvTenant', {'name': 'Shop'},
+           filt('https', {'name': 'https', 'etherT': 'ip', 'prot': 'tcp', 'dFromPort': '443', 'dToPort': '443'}),
+           contract('web-to-app-https', ['https']),
+           mo('fvAp', {'name': 'Webshop'},
+              mo('fvAEPg', {'name': 'Web'}, mo('fvRsCons', {'tnVzBrCPName': 'web-to-app-https'})),
+              mo('fvAEPg', {'name': 'App'}, mo('fvRsProv', {'tnVzBrCPName': 'web-to-app-https'}))))
+
+lab(id='32-https-least-privilege', title='32 Least Privilege: HTTPS von WEB zu APP', topic='Policy / Contracts', level='Einstieg',
+    duration='25 min', fabric='discovered', kind='requirements', modes=['guided', 'exam'],
+    prerequisites=['Lab 03: Tenant, VRF, Bridge Domain und EPG anlegen können'],
+    tools=['Traffic-Test (Operations > Visibility & Troubleshooting oder Simulation > Testmatrix)',
+           'Tenant-Konfiguration per GUI, REST-API oder Ansible',
+           'CLI auf dem Leaf: show zoning-rule, show endpoint'],
+    goals=['Implicit Deny zwischen EPGs vom Routing unterscheiden', 'Filter, Contract und Subject passend zur Anforderung bauen',
+           'Consumer und Provider aus der Verbindungsrichtung ableiten', 'Least Privilege prüfen: auch was blockiert sein muss'],
+    intro='Der Tenant **Shop** läuft: VRF **Prod**, die Bridge Domains **BD-Web** (10.10.10.1/24) und **BD-App** (10.10.20.1/24) '
+          'mit Unicast Routing, das Application Profile **Webshop** mit den EPGs **Web** und **App**. Die Access Policies sind fertig, '
+          '**web1** (10.10.10.11, leaf101 eth1/1, VLAN 110) und **app1** (10.10.20.11, leaf102 eth1/2, VLAN 120) sind gelernt. '
+          'Auf app1 laufen HTTPS (tcp/443) und SSH (tcp/22), auf web1 SSH.\n\n'
+          'Teste zuerst den Ausgangszustand mit dem Traffic-Test: **web1 → app1, TCP 443**. Woran scheitert er – und woran nicht?',
+    requirements=['web1 kann HTTPS-Verbindungen (TCP 443) zu app1 aufbauen.',
+                  'Sonst ist von Web nach App nichts erlaubt: kein SSH, kein Ping, keine anderen Ports (Least Privilege).',
+                  'App kann von sich aus keine Verbindungen zu Web aufbauen.',
+                  'Access Policies, Bridge Domains und Routing bleiben unverändert.'],
+    limits=['Contracts sind wie in ACI zustandslos: Auch die Antwort braucht eine passende Regel. '
+            'Die Filter-Option Stateful erlaubt vom Provider zum Consumer nur TCP mit ACK (keine Prüfung von Sequenznummern).',
+            'Subjects ohne "Apply Both Directions" (vzInTerm/vzOutTerm) werden noch nicht unterstützt.',
+            'Ob auf einem Host ein Dienst läuft, ist ein simulator-spezifisches Modell (Feld Dienste am Host).',
+            'ICMP wird nicht nach Type/Code unterschieden.'],
+    hints=['**Konzept:** Zwischen Endpoints in verschiedenen EPGs gilt in ACI ohne Freigabe *Implicit Deny* (Whitelist-Modell). '
+           'Das Routing zwischen BD-Web und BD-App ist bereits da – es fehlt etwas anderes.',
+           '**Beteiligte Objekte:** Ein *Filter* beschreibt den Verkehr, ein *Contract* mit *Subject* fasst Filter zusammen, und die '
+           'EPGs hängen als *Consumer* bzw. *Provider* am Contract. Alles liegt im Tenant Shop.',
+           '**Prüfschritt:** Im Traffic-Test web1 → app1 tcp/443 den Schritt *Policy Anfrage* lesen und auf leaf102 '
+           '`show zoning-rule` ansehen. Wer baut die Verbindung auf? Diese EPG ist Consumer. Wer bietet den Dienst an? '
+           'Diese EPG ist Provider. Danach SSH und Ping testen – die müssen weiter blockiert sein.',
+           '**Lösung:** Filter **https** (EtherType IP, Protokoll tcp, Destination Port 443) → Contract **web-to-app-https** '
+           '(Scope VRF) mit einem Subject, das den Filter enthält (Reverse Filter Ports an) → EPG **Web** konsumiert, EPG **App** '
+           'stellt bereit. Die Antwort von app1 (Quell-Port 443) kommt über die umgekehrte Regel des Subjects zurück. Ein Filter '
+           'mit Protokoll *unspecified* oder ein Contract mit dem Filter *default* aus common würde zwar funktionieren, öffnet aber '
+           'alles und fällt durch die Least-Privilege-Prüfung.'],
+    cause='Im Ausgangszustand gibt es zwischen den EPGs Web und App keinen Contract. Endpoint Learning, Gateway und Routing sind in '
+          'Ordnung – der Traffic-Test endet mit POLICY_IMPLICIT_DENY im Schritt *Policy Anfrage*.',
+    config=[SERVER_ACCESS, shop_tenant()], hosts=[WEB32, APP32], tasks=[],
+    checks=[check('web1 → app1 HTTPS (TCP 443) funktioniert', 'traffic', src='web1', dst='app1', proto='tcp', port=443, expect=True),
+            check('web1 erreicht weiterhin sein Gateway (Routing unverändert)', 'traffic', src='web1', dst='10.10.10.1', proto='icmp', expect=True),
+            check('web1 → app1 SSH (TCP 22) ist durch die Policy blockiert', 'traffic', src='web1', dst='app1', proto='tcp', port=22,
+                  expect=False, reason='POLICY_', category='security'),
+            check('web1 → app1 Ping ist durch die Policy blockiert', 'traffic', src='web1', dst='app1', proto='icmp',
+                  expect=False, reason='POLICY_', category='security'),
+            check('app1 → web1 TCP 443: App baut keine Verbindung auf', 'traffic', src='app1', dst='web1', proto='tcp', port=443,
+                  expect=False, reason='POLICY_', category='security'),
+            check('Least Privilege Web → App: nur tcp/443 offen', 'exposure', src='web1', dst='app1', allow=['tcp/443'], category='security'),
+            check('Least Privilege App → Web: keine neuen Verbindungen', 'exposure', src='app1', dst='web1', allow=[], category='security')],
+    questions=[{'id': 'q1', 'q': 'Warum schlug HTTPS im Ausgangszustand fehl, obwohl das Routing zwischen BD-Web und BD-App funktioniert?',
+                'options': ['Es fehlte eine Route zwischen den Subnetzen', 'Zwischen zwei EPGs gilt ohne Contract Implicit Deny',
+                            'Der Dienst auf app1 lief nicht', 'Das VLAN von web1 war nicht im VLAN-Pool'],
+                'answer': 1, 'explain': 'Routing und Policy sind in ACI getrennte Entscheidungen. Der Traffic-Test zeigt Gateway und Routing grün '
+                                        'und scheitert erst an der Policy (Implicit Deny).'},
+               {'id': 'q2', 'q': 'Welche EPG ist für diesen Contract der Provider?',
+                'options': ['Web, weil sie die Verbindung aufbaut', 'App, weil sie den Dienst anbietet',
+                            'Beide, sonst gibt es keinen Rückverkehr', 'Keine – die Rolle spielt keine Rolle'],
+                'answer': 1, 'explain': 'Der Provider bietet den Dienst an (Ziel-Port 443), der Consumer baut die Verbindung auf. Vertauschte Rollen '
+                                        'erlauben die Anfrage nicht.'},
+               {'id': 'q3', 'q': 'Wie kommt die Antwort von app1 (Quell-Port 443) zurück zu web1, obwohl Contracts zustandslos sind?',
+                'options': ['Über die Regel für die Gegenrichtung, die Quell- und Ziel-Port des Filters vertauscht',
+                            'App darf damit selbst Verbindungen zu Web auf Ziel-Port 443 aufbauen',
+                            'Der Contract arbeitet wie eine Stateful Firewall',
+                            'Gar nicht – Antworten sind in ACI immer erlaubt'],
+                'answer': 0, 'explain': 'Das Subject erzeugt bei "Apply Both Directions" mit "Reverse Filter Ports" eine Regel Provider → Consumer '
+                                        'mit vertauschten Ports. Dadurch passt die Antwort (Quell-Port 443). Ohne die Option kommt die Anfrage '
+                                        'durch, die Antwort nicht.'}],
+    solution='Filter, Contract und Rollen (POST auf `uni/tn-Shop`):\n\n`' + json.dumps(SOL32) + '`\n\n'
+             'Gleichwertig sind z. B.: Contract-Scope *tenant* statt *VRF*, der Filter im Tenant *common*, die Filter-Option *Stateful*, '
+             'ein Port-Bereich 443-443. Nicht gleichwertig: Filter ohne Protokoll, Filter *default*, Port-Bereiche über 443 hinaus, vertauschte '
+             'Rollen, Reverse Filter Ports aus.')
+
+
+# ----------------------------------------------------------------------------
 # Maschinenlesbare Musterloesungen (fuer die Tests: [URL-DN, Body])
 # ----------------------------------------------------------------------------
 BGP_RR = ['uni/fabric/bgpInstP-default', mo('bgpInstPol', {}, mo('bgpAsP', {'asn': '65001'}),
@@ -1781,6 +1870,7 @@ SOLUTIONS = {
                          ['#ndo', {'op': 'template', 'template': TPL31A}], ['#ndo', {'op': 'deploy', 'name': 'Shop-Stretched'}],
                          ['#ndo', {'op': 'template', 'template': TPL31B}], ['#ndo', {'op': 'deploy', 'name': 'HAM-Local'}]],
     '14-l2out-migration': [['uni', L2ACC14], ['uni', L2OUT14], ['uni/tn-Shop/BD-BD-Migration', mo('fvBD', {'arpFlood': 'yes'})]],
+    '32-https-least-privilege': [['uni', SOL32]],
 }
 
 

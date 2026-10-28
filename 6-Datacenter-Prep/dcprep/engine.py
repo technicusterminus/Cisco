@@ -12,7 +12,7 @@ import re
 from . import setup as apic_setup
 import time
 
-from .model import CLASSES, split_dn, parent_dn, rn_of, tenant_of, now_ts
+from .model import CLASSES, split_dn, parent_dn, tenant_of, now_ts
 from .ops import OpsMixin, plain
 from .multipod import PodMixin
 from .msite import SiteMixin
@@ -2222,12 +2222,24 @@ class Engine(OpsMixin, PodMixin, SiteMixin):
         return True
 
     def packet(self, s, d, proto, sport, dport, flags):
-        """Entscheidet ein einzelnes Paket von Klasse s nach Klasse d."""
+        """Entscheidet ein einzelnes Paket von Klasse s nach Klasse d -> (permit|deny, Begruendung).
+        Danach stehen in last_code der Reason Code und in last_rule die angewandte Regel."""
+        self._code, self.last_rule = None, None
+        act, why = self._packet(s, d, proto, sport, dport, flags)
+        self.last_code = self._code
+        return act, why
+
+    def _decide(self, code, act, why, rule=None):
+        self._code = code
+        self.last_rule = rule
+        return act, why
+
+    def _packet(self, s, d, proto, sport, dport, flags):
         self.last_hit = None
         vrf = s['vrf']
         va = self.A(vrf) or {}
         if va.get('pcEnfPref') == 'unenforced':
-            return 'permit', 'VRF %s steht auf "unenforced" - keine Policy-Pruefung' % self.short(vrf)
+            return self._decide('POLICY_VRF_UNENFORCED', 'permit', 'VRF %s steht auf "unenforced" - keine Policy-Pruefung' % self.short(vrf))
         for tb in self._rs_targets(d['dn'], 'fvRsProtBy'):
             for ts in self.kids(tb, 'vzTSubj'):
                 for rd in self.kids(ts, 'vzRsDenyRule'):
@@ -2236,18 +2248,18 @@ class Engine(OpsMixin, PodMixin, SiteMixin):
                         continue
                     for e in self.kids(rda['tDn'], 'vzEntry'):
                         if self._entry_match(self.A(e), proto, sport, dport, flags, False):
-                            return 'deny', 'Taboo Contract %s (Filter %s) schuetzt %s' % (
-                                self.short(tb), self.A(rda['tDn'])['name'], self.short(d['dn']))
+                            return self._decide('POLICY_TABOO', 'deny', 'Taboo Contract %s (Filter %s) schuetzt %s' % (
+                                self.short(tb), self.A(rda['tDn'])['name'], self.short(d['dn'])), {'contract': tb, 'filter': rda['tDn'], 'entry': e})
         if (s['kind'] == 'esg') != (d['kind'] == 'esg') and 'epg' in (s['kind'], d['kind']):
-            return 'deny', 'Contracts zwischen einer ESG und einer EPG werden nicht unterstuetzt - beide Seiten muessen ESGs sein ' \
-                           '(oder ein External EPG)'
+            return self._decide('POLICY_ESG_EPG_MIX', 'deny', 'Contracts zwischen einer ESG und einer EPG werden nicht unterstuetzt - beide Seiten '
+                                'muessen ESGs sein (oder ein External EPG)')
         if s['dn'] == d['dn']:
             if s.get('isolation'):
-                return 'deny', 'Intra-EPG-Isolation ist aktiv'
-            return 'permit', 'Quelle und Ziel in derselben EPG - kein Contract noetig'
+                return self._decide('POLICY_INTRA_EPG_ISOLATION', 'deny', 'Intra-EPG-Isolation ist aktiv', {'epg': s['dn']})
+            return self._decide('POLICY_SAME_EPG', 'permit', 'Quelle und Ziel in derselben EPG - kein Contract noetig', {'epg': s['dn']})
         anya = self.A(vrf + '/any') or {}
         if anya.get('prefGrMemb') == 'enabled' and s['pref'] and d['pref']:
-            return 'permit', 'Beide sind Mitglied der Preferred Group'
+            return self._decide('POLICY_PREFERRED_GROUP', 'permit', 'Beide sind Mitglied der Preferred Group', {'vrf': vrf})
         hits = []
         for brc, rel in self.contracts.items():
             s_cons = s['dn'] in rel['cons'] or vrf in rel['cons_any']
@@ -2275,18 +2287,25 @@ class Engine(OpsMixin, PodMixin, SiteMixin):
                         where = '%s / %s / %s / %s' % (self.short(brc), sa['name'], self.A(rfa['tDn'])['name'],
                                                        ea['name'])
                         if fwd and self._entry_match(ea, proto, sport, dport, flags, False):
-                            hits.append((rfa['action'], where + ' (Consumer -> Provider)', subj, 'c2p'))
+                            hits.append((rfa['action'], where + ' (Consumer -> Provider)', subj, 'c2p', brc, rfa['tDn'], e))
+                        # stateful: Provider -> Consumer nur TCP mit ACK (Antworten), kein Verbindungsaufbau vom Provider
+                        if rev and ea.get('stateful') == 'yes' and (proto != 'tcp' or flags != 'ack'):
+                            continue
                         if rev and self._entry_match(ea, proto, sport, dport, flags, sa['revFltPorts'] == 'yes'):
                             hits.append((rfa['action'], where + ' (Provider -> Consumer%s)'
-                                         % (', Ports getauscht' if sa['revFltPorts'] == 'yes' else ''), subj, 'p2c'))
+                                         % (', Ports getauscht' if sa['revFltPorts'] == 'yes' else ''), subj, 'p2c', brc, rfa['tDn'], e))
         deny = [h for h in hits if h[0] == 'deny']
         if deny:
-            return 'deny', 'Deny-Filter: ' + deny[0][1]
+            return self._decide('POLICY_DENY_RULE', 'deny', 'Deny-Filter: ' + deny[0][1], self._rule(deny[0]))
         if hits:
             # gleiche Prioritaet: Deny vor Redirect vor Permit
             redir = [h for h in hits if (getattr(self, 'graphs', {}).get(h[2]) or {}).get('state') == 'applied']
             h0 = redir[0] if redir else hits[0]
             self.last_hit = (h0[2], h0[3])
-            return 'permit', 'Contract: ' + h0[1]
-        return 'deny', 'Implicit Deny: kein Contract mit passendem Filter zwischen %s und %s' % (
-            self.short(s['dn']), self.short(d['dn']))
+            return self._decide('POLICY_CONTRACT_PERMIT', 'permit', 'Contract: ' + h0[1], self._rule(h0))
+        return self._decide('POLICY_IMPLICIT_DENY', 'deny', 'Implicit Deny: kein Contract mit passendem Filter zwischen %s und %s' % (
+            self.short(s['dn']), self.short(d['dn'])))
+
+    def _rule(self, h):
+        """Angewandte Regel als Objektreferenzen."""
+        return {'contract': h[4], 'subject': h[2], 'filter': h[5], 'entry': h[6], 'direction': h[3]}

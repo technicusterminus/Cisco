@@ -2,7 +2,7 @@
 import os
 import re
 
-from .model import CLASSES, COMMON_RW, split_dn
+from .model import CLASSES, COMMON_RW
 
 _SRC = None
 

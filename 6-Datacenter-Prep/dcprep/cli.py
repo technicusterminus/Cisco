@@ -4,8 +4,8 @@ import re
 import shlex
 
 from .model import CLASSES, split_dn
-from .engine import ip_of, net_of, pnum, vlan_num
-from .query import parse_filter, eval_filter, out_attrs
+from .engine import ip_of, pnum, vlan_num
+from .query import eval_filter, out_attrs
 
 APIC_HELP = """Verfuegbare Befehle auf dem APIC:
   acidiag fnvread                     Fabric-Knoten und ihr Zustand
@@ -1059,7 +1059,6 @@ def _verify_methods():
         return '\n'.join(out)
 
     def iping(self, nid, vname, dst):
-        from . import trace
         e = self.e
         vrf = self._vrf_by_name(vname)
         if not vrf or vrf not in e.dep_vrf.get(nid, set()):
@@ -1474,7 +1473,6 @@ def ops_leaf(self, nid, c):
 
 def ops_apic(self, c):
     e = self.e
-    from . import ops as _ops
     if c == 'show firmware upgrade status':
         out = [' Pod  Node  Role        Current Firmware    Target Firmware     Status', ' ---  ----  ----------  ------------------  ------------------  ------------']
         ups = {}
