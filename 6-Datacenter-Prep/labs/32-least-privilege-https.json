@@ -1,0 +1,790 @@
+{
+ "id": "32-least-privilege-https",
+ "title": "32 Least Privilege: HTTPS von WEB zu APP",
+ "topic": "Policy / Contracts",
+ "level": "Einstieg",
+ "duration": "25 min",
+ "fabric": "discovered",
+ "goals": [
+  "Einen Policy-Drop von einem Netzwerkfehler unterscheiden",
+  "Filter, Contract und Consumer/Provider passend zur Richtung modellieren",
+  "Verstehen, warum \"funktioniert\" nicht \"sicher\" heisst: Negativtests und Least Privilege"
+ ],
+ "intro": "Im Tenant **Portal** stehen die EPGs **WEB** (web1), **APP** (app1) und **MON** (mon1) im VRF Prod, jede in ihrer eigenen Bridge Domain. Access-Anbindung, Gateways und Routing sind fertig, alle drei Hosts sind gelernt.\n\n**Anforderung:** web1 muss die Applikation auf app1 per **HTTPS** erreichen. Sonst wird nichts freigegeben: kein SSH, kein Ping, keine Verbindung, die APP von sich aus zu WEB aufbaut, und MON bekommt in diesem Change keine neuen Rechte.\n\nBewertet wird der Endzustand der Fabric, nicht der Weg dorthin: erst die Funktion, dann die Sicherheit.",
+ "config": [
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "infraInfra": {
+       "attributes": {},
+       "children": [
+        {
+         "fvnsVlanInstP": {
+          "attributes": {
+           "name": "VLAN-Pool-Server",
+           "allocMode": "static"
+          },
+          "children": [
+           {
+            "fvnsEncapBlk": {
+             "attributes": {
+              "from": "vlan-100",
+              "to": "vlan-199"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAttEntityP": {
+          "attributes": {
+           "name": "AAEP-Server"
+          },
+          "children": [
+           {
+            "infraRsDomP": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraFuncP": {
+          "attributes": {},
+          "children": [
+           {
+            "infraAccPortGrp": {
+             "attributes": {
+              "name": "IPG-Server-Access"
+             },
+             "children": [
+              {
+               "infraRsAttEntP": {
+                "attributes": {
+                 "tDn": "uni/infra/attentp-AAEP-Server"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAccPortP": {
+          "attributes": {
+           "name": "IntProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraHPortS": {
+             "attributes": {
+              "name": "Server-Ports",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraPortBlk": {
+                "attributes": {
+                 "name": "block2",
+                 "fromPort": "1",
+                 "toPort": "10"
+                }
+               }
+              },
+              {
+               "infraRsAccBaseGrp": {
+                "attributes": {
+                 "tDn": "uni/infra/funcprof/accportgrp-IPG-Server-Access"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraNodeP": {
+          "attributes": {
+           "name": "SwProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraLeafS": {
+             "attributes": {
+              "name": "101-102",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraNodeBlk": {
+                "attributes": {
+                 "name": "blk",
+                 "from_": "101",
+                 "to_": "102"
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "infraRsAccPortP": {
+             "attributes": {
+              "tDn": "uni/infra/accportprof-IntProf-Leaf101-102"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "physDomP": {
+       "attributes": {
+        "name": "PhysDom-Server"
+       },
+       "children": [
+        {
+         "infraRsVlanNs": {
+          "attributes": {
+           "tDn": "uni/infra/vlanns-[VLAN-Pool-Server]-static"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Portal"
+    },
+    "children": [
+     {
+      "fvCtx": {
+       "attributes": {
+        "name": "Prod"
+       }
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Web"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.32.10.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-App"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.32.20.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Mon"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.32.50.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Portal"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "WEB"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Web"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/1]",
+              "encap": "vlan-110",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "APP"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-App"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/2]",
+              "encap": "vlan-120",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "MON"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Mon"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/6]",
+              "encap": "vlan-150",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "hosts": [
+  {
+   "name": "web1",
+   "mac": "00:50:56:32:10:11",
+   "ip": "10.32.10.11/24",
+   "gw": "10.32.10.1",
+   "vlan": 110,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/1"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Webserver (lauscht auf 443 und 22)",
+   "services": [
+    "tcp/443",
+    "tcp/22"
+   ]
+  },
+  {
+   "name": "app1",
+   "mac": "00:50:56:32:20:11",
+   "ip": "10.32.20.11/24",
+   "gw": "10.32.20.1",
+   "vlan": 120,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/2"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Applikationsserver (lauscht auf 443 und 22)",
+   "services": [
+    "tcp/443",
+    "tcp/22"
+   ]
+  },
+  {
+   "name": "mon1",
+   "mac": "00:50:56:32:50:11",
+   "ip": "10.32.50.11/24",
+   "gw": "10.32.50.1",
+   "vlan": 150,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/6"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Monitoring-Server (Weboberflaeche auf 443)",
+   "services": [
+    "tcp/443"
+   ]
+  }
+ ],
+ "tasks": [
+  {
+   "title": "Ausgangslage",
+   "text": "Teste im Traffic Inspector (*Operations > Visibility & Troubleshooting*) **web1 → app1, TCP 443**. Lies Ergebnis, Reason Code und Fehlerort: Liegt es an Anbindung, Routing oder Policy?"
+  },
+  {
+   "title": "Policy modellieren",
+   "text": "Setze die Anforderung so um, dass genau dieser Dienst in genau dieser Richtung erlaubt ist."
+  },
+  {
+   "title": "Gegenprobe",
+   "text": "Teste auch, was **nicht** gehen darf: SSH und Ping von web1 zu app1, HTTPS von app1 zu web1, HTTPS von mon1 zu app1 und von web1 zu mon1. Dann **Lab prüfen**."
+  }
+ ],
+ "hints": [
+  {
+   "level": 1,
+   "title": "Konzept",
+   "text": "Zwischen zwei EPGs gilt im enforced VRF ein Implicit Deny. Erlaubt ist nur, was ein Contract mit seinen Filtern beschreibt - nicht mehr. Routing und Gateway allein geben keinen Verkehr frei."
+  },
+  {
+   "level": 2,
+   "title": "Betroffene Objekte",
+   "text": "Du brauchst einen Filter, einen Contract mit Subject und die Contract-Beziehungen an **WEB** und **APP**. Frage dich: Wer stellt den Dienst bereit (Provider), wer nutzt ihn (Consumer)?"
+  },
+  {
+   "level": 3,
+   "title": "Prüfschritt",
+   "text": "Nach der Änderung: Traffic Inspector web1 → app1 tcp/443 zeigt die angewendete Regel (Contract / Subject / Filter / Entry) für Anfrage und Antwort. Auf leaf102 `show zoning-rule`: Gibt es neben der Regel für Port 443 noch weitere Freigaben? Ist **Reverse Filter Ports** am Subject an, damit die Antwort von Port 443 passt?"
+  },
+  {
+   "level": 4,
+   "title": "Lösung",
+   "text": "Filter **https** mit einem Entry: EtherType IP, Protokoll tcp, Destination Port 443. Contract **web-to-app-https** (Scope VRF), Subject mit dem Filter und den Standardwerten *Apply Both Directions* und *Reverse Filter Ports*. **APP** als Provider, **WEB** als Consumer. Ein Contract mit dem Filter *default* (alles) oder vzAny als Provider erfüllt die Funktion, scheitert aber an den Sicherheitsprüfungen."
+  }
+ ],
+ "limits": "Contracts wertet der Simulator zustandslos aus wie die Zoning-Rules der Leafs: Anfrage und Antwort werden getrennt geprüft. Die Dienste der Hosts sind fest vorgegeben (web1 und app1: tcp/443 und tcp/22, mon1: tcp/443). Nicht ausgewertet: Subjects mit getrennten Filtern je Richtung (Apply Both Directions aus) - der Traffic Inspector meldet dann UNRESOLVED.",
+ "checks": [
+  {
+   "desc": "web1 → app1 HTTPS (TCP 443) erreichbar",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "app1",
+   "proto": "tcp",
+   "port": 443,
+   "expect": true
+  },
+  {
+   "desc": "web1 → app1 SSH (TCP 22) bleibt blockiert",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "app1",
+   "proto": "tcp",
+   "port": 22,
+   "expect": false
+  },
+  {
+   "desc": "web1 → app1 Ping bleibt blockiert (ICMP ist kein HTTPS)",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "app1",
+   "proto": "icmp",
+   "expect": false
+  },
+  {
+   "desc": "app1 → web1 HTTPS blockiert (APP baut keine Verbindung zu WEB auf)",
+   "type": "traffic",
+   "src": "app1",
+   "dst": "web1",
+   "proto": "tcp",
+   "port": 443,
+   "expect": false
+  },
+  {
+   "desc": "mon1 → app1 HTTPS blockiert (keine neue Freigabe für MON)",
+   "type": "traffic",
+   "src": "mon1",
+   "dst": "app1",
+   "proto": "tcp",
+   "port": 443,
+   "expect": false
+  },
+  {
+   "desc": "web1 → mon1 HTTPS blockiert (WEB erreicht nur APP)",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "mon1",
+   "proto": "tcp",
+   "port": 443,
+   "expect": false
+  },
+  {
+   "desc": "Least Privilege: zwischen WEB und APP ist nur TCP 443 freigegeben",
+   "type": "policy_scope",
+   "src": "web1",
+   "dst": "app1",
+   "allow": [
+    "tcp/443"
+   ]
+  }
+ ],
+ "solution": "Filter, Contract und Beziehungen in einem POST an `/api/mo/uni.json`:\n\n`{\"fvTenant\": {\"attributes\": {\"name\": \"Portal\"}, \"children\": [{\"fvCtx\": {\"attributes\": {\"name\": \"Prod\"}}}, {\"fvBD\": {\"attributes\": {\"name\": \"BD-Web\"}, \"children\": [{\"fvRsCtx\": {\"attributes\": {\"tnFvCtxName\": \"Prod\"}}}, {\"fvSubnet\": {\"attributes\": {\"ip\": \"10.32.10.1/24\", \"scope\": \"private\"}}}]}}, {\"fvBD\": {\"attributes\": {\"name\": \"BD-App\"}, \"children\": [{\"fvRsCtx\": {\"attributes\": {\"tnFvCtxName\": \"Prod\"}}}, {\"fvSubnet\": {\"attributes\": {\"ip\": \"10.32.20.1/24\", \"scope\": \"private\"}}}]}}, {\"fvBD\": {\"attributes\": {\"name\": \"BD-Mon\"}, \"children\": [{\"fvRsCtx\": {\"attributes\": {\"tnFvCtxName\": \"Prod\"}}}, {\"fvSubnet\": {\"attributes\": {\"ip\": \"10.32.50.1/24\", \"scope\": \"private\"}}}]}}, {\"fvAp\": {\"attributes\": {\"name\": \"Portal\"}, \"children\": [{\"fvAEPg\": {\"attributes\": {\"name\": \"WEB\"}, \"children\": [{\"fvRsBd\": {\"attributes\": {\"tnFvBDName\": \"BD-Web\"}}}, {\"fvRsDomAtt\": {\"attributes\": {\"tDn\": \"uni/phys-PhysDom-Server\"}}}, {\"fvRsPathAtt\": {\"attributes\": {\"tDn\": \"topology/pod-1/paths-101/pathep-[eth1/1]\", \"encap\": \"vlan-110\", \"mode\": \"regular\"}}}, {\"fvRsCons\": {\"attributes\": {\"tnVzBrCPName\": \"web-to-app-https\"}}}]}}, {\"fvAEPg\": {\"attributes\": {\"name\": \"APP\"}, \"children\": [{\"fvRsBd\": {\"attributes\": {\"tnFvBDName\": \"BD-App\"}}}, {\"fvRsDomAtt\": {\"attributes\": {\"tDn\": \"uni/phys-PhysDom-Server\"}}}, {\"fvRsPathAtt\": {\"attributes\": {\"tDn\": \"topology/pod-1/paths-102/pathep-[eth1/2]\", \"encap\": \"vlan-120\", \"mode\": \"regular\"}}}, {\"fvRsProv\": {\"attributes\": {\"tnVzBrCPName\": \"web-to-app-https\"}}}]}}, {\"fvAEPg\": {\"attributes\": {\"name\": \"MON\"}, \"children\": [{\"fvRsBd\": {\"attributes\": {\"tnFvBDName\": \"BD-Mon\"}}}, {\"fvRsDomAtt\": {\"attributes\": {\"tDn\": \"uni/phys-PhysDom-Server\"}}}, {\"fvRsPathAtt\": {\"attributes\": {\"tDn\": \"topology/pod-1/paths-101/pathep-[eth1/6]\", \"encap\": \"vlan-150\", \"mode\": \"regular\"}}}]}}]}}, {\"vzFilter\": {\"attributes\": {\"name\": \"https\"}, \"children\": [{\"vzEntry\": {\"attributes\": {\"name\": \"tcp-443\", \"etherT\": \"ip\", \"prot\": \"tcp\", \"dFromPort\": \"443\", \"dToPort\": \"443\"}}}]}}, {\"vzBrCP\": {\"attributes\": {\"name\": \"web-to-app-https\", \"scope\": \"context\"}, \"children\": [{\"vzSubj\": {\"attributes\": {\"name\": \"subj\", \"revFltPorts\": \"yes\"}, \"children\": [{\"vzRsSubjFiltAtt\": {\"attributes\": {\"tnVzFilterName\": \"https\"}}}]}}]}}]}}`\n\nWarum so: Der Consumer (WEB) startet die Verbindung zum Provider (APP). Mit *Reverse Filter Ports* erlaubt dasselbe Subject die Antwort von Quell-Port 443 zurück zu WEB. SSH, Ping und die Gegenrichtung bleiben im Implicit Deny. Ein Permit-any-Contract oder vzAny würde die Funktion erfüllen, aber mehr freigeben als verlangt.",
+ "routers": [],
+ "vcenters": [],
+ "devices": [],
+ "aaa": [],
+ "switches": [],
+ "solutionConfig": [
+  [
+   "uni",
+   {
+    "fvTenant": {
+     "attributes": {
+      "name": "Portal"
+     },
+     "children": [
+      {
+       "fvCtx": {
+        "attributes": {
+         "name": "Prod"
+        }
+       }
+      },
+      {
+       "fvBD": {
+        "attributes": {
+         "name": "BD-Web"
+        },
+        "children": [
+         {
+          "fvRsCtx": {
+           "attributes": {
+            "tnFvCtxName": "Prod"
+           }
+          }
+         },
+         {
+          "fvSubnet": {
+           "attributes": {
+            "ip": "10.32.10.1/24",
+            "scope": "private"
+           }
+          }
+         }
+        ]
+       }
+      },
+      {
+       "fvBD": {
+        "attributes": {
+         "name": "BD-App"
+        },
+        "children": [
+         {
+          "fvRsCtx": {
+           "attributes": {
+            "tnFvCtxName": "Prod"
+           }
+          }
+         },
+         {
+          "fvSubnet": {
+           "attributes": {
+            "ip": "10.32.20.1/24",
+            "scope": "private"
+           }
+          }
+         }
+        ]
+       }
+      },
+      {
+       "fvBD": {
+        "attributes": {
+         "name": "BD-Mon"
+        },
+        "children": [
+         {
+          "fvRsCtx": {
+           "attributes": {
+            "tnFvCtxName": "Prod"
+           }
+          }
+         },
+         {
+          "fvSubnet": {
+           "attributes": {
+            "ip": "10.32.50.1/24",
+            "scope": "private"
+           }
+          }
+         }
+        ]
+       }
+      },
+      {
+       "fvAp": {
+        "attributes": {
+         "name": "Portal"
+        },
+        "children": [
+         {
+          "fvAEPg": {
+           "attributes": {
+            "name": "WEB"
+           },
+           "children": [
+            {
+             "fvRsBd": {
+              "attributes": {
+               "tnFvBDName": "BD-Web"
+              }
+             }
+            },
+            {
+             "fvRsDomAtt": {
+              "attributes": {
+               "tDn": "uni/phys-PhysDom-Server"
+              }
+             }
+            },
+            {
+             "fvRsPathAtt": {
+              "attributes": {
+               "tDn": "topology/pod-1/paths-101/pathep-[eth1/1]",
+               "encap": "vlan-110",
+               "mode": "regular"
+              }
+             }
+            },
+            {
+             "fvRsCons": {
+              "attributes": {
+               "tnVzBrCPName": "web-to-app-https"
+              }
+             }
+            }
+           ]
+          }
+         },
+         {
+          "fvAEPg": {
+           "attributes": {
+            "name": "APP"
+           },
+           "children": [
+            {
+             "fvRsBd": {
+              "attributes": {
+               "tnFvBDName": "BD-App"
+              }
+             }
+            },
+            {
+             "fvRsDomAtt": {
+              "attributes": {
+               "tDn": "uni/phys-PhysDom-Server"
+              }
+             }
+            },
+            {
+             "fvRsPathAtt": {
+              "attributes": {
+               "tDn": "topology/pod-1/paths-102/pathep-[eth1/2]",
+               "encap": "vlan-120",
+               "mode": "regular"
+              }
+             }
+            },
+            {
+             "fvRsProv": {
+              "attributes": {
+               "tnVzBrCPName": "web-to-app-https"
+              }
+             }
+            }
+           ]
+          }
+         },
+         {
+          "fvAEPg": {
+           "attributes": {
+            "name": "MON"
+           },
+           "children": [
+            {
+             "fvRsBd": {
+              "attributes": {
+               "tnFvBDName": "BD-Mon"
+              }
+             }
+            },
+            {
+             "fvRsDomAtt": {
+              "attributes": {
+               "tDn": "uni/phys-PhysDom-Server"
+              }
+             }
+            },
+            {
+             "fvRsPathAtt": {
+              "attributes": {
+               "tDn": "topology/pod-1/paths-101/pathep-[eth1/6]",
+               "encap": "vlan-150",
+               "mode": "regular"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      },
+      {
+       "vzFilter": {
+        "attributes": {
+         "name": "https"
+        },
+        "children": [
+         {
+          "vzEntry": {
+           "attributes": {
+            "name": "tcp-443",
+            "etherT": "ip",
+            "prot": "tcp",
+            "dFromPort": "443",
+            "dToPort": "443"
+           }
+          }
+         }
+        ]
+       }
+      },
+      {
+       "vzBrCP": {
+        "attributes": {
+         "name": "web-to-app-https",
+         "scope": "context"
+        },
+        "children": [
+         {
+          "vzSubj": {
+           "attributes": {
+            "name": "subj",
+            "revFltPorts": "yes"
+           },
+           "children": [
+            {
+             "vzRsSubjFiltAtt": {
+              "attributes": {
+               "tnVzFilterName": "https"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  ]
+ ]
+}

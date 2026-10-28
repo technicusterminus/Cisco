@@ -26,6 +26,7 @@ from . import ops
 from . import msite
 from . import flows
 from . import coverage
+from . import assess
 from .users import Hub, SimProxy, COOKIE as DP_COOKIE, SESSION_DAYS
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -86,7 +87,7 @@ class Sim:
         base_config(self.store, self.admin_pwd)
         old = self.sim or {}
         self.sim = self._new_sim()
-        for k in ('settings', 'audit', 'events', 'seq', 'fileserver', 'monitors', 'monlog'):
+        for k in ('settings', 'audit', 'events', 'seq', 'fileserver', 'monitors', 'monlog', 'labMode'):
             if k in old:
                 self.sim[k] = old[k]
         if keep_sim:
@@ -314,7 +315,7 @@ class Sim:
         e = self.engine
         res = []
         for c in lab.get('checks', []):
-            ok, info = False, ''
+            ok, info, detail = False, '', None
             t = c['type']
             try:
                 if t == 'node':
@@ -333,12 +334,17 @@ class Sim:
                              and d.startswith(c.get('under', '')) for d in dns)
                 elif t == 'traffic':
                     r = trace.run(e, self.sim, c['src'], c['dst'], c.get('proto', 'icmp'), c.get('port', 0))
-                    ok = r['ok'] == c.get('expect', True)
+                    # UNRESOLVED zaehlt nie als bestanden - auch nicht bei einem erwarteten Drop
+                    ok = r.get('verdict') != 'UNRESOLVED' and r['ok'] == c.get('expect', True)
                     if ok and c.get('via'):
                         ok = any(c['via'] in (s_['title'] + ' ' + s_['detail']) for s_ in r['steps'])
+                    if ok and c.get('reason'):
+                        ok = r.get('reason') == c['reason']
                     bad = next((s for s in r['steps'] if s['ok'] is False), None)
-                    info = 'Ergebnis: %s%s' % ('erreichbar' if r['ok'] else 'blockiert',
-                                               ' - ' + bad['title'] if bad else '')
+                    info = 'Ergebnis: %s (%s)%s' % (r.get('verdict'), r.get('reason'), ' - ' + bad['title'] if bad else '')
+                    detail = {'verdict': r.get('verdict'), 'reason': r.get('reason')}
+                elif t == 'policy_scope':
+                    ok, info = assess.policy_scope(e, c)
                 elif t == 'endpoint':
                     hs = e.hosts.get(c['host'], {})
                     ok = hs.get('learned') and (not c.get('epg') or hs.get('epg') == c['epg'])
@@ -463,11 +469,43 @@ class Sim:
                     info = 'Hold Time: %s' % tm.get('hold')
             except (KeyError, ValueError) as ex:
                 info = 'Pruefung fehlerhaft: %s' % ex
-            res.append({'desc': c['desc'], 'ok': bool(ok), 'info': info})
-        out = {'id': lab['id'], 'title': lab['title'], 'checks': res,
-               'passed': sum(1 for r in res if r['ok']), 'total': len(res)}
+            row = {'desc': c['desc'], 'ok': bool(ok), 'info': info, 'category': assess.category(c)}
+            if detail:
+                row.update(detail)
+            res.append(row)
+        out = {'id': lab['id'], 'title': lab['title'], 'checks': res, 'categories': assess.summarize(res),
+               'passed': sum(1 for r in res if r['ok']), 'total': len(res),
+               'mode': self.lab_mode(), 'hintsUsed': self.sim.get('labHints', {}).get(lab['id'], 0)}
         self.record_progress(out)
         return out
+
+    # -------------------------------------------------------------- Lab-Modus und Hinweise
+    def lab_mode(self):
+        return self.sim.get('labMode') if self.sim.get('labMode') in assess.MODES else 'guided'
+
+    def set_lab_mode(self, mode):
+        if mode not in assess.MODES:
+            raise AciError(400, 'Modus muss guided oder exam sein')
+        self.sim['labMode'] = mode
+        self.save()
+        return mode
+
+    def lab_hint(self, level=None):
+        """Gibt Hinweise bis zur naechsten (oder angegebenen) Stufe frei. Aendert nie die Konfiguration."""
+        lab = self.lab(self.sim.get('lab'))
+        if not lab:
+            raise AciError(400, 'Kein Lab aktiv')
+        if self.lab_mode() == 'exam':
+            raise AciError(403, 'Im Pruefungsmodus gibt es keine Hinweise', 403)
+        hints = assess.hints_of(lab)
+        if not hints:
+            return {'hints': [], 'level': 0, 'total': 0}
+        cur = self.sim.setdefault('labHints', {}).get(lab['id'], 0)
+        want = int(level) if level is not None else cur + 1
+        want = max(cur, min(want, hints[-1]['level']))
+        self.sim['labHints'][lab['id']] = want
+        self.save()
+        return {'hints': [h for h in hints if h['level'] <= want], 'level': want, 'total': len(hints)}
 
     # -------------------------------------------------------------- Fortschritt
     def progress(self):
@@ -489,8 +527,13 @@ class Sim:
         old = p.get(chk['id'], {})
         done = old.get('done') or (chk['total'] > 0 and chk['passed'] == chk['total'])
         new = {'passed': chk['passed'], 'total': chk['total'], 'ts': now_ts(), 'done': bool(done),
-               'doneTs': old.get('doneTs') or (now_ts() if done else None)}
-        if {k: old.get(k) for k in ('passed', 'total', 'done')} != {k: new[k] for k in ('passed', 'total', 'done')}:
+               'doneTs': old.get('doneTs') or (now_ts() if done else None),
+               'hints': max(old.get('hints', 0), chk.get('hintsUsed', 0))}
+        if done and not old.get('done'):
+            new['doneMode'] = chk.get('mode', 'guided')
+        elif old.get('doneMode'):
+            new['doneMode'] = old['doneMode']
+        if {k: old.get(k) for k in ('passed', 'total', 'done', 'hints')} != {k: new[k] for k in ('passed', 'total', 'done', 'hints')}:
             p[chk['id']] = new
             self._write_progress(p)
 
@@ -1171,7 +1214,8 @@ class Sim:
                 'upgrading': any(not u.get('done') for u in self.sim.get('upgrades', [])),
                 'graphs': [{k: g[k] for k in ('dn', 'brc', 'graph', 'state', 'reasons', 'node', 'dev')}
                            for g in getattr(e, 'graphs', {}).values()],
-                'lab': {k: lab.get(k) for k in ('id', 'title', 'intro', 'tasks', 'goals', 'solution')} if lab else None,
+                'lab': assess.lab_view(lab, self.lab_mode(), self.sim.get('labHints', {}).get(lab['id'], 0)) if lab else None,
+                'labMode': self.lab_mode(),
                 'nextEvent': e.next_event}
 
 
@@ -1622,6 +1666,10 @@ def make_handler(hub):
                     return self.send(200, {'ok': True, 'title': lab['title']})
                 if rest == 'labs/check':
                     return self.send(200, S.check_lab() or {'checks': []})
+                if rest == 'labs/hint':
+                    return self.send(200, S.lab_hint(b.get('level')))
+                if rest == 'labs/mode':
+                    return self.send(200, {'mode': S.set_lab_mode(b.get('mode'))})
                 if rest == 'reset':
                     S.reset(b.get('mode', 'discovered'))
                     S.save()

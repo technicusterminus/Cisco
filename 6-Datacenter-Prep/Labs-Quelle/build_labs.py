@@ -1314,6 +1314,10 @@ def _backup25():
     base_config(st, 'admin')
     mpost(st, 'uni', shop_tenant(with_contracts=True))
     rows = [r for r in st.dump_config() if r[0] == 'uni/tn-Shop' or r[0].startswith('uni/tn-Shop/')]
+    # feste Zeitstempel: der Generator soll bei jedem Lauf dieselben Dateien erzeugen
+    for r in rows:
+        if 'modTs' in r[2]:
+            r[2]['modTs'] = '2026-10-26T23:00:00.000+00:00'
     return {'size': '18 KB', 'export': {'kind': 'aci-config-export', 'created': '2026-10-26T23:00:04.000+00:00', 'target': 'uni/tn-Shop',
                                         'secure': False, 'key': '', 'policy': 'Shop-Nightly', 'rows': rows, 'version': '6.0(5h)',
                                         'counters': dict(st.counters)}}
@@ -1658,6 +1662,87 @@ lab(id='31-multisite-ndo', title='31 Multi-Site mit dem Nexus Dashboard Orchestr
 # ----------------------------------------------------------------------------
 # Maschinenlesbare Musterloesungen (fuer die Tests: [URL-DN, Body])
 # ----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
+# Lab 32 - Least Privilege: HTTPS von WEB zu APP (Abnahmefall der Lernplattform)
+# ----------------------------------------------------------------------------
+def svc_host(name, mac, ip, gw, vlan, links, services, descr):
+    h = host(name, mac, ip, gw, vlan, links, descr=descr)
+    h['services'] = list(services)
+    return h
+
+
+WEB32 = svc_host('web1', '00:50:56:32:10:11', '10.32.10.11/24', '10.32.10.1', 110, [[L101, 'eth1/1']], ['tcp/443', 'tcp/22'],
+                 'Webserver (lauscht auf 443 und 22)')
+APP32 = svc_host('app1', '00:50:56:32:20:11', '10.32.20.11/24', '10.32.20.1', 120, [[L102, 'eth1/2']], ['tcp/443', 'tcp/22'],
+                 'Applikationsserver (lauscht auf 443 und 22)')
+MON32 = svc_host('mon1', '00:50:56:32:50:11', '10.32.50.11/24', '10.32.50.1', 150, [[L101, 'eth1/6']], ['tcp/443'],
+                 'Monitoring-Server (Weboberflaeche auf 443)')
+
+
+def portal_tenant(*extra, web_cons=(), app_prov=()):
+    return mo('fvTenant', {'name': 'Portal'},
+              mo('fvCtx', {'name': 'Prod'}),
+              bd('BD-Web', 'Prod', '10.32.10.1/24'), bd('BD-App', 'Prod', '10.32.20.1/24'), bd('BD-Mon', 'Prod', '10.32.50.1/24'),
+              mo('fvAp', {'name': 'Portal'},
+                 epg('WEB', 'BD-Web', ports=[(path(101, 'eth1/1'), 110)], cons=web_cons),
+                 epg('APP', 'BD-App', ports=[(path(102, 'eth1/2'), 120)], prov=app_prov),
+                 epg('MON', 'BD-Mon', ports=[(path(101, 'eth1/6'), 150)])),
+              *extra)
+
+
+HTTPS32 = filt('https', {'name': 'tcp-443', 'etherT': 'ip', 'prot': 'tcp', 'dFromPort': '443', 'dToPort': '443'})
+SOL32 = portal_tenant(HTTPS32, contract('web-to-app-https', ['https']), web_cons=['web-to-app-https'], app_prov=['web-to-app-https'])
+lab(id='32-least-privilege-https', title='32 Least Privilege: HTTPS von WEB zu APP', topic='Policy / Contracts', level='Einstieg',
+    duration='25 min', fabric='discovered',
+    goals=['Einen Policy-Drop von einem Netzwerkfehler unterscheiden', 'Filter, Contract und Consumer/Provider passend zur Richtung modellieren',
+           'Verstehen, warum "funktioniert" nicht "sicher" heisst: Negativtests und Least Privilege'],
+    intro='Im Tenant **Portal** stehen die EPGs **WEB** (web1), **APP** (app1) und **MON** (mon1) im VRF Prod, jede in ihrer eigenen '
+          'Bridge Domain. Access-Anbindung, Gateways und Routing sind fertig, alle drei Hosts sind gelernt.\n\n'
+          '**Anforderung:** web1 muss die Applikation auf app1 per **HTTPS** erreichen. Sonst wird nichts freigegeben: kein SSH, kein '
+          'Ping, keine Verbindung, die APP von sich aus zu WEB aufbaut, und MON bekommt in diesem Change keine neuen Rechte.\n\n'
+          'Bewertet wird der Endzustand der Fabric, nicht der Weg dorthin: erst die Funktion, dann die Sicherheit.',
+    config=[SERVER_ACCESS, portal_tenant()], hosts=[WEB32, APP32, MON32],
+    tasks=[
+        task('Ausgangslage', 'Teste im Traffic Inspector (*Operations > Visibility & Troubleshooting*) **web1 → app1, TCP 443**. '
+             'Lies Ergebnis, Reason Code und Fehlerort: Liegt es an Anbindung, Routing oder Policy?'),
+        task('Policy modellieren', 'Setze die Anforderung so um, dass genau dieser Dienst in genau dieser Richtung erlaubt ist.'),
+        task('Gegenprobe', 'Teste auch, was **nicht** gehen darf: SSH und Ping von web1 zu app1, HTTPS von app1 zu web1, HTTPS von '
+             'mon1 zu app1 und von web1 zu mon1. Dann **Lab prüfen**.'),
+    ],
+    hints=[
+        {'level': 1, 'title': 'Konzept', 'text': 'Zwischen zwei EPGs gilt im enforced VRF ein Implicit Deny. Erlaubt ist nur, was ein '
+         'Contract mit seinen Filtern beschreibt - nicht mehr. Routing und Gateway allein geben keinen Verkehr frei.'},
+        {'level': 2, 'title': 'Betroffene Objekte', 'text': 'Du brauchst einen Filter, einen Contract mit Subject und die '
+         'Contract-Beziehungen an **WEB** und **APP**. Frage dich: Wer stellt den Dienst bereit (Provider), wer nutzt ihn (Consumer)?'},
+        {'level': 3, 'title': 'Prüfschritt', 'text': 'Nach der Änderung: Traffic Inspector web1 → app1 tcp/443 zeigt die angewendete Regel '
+         '(Contract / Subject / Filter / Entry) für Anfrage und Antwort. Auf leaf102 `show zoning-rule`: Gibt es neben der Regel für '
+         'Port 443 noch weitere Freigaben? Ist **Reverse Filter Ports** am Subject an, damit die Antwort von Port 443 passt?'},
+        {'level': 4, 'title': 'Lösung', 'text': 'Filter **https** mit einem Entry: EtherType IP, Protokoll tcp, Destination Port 443. '
+         'Contract **web-to-app-https** (Scope VRF), Subject mit dem Filter und den Standardwerten *Apply Both Directions* und '
+         '*Reverse Filter Ports*. **APP** als Provider, **WEB** als Consumer. Ein Contract mit dem Filter *default* (alles) oder vzAny '
+         'als Provider erfüllt die Funktion, scheitert aber an den Sicherheitsprüfungen.'},
+    ],
+    limits='Contracts wertet der Simulator zustandslos aus wie die Zoning-Rules der Leafs: Anfrage und Antwort werden getrennt geprüft. '
+           'Die Dienste der Hosts sind fest vorgegeben (web1 und app1: tcp/443 und tcp/22, mon1: tcp/443). '
+           'Nicht ausgewertet: Subjects mit getrennten Filtern je Richtung (Apply Both Directions aus) - der Traffic Inspector meldet '
+           'dann UNRESOLVED.',
+    checks=[check('web1 → app1 HTTPS (TCP 443) erreichbar', 'traffic', src='web1', dst='app1', proto='tcp', port=443, expect=True),
+            check('web1 → app1 SSH (TCP 22) bleibt blockiert', 'traffic', src='web1', dst='app1', proto='tcp', port=22, expect=False),
+            check('web1 → app1 Ping bleibt blockiert (ICMP ist kein HTTPS)', 'traffic', src='web1', dst='app1', proto='icmp', expect=False),
+            check('app1 → web1 HTTPS blockiert (APP baut keine Verbindung zu WEB auf)', 'traffic', src='app1', dst='web1', proto='tcp',
+                  port=443, expect=False),
+            check('mon1 → app1 HTTPS blockiert (keine neue Freigabe für MON)', 'traffic', src='mon1', dst='app1', proto='tcp', port=443,
+                  expect=False),
+            check('web1 → mon1 HTTPS blockiert (WEB erreicht nur APP)', 'traffic', src='web1', dst='mon1', proto='tcp', port=443,
+                  expect=False),
+            check('Least Privilege: zwischen WEB und APP ist nur TCP 443 freigegeben', 'policy_scope', src='web1', dst='app1',
+                  allow=['tcp/443'])],
+    solution='Filter, Contract und Beziehungen in einem POST an `/api/mo/uni.json`:\n\n`' + json.dumps(SOL32) + '`\n\n'
+             'Warum so: Der Consumer (WEB) startet die Verbindung zum Provider (APP). Mit *Reverse Filter Ports* erlaubt dasselbe Subject '
+             'die Antwort von Quell-Port 443 zurück zu WEB. SSH, Ping und die Gegenrichtung bleiben im Implicit Deny. '
+             'Ein Permit-any-Contract oder vzAny würde die Funktion erfüllen, aber mehr freigeben als verlangt.')
+
+
 BGP_RR = ['uni/fabric/bgpInstP-default', mo('bgpInstPol', {}, mo('bgpAsP', {'asn': '65001'}),
                                             mo('bgpRRP', {}, mo('bgpRRNodePEp', {'id': '201'}), mo('bgpRRNodePEp', {'id': '202'})))]
 SOLUTIONS = {
@@ -1781,6 +1866,7 @@ SOLUTIONS = {
                          ['#ndo', {'op': 'template', 'template': TPL31A}], ['#ndo', {'op': 'deploy', 'name': 'Shop-Stretched'}],
                          ['#ndo', {'op': 'template', 'template': TPL31B}], ['#ndo', {'op': 'deploy', 'name': 'HAM-Local'}]],
     '14-l2out-migration': [['uni', L2ACC14], ['uni', L2OUT14], ['uni/tn-Shop/BD-BD-Migration', mo('fvBD', {'arpFlood': 'yes'})]],
+    '32-least-privilege-https': [['uni', SOL32]],
 }
 
 
