@@ -1,5 +1,5 @@
 /* GUI-Test Troubleshooting: Endpoint-Verlauf im EP Tracker (Lab 36), physische Ursachen im Traffic Inspector (Lab 37),
-   Link-Ereignis über die Hosttabelle. Aufruf: node tests/gui/troubleshooting.js (braucht Node.js und Playwright mit Chromium) */
+   Link-Ereignis über die Hosttabelle, Change mit Snapshot und Rollback (Lab 43). Aufruf: node tests/gui/troubleshooting.js (braucht Node.js und Playwright mit Chromium) */
 'use strict';
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -71,6 +71,24 @@ const SHOTS = process.env.SHOTS;
     await p.evaluate(() => App.go('ops', 'ep')); await p.waitForSelector('.traffic input');
     await p.fill('.traffic input', 'web3'); await p.click('.traffic button:has-text("Suchen")'); await p.waitForTimeout(600);
     check((await p.innerText('.main')).includes('Link up'), 'Verlauf von web3 enthält das Link-Ereignis');
+
+    // Lab 43: Change mit Snapshot über die Oberfläche absichern und zurückrollen
+    await startLab('43-change-snapshot');
+    await p.evaluate(() => App.go('admin', 'rollback')); await p.waitForSelector('text=Create a snapshot now');
+    await p.click('button:has-text("Create a snapshot now")'); await p.waitForSelector('.modal');
+    await p.locator('.modal input').first().fill('vor-CHG4711'); await p.click('.modal .btn.primary'); await p.waitForTimeout(700);
+    check((await p.innerText('.main')).includes('vor-CHG4711'), 'Snapshot vor-CHG4711 über Admin > Config Rollbacks angelegt');
+    const change = await p.evaluate(async () => { const l = App.state.lab; const m = /`(\{.*\})`/s.exec(l.intro); return m && m[1]; });
+    await p.evaluate(async body => { await API.postMo('uni/tn-Shop', JSON.parse(body)); }, change);
+    t = await trafficTest('web1', 'app1', 'tcp', 443);
+    check(t.includes('DROP') && t.includes('POLICY_IMPLICIT_DENY'), 'Nach dem Change: HTTPS blockiert');
+    await p.evaluate(() => App.go('admin', 'rollback')); await p.waitForSelector('text=vor-CHG4711');
+    await p.locator('tr', { hasText: 'vor-CHG4711' }).locator('button:has-text("Rollback")').click(); await p.waitForSelector('.modal');
+    await p.click('.modal .btn.primary'); await p.waitForTimeout(900);
+    await p.evaluate(() => App.go('sim', 'labs')); await p.waitForSelector('.card.lab');
+    await p.click('.card.lab button:has-text("Lab prüfen")'); await p.waitForSelector('.card.lab .trace .verdict');
+    const res = await p.innerText('.card.lab .trace');
+    check(res.includes('bestanden') && !res.includes('noch nicht'), 'Lab 43 nach Rollback bestanden');
   } catch (e) {
     fails.push('Abbruch: ' + e.message.split('\n')[0]);
   } finally {

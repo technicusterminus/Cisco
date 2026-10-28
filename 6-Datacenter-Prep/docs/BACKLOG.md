@@ -25,7 +25,6 @@ Alle Punkte sind offen. Erledigt ist, was in `docs/GAP-ANALYSE.md` als „behobe
 | # | Punkt |
 |---|---|
 | B-06 | Subjects ohne „Apply Both Directions“ (vzInTerm/vzOutTerm) |
-| B-15 | Soll-Labs 20, 21, 25 im neuen Format (External EPG vs. Routing, Rückweg, Snapshot-Rollback) |
 | B-16 | Contract-Prioritäten (vzAny vs. EPG vs. Taboo, Priority-Stufen) nach Abgleich mit echtem ACI präzisieren |
 | B-17 | Fault-Codes gegen die Fault Reference prüfen (heute belegt: F0467) |
 

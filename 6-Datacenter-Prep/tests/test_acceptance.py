@@ -408,6 +408,9 @@ class TestRequirementLabs(unittest.TestCase):
         '38-intra-epg': ['Isolation', 'Intra-EPG', 'Intra EPG', 'fvRsIntraEpg', 'Contract'],
         '39-preferred-group': ['Preferred', 'vzAny', 'EPG Collection', 'prefGrMemb', 'Include'],
         '40-it-ot-segmentation': ['Consumer', 'Provider', 'Isolation', 'Intra', 'vzBrCP', 'scada-to-plc'],
+        '41-route-or-contract': ['Route Reflector', 'MP-BGP', 'BGP', 'konsumiert', 'fvRsCons'],
+        '42-return-path': ['Advertised', 'public', 'fvRsBDToOut', 'Associated', 'Rückweg'],
+        '43-change-snapshot': ['Config Rollbacks', 'Port 8443'],
     }
 
     def setUp(self):
@@ -743,6 +746,100 @@ class TestSegmentationLabs(unittest.TestCase):
         self.S.load_lab('40-it-ot-segmentation')
         self.assertEqual(trace.run(self.S.engine, self.S.sim, 'plc1', 'plc2', 'tcp', 502)['verdict'], 'ALLOW')
         self.assertEqual(trace.run(self.S.engine, self.S.sim, 'scada1', 'plc1', 'tcp', 502)['reason'], 'POLICY_IMPLICIT_DENY')
+
+
+class TestOperationsLabs(unittest.TestCase):
+    """Labs 41 (Routing vs. Contract), 42 (Rueckweg), 43 (Change mit Snapshot)."""
+
+    def setUp(self):
+        self.S = Sim(tempfile.mkdtemp(), 'admin')
+        self.S.sim['settings']['discoverySeconds'] = 0
+
+    def apply(self, *items, audit=False):
+        for dn, body in items:
+            ch = post(self.S.store, dn, body)
+            if audit:
+                self.S.audit('admin', ch)
+        self.S.changed()
+
+    def by(self):
+        r = self.S.check_lab()
+        return r, {c['desc']: c['ok'] for c in r['checks']}
+
+    def tr(self, *a):
+        return trace.run(self.S.engine, self.S.sim, *a)
+
+    def test_lab41_faults_appear_in_order(self):
+        lab = self.S.load_lab('41-route-or-contract')
+        self.assertEqual(self.tr('web1', '8.8.8.8', 'icmp')['reason'], 'ROUTE_MISSING')
+        self.apply(lab['solutionConfig'][0])
+        self.assertEqual(self.tr('web1', '8.8.8.8', 'icmp')['reason'], 'POLICY_IMPLICIT_DENY')
+        self.apply(lab['solutionConfig'][1])
+        self.assertEqual(self.tr('web1', '8.8.8.8', 'icmp')['verdict'], 'ALLOW')
+
+    def test_lab41_app_without_route_reflector_does_not_count_as_policy_block(self):
+        self.S.load_lab('41-route-or-contract')
+        r, by = self.by()
+        self.assertFalse(by['app1 → 8.8.8.8 durch die Policy blockiert'], 'blockiert durch fehlende Route, nicht durch Policy')
+
+    def test_lab41_permit_any_to_internet_fails(self):
+        lab = self.S.load_lab('41-route-or-contract')
+        self.apply(lab['solutionConfig'][0], ('uni', mo('fvTenant', {'name': 'Shop'},
+            mo('vzFilter', {'name': 'any'}, mo('vzEntry', {'name': 'any'})),
+            mo('vzBrCP', {'name': 'all'}, mo('vzSubj', {'name': 's'}, mo('vzRsSubjFiltAtt', {'tnVzFilterName': 'any'}))),
+            mo('fvAp', {'name': 'Webshop'}, mo('fvAEPg', {'name': 'Web'}, mo('fvRsCons', {'tnVzBrCPName': 'all'}))),
+            mo('l3extOut', {'name': 'WAN'}, mo('l3extInstP', {'name': 'Internet'}, mo('fvRsProv', {'tnVzBrCPName': 'all'}))))))
+        r, by = self.by()
+        self.assertTrue(by['web1 → 8.8.8.8 HTTPS'])
+        self.assertFalse(by['Least Privilege web1 → Internet: nur Ping und HTTPS'])
+
+    def test_lab42_announcing_app_subnet_fails(self):
+        lab = self.S.load_lab('42-return-path')
+        self.assertEqual(self.tr('web1', '8.8.8.8', 'icmp')['reason'], 'RETURN_ROUTE_MISSING')
+        bd_app = ('uni/tn-Shop/BD-BD-App', mo('fvBD', {}, mo('fvSubnet', {'ip': '10.10.20.1/24', 'scope': 'public'}),
+                                                  mo('fvRsBDToOut', {'tnL3extOutName': 'WAN'})))
+        self.apply(*lab['solutionConfig'], bd_app)
+        r, by = self.by()
+        self.assertTrue(by['10.10.20.0/24 wird nicht angekündigt'], 'BD-App ist ohne Contract zum External EPG nicht auf dem Border Leaf aktiv')
+        self.apply(('uni/tn-Shop/ap-Webshop/epg-App', mo('fvAEPg', {}, mo('fvRsCons', {'tnVzBrCPName': 'web-to-internet'}))))
+        r, by = self.by()
+        self.assertTrue(by['wan1 kennt 10.10.10.0/24'])
+        self.assertFalse(by['10.10.20.0/24 wird nicht angekündigt'])
+
+    def change(self):
+        return self.S.lab('43-change-snapshot')['solutionConfig'][1][1]
+
+    def test_lab43_full_process(self):
+        self.S.load_lab('43-change-snapshot')
+        self.S.snapshot('create', 'vor-CHG4711-a')
+        self.apply(self.change(), audit=True)
+        self.assertEqual(self.tr('web1', 'app1', 'tcp', 443)['reason'], 'POLICY_IMPLICIT_DENY')
+        self.S.snapshot('rollback', 'vor-CHG4711-a')
+        r, by = self.by()
+        self.assertEqual([k for k, v in by.items() if not v], [])
+
+    def test_lab43_without_snapshot_or_without_change_fails(self):
+        self.S.load_lab('43-change-snapshot')
+        r, by = self.by()
+        self.assertFalse(by['Sicherungspunkt vor-CHG4711 in diesem Lab angelegt'])
+        self.assertFalse(by['Change CHG-4711 wurde eingespielt (Audit-Log)'], 'nichts tun ist keine Loesung')
+
+    def test_lab43_old_snapshot_from_before_lab_start_does_not_count(self):
+        self.S.snapshot('create', 'vor-CHG4711-alt')
+        import time
+        time.sleep(1.1)
+        self.S.load_lab('43-change-snapshot')
+        r, by = self.by()
+        self.assertFalse(by['Sicherungspunkt vor-CHG4711 in diesem Lab angelegt'])
+
+    def test_lab43_hand_fix_instead_of_rollback_fails(self):
+        self.S.load_lab('43-change-snapshot')
+        self.S.snapshot('create', 'vor-CHG4711')
+        self.apply(self.change(), audit=True)
+        self.apply(('uni/tn-Shop/flt-https/e-https', mo('vzEntry', {'dFromPort': '443', 'dToPort': '443'})), audit=True)
+        r, by = self.by()
+        self.assertTrue(by['web1 → app1 HTTPS funktioniert'])
+        self.assertFalse(by['Change vollständig zurückgerollt (keine EPG Api)'])
 
 
 if __name__ == '__main__':

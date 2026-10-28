@@ -2,7 +2,7 @@
 
 Die Tabelle vergleicht den geplanten Lernpfad (26 Labs) mit den vorhandenen Lab-Dateien in `labs/`.
 
-**Format neu** (Labs 02, 03, 04, 07 und 32 bis 40) heißt, das Lab hat:
+**Format neu** (Labs 02, 03, 04, 07 und 32 bis 43) heißt, das Lab hat:
 
 - Anforderungen statt Klickanleitung
 - vier Hinweisstufen
@@ -39,12 +39,12 @@ Startbar sind nur Labs, die es als Datei gibt. Die Spalte *Stand* gilt für die 
 | 17 | Interface-Ausfall vs. Policy-Drop | **37 Interface-Ausfall oder Policy-Drop?** | vollständig (neu) | drei Ursachen: PORT_ADMIN_DOWN, POLICY_IMPLICIT_DENY, LINK_DOWN |
 | 18 | Mehrere unabhängige Fehler | 07 Troubleshooting (sechs Tickets) | vollständig (neu) | mit Least-Privilege-Nebenbedingung |
 | 19 | Einfacher L3Out | 06 L3Out OSPF, 09 eBGP | vollständig (alt) | |
-| 20 | Routingfehler vs. fehlender External-EPG-Contract | 06, 09 | teilweise | Codes `ROUTE_MISSING`, `EXT_EPG_NO_MATCH`, `POLICY_*` |
-| 21 | Fehlender Rückweg | 06 | teilweise | `RETURN_ROUTE_MISSING` |
+| 20 | Routingfehler vs. fehlender External-EPG-Contract | **41 Routingfehler oder fehlender Contract?** | vollständig (neu) | erst ROUTE_MISSING (kein MP-BGP), dann POLICY_IMPLICIT_DENY |
+| 21 | Fehlender Rückweg | **42 Fehlender Rückweg** | vollständig (neu) | RETURN_ROUTE_MISSING; App-Netz darf nicht angekündigt werden |
 | 22 | Preferred Group | **39 Preferred Group für eine Migration** | vollständig (neu) | Nicht-Mitglied bleibt geschützt; kein VRF unenforced |
 | 23 | vzAny | 04 Contracts und vzAny | vollständig (neu) | Lösung pro EPG wird ebenfalls anerkannt (dokumentiert) |
 | 24 | Inter-VRF Shared Services | 13 Shared Services | vollständig (alt) | |
-| 25 | Fehlerhafte Änderung per Snapshot zurücksetzen | – (Config Rollback vorhanden, Lab 25 ist Export/Import) | geplant | |
+| 25 | Fehlerhafte Änderung per Snapshot zurücksetzen | **43 Change mit Snapshot absichern und zurückrollen** | vollständig (neu) | bewertet Snapshot nach Lab-Start, eingespielten Change (Audit-Log) und vollständigen Rollback |
 | 26 | IT-/OT-Segmentierung | **40 IT-/OT-Segmentierung einer Fertigungslinie** | vollständig (neu) | fünf Zonen, 18 Prüfungen, davon 10 Least-Privilege-Prüfungen inkl. lateraler Kommunikation; didaktisch, ohne Sicherheitsgarantie |
 
 Weitere vorhandene Labs außerhalb dieses Pfads:
