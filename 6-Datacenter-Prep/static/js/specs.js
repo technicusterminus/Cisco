@@ -187,6 +187,7 @@ const SPEC = {
       ['Add Provided Contract', dn => createDialog(dn, 'fvRsProv', 'Add Provided Contract')],
       ['Add Consumed Contract', dn => createDialog(dn, 'fvRsCons', 'Add Consumed Contract')],
       ['Add Taboo Contract', dn => createDialog(dn, 'fvRsProtBy', 'Add Taboo Contract')],
+      ['Add Intra-EPG Contract', dn => createDialog(dn, 'fvRsIntraEpg', 'Add Intra-EPG Contract')],
       ['Add Consumed Contract Interface', dn => createDialog(dn, 'fvRsConsIf', 'Add Consumed Contract Interface')]],
   },
   fvRsDomAtt: {
@@ -216,6 +217,7 @@ const SPEC = {
   },
   fvRsProv: { label: 'Provided Contract', fields: [relNameSelf('tnVzBrCPName', 'Contract', 'vzBrCP')], cols: [col('Contract', r => r.tnVzBrCPName), col('Typ', () => 'Provided'), col('State', relState)] },
   fvRsCons: { label: 'Consumed Contract', fields: [relNameSelf('tnVzBrCPName', 'Contract', 'vzBrCP')], cols: [col('Contract', r => r.tnVzBrCPName), col('Typ', () => 'Consumed'), col('State', relState)] },
+  fvRsIntraEpg: { label: 'Intra-EPG Contract', fields: [relNameSelf('tnVzBrCPName', 'Contract', 'vzBrCP')], cols: [col('Contract', r => r.tnVzBrCPName), col('Typ', () => 'Intra-EPG'), col('State', relState)] },
   fvRsProtBy: { label: 'Taboo Contract', fields: [relNameSelf('tnVzTabooName', 'Taboo Contract', 'vzTaboo')], cols: [col('Contract', r => r.tnVzTabooName), col('Typ', () => 'Taboo'), col('State', relState)] },
   fvCEp: { fields: [], cols: [col('MAC', r => r.mac), col('IP', r => r.ip), col('Learning Source', r => r.lcC), col('Interface', r => pathLabel(r.fabricPathDn)), col('Encap', r => r.encap)] },
 
@@ -1158,7 +1160,7 @@ const TREE = {
   aaaLdapProviderGroup: [{ l: 'Providers', cls: ['aaaProviderRef'], flat: 1 }],
   mgmtInB: [{ l: 'Static Node Management Addresses (In-Band)', cls: ['mgmtRsInBStNode'], flat: 1 }],
   fvAEPg: [{ l: 'uSeg Attributes', rn: 'crtrn' }, { l: 'Domains (VMs and Bare-Metals)', cls: ['fvRsDomAtt'], flat: 1 }, PH('EPG Members'), { l: 'Static Ports', cls: ['fvRsPathAtt'], flat: 1 },
-    { l: 'Static Leafs', cls: ['fvRsNodeAtt'], flat: 1 }, { l: 'Contracts', cls: ['fvRsProv', 'fvRsCons', 'fvRsConsIf', 'fvRsProtBy'], flat: 1 }, PH('Static Endpoint'), { l: 'Subnets', cls: ['fvSubnet'], flat: 1 }],
+    { l: 'Static Leafs', cls: ['fvRsNodeAtt'], flat: 1 }, { l: 'Contracts', cls: ['fvRsProv', 'fvRsCons', 'fvRsConsIf', 'fvRsProtBy', 'fvRsIntraEpg'], flat: 1 }, PH('Static Endpoint'), { l: 'Subnets', cls: ['fvSubnet'], flat: 1 }],
   fvBD: [{ l: 'Subnets', cls: ['fvSubnet'], flat: 1 }, { l: 'Associated L3 Outs', cls: ['fvRsBDToOut'], flat: 1, hidden: 1 }, PH('ND Proxy Subnets')],
   fvCtx: [{ l: 'EPG Collection for VRF', rn: 'any' }],
   vzAny: [{ l: 'Contracts', cls: ['vzRsAnyToProv', 'vzRsAnyToCons'], flat: 1 }],

@@ -2,7 +2,7 @@
 
 Die Tabelle vergleicht den geplanten Lernpfad (26 Labs) mit den vorhandenen Lab-Dateien in `labs/`.
 
-**Format neu** (Labs 02, 03, 04, 07 und 32 bis 37) heißt, das Lab hat:
+**Format neu** (Labs 02, 03, 04, 07 und 32 bis 40) heißt, das Lab hat:
 
 - Anforderungen statt Klickanleitung
 - vier Hinweisstufen
@@ -33,7 +33,7 @@ Startbar sind nur Labs, die es als Datei gibt. Die Spalte *Stand* gilt für die 
 | 11 | HTTPS erlauben, SSH blockieren | **32 Least Privilege** | **vollständig (neu)** | Abnahmefall, siehe `tests/test_acceptance.py` |
 | 12 | ICMP und TCP getrennt | 04, 32, 34 | vollständig (neu) | |
 | 13 | Falscher Port, falsche Richtung | **35 Falscher Port, falsche Richtung** | vollständig (neu) | zwei unabhängige Fehler, permit any scheitert |
-| 14 | Intra-EPG Isolation | – | geplant | Engine vereinfacht: Intra-EPG-Contracts fehlen (B-05) |
+| 14 | Intra-EPG Isolation | **38 Innerhalb einer EPG einschränken** | vollständig (neu) | Isolation allein reicht nicht; Intra-EPG-Contract mit Least Privilege |
 | 15 | Fehlendes Endpoint Learning | 07 Troubleshooting (Ticket 5) | teilweise (neu) | |
 | 16 | Endpoint Move | **36 Endpoint Move nachvollziehen** | vollständig (neu) | Endpoint-Verlauf im EP Tracker; alte Bindung als Sicherheitsrisiko |
 | 17 | Interface-Ausfall vs. Policy-Drop | **37 Interface-Ausfall oder Policy-Drop?** | vollständig (neu) | drei Ursachen: PORT_ADMIN_DOWN, POLICY_IMPLICIT_DENY, LINK_DOWN |
@@ -41,11 +41,11 @@ Startbar sind nur Labs, die es als Datei gibt. Die Spalte *Stand* gilt für die 
 | 19 | Einfacher L3Out | 06 L3Out OSPF, 09 eBGP | vollständig (alt) | |
 | 20 | Routingfehler vs. fehlender External-EPG-Contract | 06, 09 | teilweise | Codes `ROUTE_MISSING`, `EXT_EPG_NO_MATCH`, `POLICY_*` |
 | 21 | Fehlender Rückweg | 06 | teilweise | `RETURN_ROUTE_MISSING` |
-| 22 | Preferred Group | – | geplant | Engine umgesetzt, ohne eigenes Lab |
+| 22 | Preferred Group | **39 Preferred Group für eine Migration** | vollständig (neu) | Nicht-Mitglied bleibt geschützt; kein VRF unenforced |
 | 23 | vzAny | 04 Contracts und vzAny | vollständig (neu) | Lösung pro EPG wird ebenfalls anerkannt (dokumentiert) |
 | 24 | Inter-VRF Shared Services | 13 Shared Services | vollständig (alt) | |
 | 25 | Fehlerhafte Änderung per Snapshot zurücksetzen | – (Config Rollback vorhanden, Lab 25 ist Export/Import) | geplant | |
-| 26 | IT-/OT-Segmentierung | – | geplant | Phase 4, mit negativen Tests für laterale Kommunikation |
+| 26 | IT-/OT-Segmentierung | **40 IT-/OT-Segmentierung einer Fertigungslinie** | vollständig (neu) | fünf Zonen, 18 Prüfungen, davon 10 Least-Privilege-Prüfungen inkl. lateraler Kommunikation; didaktisch, ohne Sicherheitsgarantie |
 
 Weitere vorhandene Labs außerhalb dieses Pfads:
 

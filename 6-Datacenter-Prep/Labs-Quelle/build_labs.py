@@ -2068,6 +2068,197 @@ lab(id='37-link-or-policy', title='37 Interface-Ausfall oder Policy-Drop?', topi
 
 
 # ----------------------------------------------------------------------------
+# Lab 38 - Intra-EPG Isolation und Intra-EPG-Contract
+# ----------------------------------------------------------------------------
+WEB2B = mo('fvTenant', {'name': 'Shop'}, mo('fvAp', {'name': 'Webshop'}, mo('fvAEPg', {'name': 'Web'},
+           mo('fvRsPathAtt', {'tDn': path(102, 'eth1/3'), 'encap': 'vlan-110', 'mode': 'regular'}))))
+SOL38 = mo('fvTenant', {'name': 'Shop'},
+           filt('cluster-sync', {'name': 'sync', 'etherT': 'ip', 'prot': 'tcp', 'dFromPort': '9100', 'dToPort': '9100'}),
+           contract('web-intra', ['cluster-sync']),
+           mo('fvAp', {'name': 'Webshop'}, mo('fvAEPg', {'name': 'Web'}, mo('fvRsIntraEpg', {'tnVzBrCPName': 'web-intra'}))))
+lab(id='38-intra-epg', title='38 Innerhalb einer EPG einschränken', topic='Policy / Mikrosegmentierung', level='Mittel',
+    duration='20 min', fabric='discovered', kind='requirements', modes=['guided', 'exam'],
+    prerequisites=['Labs 33 und 32'], tools=['EPG > Policy (Intra EPG Isolation)', 'EPG > Contracts', 'Traffic-Test'],
+    goals=['Verstehen, dass eine EPG ohne weitere Maßnahmen intern alles erlaubt',
+           'Zwei Werkzeuge vergleichen: alles verbieten oder gezielt erlauben', 'Laterale Bewegung innerhalb einer Gruppe begrenzen'],
+    intro='In der EPG **Web** laufen zwei Webserver: **web1** (leaf101 eth1/1) und **web2** (leaf102 eth1/3). Sie gleichen ihre Sitzungen '
+          'über **TCP 9100** ab. Die Security-Abteilung möchte, dass ein kompromittierter Webserver den anderen nicht angreifen kann.\n\n'
+          'Teste web1 → web2 auf TCP 22: Im Moment ist alles offen.',
+    requirements=['web1 und web2 erreichen sich gegenseitig auf **TCP 9100**.',
+                  'Sonst ist zwischen den Webservern nichts erlaubt – kein SSH, kein Ping.',
+                  'Beide bleiben in der EPG Web; web1 erreicht app1 weiterhin auf TCP 8080.'],
+    limits=['Regeln für Verkehr innerhalb einer EPG erscheinen in diesem Simulator nicht in `show zoning-rule`.',
+            'Werden Isolation und ein Contract für die EPG kombiniert, wertet der Simulator den Contract. Das Zusammenspiel ist nicht '
+            'gegen die Cisco-Dokumentation geprüft.'],
+    hints=['**Konzept:** Innerhalb einer EPG ist ohne weitere Konfiguration alles erlaubt. Es gibt zwei Werkzeuge: alles innerhalb der '
+           'EPG verbieten – oder genau festlegen, was innerhalb der EPG erlaubt ist.',
+           '**Beteiligte Objekte:** Die EPG-Option *Intra EPG Isolation* (verbietet alles) und der **Intra-EPG Contract** an der EPG '
+           '(erlaubt nur, was seine Filter zulassen). Dazu ein Filter für TCP 9100.',
+           '**Prüfschritt:** Probiere zuerst nur *Intra EPG Isolation: Enforced* – was passiert mit TCP 9100? Danach im Traffic Inspector '
+           'auf den Code achten: POLICY_INTRA_EPG_ISOLATION oder POLICY_INTRA_EPG_CONTRACT_DENY.',
+           '**Lösung:** Filter tcp/9100 → Contract (z. B. web-intra) → an der EPG Web als *Intra-EPG Contract* hinzufügen. Isolation '
+           'allein reicht nicht, weil sie auch TCP 9100 verbietet.'],
+    cause='Ohne Isolation und ohne Intra-EPG-Contract ist innerhalb der EPG Web alles erlaubt (POLICY_SAME_EPG).',
+    config=[SERVER_ACCESS, shop_tenant(with_contracts=True), WEB2B], hosts=[WEB1, WEB2, APP1], tasks=[],
+    checks=[check('web1 → web2 TCP 9100', 'traffic', src='web1', dst='web2', proto='tcp', port=9100, expect=True),
+            check('web2 → web1 TCP 9100', 'traffic', src='web2', dst='web1', proto='tcp', port=9100, expect=True),
+            check('web2 bleibt in der EPG Web', 'endpoint', host='web2', epg='uni/tn-Shop/ap-Webshop/epg-Web'),
+            check('web1 → app1 TCP 8080 weiterhin', 'traffic', src='web1', dst='app1', proto='tcp', port=8080, expect=True),
+            check('web1 → web2 SSH durch die Policy blockiert', 'traffic', src='web1', dst='web2', proto='tcp', port=22, expect=False,
+                  reason='POLICY_', category='security'),
+            check('Least Privilege web1 → web2: nur TCP 9100', 'exposure', src='web1', dst='web2', allow=['tcp/9100'], category='security'),
+            check('Least Privilege web2 → web1: nur TCP 9100', 'exposure', src='web2', dst='web1', allow=['tcp/9100'], category='security')],
+    questions=[{'id': 'q1', 'q': 'Was ist der Unterschied zwischen Intra EPG Isolation und einem Intra-EPG Contract?',
+                'options': ['Isolation verbietet allen Verkehr innerhalb der EPG, der Contract erlaubt gezielt einzelne Dienste',
+                            'Beides ist dasselbe', 'Isolation gilt nur für ICMP', 'Der Contract gilt nur zwischen verschiedenen EPGs'],
+                'answer': 0, 'explain': 'Isolation ist ein Ein/Aus-Schalter. Der Intra-EPG Contract macht die EPG zur Whitelist für Verkehr innerhalb der Gruppe.'},
+               {'id': 'q2', 'q': 'Warum nicht einfach jeden Webserver in eine eigene EPG legen?',
+                'options': ['Das geht technisch nicht', 'Die Gruppe hat dieselbe Rolle und dieselben Freigaben nach außen – getrennte EPGs '
+                            'verdoppeln Contracts und Pflege', 'EPGs dürfen nur einen Endpoint haben', 'Weil dann das VLAN fehlt'],
+                'answer': 1, 'explain': 'Die EPG beschreibt die Rolle. Intra-EPG-Regeln begrenzen die Gruppe intern, ohne das Rollenmodell aufzubrechen.'}],
+    solution='`POST /api/mo/uni.json` mit `' + json.dumps(SOL38) + '`')
+
+# ----------------------------------------------------------------------------
+# Lab 39 - Preferred Group
+# ----------------------------------------------------------------------------
+lab(id='39-preferred-group', title='39 Preferred Group für eine Migration', topic='Policy / Contracts', level='Mittel',
+    duration='20 min', fabric='discovered', kind='requirements', modes=['guided', 'exam'],
+    prerequisites=['Lab 04'], tools=['VRF > EPG Collection for VRF', 'EPG > Policy', 'Traffic-Test'],
+    goals=['Eine Gruppe von EPGs ohne einzelne Contracts frei kommunizieren lassen', 'Erkennen, dass Nicht-Mitglieder geschützt bleiben',
+           'Die Grenze zwischen „schnell funktionierend“ und Least Privilege bewusst ziehen'],
+    intro='Der Webshop wird aus einem alten Netz migriert. Welche Ports Web und App untereinander brauchen, weiß noch niemand – für die '
+          'Übergangszeit sollen sie sich frei erreichen. Die EPG **Mgmt** mit **jump1** bleibt dagegen streng getrennt.',
+    requirements=['web1 und app1 erreichen sich gegenseitig auf allen Ports, ohne dass dafür Contracts angelegt werden.',
+                  'Mgmt bleibt außen vor: Web und App erreichen jump1 nicht, jump1 erreicht Web und App nicht.',
+                  'Die Policy im VRF bleibt eingeschaltet (kein VRF-weites „alles erlauben“).'],
+    limits=['Prioritäten zwischen Preferred Group, vzAny und EPG-Contracts sind vereinfacht.'],
+    hints=['**Konzept:** Es gibt eine Mitgliedschaft auf VRF-Ebene: Mitglieder sprechen untereinander ohne Contract, für Nicht-Mitglieder '
+           'gilt weiter das Whitelist-Modell.',
+           '**Beteiligte Objekte:** Die Einstellung *Preferred Group Member* am VRF (*EPG Collection for VRF*) und an jeder EPG.',
+           '**Prüfschritt:** Nach dem Einschalten am VRF web1 → app1 testen – noch blockiert? Dann fehlt die Mitgliedschaft der EPGs. '
+           'Im Traffic Inspector heißt der Code danach POLICY_PREFERRED_GROUP.',
+           '**Lösung:** VRF Prod → EPG Collection for VRF → Preferred Group Member *Enabled*. EPGs Web und App → *Preferred Group Member: '
+           'Include*. Mgmt bleibt *Exclude*.'],
+    cause='Zwischen den EPGs gibt es keine Contracts und keine Preferred Group: alles Implicit Deny.',
+    config=[SERVER_ACCESS, shop_tenant(with_mgmt=True)], hosts=[WEB1, APP1, JUMP1], tasks=[],
+    checks=[check('web1 → app1 TCP 1433', 'traffic', src='web1', dst='app1', proto='tcp', port=1433, expect=True),
+            check('app1 → web1 TCP 22', 'traffic', src='app1', dst='web1', proto='tcp', port=22, expect=True),
+            check('web1 → app1 Ping', 'traffic', src='web1', dst='app1', proto='icmp', expect=True),
+            check('Ohne Contracts gelöst', 'class', cls='vzBrCP', under='uni/tn-Shop/', max=0),
+            check('Policy im VRF Prod bleibt eingeschaltet', 'exists', dn='uni/tn-Shop/ctx-Prod', attrs={'pcEnfPref': 'enforced'}, category='security'),
+            check('web1 → jump1 durch die Policy blockiert', 'traffic', src='web1', dst='jump1', proto='icmp', expect=False, reason='POLICY_', category='security'),
+            check('Least Privilege jump1 → App: nichts', 'exposure', src='jump1', dst='app1', allow=[], category='security')],
+    questions=[{'id': 'q1', 'q': 'Was gilt für eine EPG, die nicht Mitglied der Preferred Group ist?',
+                'options': ['Sie braucht weiterhin Contracts – zu Mitgliedern wie zu anderen', 'Sie darf alles', 'Sie wird isoliert, auch intern',
+                            'Sie verliert ihre Endpoints'],
+                'answer': 0, 'explain': 'Die Preferred Group öffnet nur zwischen Mitgliedern.'},
+               {'id': 'q2', 'q': 'Warum ist die Preferred Group nur eine Übergangslösung?',
+                'options': ['Sie ist langsam', 'Zwischen den Mitgliedern gilt kein Least Privilege mehr – das widerspricht dem Whitelist-Modell',
+                            'Sie funktioniert nur 30 Tage', 'Sie kostet Lizenzen'],
+                'answer': 1, 'explain': 'Sie ist praktisch für Migrationen. Danach sollten die benötigten Flüsse als Contracts gebaut werden.'}],
+    solution='`POST /api/mo/uni/tn-Shop.json` mit `' + json.dumps(mo('fvTenant', {}, mo('fvCtx', {'name': 'Prod'}, mo('vzAny', {'prefGrMemb': 'enabled'})),
+        mo('fvAp', {'name': 'Webshop'}, mo('fvAEPg', {'name': 'Web', 'prefGrMemb': 'include'}), mo('fvAEPg', {'name': 'App', 'prefGrMemb': 'include'})))) + '`')
+
+# ----------------------------------------------------------------------------
+# Lab 40 - IT-/OT-Segmentierung (didaktisches Beispiel)
+# ----------------------------------------------------------------------------
+OT_HOSTS = [host('eng1', '00:50:56:50:10:11', '10.50.10.11/24', '10.50.10.1', 150, [[L101, 'eth1/1']], descr='Engineering-Workstation'),
+            host('scada1', '00:50:56:50:20:11', '10.50.20.11/24', '10.50.20.1', 160, [[L101, 'eth1/2']], descr='SCADA-/HMI-Server'),
+            host('plc1', '00:50:56:50:30:11', '10.50.30.11/24', '10.50.30.1', 170, [[L102, 'eth1/1']], descr='Steuerung Linie 1'),
+            host('plc2', '00:50:56:50:30:12', '10.50.30.12/24', '10.50.30.1', 170, [[L102, 'eth1/2']], descr='Steuerung Linie 2'),
+            host('mon1', '00:50:56:50:40:11', '10.50.40.11/24', '10.50.40.1', 180, [[L101, 'eth1/3']], descr='Monitoring'),
+            host('adm1', '00:50:56:50:50:11', '10.50.50.11/24', '10.50.50.1', 190, [[L101, 'eth1/4']], descr='Admin-Jump-Host')]
+for h_, svc in zip(OT_HOSTS, (['tcp/22', 'udp/161'], ['tcp/22', 'tcp/443', 'udp/161'], ['tcp/502', 'tcp/44818', 'udp/161'],
+                              ['tcp/502', 'tcp/44818', 'udp/161'], ['tcp/22'], ['tcp/22'])):
+    h_['services'] = svc
+OT_TENANT = mo('fvTenant', {'name': 'Werk'}, mo('fvCtx', {'name': 'OT'}),
+               bd('BD-ENG', 'OT', '10.50.10.1/24'), bd('BD-SCADA', 'OT', '10.50.20.1/24'), bd('BD-PLC', 'OT', '10.50.30.1/24'),
+               bd('BD-MON', 'OT', '10.50.40.1/24'), bd('BD-MGMT', 'OT', '10.50.50.1/24'),
+               mo('fvAp', {'name': 'Linie1'},
+                  epg('ENG', 'BD-ENG', ports=[(path(101, 'eth1/1'), 150)]), epg('SCADA', 'BD-SCADA', ports=[(path(101, 'eth1/2'), 160)]),
+                  epg('PLC', 'BD-PLC', ports=[(path(102, 'eth1/1'), 170), (path(102, 'eth1/2'), 170)]),
+                  epg('MON', 'BD-MON', ports=[(path(101, 'eth1/3'), 180)]), epg('MGMT', 'BD-MGMT', ports=[(path(101, 'eth1/4'), 190)])))
+SOL40 = mo('fvTenant', {'name': 'Werk'},
+           filt('modbus', {'name': 'modbus', 'etherT': 'ip', 'prot': 'tcp', 'dFromPort': '502', 'dToPort': '502'}),
+           filt('enip', {'name': 'enip', 'etherT': 'ip', 'prot': 'tcp', 'dFromPort': '44818', 'dToPort': '44818'}),
+           filt('snmp', {'name': 'snmp', 'etherT': 'ip', 'prot': 'udp', 'dFromPort': '161', 'dToPort': '161'}),
+           filt('ssh', {'name': 'ssh', 'etherT': 'ip', 'prot': 'tcp', 'dFromPort': '22', 'dToPort': '22'}),
+           contract('scada-to-plc', ['modbus']), contract('eng-to-plc', ['enip']),
+           contract('monitoring', ['snmp', 'icmp']), contract('admin-ssh', ['ssh']),
+           mo('fvAp', {'name': 'Linie1'},
+              mo('fvAEPg', {'name': 'SCADA'}, mo('fvRsCons', {'tnVzBrCPName': 'scada-to-plc'}), mo('fvRsProv', {'tnVzBrCPName': 'monitoring'}),
+                 mo('fvRsProv', {'tnVzBrCPName': 'admin-ssh'})),
+              mo('fvAEPg', {'name': 'ENG'}, mo('fvRsCons', {'tnVzBrCPName': 'eng-to-plc'}), mo('fvRsProv', {'tnVzBrCPName': 'monitoring'}),
+                 mo('fvRsProv', {'tnVzBrCPName': 'admin-ssh'})),
+              mo('fvAEPg', {'name': 'PLC', 'pcEnfPref': 'enforced'}, mo('fvRsProv', {'tnVzBrCPName': 'scada-to-plc'}),
+                 mo('fvRsProv', {'tnVzBrCPName': 'eng-to-plc'}), mo('fvRsProv', {'tnVzBrCPName': 'monitoring'})),
+              mo('fvAEPg', {'name': 'MON'}, mo('fvRsCons', {'tnVzBrCPName': 'monitoring'})),
+              mo('fvAEPg', {'name': 'MGMT'}, mo('fvRsCons', {'tnVzBrCPName': 'admin-ssh'}))))
+lab(id='40-it-ot-segmentation', title='40 IT-/OT-Segmentierung einer Fertigungslinie', topic='Policy / Praxis', level='Fortgeschritten',
+    duration='60 min', fabric='discovered', kind='requirements', modes=['guided', 'exam'],
+    prerequisites=['Labs 32, 34 und 38'], tools=['Tenant Werk > Contracts', 'EPG > Policy', 'Traffic Inspector', 'Testmatrix (Simulation)'],
+    goals=['Eine Kommunikationsmatrix in Contracts übersetzen', 'Monitoring-Zugriffe von administrativen Zugriffen trennen',
+           'Laterale Kommunikation verhindern – auch innerhalb einer Zone', 'Zeigen, dass „alles funktioniert“ nicht Least Privilege ist'],
+    intro='Eine Fertigungslinie im Tenant **Werk** (VRF **OT**) hat fünf Zonen, jede als eigene EPG mit eigener Bridge Domain:\n\n'
+          '- **ENG**: eng1, Engineering-Workstation\n- **SCADA**: scada1, SCADA-/HMI-Server\n- **PLC**: plc1, plc2, Steuerungen\n'
+          '- **MON**: mon1, Monitoring\n- **MGMT**: adm1, Admin-Jump-Host\n\nIm Moment darf keine Zone mit einer anderen sprechen.',
+    requirements=['SCADA → PLC: **Modbus/TCP** (tcp/502).',
+                  'ENG → PLC: **EtherNet/IP** (tcp/44818) für die Programmierung.',
+                  'MON → ENG, SCADA und PLC: **SNMP** (udp/161) und **Ping** – nur lesend, keine Administrationsprotokolle.',
+                  'MGMT → ENG und SCADA: **SSH** (tcp/22). Kein direkter Zugriff von MGMT auf die Steuerungen.',
+                  'Keine laterale Kommunikation: Die Steuerungen sprechen nicht miteinander, bauen keine Verbindungen auf, ENG und SCADA '
+                  'sprechen nicht miteinander.',
+                  'Alles andere bleibt zu.'],
+    limits=['**Didaktisches Beispiel ohne Sicherheits- oder Verfügbarkeitsgarantie.** Reale OT-Netze folgen einem Zonen- und '
+            'Conduit-Modell (z. B. IEC 62443) und brauchen zusätzlich OT-Firewalls mit Protokollprüfung (z. B. Modbus-Funktionscodes). '
+            'ACI-Filter prüfen nur Layer 3/4.',
+            'Contracts sind zustandslos; ICMP erlaubt auch die Gegenrichtung (Ping der Steuerung zurück zum Monitoring).'],
+    hints=['**Konzept:** Jede Zeile der Matrix ist ein gerichteter Fluss: Wer baut auf (Consumer), wer bietet an (Provider), welcher '
+           'Dienst (Filter). Gleiche Dienste für mehrere Ziele lassen sich in einem Contract bündeln. Laterale Bewegung *innerhalb* einer '
+           'Zone ist ein eigenes Thema (Lab 38).',
+           '**Beteiligte Objekte:** Filter modbus, enip, snmp, ssh (Ping: Filter icmp aus common), vier Contracts nach Zweck, Consumer- und '
+           'Provider-Beziehungen der fünf EPGs, Intra EPG Isolation für die EPG PLC.',
+           '**Prüfschritt:** Baue zuerst die Funktion, prüfe dann jede verbotene Richtung: plc1 → plc2, plc1 → scada1, mon1 → scada1 TCP 22, '
+           'adm1 → plc1, eng1 → scada1. Die Testmatrix (Simulation > Testmatrix) zeigt alle Zonen auf einen Blick.',
+           '**Lösung:** Contracts scada-to-plc (modbus: SCADA konsumiert, PLC stellt bereit), eng-to-plc (enip: ENG konsumiert, PLC stellt '
+           'bereit), monitoring (snmp + icmp: MON konsumiert, ENG, SCADA, PLC stellen bereit), admin-ssh (ssh: MGMT konsumiert, ENG und '
+           'SCADA stellen bereit). EPG PLC: Intra EPG Isolation *Enforced*.'],
+    cause='Ohne Contracts ist zwischen den Zonen alles blockiert, innerhalb der Zone PLC aber alles offen.',
+    config=[SERVER_ACCESS, OT_TENANT], hosts=OT_HOSTS, tasks=[],
+    checks=[check('SCADA → plc1 Modbus', 'traffic', src='scada1', dst='plc1', proto='tcp', port=502, expect=True),
+            check('SCADA → plc2 Modbus', 'traffic', src='scada1', dst='plc2', proto='tcp', port=502, expect=True),
+            check('ENG → plc1 EtherNet/IP', 'traffic', src='eng1', dst='plc1', proto='tcp', port=44818, expect=True),
+            check('MON → plc2 SNMP', 'traffic', src='mon1', dst='plc2', proto='udp', port=161, expect=True),
+            check('MON → SCADA SNMP', 'traffic', src='mon1', dst='scada1', proto='udp', port=161, expect=True),
+            check('MON → ENG Ping', 'traffic', src='mon1', dst='eng1', proto='icmp', expect=True),
+            check('MGMT → SCADA SSH', 'traffic', src='adm1', dst='scada1', proto='tcp', port=22, expect=True),
+            check('MGMT → ENG SSH', 'traffic', src='adm1', dst='eng1', proto='tcp', port=22, expect=True),
+            check('SCADA → PLC: nur Modbus', 'exposure', src='scada1', dst='plc1', allow=['tcp/502'], category='security'),
+            check('ENG → PLC: nur EtherNet/IP', 'exposure', src='eng1', dst='plc2', allow=['tcp/44818'], category='security'),
+            check('MON → PLC: nur SNMP und Ping', 'exposure', src='mon1', dst='plc1', allow=['udp/161', 'icmp'], category='security'),
+            check('MON → SCADA: nur SNMP und Ping (kein SSH)', 'exposure', src='mon1', dst='scada1', allow=['udp/161', 'icmp'], category='security'),
+            check('MGMT → SCADA: nur SSH', 'exposure', src='adm1', dst='scada1', allow=['tcp/22'], category='security'),
+            check('MGMT → PLC: nichts', 'exposure', src='adm1', dst='plc1', allow=[], category='security'),
+            check('Keine laterale Kommunikation plc1 → plc2', 'exposure', src='plc1', dst='plc2', allow=[], category='security'),
+            check('Steuerung baut nichts zu SCADA auf', 'exposure', src='plc1', dst='scada1', allow=[], category='security'),
+            check('ENG und SCADA getrennt (ENG → SCADA)', 'exposure', src='eng1', dst='scada1', allow=[], category='security'),
+            check('ENG und SCADA getrennt (SCADA → ENG)', 'exposure', src='scada1', dst='eng1', allow=[], category='security')],
+    questions=[{'id': 'q1', 'q': 'Warum bekommen Monitoring und Administration getrennte Contracts?',
+                'options': ['Weil ACI nur einen Filter pro Contract erlaubt', 'Damit ein kompromittiertes Monitoring keine Administrationsrechte hat '
+                            '(SNMP lesen ≠ SSH)', 'Wegen der Performance', 'Das ist egal'],
+                'answer': 1, 'explain': 'Trennung nach Zweck: Wer nur beobachten muss, bekommt keine Werkzeuge zum Ändern.'},
+               {'id': 'q2', 'q': 'Warum Intra EPG Isolation für die Zone PLC?',
+                'options': ['Damit eine kompromittierte Steuerung die andere nicht erreicht (laterale Bewegung)', 'Damit Modbus schneller ist',
+                            'Weil sonst SCADA die Steuerungen nicht erreicht', 'Weil Steuerungen kein IP sprechen'],
+                'answer': 0, 'explain': 'Zwischen Zonen schützen Contracts, innerhalb der Zone braucht es eine eigene Maßnahme.'},
+               {'id': 'q3', 'q': 'Ein Kollege verbindet alle Zonen mit einem Contract „permit any“. Was stimmt?',
+                'options': ['Alle Funktionstests sind grün, die Least-Privilege-Prüfungen scheitern', 'Nichts funktioniert mehr',
+                            'Das ist Least Privilege, weil alles geht', 'ACI lehnt so einen Contract ab'],
+                'answer': 0, 'explain': '„Alles funktioniert“ ist nicht dasselbe wie „nur das Nötige ist erlaubt“.'}],
+    solution='`POST /api/mo/uni.json` mit `' + json.dumps(SOL40) + '`')
+
+
+# ----------------------------------------------------------------------------
 # Maschinenlesbare Musterloesungen (fuer die Tests: [URL-DN, Body])
 # ----------------------------------------------------------------------------
 BGP_RR = ['uni/fabric/bgpInstP-default', mo('bgpInstPol', {}, mo('bgpAsP', {'asn': '65001'}),
@@ -2200,6 +2391,11 @@ SOLUTIONS = {
                                                                   mo('fvRsPathAtt', {'tDn': path(101, 'eth1/6'), 'status': 'deleted'}))]],
     '37-link-or-policy': [['uni/fabric/outofsvc', mo('fabricOOServicePol', {}, mo('fabricRsOosPath', {'tDn': path(102, 'eth1/2'), 'status': 'deleted'}))],
                           ['uni', SOL37]],
+    '38-intra-epg': [['uni', SOL38]],
+    '39-preferred-group': [['uni/tn-Shop', mo('fvTenant', {}, mo('fvCtx', {'name': 'Prod'}, mo('vzAny', {'prefGrMemb': 'enabled'})),
+                                              mo('fvAp', {'name': 'Webshop'}, mo('fvAEPg', {'name': 'Web', 'prefGrMemb': 'include'}),
+                                                 mo('fvAEPg', {'name': 'App', 'prefGrMemb': 'include'})))]],
+    '40-it-ot-segmentation': [['uni', SOL40]],
     '35-port-and-direction': [['uni/tn-Shop/flt-https/e-https', mo('vzEntry', {'dFromPort': '443', 'dToPort': '443'})],
                               ['uni/tn-Shop/ap-Webshop/epg-Web', mo('fvAEPg', {}, mo('fvRsProv', {'tnVzBrCPName': 'web-to-app-https', 'status': 'deleted'}),
                                                                    mo('fvRsCons', {'tnVzBrCPName': 'web-to-app-https'}))],

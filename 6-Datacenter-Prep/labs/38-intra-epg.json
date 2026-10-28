@@ -1,0 +1,675 @@
+{
+ "id": "38-intra-epg",
+ "title": "38 Innerhalb einer EPG einschränken",
+ "topic": "Policy / Mikrosegmentierung",
+ "level": "Mittel",
+ "duration": "20 min",
+ "fabric": "discovered",
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Labs 33 und 32"
+ ],
+ "tools": [
+  "EPG > Policy (Intra EPG Isolation)",
+  "EPG > Contracts",
+  "Traffic-Test"
+ ],
+ "goals": [
+  "Verstehen, dass eine EPG ohne weitere Maßnahmen intern alles erlaubt",
+  "Zwei Werkzeuge vergleichen: alles verbieten oder gezielt erlauben",
+  "Laterale Bewegung innerhalb einer Gruppe begrenzen"
+ ],
+ "intro": "In der EPG **Web** laufen zwei Webserver: **web1** (leaf101 eth1/1) und **web2** (leaf102 eth1/3). Sie gleichen ihre Sitzungen über **TCP 9100** ab. Die Security-Abteilung möchte, dass ein kompromittierter Webserver den anderen nicht angreifen kann.\n\nTeste web1 → web2 auf TCP 22: Im Moment ist alles offen.",
+ "requirements": [
+  "web1 und web2 erreichen sich gegenseitig auf **TCP 9100**.",
+  "Sonst ist zwischen den Webservern nichts erlaubt – kein SSH, kein Ping.",
+  "Beide bleiben in der EPG Web; web1 erreicht app1 weiterhin auf TCP 8080."
+ ],
+ "limits": [
+  "Regeln für Verkehr innerhalb einer EPG erscheinen in diesem Simulator nicht in `show zoning-rule`.",
+  "Werden Isolation und ein Contract für die EPG kombiniert, wertet der Simulator den Contract. Das Zusammenspiel ist nicht gegen die Cisco-Dokumentation geprüft."
+ ],
+ "hints": [
+  "**Konzept:** Innerhalb einer EPG ist ohne weitere Konfiguration alles erlaubt. Es gibt zwei Werkzeuge: alles innerhalb der EPG verbieten – oder genau festlegen, was innerhalb der EPG erlaubt ist.",
+  "**Beteiligte Objekte:** Die EPG-Option *Intra EPG Isolation* (verbietet alles) und der **Intra-EPG Contract** an der EPG (erlaubt nur, was seine Filter zulassen). Dazu ein Filter für TCP 9100.",
+  "**Prüfschritt:** Probiere zuerst nur *Intra EPG Isolation: Enforced* – was passiert mit TCP 9100? Danach im Traffic Inspector auf den Code achten: POLICY_INTRA_EPG_ISOLATION oder POLICY_INTRA_EPG_CONTRACT_DENY.",
+  "**Lösung:** Filter tcp/9100 → Contract (z. B. web-intra) → an der EPG Web als *Intra-EPG Contract* hinzufügen. Isolation allein reicht nicht, weil sie auch TCP 9100 verbietet."
+ ],
+ "cause": "Ohne Isolation und ohne Intra-EPG-Contract ist innerhalb der EPG Web alles erlaubt (POLICY_SAME_EPG).",
+ "config": [
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "infraInfra": {
+       "attributes": {},
+       "children": [
+        {
+         "fvnsVlanInstP": {
+          "attributes": {
+           "name": "VLAN-Pool-Server",
+           "allocMode": "static"
+          },
+          "children": [
+           {
+            "fvnsEncapBlk": {
+             "attributes": {
+              "from": "vlan-100",
+              "to": "vlan-199"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAttEntityP": {
+          "attributes": {
+           "name": "AAEP-Server"
+          },
+          "children": [
+           {
+            "infraRsDomP": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraFuncP": {
+          "attributes": {},
+          "children": [
+           {
+            "infraAccPortGrp": {
+             "attributes": {
+              "name": "IPG-Server-Access"
+             },
+             "children": [
+              {
+               "infraRsAttEntP": {
+                "attributes": {
+                 "tDn": "uni/infra/attentp-AAEP-Server"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAccPortP": {
+          "attributes": {
+           "name": "IntProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraHPortS": {
+             "attributes": {
+              "name": "Server-Ports",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraPortBlk": {
+                "attributes": {
+                 "name": "block2",
+                 "fromPort": "1",
+                 "toPort": "10"
+                }
+               }
+              },
+              {
+               "infraRsAccBaseGrp": {
+                "attributes": {
+                 "tDn": "uni/infra/funcprof/accportgrp-IPG-Server-Access"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraNodeP": {
+          "attributes": {
+           "name": "SwProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraLeafS": {
+             "attributes": {
+              "name": "101-102",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraNodeBlk": {
+                "attributes": {
+                 "name": "blk",
+                 "from_": "101",
+                 "to_": "102"
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "infraRsAccPortP": {
+             "attributes": {
+              "tDn": "uni/infra/accportprof-IntProf-Leaf101-102"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "physDomP": {
+       "attributes": {
+        "name": "PhysDom-Server"
+       },
+       "children": [
+        {
+         "infraRsVlanNs": {
+          "attributes": {
+           "tDn": "uni/infra/vlanns-[VLAN-Pool-Server]-static"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Shop"
+    },
+    "children": [
+     {
+      "fvCtx": {
+       "attributes": {
+        "name": "Prod"
+       }
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Web"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.10.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-App"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.20.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Webshop"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Web"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Web"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/1]",
+              "encap": "vlan-110",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsCons": {
+             "attributes": {
+              "tnVzBrCPName": "web-to-app"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "App"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-App"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/2]",
+              "encap": "vlan-120",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsProv": {
+             "attributes": {
+              "tnVzBrCPName": "web-to-app"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzFilter": {
+       "attributes": {
+        "name": "tcp-8080"
+       },
+       "children": [
+        {
+         "vzEntry": {
+          "attributes": {
+           "name": "tcp-8080",
+           "etherT": "ip",
+           "prot": "tcp",
+           "dFromPort": "8080",
+           "dToPort": "8080"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzBrCP": {
+       "attributes": {
+        "name": "web-to-app",
+        "scope": "context"
+       },
+       "children": [
+        {
+         "vzSubj": {
+          "attributes": {
+           "name": "subj",
+           "revFltPorts": "yes"
+          },
+          "children": [
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "tcp-8080"
+             }
+            }
+           },
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "icmp"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Shop"
+    },
+    "children": [
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Webshop"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Web"
+          },
+          "children": [
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/3]",
+              "encap": "vlan-110",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "hosts": [
+  {
+   "name": "web1",
+   "mac": "00:50:56:10:10:11",
+   "ip": "10.10.10.11/24",
+   "gw": "10.10.10.1",
+   "vlan": 110,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/1"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Webserver"
+  },
+  {
+   "name": "web2",
+   "mac": "00:50:56:10:10:12",
+   "ip": "10.10.10.12/24",
+   "gw": "10.10.10.1",
+   "vlan": 110,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/3"
+    ]
+   ],
+   "bond": "none",
+   "descr": "zweiter Webserver"
+  },
+  {
+   "name": "app1",
+   "mac": "00:50:56:10:20:11",
+   "ip": "10.10.20.11/24",
+   "gw": "10.10.20.1",
+   "vlan": 120,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/2"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Applikationsserver"
+  }
+ ],
+ "tasks": [],
+ "checks": [
+  {
+   "desc": "web1 → web2 TCP 9100",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "web2",
+   "proto": "tcp",
+   "port": 9100,
+   "expect": true
+  },
+  {
+   "desc": "web2 → web1 TCP 9100",
+   "type": "traffic",
+   "src": "web2",
+   "dst": "web1",
+   "proto": "tcp",
+   "port": 9100,
+   "expect": true
+  },
+  {
+   "desc": "web2 bleibt in der EPG Web",
+   "type": "endpoint",
+   "host": "web2",
+   "epg": "uni/tn-Shop/ap-Webshop/epg-Web"
+  },
+  {
+   "desc": "web1 → app1 TCP 8080 weiterhin",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "app1",
+   "proto": "tcp",
+   "port": 8080,
+   "expect": true
+  },
+  {
+   "desc": "web1 → web2 SSH durch die Policy blockiert",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "web2",
+   "proto": "tcp",
+   "port": 22,
+   "expect": false,
+   "reason": "POLICY_",
+   "category": "security"
+  },
+  {
+   "desc": "Least Privilege web1 → web2: nur TCP 9100",
+   "type": "exposure",
+   "src": "web1",
+   "dst": "web2",
+   "allow": [
+    "tcp/9100"
+   ],
+   "category": "security"
+  },
+  {
+   "desc": "Least Privilege web2 → web1: nur TCP 9100",
+   "type": "exposure",
+   "src": "web2",
+   "dst": "web1",
+   "allow": [
+    "tcp/9100"
+   ],
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Was ist der Unterschied zwischen Intra EPG Isolation und einem Intra-EPG Contract?",
+   "options": [
+    "Isolation verbietet allen Verkehr innerhalb der EPG, der Contract erlaubt gezielt einzelne Dienste",
+    "Beides ist dasselbe",
+    "Isolation gilt nur für ICMP",
+    "Der Contract gilt nur zwischen verschiedenen EPGs"
+   ],
+   "answer": 0,
+   "explain": "Isolation ist ein Ein/Aus-Schalter. Der Intra-EPG Contract macht die EPG zur Whitelist für Verkehr innerhalb der Gruppe."
+  },
+  {
+   "id": "q2",
+   "q": "Warum nicht einfach jeden Webserver in eine eigene EPG legen?",
+   "options": [
+    "Das geht technisch nicht",
+    "Die Gruppe hat dieselbe Rolle und dieselben Freigaben nach außen – getrennte EPGs verdoppeln Contracts und Pflege",
+    "EPGs dürfen nur einen Endpoint haben",
+    "Weil dann das VLAN fehlt"
+   ],
+   "answer": 1,
+   "explain": "Die EPG beschreibt die Rolle. Intra-EPG-Regeln begrenzen die Gruppe intern, ohne das Rollenmodell aufzubrechen."
+  }
+ ],
+ "solution": "`POST /api/mo/uni.json` mit `{\"fvTenant\": {\"attributes\": {\"name\": \"Shop\"}, \"children\": [{\"vzFilter\": {\"attributes\": {\"name\": \"cluster-sync\"}, \"children\": [{\"vzEntry\": {\"attributes\": {\"name\": \"sync\", \"etherT\": \"ip\", \"prot\": \"tcp\", \"dFromPort\": \"9100\", \"dToPort\": \"9100\"}}}]}}, {\"vzBrCP\": {\"attributes\": {\"name\": \"web-intra\", \"scope\": \"context\"}, \"children\": [{\"vzSubj\": {\"attributes\": {\"name\": \"subj\", \"revFltPorts\": \"yes\"}, \"children\": [{\"vzRsSubjFiltAtt\": {\"attributes\": {\"tnVzFilterName\": \"cluster-sync\"}}}]}}]}}, {\"fvAp\": {\"attributes\": {\"name\": \"Webshop\"}, \"children\": [{\"fvAEPg\": {\"attributes\": {\"name\": \"Web\"}, \"children\": [{\"fvRsIntraEpg\": {\"attributes\": {\"tnVzBrCPName\": \"web-intra\"}}}]}}]}}]}}`",
+ "routers": [],
+ "vcenters": [],
+ "devices": [],
+ "aaa": [],
+ "switches": [],
+ "solutionConfig": [
+  [
+   "uni",
+   {
+    "fvTenant": {
+     "attributes": {
+      "name": "Shop"
+     },
+     "children": [
+      {
+       "vzFilter": {
+        "attributes": {
+         "name": "cluster-sync"
+        },
+        "children": [
+         {
+          "vzEntry": {
+           "attributes": {
+            "name": "sync",
+            "etherT": "ip",
+            "prot": "tcp",
+            "dFromPort": "9100",
+            "dToPort": "9100"
+           }
+          }
+         }
+        ]
+       }
+      },
+      {
+       "vzBrCP": {
+        "attributes": {
+         "name": "web-intra",
+         "scope": "context"
+        },
+        "children": [
+         {
+          "vzSubj": {
+           "attributes": {
+            "name": "subj",
+            "revFltPorts": "yes"
+           },
+           "children": [
+            {
+             "vzRsSubjFiltAtt": {
+              "attributes": {
+               "tnVzFilterName": "cluster-sync"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      },
+      {
+       "fvAp": {
+        "attributes": {
+         "name": "Webshop"
+        },
+        "children": [
+         {
+          "fvAEPg": {
+           "attributes": {
+            "name": "Web"
+           },
+           "children": [
+            {
+             "fvRsIntraEpg": {
+              "attributes": {
+               "tnVzBrCPName": "web-intra"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  ]
+ ]
+}

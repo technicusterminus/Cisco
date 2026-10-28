@@ -722,7 +722,8 @@ class Engine(OpsMixin, PodMixin, SiteMixin):
                             'prov': self._rs_targets(dn, 'fvRsProv'),
                             'cons': self._rs_targets(dn, 'fvRsCons'),
                             'pref': a['prefGrMemb'] == 'include',
-                            'isolation': a['pcEnfPref'] == 'enforced'}
+                            'isolation': a['pcEnfPref'] == 'enforced',
+                            'intra': self._rs_targets(dn, 'fvRsIntraEpg')}
         for dn in self.store.by_class('fvESg'):
             a = self.A(dn)
             vrs = self.A(dn + '/rsscope') or {}
@@ -2264,6 +2265,25 @@ class Engine(OpsMixin, PodMixin, SiteMixin):
             return self._decide('POLICY_ESG_EPG_MIX', 'deny', 'Contracts zwischen einer ESG und einer EPG werden nicht unterstuetzt - beide Seiten '
                                 'muessen ESGs sein (oder ein External EPG)')
         if s['dn'] == d['dn']:
+            if s.get('intra'):
+                # Intra-EPG-Contract: innerhalb der EPG gilt nur noch, was der Contract erlaubt (EPG ist Consumer und Provider)
+                for brc in s['intra']:
+                    for subj in self.kids(brc, 'vzSubj'):
+                        sa = self.A(subj)
+                        for rf in self.kids(subj, 'vzRsSubjFiltAtt'):
+                            rfa = self.A(rf)
+                            if rfa['state'] != 'formed':
+                                continue
+                            for e in self.kids(rfa['tDn'], 'vzEntry'):
+                                ea = self.A(e)
+                                hit = self._entry_match(ea, proto, sport, dport, flags, False) or \
+                                    self._entry_match(ea, proto, sport, dport, flags, sa['revFltPorts'] == 'yes')
+                                if hit:
+                                    return self._decide('POLICY_INTRA_EPG_CONTRACT', rfa['action'],
+                                                        'Intra-EPG-Contract %s / %s / %s' % (self.short(brc), sa['name'], self.A(rfa['tDn'])['name']),
+                                                        {'contract': brc, 'subject': subj, 'filter': rfa['tDn'], 'entry': e, 'direction': 'intra'})
+                return self._decide('POLICY_INTRA_EPG_CONTRACT_DENY', 'deny', 'Intra-EPG-Contract an %s erlaubt diesen Verkehr nicht'
+                                    % self.short(s['dn']), {'epg': s['dn']})
             if s.get('isolation'):
                 return self._decide('POLICY_INTRA_EPG_ISOLATION', 'deny', 'Intra-EPG-Isolation ist aktiv', {'epg': s['dn']})
             return self._decide('POLICY_SAME_EPG', 'permit', 'Quelle und Ziel in derselben EPG - kein Contract noetig', {'epg': s['dn']})

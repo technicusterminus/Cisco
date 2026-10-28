@@ -173,8 +173,11 @@ Unter *Simulation > Labs & Stände* laden. Jedes Lab setzt die Konfiguration auf
 | 35 | Falscher Port, falsche Richtung: eine kaputte Freigabe reparieren (neues Format) | 20 min |
 | 36 | Endpoint Move nachvollziehen: Verlauf lesen, alte Bindung entfernen (neues Format) | 25 min |
 | 37 | Interface-Ausfall oder Policy-Drop? Drei Tickets, drei Ursachen (neues Format) | 25 min |
+| 38 | Innerhalb einer EPG einschränken: Isolation und Intra-EPG-Contract (neues Format) | 20 min |
+| 39 | Preferred Group für eine Migration (neues Format) | 20 min |
+| 40 | IT-/OT-Segmentierung einer Fertigungslinie: fünf Zonen, laterale Bewegung verhindern (neues Format, didaktisch) | 60 min |
 
-**Neues Lab-Format** (Labs 02, 03, 04, 07 und 32 bis 37): Statt einer Klickanleitung gibt es Anforderungen. Der Rest im Überblick:
+**Neues Lab-Format** (Labs 02, 03, 04, 07 und 32 bis 40): Statt einer Klickanleitung gibt es Anforderungen. Der Rest im Überblick:
 
 - **Hinweise** in vier Stufen: Konzept, Objekte, Prüfschritt, Lösung. Die Oberfläche zählt, wie viele genutzt wurden.
 - **Bewertung** getrennt nach *Funktion* und *Sicherheit / Least Privilege*. Eine Permit-any-Abkürzung funktioniert zwar, besteht aber nicht.
@@ -292,7 +295,7 @@ Das Verhalten ist nachgebildet und nicht gegen einen echten APIC geprüft. Dafü
 
 ## Grenzen
 
-Nicht simuliert: VMM für Kubernetes, Microsoft und OpenStack, vPC über Pods hinweg, Remote-Leaf-vPC, Stretched Fabric, GOLF und SR-MPLS, die vollständige NDO-Oberfläche (der NDO ist vereinfacht, die zweite Site hat nur feste Endpoints), Service Graphs ohne PBR (Firewall als Gateway), Managed Devices (Device Packages), Set Rules und Route-Profile mit Community/Tag, Multicast, Custom QoS Policies und die Wirkung von QoS auf den Datenverkehr, SNMPv3, Scheduler für Exporte und Upgrades, DHCP über L3Out. Nicht unterstützt sind außerdem Subjects ohne „Apply Both Directions“ und Intra-EPG-Contracts (siehe [Backlog](docs/BACKLOG.md)). Die Pakete fließen nicht wirklich: Der Traffic-Test berechnet anhand von Konfiguration und Zustand, ob ein Paket und seine Antwort ankommen würden, und begründet jeden Schritt.
+Nicht simuliert: VMM für Kubernetes, Microsoft und OpenStack, vPC über Pods hinweg, Remote-Leaf-vPC, Stretched Fabric, GOLF und SR-MPLS, die vollständige NDO-Oberfläche (der NDO ist vereinfacht, die zweite Site hat nur feste Endpoints), Service Graphs ohne PBR (Firewall als Gateway), Managed Devices (Device Packages), Set Rules und Route-Profile mit Community/Tag, Multicast, Custom QoS Policies und die Wirkung von QoS auf den Datenverkehr, SNMPv3, Scheduler für Exporte und Upgrades, DHCP über L3Out. Nicht unterstützt sind außerdem Subjects ohne „Apply Both Directions“ (siehe [Backlog](docs/BACKLOG.md)). Die Pakete fließen nicht wirklich: Der Traffic-Test berechnet anhand von Konfiguration und Zustand, ob ein Paket und seine Antwort ankommen würden, und begründet jeden Schritt.
 
 ## Aufbau des Ordners
 

@@ -242,6 +242,8 @@ mo('fvRsProv', 'rsprov-{tnVzBrCPName}', ('fvAEPg', 'l3extInstP', 'l2extInstP', '
    rel=('name', 'tnVzBrCPName', 'vzBrCP', 'tenant'), label='Provided Contract')
 mo('fvRsCons', 'rscons-{tnVzBrCPName}', ('fvAEPg', 'l3extInstP', 'l2extInstP', 'fvESg'), {'prio': 'unspecified'},
    rel=('name', 'tnVzBrCPName', 'vzBrCP', 'tenant'), label='Consumed Contract')
+mo('fvRsIntraEpg', 'rsintraEpg-{tnVzBrCPName}', ('fvAEPg',), {'prio': 'unspecified'},
+   rel=('name', 'tnVzBrCPName', 'vzBrCP', 'tenant'), label='Intra EPG Contract')
 
 # Operative Endpunkte (vom Simulator gelernt)
 mo('fvCEp', 'cep-{mac}', ('fvAEPg', 'l3extInstP', 'l2extInstP', 'vnsEPpInfo', 'fvESg'),

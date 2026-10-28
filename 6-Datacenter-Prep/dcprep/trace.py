@@ -46,6 +46,7 @@ POLICY_HINTS = {
     'POLICY_DENY_RULE': 'Ein Filter mit Aktion Deny passt. Subjects und Filter-Aktionen im Contract pruefen.',
     'POLICY_TABOO': 'Ein Taboo Contract an der Ziel-EPG verbietet diesen Verkehr.',
     'POLICY_INTRA_EPG_ISOLATION': 'An der EPG ist Intra EPG Isolation "enforced" - Endpoints derselben EPG duerfen nicht miteinander sprechen.',
+    'POLICY_INTRA_EPG_CONTRACT_DENY': 'An der EPG haengt ein Intra-EPG-Contract: Innerhalb der EPG gilt nur noch, was seine Filter erlauben.',
     'POLICY_ESG_EPG_MIX': 'Contracts zwischen ESG und EPG gibt es nicht; beide Seiten muessen ESGs sein.',
 }
 

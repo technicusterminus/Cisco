@@ -405,6 +405,9 @@ class TestRequirementLabs(unittest.TestCase):
         '35-port-and-direction': ['8443', 'Consumer', 'Provider', 'vertauscht', 'konsumiert'],
         '36-endpoint-move': ['eth1/7', 'eth1/6', 'pc-x', 'Static Port', 'Bindung'],
         '37-link-or-policy': ['Disabled', 'deaktiviert', 'Kabel', 'LINK_DOWN', 'Contract', 'eth1/2 ist'],
+        '38-intra-epg': ['Isolation', 'Intra-EPG', 'Intra EPG', 'fvRsIntraEpg', 'Contract'],
+        '39-preferred-group': ['Preferred', 'vzAny', 'EPG Collection', 'prefGrMemb', 'Include'],
+        '40-it-ot-segmentation': ['Consumer', 'Provider', 'Isolation', 'Intra', 'vzBrCP', 'scada-to-plc'],
     }
 
     def setUp(self):
@@ -644,6 +647,102 @@ class TestTroubleshootingLabs(unittest.TestCase):
         self.assertTrue(by['Ticket 1: web1 → app1 TCP 8080'] and by['Ticket 2: jump1 → web1 SSH'])
         self.assertFalse(by['Least Privilege jump1 → Web: nur SSH'])
         self.assertEqual(trace.run(self.S.engine, self.S.sim, 'web1', 'web3', 'icmp')['reason'], 'LINK_DOWN', 'Ticket 3 bleibt physisch')
+
+
+class TestSegmentationLabs(unittest.TestCase):
+    """Labs 38 (Intra-EPG), 39 (Preferred Group), 40 (IT/OT): Loesung besteht, Abkuerzungen scheitern."""
+
+    ANY = mo('vzFilter', {'name': 'any'}, mo('vzEntry', {'name': 'any'}))
+    ANYC = mo('vzBrCP', {'name': 'all'}, mo('vzSubj', {'name': 's'}, mo('vzRsSubjFiltAtt', {'tnVzFilterName': 'any'})))
+
+    def setUp(self):
+        self.S = Sim(tempfile.mkdtemp(), 'admin')
+        self.S.sim['settings']['discoverySeconds'] = 0
+
+    def apply(self, *items):
+        for dn, body in items:
+            post(self.S.store, dn, body)
+        self.S.changed()
+
+    def by(self):
+        r = self.S.check_lab()
+        return r, {c['desc']: c['ok'] for c in r['checks']}
+
+    def test_lab38_isolation_alone_breaks_sync(self):
+        self.S.load_lab('38-intra-epg')
+        self.apply(('uni/tn-Shop/ap-Webshop/epg-Web', mo('fvAEPg', {'pcEnfPref': 'enforced'})))
+        r, by = self.by()
+        self.assertFalse(by['web1 → web2 TCP 9100'])
+        self.assertTrue(by['web1 → web2 SSH durch die Policy blockiert'])
+        self.assertEqual(trace.run(self.S.engine, self.S.sim, 'web1', 'web2', 'tcp', 9100)['reason'], 'POLICY_INTRA_EPG_ISOLATION')
+
+    def test_lab38_intra_contract_permit_any_fails(self):
+        self.S.load_lab('38-intra-epg')
+        self.apply(('uni', mo('fvTenant', {'name': 'Shop'}, self.ANY, self.ANYC, mo('fvAp', {'name': 'Webshop'},
+                    mo('fvAEPg', {'name': 'Web'}, mo('fvRsIntraEpg', {'tnVzBrCPName': 'all'}))))))
+        r, by = self.by()
+        self.assertTrue(by['web1 → web2 TCP 9100'])
+        self.assertFalse(by['Least Privilege web1 → web2: nur TCP 9100'])
+
+    def test_lab38_solution_reason_codes(self):
+        lab = self.S.load_lab('38-intra-epg')
+        self.apply(*lab['solutionConfig'])
+        self.assertEqual(trace.run(self.S.engine, self.S.sim, 'web1', 'web2', 'tcp', 22)['reason'], 'POLICY_INTRA_EPG_CONTRACT_DENY')
+        self.assertEqual(trace.run(self.S.engine, self.S.sim, 'web1', 'web2', 'tcp', 9100)['policy'][0]['code'], 'POLICY_INTRA_EPG_CONTRACT')
+
+    def test_lab39_shortcuts(self):
+        self.S.load_lab('39-preferred-group')
+        self.apply(('uni/tn-Shop/ctx-Prod', mo('fvCtx', {'pcEnfPref': 'unenforced'})))
+        r, by = self.by()
+        self.assertTrue(by['web1 → app1 TCP 1433'])
+        self.assertFalse(by['Policy im VRF Prod bleibt eingeschaltet'])
+        self.assertFalse(by['web1 → jump1 durch die Policy blockiert'])
+        self.S.load_lab('39-preferred-group')
+        self.apply(('uni', mo('fvTenant', {'name': 'Shop'}, self.ANY, self.ANYC, mo('fvAp', {'name': 'Webshop'},
+                    mo('fvAEPg', {'name': 'Web'}, mo('fvRsCons', {'tnVzBrCPName': 'all'}), mo('fvRsProv', {'tnVzBrCPName': 'all'})),
+                    mo('fvAEPg', {'name': 'App'}, mo('fvRsCons', {'tnVzBrCPName': 'all'}), mo('fvRsProv', {'tnVzBrCPName': 'all'}))))))
+        r, by = self.by()
+        self.assertTrue(by['web1 → app1 TCP 1433'])
+        self.assertFalse(by['Ohne Contracts gelöst'])
+
+    def test_lab39_mgmt_in_group_fails_and_vrf_only_is_not_enough(self):
+        lab = self.S.load_lab('39-preferred-group')
+        self.apply(('uni/tn-Shop/ctx-Prod/any', mo('vzAny', {'prefGrMemb': 'enabled'})))
+        r, by = self.by()
+        self.assertFalse(by['web1 → app1 TCP 1433'], 'nur am VRF reicht nicht')
+        self.apply(*lab['solutionConfig'], ('uni/tn-Shop/ap-Webshop/epg-Mgmt', mo('fvAEPg', {'prefGrMemb': 'include'})))
+        r, by = self.by()
+        self.assertFalse(by['Least Privilege jump1 → App: nichts'])
+
+    def test_lab40_permit_any_works_but_is_not_least_privilege(self):
+        self.S.load_lab('40-it-ot-segmentation')
+        self.apply(('uni', mo('fvTenant', {'name': 'Werk'}, self.ANY, self.ANYC,
+                              mo('fvCtx', {'name': 'OT'}, mo('vzAny', {}, mo('vzRsAnyToCons', {'tnVzBrCPName': 'all'}),
+                                                              mo('vzRsAnyToProv', {'tnVzBrCPName': 'all'}))))))
+        r, by = self.by()
+        self.assertEqual(r['categories']['function']['passed'], r['categories']['function']['total'], 'alles funktioniert ...')
+        self.assertLessEqual(r['categories']['security']['passed'], 1, '... aber fast nichts ist Least Privilege')
+
+    def test_lab40_without_plc_isolation_lateral_fails(self):
+        lab = self.S.load_lab('40-it-ot-segmentation')
+        sol = json.loads(json.dumps(lab['solutionConfig'][0][1]))
+        ap = next(c for c in sol['fvTenant']['children'] if 'fvAp' in c)['fvAp']['children']
+        next(e for e in ap if e['fvAEPg']['attributes']['name'] == 'PLC')['fvAEPg']['attributes'].pop('pcEnfPref')
+        self.apply(('uni', sol))
+        r, by = self.by()
+        self.assertFalse(by['Keine laterale Kommunikation plc1 → plc2'])
+        self.assertEqual(r['passed'], r['total'] - 1)
+
+    def test_lab40_monitoring_with_admin_rights_fails(self):
+        lab = self.S.load_lab('40-it-ot-segmentation')
+        self.apply(*lab['solutionConfig'], ('uni/tn-Werk/ap-Linie1/epg-MON', mo('fvAEPg', {}, mo('fvRsCons', {'tnVzBrCPName': 'admin-ssh'}))))
+        r, by = self.by()
+        self.assertFalse(by['MON → SCADA: nur SNMP und Ping (kein SSH)'])
+
+    def test_lab40_start_shows_lateral_risk(self):
+        self.S.load_lab('40-it-ot-segmentation')
+        self.assertEqual(trace.run(self.S.engine, self.S.sim, 'plc1', 'plc2', 'tcp', 502)['verdict'], 'ALLOW')
+        self.assertEqual(trace.run(self.S.engine, self.S.sim, 'scada1', 'plc1', 'tcp', 502)['reason'], 'POLICY_IMPLICIT_DENY')
 
 
 if __name__ == '__main__':
