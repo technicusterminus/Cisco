@@ -198,6 +198,8 @@ Den Stand gegenüber dem geplanten Lernpfad zeigt [docs/LAB-KATALOG.md](docs/LAB
 
 Reason Codes und das Dienstmodell der Hosts (Feld *Dienste*) sind simulator-spezifisch.
 
+Unter **Pfad in der Topologie** zeigt der Traffic Inspector denselben Test in der Fabric-Grafik: erreichte Abschnitte blau, die Stelle, an der der Test endet, rot mit ✖. Die **Policy-Matrix** (*Operations > Policy-Matrix*) zeigt je VRF für jedes EPG-Paar, welche typischen Dienste die Policy für eine neue Verbindung erlaubt – berechnet mit derselben Entscheidung wie Traffic Inspector und Lab-Bewertung.
+
 **Ereignisse:** In der Hosttabelle (*Simulation > Topologie & Hosts*) lässt sich der Link eines Hosts trennen und wieder verbinden; ein umgesteckter Host (anderer Port im Host-Dialog) ist ein Endpoint Move. Der **EP Tracker** zeigt pro Host den Verlauf: gelernt, umgezogen, nicht mehr gelernt, Link down/up. Die Event-Codes S9101–S9103 sind simulator-spezifisch.
 
 Die Lab-Dateien entstehen aus `Labs-Quelle/build_labs.py` (`python3 Labs-Quelle/build_labs.py`). Die Tests prüfen für jedes Lab, dass es ohne Lösung nicht bestanden und mit Musterlösung vollständig bestanden ist.

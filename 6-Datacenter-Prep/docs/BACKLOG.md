@@ -7,9 +7,8 @@ Alle Punkte sind offen. Erledigt ist, was in `docs/GAP-ANALYSE.md` als „behobe
 | # | Punkt | Begründung | Umfang |
 |---|---|---|---|
 | B-01 | Weitere Labs ins Anforderungsformat überführen (als Nächstes 05, 06, 11, 13; erledigt: 02, 03, 04, 07) | Die Lösung steht bei den übrigen Labs in der Aufgabe | je Lab Inhalt + Tests wie `test_acceptance.py` |
-| B-08 | Topologie: berechneten Pfad und Drop-Punkt aus `trace.path` hervorheben, Overlays für EPG, BD, VRF und Policy | gefordert, heute nur als Pfadleiste im Traffic Inspector | Frontend |
+| B-08 | Topologie: Overlays für EPG, BD, VRF und Policy (Pfad und Drop-Punkt aus dem Traffic-Test sind umgesetzt) | Zusammenhänge sichtbar machen | Frontend |
 | B-09 | Dark Mode und Tastaturbedienung (Fokus-Reihenfolge, Shortcuts) | Barrierefreiheit | CSS-Tokens, Frontend |
-| B-11 | Contract-/Policy-Matrix je VRF: EPG × EPG mit angewandter Regel | Überblick statt Einzeltest | baut auf `Engine.packet` auf |
 | B-12 | Change-History: welche Änderung wann, mit Diff, aus allen Bedienwegen | „Änderungen sicher planen“ | Store-Hook |
 
 ## Phase 3: Troubleshooting

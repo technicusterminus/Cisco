@@ -39,6 +39,7 @@ Ein Prozess, ein Python-Paket (`dcprep/`), eine statische Weboberfläche (`stati
 
 - Jede Änderung (GUI-Formular, REST, Ansible, Lab-Start, Spielstand laden) geht durch `model.post` bzw. `Store.load_config`, danach `Sim.changed()` → `Engine.rebuild()`.
 - Traffic Inspector (`POST /sim/traffic`), Testmatrix (`flows.py`), Lab-Checks vom Typ `traffic` und `exposure` rufen alle `trace.run` auf.
+- Die Policy-Matrix (`flows.policy_matrix`, `GET /sim/policymatrix`) fragt `Engine.packet` direkt ab – dieselbe Policy-Entscheidung, die `trace.run` im Schritt *Policy Anfrage* verwendet.
 - Die CLI (`cli.py`) formatiert nur Engine-Zustand (`show zoning-rule` = `Engine`-Regeln, `show endpoint` = gelernte Hosts).
 - Tests: `tests/test_acceptance.py` prüft genau diese Kopplung (REST → Trace → CLI → Bewertung).
 

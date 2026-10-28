@@ -842,5 +842,30 @@ class TestOperationsLabs(unittest.TestCase):
         self.assertFalse(by['Change vollständig zurückgerollt (keine EPG Api)'])
 
 
+class TestPolicyMatrix(unittest.TestCase):
+    def test_matrix_matches_trace_and_lab40_design(self):
+        from dcprep import flows
+        S = Sim(tempfile.mkdtemp(), 'admin')
+        S.sim['settings']['discoverySeconds'] = 0
+        lab = S.load_lab('40-it-ot-segmentation')
+        for dn, body in lab['solutionConfig']:
+            post(S.store, dn, body)
+        S.changed()
+        m = flows.policy_matrix(S)
+        self.assertEqual(m['vrf'], 'uni/tn-Werk/ctx-OT')
+        z = lambda n: 'uni/tn-Werk/ap-Linie1/epg-' + n
+        cell = lambda a, b: m['cells'][z(a)][z(b)]
+        self.assertEqual(cell('SCADA', 'PLC')['open'], ['tcp/502'])
+        self.assertEqual(cell('SCADA', 'PLC')['rules'], ['Werk:scada-to-plc'])
+        self.assertEqual(cell('ENG', 'PLC')['open'], ['tcp/44818'])
+        self.assertEqual(sorted(cell('MON', 'SCADA')['open']), ['icmp', 'udp/161'])
+        self.assertEqual(cell('PLC', 'PLC')['open'], [], 'Isolation in der Zone PLC')
+        self.assertTrue(cell('ENG', 'ENG')['all'], 'ohne Isolation ist innerhalb der EPG alles offen')
+        self.assertEqual(cell('PLC', 'SCADA')['open'], [])
+        # gleiche Entscheidung wie der Traffic-Test
+        self.assertEqual(trace.run(S.engine, S.sim, 'scada1', 'plc1', 'tcp', 502)['verdict'], 'ALLOW')
+        self.assertEqual(trace.run(S.engine, S.sim, 'scada1', 'plc1', 'tcp', 22)['verdict'], 'DROP')
+
+
 if __name__ == '__main__':
     unittest.main()

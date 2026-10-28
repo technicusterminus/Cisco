@@ -9,7 +9,7 @@ const TABS = [
   { id: 'vnet', l: 'Virtual Networking', subs: [['vmm', 'Inventory']] },
   { id: 'admin', l: 'Admin', subs: [['aaa', 'AAA'], ['schedulers', 'Schedulers'], ['hist', 'Historical Record Policies'], ['firmware', 'Firmware'],
     ['collectors', 'External Data Collectors'], ['rollback', 'Config Rollbacks'], ['impexp', 'Import/Export'], ['downloads', 'Downloads']] },
-  { id: 'ops', l: 'Operations', subs: [['vis', 'Visibility & Troubleshooting'], ['capacity', 'Capacity Dashboard'], ['ep', 'EP Tracker'], ['viz', 'Visualization']] },
+  { id: 'ops', l: 'Operations', subs: [['vis', 'Visibility & Troubleshooting'], ['policy', 'Policy-Matrix'], ['capacity', 'Capacity Dashboard'], ['ep', 'EP Tracker'], ['viz', 'Visualization']] },
   { id: 'apps', l: 'Apps', subs: [['apps', 'Installed Apps'], ['appfaults', 'Faults']] },
   { id: 'integrations', l: 'Integrations', subs: [['integrations', 'Integrations']] },
   { id: 'sim', l: 'Simulation', subs: [['labs', 'Labs & Stände'], ['topo', 'Topologie & Hosts'], ['tests', 'Testmatrix'], ['routers', 'Externe Router'], ['vcenter', 'vCenter'], ['devices', 'L4-L7 Geräte'], ['aaasrv', 'AAA-Server'], ['servers', 'Fileserver & Monitoring'], ['legacy', 'Legacy-Switches'], ['ipn', 'IPN & WAN'], ['ndo', 'Multi-Site (NDO)'], ['simset', 'Einstellungen']], special: true },

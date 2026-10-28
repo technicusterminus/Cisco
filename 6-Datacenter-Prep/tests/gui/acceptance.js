@@ -74,12 +74,18 @@ const SOLUTION = { fvTenant: { attributes: { name: 'Shop' }, children: [
     check(t.includes('DROP') && t.includes('POLICY_IMPLICIT_DENY'), 'HTTPS web1 → app1: DROP mit POLICY_IMPLICIT_DENY');
     check(t.includes('Policy verwirft') && t.includes('Nächster Diagnoseschritt'), 'Fehlerort und Diagnosehinweis sichtbar');
     check(/Gateway 10\.10\.10\.1/.test(t) && /Routing in VRF/.test(t), 'Gateway und Routing als erfolgreich ausgewiesen');
+    await p.click('.trace-topo summary'); await p.waitForTimeout(200);
+    check(await p.locator('.trace-topo svg .hl.bad').count() > 0 && await p.locator('.trace-topo svg .xmark').count() > 0, 'Topologie zeigt den Pfad und den Drop-Punkt');
     await shot('02-drop');
 
     // 3. Filter, Contract, Consumer/Provider anlegen (REST wie die Formulare)
     await p.evaluate(async body => { await API.postMo('uni/tn-Shop', body); }, SOLUTION);
     t = await trafficTest('app1', 'tcp', 443);
     check(t.includes('ALLOW') && t.includes('web-to-app-https') && t.includes('Provider → Consumer'), 'HTTPS: ALLOW, Hin- und Rückweg mit angewandter Regel');
+    check(await p.locator('.trace-topo svg .hl.ok').count() > 0 && await p.locator('.trace-topo svg .hl.bad').count() === 0, 'Topologie: ganzer Pfad erreicht, kein Drop');
+    await p.evaluate(() => App.go('ops', 'policy')); await p.waitForSelector('table.pmatrix');
+    const pm = await p.innerText('table.pmatrix');
+    check(pm.includes('tcp/443') && pm.includes('Shop:Webshop:Web'), 'Policy-Matrix zeigt Web → App: tcp/443');
     await shot('03-allow');
     t = await trafficTest('app1', 'tcp', 22);
     check(t.includes('DROP') && t.includes('POLICY_IMPLICIT_DENY'), 'SSH bleibt blockiert');
