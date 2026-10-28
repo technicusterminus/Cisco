@@ -12,15 +12,19 @@ const TABS = [
   { id: 'ops', l: 'Operations', subs: [['vis', 'Visibility & Troubleshooting'], ['capacity', 'Capacity Dashboard'], ['ep', 'EP Tracker'], ['viz', 'Visualization']] },
   { id: 'apps', l: 'Apps', subs: [['apps', 'Installed Apps'], ['appfaults', 'Faults']] },
   { id: 'integrations', l: 'Integrations', subs: [['integrations', 'Integrations']] },
-  { id: 'sim', l: 'Simulation', subs: [['topo', 'Topologie & Hosts'], ['tests', 'Testmatrix'], ['routers', 'Externe Router'], ['vcenter', 'vCenter'], ['devices', 'L4-L7 Geräte'], ['aaasrv', 'AAA-Server'], ['servers', 'Fileserver & Monitoring'], ['legacy', 'Legacy-Switches'], ['ipn', 'IPN & WAN'], ['ndo', 'Multi-Site (NDO)'], ['labs', 'Labs'], ['saves', 'Speichern & Laden'], ['simset', 'Einstellungen']], special: true },
+  { id: 'sim', l: 'Simulation', subs: [['topo', 'Topologie & Hosts'], ['tests', 'Testmatrix'], ['routers', 'Externe Router'], ['vcenter', 'vCenter'], ['devices', 'L4-L7 Geräte'], ['aaasrv', 'AAA-Server'], ['servers', 'Fileserver & Monitoring'], ['legacy', 'Legacy-Switches'], ['ipn', 'IPN & WAN'], ['ndo', 'Multi-Site (NDO)'], ['labs', 'Labs & Stände'], ['simset', 'Einstellungen']], special: true },
 ];
 
 const App = {
   tab: 'system', sub: 'dash', sel: null, expanded: new Set(), state: null, tenants: [], view: null,
 
   async init() {
+    Launcher.me = await (await fetch('/dp/me', { cache: 'no-store' })).json();
+    if (!Launcher.me.user) return Launcher.show();
     MIT.meta = await (await fetch('/sim/meta')).json();
-    const su = await (await fetch('/sim/setup')).json();
+    const sr = await fetch('/sim/setup', { cache: 'no-store' });
+    if (sr.status === 401) return Launcher.show('Bitte anmelden.');
+    const su = await sr.json();
     if (!su.done) return SetupConsole.show(su);
     API.onAuthLost = () => this.showLogin('Sitzung abgelaufen – bitte erneut anmelden.');
     Inspector.init();
@@ -61,6 +65,7 @@ const App = {
     root.appendChild(h('div', { class: 'login' },
       h('div', { class: 'login-box' },
         h('div', { class: 'login-brand' }, h('div', { class: 'logo-mark' }, 'DC'), h('div', null, h('b', null, 'Datacenter Prep'), h('div', { class: 'muted' }, 'Application Policy Infrastructure Controller – Trainingsumgebung'))),
+        h('div', { class: 'login-who' }, 'Übungswelt von ', h('b', null, (Launcher.me || {}).user || '—'), ' · ', h('a', { href: '#', onclick: ev => { ev.preventDefault(); Launcher.logout(); } }, 'Benutzer wechseln')),
         h('label', null, 'User ID'), user, h('label', null, 'Password'), pwd, h('label', null, 'Domain'), dom, err,
         h('button', { class: 'btn primary block', onclick: go }, 'Login'),
         h('p', { class: 'muted small' }, 'Standard-Login: admin / admin. Simulierte Umgebung zum Üben, kein Cisco-Produkt.'))));
@@ -78,7 +83,8 @@ const App = {
         h('button', { class: 'tbtn', title: 'APIC- und Switch-CLI', onclick: () => Term.open() }, '⌨ CLI'),
         h('button', { class: 'tbtn', title: 'API Inspector', onclick: () => Inspector.toggle() }, '{ } API Inspector'),
         h('a', { class: 'tbtn', href: '/visore.html', target: '_blank', title: 'Object Store Browser' }, 'Visore'),
-        h('button', { class: 'tbtn', onclick: () => this.logout(), title: 'Abmelden' }, '⏻ ' + this.user))));
+        h('button', { class: 'tbtn', title: 'Datacenter-Prep-Benutzer: wechseln, Passwort, Übungswelt zurücksetzen', onclick: ev => { ev.stopPropagation(); Launcher.menu(ev); } }, '👤 ' + ((Launcher.me || {}).user || '?') + ' ▾'),
+        h('button', { class: 'tbtn', onclick: () => this.logout(), title: 'Vom simulierten APIC abmelden' }, '⏻ ' + this.user))));
     root.appendChild(this.el.subs);
     root.appendChild(this.el.main);
     TABS.forEach(t => this.el.tabs.appendChild(h('a', { class: 'tab' + (t.special ? ' special' : ''), 'data-id': t.id, onclick: () => this.go(t.id) }, t.l)));

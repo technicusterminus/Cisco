@@ -26,6 +26,7 @@ from . import ops
 from . import msite
 from . import flows
 from . import coverage
+from .users import Hub, SimProxy, COOKIE as DP_COOKIE, SESSION_DAYS
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATIC = os.path.join(BASE, 'static')
@@ -96,6 +97,7 @@ class Sim:
             self.sim['setup'] = None
             self.sim['audit'], self.sim['events'] = [], []
             self.tokens.clear()
+        self.sim['pristine'] = True
         self.engine = Engine(self.store, self.sim)
         if mode != 'factory':
             su = self.sim['setup']
@@ -187,6 +189,8 @@ class Sim:
         ops.deliver(self, box)
 
     def audit(self, user, changes):
+        if changes:
+            self.sim.pop('pristine', None)
         log = self.sim.setdefault('audit', [])
         if not hasattr(self, 'outbox'):
             self.outbox = []
@@ -270,11 +274,12 @@ class Sim:
     def lab(self, lid):
         return next((l for l in self.labs() if l['id'] == lid), None)
 
-    def load_lab(self, lid):
+    def load_lab(self, lid, autosave=True):
         lab = self.lab(lid)
         if not lab:
             raise AciError(404, 'Lab %s nicht gefunden' % lid)
-        self.autosave_lab()
+        if autosave:
+            self.autosave_lab()
         self.reset(lab.get('fabric', 'discovered'))
         if lab.get('topology') == 'multipod':
             self.sim['topology'] = multipod_topology()
@@ -459,8 +464,35 @@ class Sim:
             except (KeyError, ValueError) as ex:
                 info = 'Pruefung fehlerhaft: %s' % ex
             res.append({'desc': c['desc'], 'ok': bool(ok), 'info': info})
-        return {'id': lab['id'], 'title': lab['title'], 'checks': res,
-                'passed': sum(1 for r in res if r['ok']), 'total': len(res)}
+        out = {'id': lab['id'], 'title': lab['title'], 'checks': res,
+               'passed': sum(1 for r in res if r['ok']), 'total': len(res)}
+        self.record_progress(out)
+        return out
+
+    # -------------------------------------------------------------- Fortschritt
+    def progress(self):
+        try:
+            with open(os.path.join(self.data_dir, 'progress.json'), encoding='utf-8') as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            return {}
+
+    def _write_progress(self, p):
+        fp = os.path.join(self.data_dir, 'progress.json')
+        with open(fp + '.tmp', 'w', encoding='utf-8') as f:
+            json.dump(p, f)
+        os.replace(fp + '.tmp', fp)
+
+    def record_progress(self, chk):
+        """Letztes Pruefergebnis je Lab; 'done' bleibt stehen, sobald ein Lab einmal komplett bestanden war."""
+        p = self.progress()
+        old = p.get(chk['id'], {})
+        done = old.get('done') or (chk['total'] > 0 and chk['passed'] == chk['total'])
+        new = {'passed': chk['passed'], 'total': chk['total'], 'ts': now_ts(), 'done': bool(done),
+               'doneTs': old.get('doneTs') or (now_ts() if done else None)}
+        if {k: old.get(k) for k in ('passed', 'total', 'done')} != {k: new[k] for k in ('passed', 'total', 'done')}:
+            p[chk['id']] = new
+            self._write_progress(p)
 
     # -------------------------------------------------------------- Snapshots
     def snapshots(self):
@@ -567,11 +599,70 @@ class Sim:
         self.engine = Engine(self.store, self.sim)
         self.changed()
 
+    @staticmethod
+    def auto_name(lid):
+        return ('auto-' + (lid or 'frei'))[:32]
+
     def autosave_lab(self):
-        """Vor dem Wechsel: das laufende Lab als auto-<lab> sichern (zum Fortsetzen)."""
+        """Vor dem Wechsel: das laufende Lab als auto-<lab> sichern (freies Ueben als auto-frei)."""
         lid = self.sim.get('lab')
-        if lid and self.sim.get('setup', 0) is not None:
-            self.save_game(('auto-' + lid)[:32], 'Automatisch gesichert beim Wechsel des Labs')
+        if self.sim.get('setup', 0) is None:
+            return
+        if not lid and self.sim.get('pristine') and not self.sim.get('hosts'):
+            return
+        self.save_game(self.auto_name(lid), 'Automatisch gesichert beim Wechsel' + ('' if lid else ' (freies Üben)'))
+
+    def lab_saves(self, lid):
+        """Speicherstaende eines Labs (lid None = freies Ueben), neueste zuerst; der automatische Stand ist markiert."""
+        return [x for x in self.saves() if (x.get('lab') or None) == (lid or None)]
+
+    def lab_op(self, b):
+        """Labs: fortsetzen, auf Default zuruecksetzen, Staende loeschen, freies Ueben."""
+        op, lid = b.get('op'), b.get('id') or None
+        if lid and not self.lab(lid):
+            raise AciError(404, 'Lab %s nicht gefunden' % lid, 404)
+        if op == 'resume':
+            saves = self.lab_saves(lid)
+            auto = next((x for x in saves if x['name'] == self.auto_name(lid)), None)
+            pick = next((x for x in saves if x['name'] == b.get('save')), None) if b.get('save') else (auto or (saves[0] if saves else None))
+            if self.sim.get('lab') != lid or b.get('save'):
+                self.autosave_lab()
+            if pick:
+                self.load_blob(self.read_save(pick['name']))
+                return {'ok': True, 'loaded': pick['name']}
+            if lid:
+                self.load_lab(lid, autosave=False)
+            else:
+                self.reset('discovered', keep_sim=False)
+                self.save()
+            return {'ok': True, 'loaded': None}
+        if op == 'reset':
+            if self.sim.get('lab') != lid:
+                self.autosave_lab()
+            for x in self.lab_saves(lid):
+                if x['name'] == self.auto_name(lid) or b.get('purge'):
+                    os.remove(self._save_file(x['name']))
+            if b.get('purge') and lid:
+                p = self.progress()
+                if p.pop(lid, None) is not None:
+                    self._write_progress(p)
+            if lid:
+                self.load_lab(lid, autosave=False)
+            else:
+                self.reset('discovered')
+                self.save()
+            return {'ok': True}
+        if op == 'purge':
+            n = 0
+            for x in self.lab_saves(lid):
+                os.remove(self._save_file(x['name']))
+                n += 1
+            if lid and b.get('progress'):
+                p = self.progress()
+                if p.pop(lid, None) is not None:
+                    self._write_progress(p)
+            return {'ok': True, 'deleted': n}
+        raise AciError(400, 'Unbekannte Aktion')
 
     # -------------------------------------------------------------- Sim-Objekte
     def used_ports(self, skip=None):
@@ -1099,7 +1190,9 @@ def meta_json():
 # HTTP
 # ----------------------------------------------------------------------------
 
-def make_handler(S):
+def make_handler(hub):
+    S = SimProxy()
+
     class H(BaseHTTPRequestHandler):
         server_version = 'Datacenter Prep'
         protocol_version = 'HTTP/1.1'
@@ -1164,9 +1257,15 @@ def make_handler(S):
             path = unquote(u.path)
             q = parse_qs(u.query, keep_blank_values=True)
             try:
-                if path.startswith('/api/'):
-                    return self.api(method, path[5:], q)
-                if path.startswith('/sim/'):
+                if path.startswith('/dp/'):
+                    return self.dp(method, path[4:])
+                if path == '/sim/meta':
+                    return self.send(200, meta_json())
+                if path.startswith('/api/') or path.startswith('/sim/'):
+                    self.dpuser = hub.resolve(self.cookies(), self.headers, self.client_address[0])
+                    S.bind(hub.sim(self.dpuser))
+                    if path.startswith('/api/'):
+                        return self.api(method, path[5:], q)
                     return self.simapi(method, path[5:], q)
                 return self.static(path)
             except AciError as e:
@@ -1192,6 +1291,30 @@ def make_handler(S):
             if ctype.startswith('text/') or ctype in ('application/javascript',):
                 ctype += '; charset=utf-8'
             self.send(200, data, ctype)
+
+        # ---------------------------------------------------------- Benutzer (Datacenter Prep)
+        def dp(self, method, rest):
+            ck = self.cookies()
+            me = hub.session_user(ck.get(DP_COOKIE))
+            b = self.body() if method == 'POST' else {}
+            clear = '%s=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax' % DP_COOKIE
+            if rest == 'users':
+                if method == 'POST':
+                    res = hub.op(me, b)
+                    gone = b.get('op') == 'delete' and (b.get('name') or me) == me
+                    return self.send(200, res, headers={'Set-Cookie': clear} if gone else None)
+                return self.send(200, {'users': hub.listing(), 'me': me, 'admin': hub.is_admin(me),
+                                       'openSignup': hub.data.get('openSignup', True)})
+            if rest == 'login' and method == 'POST':
+                tok, name = hub.login(b.get('name'), b.get('password'))
+                return self.send(200, {'user': name}, headers={'Set-Cookie': '%s=%s; Path=/; Max-Age=%d; HttpOnly; SameSite=Lax'
+                                                                            % (DP_COOKIE, tok, SESSION_DAYS * 86400)})
+            if rest == 'logout' and method == 'POST':
+                hub.logout(ck.get(DP_COOKIE))
+                return self.send(200, {'ok': True}, headers={'Set-Cookie': clear})
+            if rest == 'me':
+                return self.send(200, {'user': me, 'admin': hub.is_admin(me)})
+            raise AciError(404, 'Unbekannt: /dp/%s' % rest, 404)
 
         def auth(self):
             with S.lock:
@@ -1480,8 +1603,20 @@ def make_handler(S):
                     S.changed()
                     return self.send(200, {'ok': True})
                 if rest == 'labs':
-                    return self.send(200, [{k: l.get(k) for k in ('id', 'title', 'level', 'duration', 'goals',
-                                                                  'topic', 'fabric')} for l in S.labs()])
+                    prog, saves = S.progress(), S.saves()
+                    out = []
+                    for l in S.labs():
+                        row = {k: l.get(k) for k in ('id', 'title', 'level', 'duration', 'goals', 'topic', 'fabric')}
+                        row['progress'] = prog.get(l['id'])
+                        row['saves'] = [x for x in saves if x.get('lab') == l['id']]
+                        row['auto'] = S.auto_name(l['id'])
+                        out.append(row)
+                    if q.get('full'):
+                        return self.send(200, {'labs': out, 'current': S.sim.get('lab'), 'auto': S.auto_name(None),
+                                               'free': [x for x in saves if not x.get('lab')]})
+                    return self.send(200, out)
+                if rest == 'labs/op':
+                    return self.send(200, S.lab_op(b))
                 if rest == 'labs/load':
                     lab = S.load_lab(b.get('id'))
                     return self.send(200, {'ok': True, 'title': lab['title']})
@@ -1708,12 +1843,14 @@ def ensure_cert(data_dir):
 
 
 def serve(host, port, data_dir, admin_pwd, https=False, discovery=20):
-    S = Sim(data_dir, admin_pwd, discovery)
-    httpd = ThreadingHTTPServer((host, port), make_handler(S))
+    """Startet den Webserver. Rueckgabe (hub, httpd); hub verwaltet Benutzer und ihre Simulationen."""
+    os.makedirs(data_dir, exist_ok=True)
+    hub = Hub(data_dir, admin_pwd, discovery)
+    httpd = ThreadingHTTPServer((host, port), make_handler(hub))
     httpd.daemon_threads = True
     if https:
         crt, key = ensure_cert(data_dir)
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         ctx.load_cert_chain(crt, key)
         httpd.socket = ctx.wrap_socket(httpd.socket, server_side=True)
-    return S, httpd
+    return hub, httpd

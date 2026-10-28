@@ -601,31 +601,8 @@ Object.assign(Views, {
     }], { wide: true });
   },
 
-  /* ================================================================ Speichern & Laden */
-  async 'sim/saves'(w) {
-    const draw = async () => {
-      const list = await API.sim('saves');
-      clear(w);
-      const file = h('input', { type: 'file', accept: '.json,application/json', style: { display: 'none' }, onchange: () => Saves.upload(file, draw) });
-      w.appendChild(paneHead('Simulation – Speichern & Laden', 'Spielstände sichern alles: Konfiguration, simulierte Hosts/Router/vCenter/Firewalls, Day-0-Setup, das aktive Lab und den Fortschritt',
-        [h('button', { class: 'btn primary small', onclick: () => Saves.saveDialog(draw) }, '💾 Jetzt speichern'),
-          h('a', { class: 'btn small', href: '/sim/saves/download?name=_current' }, '⬇ Aktuellen Stand herunterladen'),
-          h('button', { class: 'btn small', onclick: () => file.click() }, '⬆ Datei hochladen'), file]));
-      w.appendChild(h('div', { class: 'card note' }, md('Ein **Spielstand** ist etwas anderes als ein **Config Rollback** (Admin > Config Rollbacks): Der Rollback setzt wie beim echten APIC nur die Konfiguration zurück, ein Spielstand stellt die ganze Übungsumgebung wieder her. '
-        + 'Beim Wechsel des Labs sichert Datacenter Prep dein laufendes Lab automatisch als **auto-…**, unter *Labs* kannst du es mit **Fortsetzen** wieder aufnehmen. Heruntergeladene Dateien lassen sich auf einem anderen Rechner wieder hochladen.')));
-      w.appendChild(table([{ l: 'Name', f: r => h('span', null, h('b', null, r.name), r.auto ? h('span', { class: 'pill off', style: { marginLeft: '6px' } }, 'auto') : null) },
-        { l: 'Lab', f: r => r.labTitle || '— (freies Üben)' },
-        { l: 'Fortschritt', f: r => r.progress ? h('span', { class: 'pill ' + (r.progress[0] === r.progress[1] ? 'ok' : 'warn') }, r.progress[0] + ' / ' + r.progress[1]) : '—' },
-        { l: 'Tenants', f: r => (r.tenants || []).filter(t => !['common', 'infra', 'mgmt'].includes(t)).join(', ') || '—' },
-        { l: 'Fabric', f: r => r.fabricName || '—' }, { l: 'Gespeichert', f: r => fmtTs(r.created) }, { l: 'Beschreibung', f: r => r.descr }], list, {
-        actions: r => [h('button', { class: 'btn primary small', onclick: () => confirmBox('Spielstand „' + r.name + '" laden? Der aktuelle Zustand wird ersetzt (vorher ggf. speichern).', () => Saves.load(r.name)) }, 'Laden'),
-          h('a', { class: 'btn small', href: '/sim/saves/download?name=' + encodeURIComponent(r.name), title: 'Als Datei herunterladen' }, '⬇'),
-          iconBtn('🗑', 'Löschen', () => confirmBox('Spielstand „' + r.name + '" löschen?', async () => { await API.sim('saves', { op: 'delete', name: r.name }); draw(); }), 'danger')],
-        empty: 'Noch keine Spielstände.',
-      }));
-    };
-    await draw();
-  },
+  /* Speichern & Laden ist Teil der Labs-Seite */
+  'sim/saves'(w) { return Views['sim/labs'](w); },
 
   /* ================================================================ AAA */
   async aaaQuickStart(w) {
@@ -721,7 +698,7 @@ const Saves = {
     if (!su.done) return location.reload();
     toast('Spielstand „' + name + '" geladen');
     await App.refreshState();
-    App.go('sim', App.state.lab ? 'labs' : 'topo');
+    App.go('sim', 'labs');
   },
   upload(input, after) {
     const fl = input.files[0];

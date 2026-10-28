@@ -1,4 +1,5 @@
 @echo off
-REM Datacenter Prep starten (Windows). Weitere Optionen: start.bat --help
+REM Datacenter Prep starten (Windows): Doppelklick. Optionen: start.bat --help
 cd /d "%~dp0"
-python -m dcprep %*
+where py >nul 2>nul && (py -3 start.py %*) || (python start.py %*)
+if errorlevel 1 pause

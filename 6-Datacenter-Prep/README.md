@@ -6,26 +6,33 @@ Er läuft ohne Installation mit Python 3.8 oder neuer, ohne zusätzliche Pakete,
 
 ## Schnellstart
 
+Es gibt genau eine Startdatei: **`start.py`**.
+
 ```sh
 cd 6-Datacenter-Prep
-python3 -m dcprep          # oder ./start.sh, unter Windows start.bat
+python3 start.py           # Windows: Doppelklick auf start.bat (oder py start.py)
 ```
 
-Dann im Browser **http://localhost:8080** öffnen und mit **admin / admin** anmelden (Domain *DefaultAuth*). Mit Login-Domains lautet der Benutzername per REST `apic#<Domain>\\<user>`.
+Der Browser öffnet sich von selbst auf **http://localhost:8080** (ist der Port belegt, nimmt `start.py` den nächsten freien und zeigt ihn an). Dort wählst du auf der Startseite **„Wer übt heute?“** deinen Benutzer oder legst einen neuen an. Danach meldest du dich am simulierten APIC mit **admin / admin** an (Domain *DefaultAuth*). Mit Login-Domains lautet der Benutzername per REST `apic#<Domain>\\<user>`. Beenden mit **Strg+C**, alle Übungswelten bleiben gespeichert.
 
 | Option | Wirkung |
 |---|---|
-| `--host 0.0.0.0` | aus dem Netz erreichbar (z. B. wenn Datacenter Prep in einer VM läuft). Standard: nur `127.0.0.1` |
-| `--port 9000` | anderer Port (Standard 8080) |
+| `--host 0.0.0.0` | aus dem Netz erreichbar (z. B. VM oder Schulungsraum). Standard: nur `127.0.0.1`. Dann allen Benutzern ein Passwort geben |
+| `--port 9000` | fester Port (Standard 8080, belegt → nächster freier) |
+| `--no-browser` | Browser nicht automatisch öffnen |
 | `--https` | HTTPS auf Port 8443 mit selbstsigniertem Zertifikat (braucht `openssl`) |
-| `--password geheim` | Passwort für `admin` bei einer frischen Installation |
-| `--discovery 5` | Sekunden pro Discovery-Schritt bei einer frischen Installation (später unter *Simulation > Einstellungen*) |
-| `--data pfad` | Ablage für Zustand und Snapshots (Standard `data/`) |
+| `--password geheim` | APIC-Passwort für `admin` in neu angelegten Übungswelten |
+| `--discovery 5` | Sekunden pro Discovery-Schritt in neuen Übungswelten (später unter *Simulation > Einstellungen*) |
+| `--data pfad` | Datenverzeichnis (Standard `data/`) |
 | `--strict` | unbekannte Attribute ablehnen statt annehmen (siehe REST-API) |
+| `--users` | Benutzer auflisten und beenden |
+| `--set-password NAME` | Passwort eines Benutzers neu setzen, z. B. ein vergessenes Verwalter-Passwort, und beenden |
+
+`python3 -m dcprep` startet dasselbe ohne Browser. `start.sh` gibt es nicht mehr.
 
 Mit Docker: `docker build -t dcprep .` und `docker run -d -p 8080:8080 -v dcprep-data:/app/data dcprep`.
 
-Der Zustand bleibt beim Beenden erhalten. Beim ersten Start ist die Fabric fertig registriert und leer konfiguriert. Unter *Simulation > Einstellungen* lässt sie sich zurücksetzen: auf „Fabric leer“ zum Üben der Discovery oder auf den **Werkszustand (Day 0)**. Dann startet der APIC mit dem Setup-Dialog an der Konsole (Fabric-Name, Controller-Anzahl, Pod-ID, TEP-Pool, Infra-VLAN, GIPo, OOB, Admin-Passwort), und GUI und REST-API sind erst danach erreichbar. Dasselbe erreichst du in der APIC-CLI mit `acidiag touch clean` und `acidiag reboot`. Lab 00 führt durch diesen Ablauf.
+Beim ersten Start ist die Fabric fertig registriert und leer konfiguriert. Unter *Simulation > Einstellungen* lässt sie sich zurücksetzen: auf „Fabric leer“ zum Üben der Discovery oder auf den **Werkszustand (Day 0)**. Dann startet der APIC mit dem Setup-Dialog an der Konsole (Fabric-Name, Controller-Anzahl, Pod-ID, TEP-Pool, Infra-VLAN, GIPo, OOB, Admin-Passwort), und GUI und REST-API sind erst danach erreichbar. Dasselbe erreichst du in der APIC-CLI mit `acidiag touch clean` und `acidiag reboot`. Lab 00 führt durch diesen Ablauf.
 
 ## Was simuliert wird
 
@@ -100,11 +107,25 @@ Oben rechts: Fault-Zähler, **CLI** (APIC und alle Switches), **API Inspector** 
 
 Datacenter Prep bildet Aufbau, Begriffe und Arbeitsabläufe der APIC-GUI nach. Layout und Grafik sind eigenständig, Bereiche ohne Funktion (z. B. L4-L7, SNMP, Kubernetes) sind als Menüpunkt vorhanden und so gekennzeichnet.
 
-## Speichern und Laden
+## Benutzer und Übungswelten
 
-Über **💾** oben rechts oder unter *Simulation > Speichern & Laden* sicherst du den kompletten Zustand als **Spielstand**: Konfiguration, simulierte Hosts, Router, vCenter und Firewalls, das Day-0-Setup, das aktive Lab und den Fortschritt der Prüfungen. Spielstände lassen sich laden, löschen, als Datei herunterladen und auf einem anderen Rechner wieder hochladen.
+Jeder Benutzer hat eine eigene, vollständig getrennte **Übungswelt**: eigene Fabric-Konfiguration, eigene Labs, Speicherstände, Snapshots und eigenen Fortschritt (`data/users/<name>/`). Das ist unabhängig von den simulierten APIC-Benutzern (admin, TACACS+ usw.).
 
-Beim Wechsel zu einem anderen Lab sichert Datacenter Prep das laufende Lab automatisch als `auto-<lab>`. Unter *Simulation > Labs* steht dann bei diesem Lab **Fortsetzen** (letzter Spielstand) neben **Neu starten**.
+- Beim ersten Start gibt es den Benutzer **standard** ohne Passwort. Er ist **Verwalter**. Eine Welt aus einer älteren Version (`data/state.json`, Spielstände, Snapshots) wird automatisch zu ihm übernommen.
+- Neue Benutzer legst du auf der Startseite an (Name, Passwort optional). Ein Verwalter kann das Selbst-Anlegen abschalten und legt Benutzer dann in der **Benutzerverwaltung** an.
+- Über **👤 Name ▾** oben rechts: Benutzer wechseln, Passwort ändern, die eigene Übungswelt komplett zurücksetzen, das eigene Konto löschen und – als Verwalter – die Benutzerverwaltung (Passwort neu setzen, Rolle, Welt zurücksetzen, löschen).
+- Die Anmeldung gilt 30 Tage im Browser. Passwörter werden gesalzen mit PBKDF2 gespeichert.
+
+## Labs und Speicherstände
+
+Unter *Simulation > Labs & Stände* hat jedes Lab (und das **freie Üben**) einen Status – *neu*, *angefangen*, *x / y* Prüfungen, *✓ bestanden* – und eigene Speicherstände:
+
+- **▶ Starten / Fortsetzen**: Fortsetzen lädt den automatisch gesicherten letzten Stand des Labs oder deinen neuesten eigenen Stand. Beim Wechsel in ein anderes Lab wird das laufende Lab automatisch als `auto-<lab>` gesichert (freies Üben als `auto-frei`).
+- **Stände ▾**: alle Speicherstände des Labs mit Fortschritt – **Laden**, **Herunterladen**, **Löschen**, oder **Alle Stände dieses Labs löschen**.
+- **↺ Default**: startet das Lab neu im Ausgangszustand und verwirft den automatischen Stand. Optional werden auch alle eigenen Stände und der Fortschritt dieses Labs gelöscht.
+- **💾** (oben rechts oder im Lab) speichert einen benannten Stand. Ein Stand enthält alles: Konfiguration, simulierte Hosts, Router, vCenter und Firewalls, Day-0-Setup, aktives Lab und Prüfergebnisse. Als Datei heruntergeladene Stände lassen sich auf einem anderen Rechner oder bei einem anderen Benutzer wieder hochladen.
+
+Der Fortschritt („bestanden“) bleibt erhalten, auch wenn du ein Lab danach weiter veränderst; er verschwindet nur mit *↺ Default* und Häkchen oder beim Zurücksetzen der ganzen Übungswelt.
 
 Davon getrennt gibt es wie beim echten APIC die **Config Rollbacks** (*Admin > Config Rollbacks*): Sie setzen nur die Konfiguration zurück, die simulierte Umgebung bleibt, wie sie ist.
 
@@ -172,6 +193,8 @@ Ansible und Terraform senden viele echte APIC-Attribute und Relationen, die Data
 
 Für Ansible: `use_ssl: false` und `port: 8080` setzen, siehe `beispiele/ansible-inventory.yml`.
 
+Welche Übungswelt ein REST-Aufruf trifft: Von diesem Rechner aus ohne weitere Angaben die des zuletzt angemeldeten Benutzers. Gezielt wählst du sie mit den Headern `X-DCPrep-User: Anna` (und `X-DCPrep-Password`, falls gesetzt). Ein APIC-Token gilt immer nur in der Welt, in der es ausgestellt wurde.
+
 ## CLI
 
 Über **CLI** oben rechts oder unter *Fabric > Inventory > Switch > CLI*. Mit `ssh leaf101` wechselst du vom APIC zum Switch, mit `exit` zurück.
@@ -224,7 +247,7 @@ Für Ansible: `use_ssl: false` und `port: 8080` setzen, siehe `beispiele/ansible
 
 Datacenter Prep ist ein Webserver, kein Image mit echtem Datenverkehr. Du kannst ihn
 - direkt auf deinem Rechner starten (am einfachsten),
-- auf einer Linux-VM oder einem Linux-Knoten in EVE-NG oder CML starten (`./start.sh --host 0.0.0.0`) und die GUI über das Management-Netz öffnen,
+- auf einer Linux-VM oder einem Linux-Knoten in EVE-NG oder CML starten (`python3 start.py --host 0.0.0.0 --no-browser`) und die GUI über das Management-Netz öffnen,
 - als Docker-Container betreiben.
 
 Die externen Router, Hosts und Pakete sind simuliert. Ein echter Router aus CML oder EVE-NG kann keine OSPF-Nachbarschaft zu Datacenter Prep aufbauen. Du kannst aber Ansible, Python oder Postman aus deinem Lab heraus gegen die REST-API laufen lassen.
@@ -247,7 +270,9 @@ Nicht simuliert: VMM für Kubernetes, Microsoft und OpenStack, vPC über Pods hi
 | `dcprep/engine.py` | Policy-Engine: Discovery, Access Policies, Deployment, Endpoints, L3Out, Contracts, Faults |
 | `dcprep/trace.py` | Traffic-Test |
 | `dcprep/cli.py` | CLI-Emulation |
-| `dcprep/server.py` | HTTP-Server, REST-API, Simulator-API, Labs, Snapshots |
+| `start.py`, `start.bat` | Startdatei (Windows: Doppelklick auf `start.bat`) |
+| `dcprep/users.py` | Benutzer, Sitzungen, getrennte Übungswelten |
+| `dcprep/server.py` | HTTP-Server, REST-API, Simulator-API, Labs, Speicherstände, Snapshots |
 | `static/` | Weboberfläche (ohne Build-Schritt): `app.js` Navigation und Tabs, `specs.js` Formulare, Wizards und Baumstruktur je Klasse, `forms.js` Steuerelemente und Wizard, `views*.js` Spezialseiten, `visore.html` |
 | `labs/`, `Labs-Quelle/` | Lab-Dateien und ihr Generator |
 | `beispiele/` | Ansible, curl, Python, Terraform |

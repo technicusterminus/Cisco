@@ -641,54 +641,82 @@ const Views = {
   },
 
   async 'sim/labs'(w) {
-    const labs = await API.sim('labs');
-    let saves = await API.sim('saves');
-    const autoNote = () => App.state.lab ? ' Dein Stand im aktuellen Lab „' + App.state.lab.title + '" wird vorher automatisch gesichert.' : '';
+    const after = async () => {
+      const su = await (await fetch('/sim/setup', { cache: 'no-store' })).json();
+      if (!su.done) return location.reload();
+      await App.refreshState();
+      return draw();
+    };
+    const op = async (body, msg) => { const r = await API.sim('labs/op', body); toast(msg || (r.loaded ? 'Geladen: ' + r.loaded : 'Geladen')); await after(); };
+    const open = new Set();
     const draw = async () => {
-      clear(w);
+      const d = await API.get('/sim/labs?full=1', true);
       const cur = App.state.lab;
-      w.appendChild(paneHead('Labs', 'Geführte Übungen mit automatischer Prüfung'));
-      if (cur) {
-        const res = h('div');
-        const check = async () => {
-          const r = await API.sim('labs/check');
-          clear(res).appendChild(h('div', { class: 'card trace ' + (r.passed === r.total ? 'ok' : 'bad') },
-            h('div', { class: 'trace-sum' }, r.passed === r.total ? '✔ Alle Prüfungen bestanden!' : r.passed + ' von ' + r.total + ' Prüfungen bestanden'),
-            h('ol', null, r.checks.map(c => h('li', { class: c.ok ? 'ok' : 'bad' }, h('b', null, c.desc), c.info ? h('div', { class: 'muted' }, c.info) : null)))));
-        };
-        const sol = h('div', { style: { display: 'none' } }, md(cur.solution || 'Keine Musterlösung hinterlegt.'));
-        w.appendChild(h('div', { class: 'card lab' }, h('div', { class: 'card-h' }, 'Aktuelles Lab: ' + cur.title),
-          md(cur.intro || ''),
-          cur.goals && cur.goals.length ? h('div', null, h('h4', null, 'Lernziele'), h('ul', null, cur.goals.map(g => h('li', null, g)))) : null,
-          h('h4', null, 'Aufgaben'),
-          h('ol', { class: 'tasks' }, (cur.tasks || []).map(t => h('li', null, h('b', null, t.title), md(t.text), t.hint ? h('details', null, h('summary', null, 'Tipp'), md(t.hint)) : null))),
-          h('div', { class: 'formbtns' }, h('button', { class: 'btn', onclick: () => Saves.saveDialog() }, '💾 Stand speichern'),
-            h('button', { class: 'btn', onclick: () => { sol.style.display = sol.style.display ? '' : 'none'; } }, 'Lösung zeigen/verbergen'),
-            h('button', { class: 'btn primary', onclick: check }, '✔ Lab prüfen')), sol, res));
-      }
-      w.appendChild(h('div', { class: 'card' }, h('div', { class: 'card-h' }, 'Alle Labs'),
-        table([{ l: 'Lab', f: l => h('b', null, l.title) }, { l: 'Thema', f: l => l.topic }, { l: 'Niveau', f: l => l.level }, { l: 'Dauer', f: l => l.duration }], labs, {
-          actions: l => [
-            saves.some(x => x.lab === l.id) ? h('button', {
-              class: 'btn small', title: 'Letzten Spielstand dieses Labs laden', onclick: () => {
-                const last = saves.filter(x => x.lab === l.id)[0];
-                confirmBox('Lab „' + l.title + '" fortsetzen? Geladen wird „' + last.name + '" vom ' + fmtTs(last.created) +
-                  (last.progress ? ' (' + last.progress[0] + ' von ' + last.progress[1] + ' Prüfungen)' : '') + '.' + autoNote(), () => Saves.load(last.name));
-              },
-            }, '▶ Fortsetzen') : null,
-            h('button', {
-              class: 'btn primary small', onclick: () => confirmBox('Lab „' + l.title + '" neu starten? Die Fabric wird auf den Startzustand des Labs gesetzt.' + autoNote(), async () => {
-                await API.sim('labs/load', { id: l.id });
-                if (l.fabric === 'factory') return location.reload();
-                toast('Lab geladen');
-                await App.refreshState();
-                saves = await API.sim('saves');
-                draw();
-              }),
-            }, saves.some(x => x.lab === l.id) ? 'Neu starten' : 'Laden')],
-        })));
+      clear(w);
+      const file = h('input', { type: 'file', accept: '.json,application/json', style: { display: 'none' }, onchange: () => Saves.upload(file, draw) });
+      const done = d.labs.filter(l => l.progress && l.progress.done).length, started = d.labs.filter(l => l.progress || l.saves.length).length;
+      w.appendChild(paneHead('Labs & Speicherstände', 'Geführte Übungen mit Prüfung – jedes Lab mit eigenen Speicherständen',
+        [h('button', { class: 'btn primary small', onclick: () => Saves.saveDialog(draw) }, '💾 Stand speichern'),
+          h('a', { class: 'btn small', href: '/sim/saves/download?name=_current' }, '⬇ Aktuellen Stand herunterladen'),
+          h('button', { class: 'btn small', onclick: () => file.click() }, '⬆ Datei hochladen'), file]));
+      w.appendChild(h('div', { class: 'cards4' }, [['Labs bestanden', done + ' / ' + d.labs.length], ['angefangen', String(started)],
+        ['aktiv', cur ? cur.title : 'freies Üben'], ['Benutzer', (Launcher.me || {}).user || '—']].map(([k, v]) => h('div', { class: 'kpi' }, h('span', null, k), h('b', null, v)))));
+      if (cur) w.appendChild(Views.labCard(cur, () => Views.labResetDialog(cur.id, cur.title, op)));
+      w.appendChild(h('div', { class: 'card note' }, md('**Fortsetzen** lädt den automatisch gesicherten letzten Stand eines Labs (er entsteht bei jedem Wechsel) oder deinen neuesten eigenen Stand. **Auf Default zurücksetzen** startet das Lab neu im Ausgangszustand; deine eigenen Speicherstände bleiben, wenn du sie nicht ausdrücklich mitlöschst. Ein Spielstand stellt die ganze Übungswelt wieder her – anders als ein Config Rollback, der nur die Konfiguration zurücksetzt.')));
+      const list = h('div', { class: 'lablist' });
+      const row = (id, title, meta, progress, saves, fabric) => {
+        const isCur = (cur ? cur.id : null) === id;
+        const key = id || 'frei';
+        const st = isCur ? h('span', { class: 'pill acc' }, 'aktiv') : progress && progress.done ? h('span', { class: 'pill ok' }, '✓ bestanden')
+          : progress ? h('span', { class: 'pill warn' }, progress.passed + ' / ' + progress.total) : saves.length ? h('span', { class: 'pill warn' }, 'angefangen') : h('span', { class: 'pill off' }, 'neu');
+        const sub = h('div', { class: 'labsaves', style: { display: open.has(key) ? '' : 'none' } },
+          table([{ l: 'Speicherstand', f: x => h('span', null, h('b', null, x.name), x.auto ? h('span', { class: 'pill off', style: { marginLeft: '6px' } }, 'automatisch') : null) },
+            { l: 'Gespeichert', f: x => fmtTs(x.created) }, { l: 'Fortschritt', f: x => x.progress ? x.progress[0] + ' / ' + x.progress[1] : '—' }, { l: 'Beschreibung', f: x => x.descr }], saves, {
+            actions: x => [h('button', { class: 'btn primary small', onclick: () => confirmBox('„' + x.name + '" laden? Dein aktueller Stand wird vorher automatisch gesichert.', () => op({ op: 'resume', id, save: x.name })) }, 'Laden'),
+              h('a', { class: 'btn small', href: '/sim/saves/download?name=' + encodeURIComponent(x.name), title: 'Herunterladen' }, '⬇'),
+              iconBtn('🗑', 'Löschen', () => confirmBox('Speicherstand „' + x.name + '" löschen?', async () => { await API.sim('saves', { op: 'delete', name: x.name }); draw(); }), 'danger')],
+            empty: 'Keine Speicherstände.' }),
+          saves.length ? h('div', { class: 'formbtns' }, h('button', { class: 'btn small danger', onclick: () => confirmBox('Alle ' + saves.length + ' Speicherstände von „' + title + '" löschen?', async () => { await API.sim('labs/op', { op: 'purge', id }); toast('Gelöscht'); draw(); }) }, 'Alle Stände dieses Labs löschen')) : null);
+        list.appendChild(h('div', { class: 'labrow' + (isCur ? ' cur' : '') },
+          h('div', { class: 'labrow-main' }, h('div', { class: 'labrow-st' }, st), h('div', { class: 'labrow-t' }, h('b', null, title), h('div', { class: 'muted small' }, meta)),
+            h('div', { class: 'labrow-act' },
+              isCur ? null : h('button', { class: 'btn primary small', onclick: () => confirmBox((saves.length ? 'Fortsetzen: „' : 'Starten: „') + title + '"?' + (cur || App.state ? ' Dein aktueller Stand wird automatisch gesichert.' : ''), () => op({ op: 'resume', id }, (saves.length ? 'Fortgesetzt: ' : 'Gestartet: ') + title)) }, saves.length ? '▶ Fortsetzen' : '▶ Starten'),
+              (saves.length || progress || isCur) ? h('button', { class: 'btn small', onclick: () => Views.labResetDialog(id, title, op) }, '↺ Default') : null,
+              h('button', { class: 'btn small', onclick: () => { if (open.has(key)) open.delete(key); else open.add(key); sub.style.display = open.has(key) ? '' : 'none'; } }, 'Stände (' + saves.length + ') ▾'))),
+          sub));
+      };
+      row(null, 'Freies Üben', 'Eigene Konfiguration ohne Lab – wird beim Wechsel in ein Lab automatisch gesichert', null, d.free, 'discovered');
+      d.labs.forEach(l => row(l.id, l.title, [l.topic, l.level, l.duration].filter(Boolean).join(' · '), l.progress, l.saves, l.fabric));
+      w.appendChild(list);
     };
     await draw();
+  },
+
+  labCard(cur, onReset) {
+    const res = h('div');
+    const check = async () => {
+      const r = await API.sim('labs/check');
+      clear(res).appendChild(h('div', { class: 'card trace ' + (r.passed === r.total ? 'ok' : 'bad') },
+        h('div', { class: 'trace-sum' }, r.passed === r.total ? '✔ Alle Prüfungen bestanden!' : r.passed + ' von ' + r.total + ' Prüfungen bestanden'),
+        h('ol', null, r.checks.map(c => h('li', { class: c.ok ? 'ok' : 'bad' }, h('b', null, c.desc), c.info ? h('div', { class: 'muted' }, c.info) : null)))));
+    };
+    const sol = h('div', { style: { display: 'none' } }, md(cur.solution || 'Keine Musterlösung hinterlegt.'));
+    return h('div', { class: 'card lab' }, h('div', { class: 'card-h' }, 'Aktuelles Lab: ' + cur.title),
+      md(cur.intro || ''),
+      cur.goals && cur.goals.length ? h('div', null, h('h4', null, 'Lernziele'), h('ul', null, cur.goals.map(g => h('li', null, g)))) : null,
+      h('h4', null, 'Aufgaben'),
+      h('ol', { class: 'tasks' }, (cur.tasks || []).map(t => h('li', null, h('b', null, t.title), md(t.text), t.hint ? h('details', null, h('summary', null, 'Tipp'), md(t.hint)) : null))),
+      h('div', { class: 'formbtns' }, h('button', { class: 'btn', onclick: () => Saves.saveDialog() }, '💾 Stand speichern'),
+        h('button', { class: 'btn', onclick: onReset }, '↺ Auf Default zurücksetzen'),
+        h('button', { class: 'btn', onclick: () => { sol.style.display = sol.style.display ? '' : 'none'; } }, 'Lösung zeigen/verbergen'),
+        h('button', { class: 'btn primary', onclick: check }, '✔ Lab prüfen')), sol, res);
+  },
+
+  labResetDialog(id, title, op) {
+    const purge = h('input', { type: 'checkbox' });
+    modal('Auf Default zurücksetzen', h('div', null, h('p', null, '„' + title + '" wird im Ausgangszustand neu gestartet. Der automatisch gesicherte letzte Stand dieses Labs wird verworfen.'),
+      h('label', { class: 'check' }, purge, h('span', null, id ? 'Auch alle eigenen Speicherstände und den Fortschritt dieses Labs löschen' : 'Auch alle eigenen Speicherstände des freien Übens löschen'))),
+    [{ l: 'Abbrechen' }, { l: 'Zurücksetzen', primary: true, cls: 'danger', fn: () => op({ op: 'reset', id, purge: purge.checked }, title + ' zurückgesetzt') }]);
   },
 
   async 'sim/simset'(w) {
