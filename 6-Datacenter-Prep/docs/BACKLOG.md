@@ -6,7 +6,7 @@ Alle Punkte sind offen. Erledigt ist, was in `docs/GAP-ANALYSE.md` als „behobe
 
 | # | Punkt | Begründung | Umfang |
 |---|---|---|---|
-| B-01 | Weitere Labs ins Anforderungsformat überführen (als Nächstes 09, 10, 12, 14; erledigt: 01 bis 07, 11, 13; neu im Format: 32 bis 45) | Die Lösung steht bei den übrigen Labs in der Aufgabe | je Lab Inhalt + Tests wie `test_acceptance.py` |
+| B-01 | Weitere Labs ins Anforderungsformat überführen (als Nächstes 08, 15 bis 18; erledigt: 01 bis 14 außer 08; neu im Format: 32 bis 45) | Die Lösung steht bei den übrigen Labs in der Aufgabe | je Lab Inhalt + Tests wie `test_acceptance.py` |
 | B-08 | Topologie: Overlays für EPG, BD, VRF und Policy (Pfad und Drop-Punkt aus dem Traffic-Test sind umgesetzt) | Zusammenhänge sichtbar machen | Frontend |
 | B-09 | Dark Mode und Tastaturbedienung (Fokus-Reihenfolge, Shortcuts) | Barrierefreiheit | CSS-Tokens, Frontend |
 | B-12 | Change-History: welche Änderung wann, mit Diff, aus allen Bedienwegen | „Änderungen sicher planen“ | Store-Hook |

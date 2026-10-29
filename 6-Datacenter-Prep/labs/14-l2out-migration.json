@@ -5,12 +5,42 @@
  "level": "Fortgeschritten",
  "duration": "40 min",
  "fabric": "discovered",
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Labs 02 und 34"
+ ],
+ "tools": [
+  "Tenant > Networking > L2Outs",
+  "Traffic Inspector",
+  "Tenant > Networking > Bridge Domains",
+  "CLI: show endpoint, show mac address-table"
+ ],
  "goals": [
-  "Ein altes Netz per L2Out (External Bridged Network) an eine Bridge Domain anbinden",
-  "Verstehen, warum stille Hosts ohne ARP Flooding unerreichbar bleiben",
+  "Ein altes Netz per L2Out an eine Bridge Domain anbinden",
+  "Verstehen, warum stille Hosts in einer reinen Layer-2-BD unerreichbar bleiben",
   "BD-Einstellungen für eine Migrationsphase wählen"
  ],
- "intro": "Das Subnetz **10.10.50.0/24** zieht vom alten Netz in die ACI. Das Gateway **10.10.50.1** bleibt während der Migration noch auf dem Legacy-Router – die **BD-Migration** ist deshalb reines Layer 2 (Unicast Routing aus, kein Subnetz). Der neue Server **web2** (EPG **Neu**) ist schon in der ACI.\n\nDer Legacy-Switch hängt an **leaf103 eth1/20** und spricht **VLAN 300**. Dahinter steht **old-srv** (10.10.50.20) – ein Altsystem, das nie von selbst sendet. Die ACI kann es also nicht lernen, bis jemand es per ARP anfragt.",
+ "intro": "Das Subnetz **10.10.50.0/24** zieht vom alten Netz in die ACI. Das Gateway **10.10.50.1** bleibt während der Migration noch auf dem Legacy-Router – die **BD-Migration** ist deshalb reines Layer 2 (Unicast Routing aus, kein Subnetz). Der neue Server **web2** (EPG **Neu**) ist schon in der ACI.\n\nDer Legacy-Switch hängt an **leaf103 eth1/20** und spricht **VLAN 300**. Dahinter steht **old-srv** (10.10.50.20) – ein Altsystem, das nie von selbst sendet.\n\nFür die Migrationsphase ist zwischen dem alten Netz und der EPG Neu freier Verkehr abgenommen (Filter *default* aus common).",
+ "requirements": [
+  "Das alte Netz ist als L2Out **Legacy** an BD-Migration angebunden, über leaf103 eth1/20 mit VLAN 300.",
+  "web2 erreicht old-srv, obwohl old-srv nie von selbst sendet.",
+  "Das Gateway bleibt auf dem Legacy-Router: keine Gateway-Adresse für 10.10.50.0/24 in der ACI.",
+  "Das alte Netz wird nur an diesem einen Port angebunden."
+ ],
+ "limits": [
+  "Der Legacy-Switch wird als Host-Gruppe hinter einem Port simuliert; Spanning Tree des Altnetzes ist nicht modelliert (siehe Lab 28 für MCP)."
+ ],
+ "hints": [
+  "**Konzept:** Eine BD ohne Unicast Routing kann unbekannte Ziele nicht selbst per ARP suchen. Wer nie sendet, wird nie gelernt – dann muss die Fabric die Anfrage an alle Ports der BD verteilen.",
+  "**Objekte:** External Bridged Domain mit VLAN Pool, AAEP, Policy Group und Profile für leaf103 eth1/20. Im Tenant ein L2Out mit BD, Encap, Pfad und External EPG; ein Contract zur EPG Neu. In der BD die ARP-Einstellungen.",
+  "**Prüfschritte:** Traffic Inspector web2 → old-srv: Der Schritt „ARP“ sagt, warum es scheitert. EP Tracker old-srv: gelernt?",
+  "**Lösung:** VLAN Pool vlan-300, L2Dom-Legacy, AAEP, IPG und Profile für 103/eth1/20. L2Out Legacy (BD-Migration, vlan-300, Pfad eth1/20, External EPG LegacyNet). Contract migration (Filter default): LegacyNet stellt bereit, Neu konsumiert. Am BD-Migration **ARP Flooding** an; Unicast Routing bleibt aus, kein Subnetz."
+ ],
+ "cause": "Es gibt keine Anbindung des alten Netzes. Ohne ARP Flooding erreicht die ARP-Anfrage den stillen Host nicht.",
  "config": [
   {
    "polUni": {
@@ -409,48 +439,21 @@
    "silent": true
   }
  ],
- "tasks": [
-  {
-   "title": "Access Policies",
-   "text": "VLAN Pool **VLAN-Pool-Legacy** (static, vlan-300), **External Bridged Domain** **L2Dom-Legacy** (Physical and External Domains > External Bridged Domains), AAEP **AAEP-Legacy**, Policy Group **IPG-Legacy**, Interface Profile **IntProf-Leaf103** mit Port 1/20 und Switch Profile **SwProf-Leaf103** für Node 103."
-  },
-  {
-   "title": "L2Out",
-   "text": "Im Tenant Shop **Networking > L2Outs**, **Create L2Out**: Name **Legacy**, Bridge Domain **BD-Migration**, Encap **vlan-300**, Domain L2Dom-Legacy, Path leaf103 eth1/20, External EPG **LegacyNet**."
-  },
-  {
-   "title": "Contract",
-   "text": "Contract **migration** (Filter **default** aus common): LegacyNet *Provided*, EPG **Neu** *Consumed*.",
-   "hint": "Ein L2Out hat ein eigenes External EPG (eigener pcTag) – auch im selben BD braucht es einen Contract."
-  },
-  {
-   "title": "Erster Test",
-   "text": "Ping von web2 zu old-srv. Warum scheitert er? Lies den Schritt im Ergebnis."
-  },
-  {
-   "title": "ARP Flooding",
-   "text": "Im **BD-Migration** unter Policy > General **ARP Flooding** aktivieren und erneut testen.",
-   "hint": "Ohne Unicast Routing kann die ACI kein ARP Glean machen. Den ARP-Request für einen unbekannten Host muss sie dann fluten."
-  }
- ],
+ "tasks": [],
  "checks": [
   {
-   "desc": "L2Out Legacy ohne F0467",
+   "desc": "Keine Konfigurationsfehler (F0467) im Tenant Shop",
    "type": "nofaults",
-   "under": "uni/tn-Shop/l2out-Legacy",
+   "under": "uni/tn-Shop",
    "code": "F0467"
   },
   {
-   "desc": "L2Out Legacy auf leaf103 eth1/20",
-   "type": "exists",
-   "dn": "uni/tn-Shop/l2out-Legacy/lnodep-default/lifp-default/rspathL2OutAtt-[topology/pod-1/paths-103/pathep-[eth1/20]]"
-  },
-  {
-   "desc": "ARP Flooding im BD-Migration",
-   "type": "exists",
-   "dn": "uni/tn-Shop/BD-BD-Migration",
+   "desc": "L2Out Legacy an leaf103 eth1/20",
+   "type": "class",
+   "cls": "l2extRsPathL2OutAtt",
+   "under": "uni/tn-Shop/l2out-Legacy/",
    "attrs": {
-    "arpFlood": "yes"
+    "tDn": "topology/pod-1/paths-103/pathep-[eth1/20]"
    }
   },
   {
@@ -460,6 +463,55 @@
    "dst": "old-srv",
    "proto": "icmp",
    "expect": true
+  },
+  {
+   "desc": "Kein Gateway für 10.10.50.0/24 in der ACI",
+   "type": "class",
+   "cls": "fvSubnet",
+   "under": "uni/tn-Shop/BD-BD-Migration/",
+   "expect": false
+  },
+  {
+   "desc": "Unicast Routing im BD-Migration bleibt aus",
+   "type": "exists",
+   "dn": "uni/tn-Shop/BD-BD-Migration",
+   "attrs": {
+    "unicastRoute": "no"
+   }
+  },
+  {
+   "desc": "Das alte Netz hängt nur an einem Port",
+   "type": "class",
+   "cls": "l2extRsPathL2OutAtt",
+   "under": "uni/tn-Shop/",
+   "max": 1,
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Warum scheitert der Ping, obwohl das L2Out steht?",
+   "options": [
+    "old-srv ist still und ohne Unicast Routing gibt es kein ARP Glean – ohne ARP Flooding erreicht ihn die Anfrage nicht",
+    "Weil der Contract fehlt",
+    "Weil das VLAN falsch ist",
+    "Weil L2Outs kein ICMP können"
+   ],
+   "answer": 0,
+   "explain": "Mit Unicast Routing und BD-Subnetz könnte die ACI per Glean suchen; in der Migrationsphase gibt es beides nicht."
+  },
+  {
+   "id": "q2",
+   "q": "Warum braucht es einen Contract, obwohl alles in derselben BD liegt?",
+   "options": [
+    "Das External EPG des L2Outs ist eine eigene Sicherheitszone mit eigenem pcTag",
+    "Braucht es nicht",
+    "Wegen des VLANs",
+    "Weil L2Outs immer geroutet werden"
+   ],
+   "answer": 0,
+   "explain": "Wie bei zwei EPGs im selben BD (Lab 34): Bridging ist nicht Policy."
   }
  ],
  "solution": "Access: `{\"polUni\": {\"attributes\": {}, \"children\": [{\"infraInfra\": {\"attributes\": {}, \"children\": [{\"fvnsVlanInstP\": {\"attributes\": {\"name\": \"VLAN-Pool-Legacy\", \"allocMode\": \"static\"}, \"children\": [{\"fvnsEncapBlk\": {\"attributes\": {\"from\": \"vlan-300\", \"to\": \"vlan-300\"}}}]}}, {\"infraAttEntityP\": {\"attributes\": {\"name\": \"AAEP-Legacy\"}, \"children\": [{\"infraRsDomP\": {\"attributes\": {\"tDn\": \"uni/l2dom-L2Dom-Legacy\"}}}]}}, {\"infraFuncP\": {\"attributes\": {}, \"children\": [{\"infraAccPortGrp\": {\"attributes\": {\"name\": \"IPG-Legacy\"}, \"children\": [{\"infraRsAttEntP\": {\"attributes\": {\"tDn\": \"uni/infra/attentp-AAEP-Legacy\"}}}]}}]}}, {\"infraAccPortP\": {\"attributes\": {\"name\": \"IntProf-Leaf103\"}, \"children\": [{\"infraHPortS\": {\"attributes\": {\"name\": \"legacy\", \"type\": \"range\"}, \"children\": [{\"infraPortBlk\": {\"attributes\": {\"name\": \"block2\", \"fromPort\": \"20\", \"toPort\": \"20\"}}}, {\"infraRsAccBaseGrp\": {\"attributes\": {\"tDn\": \"uni/infra/funcprof/accportgrp-IPG-Legacy\"}}}]}}]}}, {\"infraNodeP\": {\"attributes\": {\"name\": \"SwProf-Leaf103\"}, \"children\": [{\"infraLeafS\": {\"attributes\": {\"name\": \"103\", \"type\": \"range\"}, \"children\": [{\"infraNodeBlk\": {\"attributes\": {\"name\": \"blk\", \"from_\": \"103\", \"to_\": \"103\"}}}]}}, {\"infraRsAccPortP\": {\"attributes\": {\"tDn\": \"uni/infra/accportprof-IntProf-Leaf103\"}}}]}}]}}, {\"l2extDomP\": {\"attributes\": {\"name\": \"L2Dom-Legacy\"}, \"children\": [{\"infraRsVlanNs\": {\"attributes\": {\"tDn\": \"uni/infra/vlanns-[VLAN-Pool-Legacy]-static\"}}}]}}]}}`\n\nTenant: `{\"fvTenant\": {\"attributes\": {\"name\": \"Shop\"}, \"children\": [{\"vzBrCP\": {\"attributes\": {\"name\": \"migration\", \"scope\": \"context\"}, \"children\": [{\"vzSubj\": {\"attributes\": {\"name\": \"any\", \"revFltPorts\": \"yes\"}, \"children\": [{\"vzRsSubjFiltAtt\": {\"attributes\": {\"tnVzFilterName\": \"default\"}}}]}}]}}, {\"fvAp\": {\"attributes\": {\"name\": \"Migration\"}, \"children\": [{\"fvAEPg\": {\"attributes\": {\"name\": \"Neu\"}, \"children\": [{\"fvRsCons\": {\"attributes\": {\"tnVzBrCPName\": \"migration\"}}}]}}]}}, {\"l2extOut\": {\"attributes\": {\"name\": \"Legacy\"}, \"children\": [{\"l2extRsEBd\": {\"attributes\": {\"tnFvBDName\": \"BD-Migration\", \"encap\": \"vlan-300\"}}}, {\"l2extRsL2DomAtt\": {\"attributes\": {\"tDn\": \"uni/l2dom-L2Dom-Legacy\"}}}, {\"l2extLNodeP\": {\"attributes\": {\"name\": \"default\"}, \"children\": [{\"l2extLIfP\": {\"attributes\": {\"name\": \"default\"}, \"children\": [{\"l2extRsPathL2OutAtt\": {\"attributes\": {\"tDn\": \"topology/pod-1/paths-103/pathep-[eth1/20]\"}}}]}}]}}, {\"l2extInstP\": {\"attributes\": {\"name\": \"LegacyNet\"}, \"children\": [{\"fvRsProv\": {\"attributes\": {\"tnVzBrCPName\": \"migration\"}}}]}}]}}]}}`\n\nUnd am BD: `arpFlood=yes`. In der Migrationsphase typisch: L2 Unknown Unicast *Flood*, ARP Flooding *an*, Unicast Routing *aus*.",

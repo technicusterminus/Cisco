@@ -421,6 +421,10 @@ class TestRequirementLabs(unittest.TestCase):
         '01-fabric-discovery': ['Route Reflector', 'MP-BGP', 'Pending', 'nodeidentpol'],
         '05-vpc-lacp': ['Protection Group', 'fabricExplicitGEp', 'IPG-vPC', 'Port Channel Policy', 'lacpLagPol', 'protpaths', 'Policy Group'],
         '06-l3out-ospf': ['Route Reflector', 'MP-BGP', 'MTU ignore', 'Advertised', 'EXSTART', 'web-to-internet', '9000'],
+        '09-l3out-bgp': ['Route Reflector', 'Remote AS', 'bgpPeerP', 'web-to-isp', 'Advertised', 'VLAN Pool'],
+        '10-mgmt-ntp': ['Pod Policy Group', 'Pod Profile', 'Date and Time', 'PodPol', 'fabricRsPodPGrp'],
+        '12-vmm-vcenter': ['Dynamic', 'dynamisch', 'Resolution', 'VLAN-Pool-VMM', 'vmmDomP', 'Immediate'],
+        '14-l2out-migration': ['ARP Flooding', 'arpFlood', 'External Bridged', 'l2extOut', 'Glean', 'LegacyNet'],
         '11-static-leaf-taboo': ['Static Leaf', 'Taboo', 'fvRsNodeAtt', 'vzTaboo', 'no-ping'],
         '13-shared-services': ['Global', 'Export', 'vzCPIf', 'Shared between', 'Imported', 'fvRsConsIf', 'Consumer', 'Provider'],
         '07-troubleshooting': ['8080', 'Unicast Routing', 'BD-Bakup', 'Reverse', '149', 'Port Block'],
@@ -904,6 +908,42 @@ class TestConvertedLabs(unittest.TestCase):
         by = self.by()
         self.assertTrue(by['web1 → dns1 UDP 53'])
         self.assertFalse(by['Least Privilege Web → DNS: nur UDP 53'])
+
+
+    def test_lab09_permit_any_to_internet_fails(self):
+        lab = self.S.load_lab('09-l3out-bgp')
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+        self.apply(('uni/tn-Shop/brc-web-to-isp/subj-subj', mo('vzSubj', {}, mo('vzRsSubjFiltAtt', {'tnVzFilterName': 'default'}))))
+        by = self.by()
+        self.assertTrue(by['web1 → 1.1.1.1 Ping'])
+        self.assertFalse(by['Least Privilege Web → Internet: nur Ping'])
+        self.assertFalse(by['Least Privilege Provider → Web: nur Ping'])
+
+    def test_lab10_second_time_source_fails_security(self):
+        lab = self.S.load_lab('10-mgmt-ntp')
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+        self.apply(('uni/fabric/time-default', mo('datetimePol', {}, mo('datetimeNtpProv', {'name': 'pool.ntp.org'}))))
+        self.assertFalse(self.by()['Nur die freigegebene Zeitquelle ist eingetragen'])
+
+    def test_lab12_vmm_vms_follow_the_same_policy(self):
+        lab = self.S.load_lab('12-vmm-vcenter')
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+        r = trace.run(self.S.engine, self.S.sim, 'web-vm1', 'app-vm1', 'tcp', 22)
+        self.assertEqual(r['reason'], 'POLICY_IMPLICIT_DENY')
+
+    def test_lab14_gateway_in_aci_breaks_guardrail(self):
+        lab = self.S.load_lab('14-l2out-migration')
+        self.assertIn(trace.run(self.S.engine, self.S.sim, 'web2', 'old-srv', 'icmp')['reason'], ('EP_NOT_LEARNED', 'ARP_UNRESOLVED'))
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+        # Abkuerzung: Gateway in die ACI holen (Unicast Routing + Subnetz) statt ARP Flooding -> doppeltes Gateway
+        self.apply(('uni/tn-Shop/BD-BD-Migration', mo('fvBD', {'unicastRoute': 'yes'}, mo('fvSubnet', {'ip': '10.10.50.1/24'}))))
+        by = self.by()
+        self.assertFalse(by['Kein Gateway für 10.10.50.0/24 in der ACI'])
+        self.assertFalse(by['Unicast Routing im BD-Migration bleibt aus'])
 
 
 class TestOperationsLabs(unittest.TestCase):

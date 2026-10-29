@@ -648,30 +648,50 @@ lab(id='08-rest-api', title='08 Automatisierung über die REST-API', topic='Auto
 # Lab 09 - L3Out eBGP Sub-Interface
 # ----------------------------------------------------------------------------
 lab(id='09-l3out-bgp', title='09 L3Out mit eBGP über Sub-Interface', topic='External Routing', level='Fortgeschritten',
-    duration='45 min', fabric='discovered',
-    goals=['eBGP-L3Out mit Routed Sub-Interface bauen', 'VLAN für Sub-Interfaces in der L3 Domain bereitstellen',
-           'BGP-Peer, Remote-AS und Fabric-AS richtig setzen'],
-    intro='Der Provider-Router **isp1** hängt an **leaf104 eth1/47** und spricht **eBGP** über ein 802.1Q-Sub-Interface '
-          '**VLAN 301** (172.16.1.2/30, AS **65100**). Er erwartet die ACI als AS **65001** und kündigt eine Default Route an.\n\n'
-          'Tenant Shop mit Web, App und web-to-app ist vorhanden. BGP Route Reflector Policy und Access Policies für leaf104 fehlen.',
+    duration='45 min', fabric='discovered', kind='requirements', modes=['guided', 'exam'],
+    prerequisites=['Lab 06'], tools=['Tenant > Networking > L3Outs', 'Simulation > Externe Router', 'Traffic Inspector',
+                                    'CLI: show bgp ipv4 unicast summary vrf, show ip route vrf'],
+    goals=['Einen eBGP-L3Out über ein 802.1Q-Sub-Interface bauen', 'Fabric-AS, Remote-AS und Peer-Adresse richtig zuordnen',
+           'Nur das ankündigen und erlauben, was der Provider braucht'],
+    intro='Der Provider-Router **isp1** hängt an **leaf104 eth1/47**. Er spricht **eBGP** über ein 802.1Q-Sub-Interface **VLAN 301**, '
+          'Adresse 172.16.1.2/30, AS **65100**, und erwartet die ACI als AS **65001** mit der Adresse 172.16.1.1/30. Er kündigt eine '
+          'Default Route an. isp1 gehört dem Provider und wird nicht verändert.\n\n'
+          'Der Tenant Shop mit Web, App und web-to-app läuft. Für leaf104 gibt es noch keine Access Policies. web1 hängt an leaf101.',
+    requirements=['Die BGP-Session zu isp1 ist aufgebaut.',
+                  'web1 erreicht das Internet per Ping, sonst nichts.',
+                  'Der Provider darf web1 zur Überwachung anpingen, sonst nichts.',
+                  'app1 bleibt ohne Internet; das App-Netz 10.10.20.0/24 wird dem Provider nicht angekündigt.'],
+    limits=['BGP ist vereinfacht: Session-Zustand, AS-Prüfung, Peer-Adresse, Timer und Passwort. Attribute wie Local Preference, '
+            'MED und Communities werden nicht ausgewertet.'],
+    hints=['**Konzept:** Bei eBGP muss beides stimmen: die Layer-3-Verbindung (Sub-Interface mit VLAN, Adresse) und die BGP-Parameter '
+           '(eigene AS, Peer-Adresse, Remote AS). Die eigene AS der ACI ist die Fabric-AS.',
+           '**Objekte:** L3 Domain mit einem VLAN Pool, der VLAN 301 enthält; AAEP, Policy Group, Profile für leaf104 eth1/47. L3Out mit '
+           'BGP, Node Profile, Interface Profile mit Routed Sub-Interface und BGP Peer. *System > System Settings > BGP Route Reflector* '
+           'für die Fabric-AS.',
+           '**Prüfschritte:** `show bgp ipv4 unicast summary vrf Shop:Prod` auf leaf104: Idle/Active statt Established? Remote AS, '
+           'Peer-Adresse und VLAN vergleichen. Danach Traffic Inspector web1 → 1.1.1.1 und *Simulation > Externe Router*: Was kennt isp1?',
+           '**Lösung:** Fabric-AS 65001 mit spine201/202 als Route Reflector. L3Dom-ISP mit VLAN-Pool 300–310, Access-Kette für 104/eth1/47. '
+           'L3Out ISP (VRF Prod, BGP), Node 104 mit Router ID, Sub-Interface eth1/47 vlan-301 172.16.1.1/30, BGP Peer 172.16.1.2 Remote AS 65100. '
+           'External EPG 0.0.0.0/0, Contract nur icmp (Internet stellt bereit, Web konsumiert), BD-Web Advertised Externally und mit ISP '
+           'verknüpft. BD-App bleibt privat.'],
+    cause='Es gibt weder Fabric-AS noch Access Policies noch L3Out für leaf104.',
     config=[SERVER_ACCESS, shop_tenant(with_contracts=True)], hosts=[WEB1, APP1],
-    routers=[router('isp1', L104, 'eth1/47', '172.16.1.2/30', 'bgp', vlan=301, rid='100.64.0.1')],
-    tasks=[
-        task('Fabric-AS', 'BGP Route Reflector Policy: AS **65001**, spine201 und spine202 als Route Reflector.'),
-        task('Access Policies', 'L3 Domain **L3Dom-ISP** mit VLAN Pool **VLAN-Pool-ISP** (vlan-300 bis vlan-310, static), AAEP '
-             '**AAEP-ISP**, Policy Group **IPG-ISP**, Interface Profile für Port 1/47 und Switch Profile für Node 104.'),
-        task('L3Out', 'L3Out **ISP**, VRF Prod, L3 Domain L3Dom-ISP, Routing-Protokoll **BGP**. Node Profile mit Node 104 '
-             '(Router ID 1.1.1.104). Interface Profile mit **Routed Sub-Interface** eth1/47, **vlan-301**, **172.16.1.1/30**.'),
-        task('BGP-Peer', 'Am Interface einen BGP Peer **172.16.1.2** mit Remote AS **65100** anlegen.',
-             'Den Peer findest du unter dem Interface im Baum (BGP Peers).'),
-        task('Policy und Ankündigung', 'External EPG **Internet** (0.0.0.0/0), Contract **web-to-isp** (icmp) mit '
-             'Internet als Provider und Web als Consumer, BD-Web *Advertised Externally* und mit L3Out ISP verknüpft.'),
-        task('Prüfen', 'Auf leaf104: `show bgp ipv4 unicast summary vrf Shop:Prod`. Ping von web1 zu 1.1.1.1.'),
-    ],
+    routers=[router('isp1', L104, 'eth1/47', '172.16.1.2/30', 'bgp', vlan=301, rid='100.64.0.1')], tasks=[],
     checks=[check('BGP zu isp1 Established', 'router', name='isp1', adj='Established'),
             check('web1 → 1.1.1.1 Ping', 'traffic', src='web1', dst='1.1.1.1', proto='icmp', expect=True),
             check('isp1 → web1 Ping', 'traffic', src='isp1', dst='web1', proto='icmp', expect=True),
-            check('app1 → 1.1.1.1 blockiert', 'traffic', src='app1', dst='1.1.1.1', expect=False)],
+            check('Least Privilege Web → Internet: nur Ping', 'exposure', src='web1', dst='1.1.1.1', allow=['icmp'], category='security'),
+            check('Least Privilege Provider → Web: nur Ping', 'exposure', src='isp1', dst='web1', allow=['icmp'], category='security'),
+            check('app1 → 1.1.1.1 blockiert', 'traffic', src='app1', dst='1.1.1.1', expect=False, category='security'),
+            check('10.10.20.0/24 wird nicht angekündigt', 'learned', router='isp1', prefix='10.10.20.0/24', expect=False, category='security')],
+    questions=[{'id': 'q1', 'q': 'Die Session bleibt in „Active“. Der Router meldet „bad remote AS 65000“. Was ist falsch?',
+                'options': ['Die Fabric-AS (eigene AS der ACI) passt nicht zu dem, was der Provider erwartet', 'Das VLAN', 'Der Contract',
+                            'Die Router ID'],
+                'answer': 0, 'explain': 'Der Provider prüft die AS, die die ACI im OPEN meldet – das ist die Fabric-AS.'},
+               {'id': 'q2', 'q': 'Warum braucht das Sub-Interface ein VLAN aus dem Pool der L3 Domain?',
+                'options': ['Das Encap des Sub-Interfaces wird wie jedes Encap gegen die Domain des L3Outs geprüft', 'Braucht es nicht',
+                            'Weil BGP VLANs zählt', 'Wegen des Contracts'],
+                'answer': 0, 'explain': 'Fehlt VLAN 301 im Pool, gibt es einen Fault am L3Out und das Interface kommt nicht hoch.'}],
     solution='Interface: `l3extRsPathL3OutAtt tDn=topology/pod-1/paths-104/pathep-[eth1/47] ifInstT=sub-interface '
              'encap=vlan-301 addr=172.16.1.1/30`, darunter `bgpPeerP addr=172.16.1.2` mit `bgpAsP asn=65100`. Am L3Out '
              '`bgpExtP`. Ohne Fabric-AS (bgpAsP unter uni/fabric/bgpInstP-default) startet BGP nicht.')
@@ -681,27 +701,45 @@ lab(id='09-l3out-bgp', title='09 L3Out mit eBGP über Sub-Interface', topic='Ext
 # ----------------------------------------------------------------------------
 NODES_ALL = [(101, 'leaf101'), (102, 'leaf102'), (103, 'leaf103'), (104, 'leaf104'), (201, 'spine201'), (202, 'spine202')]
 lab(id='10-mgmt-ntp', title='10 OOB-Management und NTP', topic='Fabric-Betrieb', level='Mittel', duration='30 min', fabric='discovered',
-    goals=['Static Node Management Addresses im Tenant mgmt vergeben', 'Die NTP-Kette Date and Time Policy → Pod Policy Group → Pod Profile bauen',
-           'Mit show ntp peer-status prüfen'],
+    kind='requirements', modes=['guided', 'exam'],
+    prerequisites=['Lab 01'], tools=['Tenants > mgmt', 'Fabric > Fabric Policies', 'CLI: show ntp peer-status, show clock'],
+    goals=['Static Node Management Addresses im Tenant mgmt vergeben', 'Verstehen, wie eine Fabric Policy über Policy Groups und '
+           'Profile auf die Switches wirkt', 'Den Zustand per CLI prüfen'],
     intro='Die Fabric läuft, aber die Switches haben weder eine Management-Adresse noch eine synchrone Uhrzeit. Ohne NTP stimmen '
           'die Zeitstempel in Faults, Events und im Audit Log nicht – bei der Fehlersuche ein echtes Problem.\n\n'
-          'Das OOB-Netz ist **192.168.10.0/24**, Gateway **192.168.10.1**, der NTP-Server **192.168.10.250**.',
-    tasks=[
-        task('Management-Adressen', '**Tenants > mgmt > Node Management Addresses > Static Node Management Addresses**: Für jeden '
-             'Switch eine Adresse **192.168.10.<Node-ID>/24** mit Gateway 192.168.10.1 (z. B. leaf101 → 192.168.10.101/24).',
-             'Das sind sechs Einträge: 101, 102, 103, 104, 201, 202.'),
-        task('Date and Time Policy', '**Fabric > Fabric Policies > Policies > Pod > Date and Time > default**: NTP-Server '
-             '**192.168.10.250** mit Management EPG **default** (Out-of-Band) eintragen.'),
-        task('Pod Policy Group', '**Fabric > Fabric Policies > Pods > Policy Groups**: **PodPol** mit Date Time Policy **default**.'),
-        task('Pod Profile', '**Pods > Profiles > default**: Im Pod Selector **default** die Fabric Policy Group **PodPol** eintragen.',
-             'Ohne diese Zuordnung wirkt die Date and Time Policy nirgends – das ist der häufigste Fehler.'),
-        task('Prüfen', 'Auf einem Switch `show ntp peer-status`: Der Server muss mit `*` markiert sein. `show clock` zeigt die Zeitquelle.'),
-    ],
-    checks=[check('Management-Adresse leaf101', 'exists', dn='uni/tn-mgmt/mgmtp-default/oob-default/rsooBStNode-[topology/pod-1/node-101]'),
-            check('Management-Adresse spine201', 'exists', dn='uni/tn-mgmt/mgmtp-default/oob-default/rsooBStNode-[topology/pod-1/node-201]'),
-            check('NTP-Server in der Date and Time Policy', 'exists', dn='uni/fabric/time-default/ntpprov-192.168.10.250'),
-            check('Pod Profile default nutzt eine Pod Policy Group', 'exists', dn='uni/fabric/funcprof/podpgrp-PodPol'),
-            check('Alle Switches NTP-synchron', 'ntp', min=6)],
+          'Das OOB-Netz ist **192.168.10.0/24**, Gateway **192.168.10.1**. Der einzige freigegebene Zeitserver ist **192.168.10.250** '
+          'im OOB-Netz.',
+    requirements=['Jeder Switch (101–104, 201, 202) hat die OOB-Adresse 192.168.10.<Node-ID>/24 mit Gateway 192.168.10.1.',
+                  'Alle Switches sind mit 192.168.10.250 synchron, erreicht über das OOB-Netz.',
+                  'Es wird keine andere Zeitquelle eingetragen.'],
+    limits=['NTP ist vereinfacht: synchron ja/nein mit Grund. Stratum, Authentifizierung und Drift werden nicht modelliert.'],
+    hints=['**Konzept:** Fabric Policies wirken nicht von selbst. Eine Policy (z. B. für Datum und Uhrzeit) hängt an einer Policy Group, '
+           'und die Policy Group muss über ein Profil den Switches zugeordnet sein.',
+           '**Objekte:** *Tenants > mgmt > Node Management Addresses*. *Fabric > Fabric Policies > Policies > Pod > Date and Time*, '
+           '*Pods > Policy Groups*, *Pods > Profiles*.',
+           '**Prüfschritte:** `show ntp peer-status` auf einem Switch: Steht der Server mit `*` da? Wenn nicht, zeigt '
+           '*Fabric > Inventory* bzw. die Bewertung den Grund (z. B. keine Pod Policy Group, keine Management-Adresse).',
+           '**Lösung:** Sechs Static Node Management Addresses (OOB, default). In der Date and Time Policy default den Server 192.168.10.250 '
+           'mit Management EPG OOB default. Pod Policy Group (z. B. PodPol) mit dieser Date Time Policy, im Pod Profile default dem Selector '
+           'zuordnen.'],
+    cause='Keine Management-Adressen, kein NTP-Server, und keine Pod Policy Group ist dem Pod zugeordnet.',
+    tasks=[],
+    checks=[check('Alle sechs Switches haben eine OOB-Adresse (zusätzlich zum APIC)', 'class', cls='mgmtRsOoBStNode',
+                  under='uni/tn-mgmt/mgmtp-default/oob-default/', min=7),
+            check('leaf101 hat 192.168.10.101/24', 'exists', dn='uni/tn-mgmt/mgmtp-default/oob-default/rsooBStNode-[topology/pod-1/node-101]',
+                  attrs={'addr': '192.168.10.101/24', 'gw': '192.168.10.1'}),
+            check('spine201 hat 192.168.10.201/24', 'exists', dn='uni/tn-mgmt/mgmtp-default/oob-default/rsooBStNode-[topology/pod-1/node-201]',
+                  attrs={'addr': '192.168.10.201/24', 'gw': '192.168.10.1'}),
+            check('Alle Switches NTP-synchron', 'ntp', min=6),
+            check('Nur die freigegebene Zeitquelle ist eingetragen', 'class', cls='datetimeNtpProv', max=1, category='security'),
+            check('Die freigegebene Zeitquelle wird genutzt', 'exists', dn='uni/fabric/time-default/ntpprov-192.168.10.250', category='security')],
+    questions=[{'id': 'q1', 'q': 'Der NTP-Server ist in der Date and Time Policy eingetragen, trotzdem ist kein Switch synchron. Was fehlt am häufigsten?',
+                'options': ['Die Zuordnung der Pod Policy Group im Pod Profile', 'Ein Contract', 'Ein zweiter NTP-Server', 'Ein Neustart'],
+                'answer': 0, 'explain': 'Ohne Zuordnung wirkt die Policy auf keinen Switch.'},
+               {'id': 'q2', 'q': 'Warum ist eine fremde Zeitquelle ein Sicherheitsthema?',
+                'options': ['Falsche Zeit verfälscht Logs und Audit-Trails und kann Zertifikatsprüfungen stören', 'Ist sie nicht',
+                            'Weil NTP verschlüsselt', 'Wegen der Lizenz'],
+                'answer': 0, 'explain': 'Nachvollziehbarkeit hängt an einer vertrauenswürdigen Zeit.'}],
     solution='Adressen: `mgmtRsOoBStNode` unter `uni/tn-mgmt/mgmtp-default/oob-default` mit `tDn=topology/pod-1/node-101`, '
              '`addr=192.168.10.101/24`, `gw=192.168.10.1`. NTP: `datetimeNtpProv name=192.168.10.250` unter `uni/fabric/time-default` '
              'mit `datetimeRsNtpProvToEpg tDn=uni/tn-mgmt/mgmtp-default/oob-default`. Pod: `fabricPodPGrp PodPol` mit `fabricRsTimePol` '
@@ -781,34 +819,52 @@ VMM12 = mo('polUni', {},
        mo('vmmCtrlrP', {'name': 'vcsa01', 'hostOrIp': '192.168.10.50', 'rootContName': 'DC-Frankfurt'},
           mo('vmmRsAcc', {'tDn': 'uni/vmmp-VMware/dom-VDS-Prod/usracc-vc-admin'})))))
 lab(id='12-vmm-vcenter', title='12 VMM-Integration mit VMware vCenter', topic='Virtual Networking', level='Fortgeschritten',
-    duration='40 min', fabric='discovered',
-    goals=['Eine vCenter VMM Domain mit dynamischem VLAN Pool anlegen', 'Port Groups Tenant|AP|EPG vom APIC erzeugen lassen',
-           'Resolution Immediacy und LLDP-Discovery zum ESXi verstehen'],
+    duration='40 min', fabric='discovered', kind='requirements', modes=['guided', 'exam'],
+    prerequisites=['Labs 02 und 03'], tools=['Virtual Networking > VMM Domains', 'Simulation > vCenter', 'Traffic Inspector',
+                                            'CLI: show vlan extended, show endpoint'],
+    goals=['Eine vCenter VMM Domain anlegen und mit den EPGs verbinden', 'Verstehen, wer bei VMM die VLANs vergibt',
+           'Port Groups Tenant|AP|EPG vom APIC erzeugen lassen'],
     intro='Im Webshop kommen virtuelle Server dazu. Im vCenter **vcsa01** (192.168.10.50, Datacenter **DC-Frankfurt**, Benutzer '
-          '**administrator@vsphere.local**, Passwort **Lab12!vc**) gibt es den Distributed Switch **VDS-Prod** mit den Hosts **esx01** '
-          '(leaf101 eth1/11) und **esx02** (leaf102 eth1/11). Die VMs **web-vm1** und **app-vm1** sind schon auf die Port Groups '
+          '**administrator@vsphere.local**, Passwort **Lab12!vc**, nur Labor) gibt es den Distributed Switch **VDS-Prod** mit den Hosts '
+          '**esx01** (leaf101 eth1/11) und **esx02** (leaf102 eth1/11). Die VMs **web-vm1** und **app-vm1** sind schon auf die Port Groups '
           '`Shop|Webshop|Web` und `Shop|Webshop|App` eingestellt – nur gibt es diese Port Groups noch nicht.\n\n'
           'Policy Group **IPG-ESXi** und Selector für Port 1/11 sind vorhanden, das AAEP **AAEP-ESXi** ist aber noch leer. '
-          'Den Zustand im vCenter siehst du unter **Simulation > vCenter**.',
-    config=[SERVER_ACCESS, ESXI_ACCESS, shop_tenant(with_contracts=True)], hosts=[WEB1, APP1], vcenters=[VC12],
-    tasks=[
-        task('Dynamischer VLAN Pool', '**Fabric > Access Policies > Pools > VLAN**: **VLAN-Pool-VMM** mit *Dynamic Allocation* '
-             'und dem Encap Block vlan-1000 bis vlan-1099.',
-             'Ein statischer Pool reicht nicht: Der APIC vergibt die VLANs für die Port Groups selbst.'),
-        task('VMM Domain', '**Virtual Networking > VMM Domains > VMware**, Rechtsklick **Create vCenter Domain**: Name **VDS-Prod**, '
-             'VLAN Pool VLAN-Pool-VMM, AAEP **AAEP-ESXi**, Credential **vc-admin** und Controller **vcsa01** mit IP und Datacenter.',
-             'Der Datacenter-Name muss exakt stimmen. Unter **Operational** der Domain siehst du, ob der APIC verbunden ist (Fault S0606, wenn nicht).'),
-        task('EPGs anbinden', 'An den EPGs **Web** und **App** jeweils **Add VMM Domain Association** mit VDS-Prod, '
-             'Resolution Immediacy **Immediate**.'),
-        task('Prüfen', 'Unter **Simulation > vCenter** erscheinen die Port Groups mit VLANs aus dem Pool, die VMs werden gelernt. '
-             'Auf leaf101: `show vlan extended` und `show endpoint` – Learning Source *learned,vmm*.'),
-        task('Experiment', 'Stelle die Resolution Immediacy an der EPG App auf **On Demand** und lösche app-vm1. Was passiert mit dem VLAN auf leaf102?'),
-    ],
+          'Den Zustand im vCenter siehst du unter **Simulation > vCenter**. Die VLANs 1000–1099 sind für die Virtualisierung reserviert.',
+    requirements=['Der APIC ist mit vcsa01 verbunden und verwaltet VDS-Prod (VMM Domain **VDS-Prod**).',
+                  'web-vm1 landet in der EPG Web, app-vm1 in der EPG App – ohne dass jemand im vCenter Port Groups anlegt.',
+                  'web-vm1 erreicht app-vm1 und app-vm1 ist auch vom Bare-Metal-Server web1 erreichbar (Contract web-to-app).',
+                  'Für VMs gelten dieselben Regeln wie für Bare Metal: zwischen Web und App nur, was web-to-app erlaubt.'],
+    limits=['vCenter wird simuliert: Verbindung, Port Groups, VLAN-Vergabe, VM-Zuordnung und LLDP-Sicht der ESXi-Hosts. '
+            'vMotion und Host-Profile fehlen.'],
+    hints=['**Konzept:** Bei VMM vergibt der APIC die VLANs selbst und legt die Port Groups im vCenter an. Dafür braucht er eine VMM '
+           'Domain mit Zugangsdaten und einen VLAN-Bereich, aus dem er frei wählen darf.',
+           '**Objekte:** VLAN Pool (Allocation Mode!), VMM Domain mit Credential und Controller, AAEP der ESXi-Ports mit dieser Domain, '
+           'an den EPGs die VMM-Domain-Zuordnung.',
+           '**Prüfschritte:** *Simulation > vCenter*: Gibt es die Port Groups, welche VLANs? Unter *Operational* der VMM Domain: verbunden? '
+           '(Fault S0606, wenn nicht). Auf leaf101 `show endpoint`: Learning Source *learned,vmm*.',
+           '**Lösung:** VLAN Pool VLAN-Pool-VMM mit *Dynamic Allocation* (vlan-1000 bis vlan-1099). VMM Domain VDS-Prod mit Credential '
+           'und Controller vcsa01 (Datacenter DC-Frankfurt). AAEP-ESXi mit der VMM Domain. An Web und App *Add VMM Domain Association* '
+           'mit Resolution Immediacy Immediate.'],
+    cause='Es gibt keine VMM Domain; der APIC kennt das vCenter nicht und legt keine Port Groups an.',
+    config=[SERVER_ACCESS, ESXI_ACCESS, shop_tenant(with_contracts=True)], hosts=[WEB1, APP1], vcenters=[VC12], tasks=[],
     checks=[check('VMM Domain VDS-Prod mit vCenter verbunden', 'vmm', dn='uni/vmmp-VMware/dom-VDS-Prod'),
             check('web-vm1 in EPG Web gelernt', 'endpoint', host='web-vm1', epg='uni/tn-Shop/ap-Webshop/epg-Web'),
             check('app-vm1 in EPG App gelernt', 'endpoint', host='app-vm1', epg='uni/tn-Shop/ap-Webshop/epg-App'),
             check('web-vm1 → app-vm1 TCP 8080', 'traffic', src='web-vm1', dst='app-vm1', proto='tcp', port=8080, expect=True),
-            check('web1 (Bare Metal) → app-vm1 Ping', 'traffic', src='web1', dst='app-vm1', proto='icmp', expect=True)],
+            check('web1 (Bare Metal) → app-vm1 Ping', 'traffic', src='web1', dst='app-vm1', proto='icmp', expect=True),
+            check('web-vm1 → app-vm1 SSH blockiert', 'traffic', src='web-vm1', dst='app-vm1', proto='tcp', port=22, expect=False,
+                  reason='POLICY_', category='security'),
+            check('Least Privilege VM Web → VM App: nur TCP 8080 und Ping', 'exposure', src='web-vm1', dst='app-vm1',
+                  allow=['tcp/8080', 'icmp'], category='security'),
+            check('app-vm1 baut außer Ping keine Verbindungen zu web-vm1 auf', 'exposure', src='app-vm1', dst='web-vm1', allow=['icmp'],
+                  category='security')],
+    questions=[{'id': 'q1', 'q': 'Warum braucht die VMM Domain einen VLAN Pool mit Dynamic Allocation?',
+                'options': ['Der APIC wählt die VLANs für die Port Groups selbst aus dem Bereich', 'Weil vCenter keine statischen VLANs kennt',
+                            'Weil sonst LLDP nicht geht', 'Braucht sie nicht'],
+                'answer': 0, 'explain': 'Bei Static Allocation müsste jemand das VLAN pro EPG festlegen – das ist nicht der VMM-Weg.'},
+               {'id': 'q2', 'q': 'Resolution Immediacy „On Demand“: Wann kommt das VLAN auf leaf102?',
+                'options': ['Erst wenn eine VM der EPG auf einem Host an leaf102 läuft', 'Sofort beim Speichern', 'Nie', 'Nach einem Neustart'],
+                'answer': 0, 'explain': 'On Demand spart Ressourcen auf den Leafs, macht die Fehlersuche aber weniger offensichtlich.'}],
     solution='Domain: `' + json.dumps(VMM12) + '`\n\nAn der EPG: `fvRsDomAtt tDn=uni/vmmp-VMware/dom-VDS-Prod resImedcy=immediate`. '
              'Die Port Group heißt `Tenant|Application Profile|EPG`.')
 
@@ -889,33 +945,49 @@ L2OUT14 = mo('fvTenant', {'name': 'Shop'},
                 mo('l2extLNodeP', {'name': 'default'}, mo('l2extLIfP', {'name': 'default'}, mo('l2extRsPathL2OutAtt', {'tDn': path(103, 'eth1/20')}))),
                 mo('l2extInstP', {'name': 'LegacyNet'}, mo('fvRsProv', {'tnVzBrCPName': 'migration'}))))
 lab(id='14-l2out-migration', title='14 L2Out und Migration: stille Hosts und ARP Flooding', topic='Netzwerk-Migration', level='Fortgeschritten',
-    duration='40 min', fabric='discovered',
-    goals=['Ein altes Netz per L2Out (External Bridged Network) an eine Bridge Domain anbinden',
-           'Verstehen, warum stille Hosts ohne ARP Flooding unerreichbar bleiben', 'BD-Einstellungen für eine Migrationsphase wählen'],
+    duration='40 min', fabric='discovered', kind='requirements', modes=['guided', 'exam'],
+    prerequisites=['Labs 02 und 34'], tools=['Tenant > Networking > L2Outs', 'Traffic Inspector', 'Tenant > Networking > Bridge Domains',
+                                            'CLI: show endpoint, show mac address-table'],
+    goals=['Ein altes Netz per L2Out an eine Bridge Domain anbinden',
+           'Verstehen, warum stille Hosts in einer reinen Layer-2-BD unerreichbar bleiben', 'BD-Einstellungen für eine Migrationsphase wählen'],
     intro='Das Subnetz **10.10.50.0/24** zieht vom alten Netz in die ACI. Das Gateway **10.10.50.1** bleibt während der Migration noch '
           'auf dem Legacy-Router – die **BD-Migration** ist deshalb reines Layer 2 (Unicast Routing aus, kein Subnetz). Der neue Server '
           '**web2** (EPG **Neu**) ist schon in der ACI.\n\nDer Legacy-Switch hängt an **leaf103 eth1/20** und spricht **VLAN 300**. Dahinter '
-          'steht **old-srv** (10.10.50.20) – ein Altsystem, das nie von selbst sendet. Die ACI kann es also nicht lernen, bis jemand es per ARP anfragt.',
-    config=[SERVER_ACCESS, shop_tenant(), MIG14], hosts=[WEB2, OLD14],
-    tasks=[
-        task('Access Policies', 'VLAN Pool **VLAN-Pool-Legacy** (static, vlan-300), **External Bridged Domain** **L2Dom-Legacy** '
-             '(Physical and External Domains > External Bridged Domains), AAEP **AAEP-Legacy**, Policy Group **IPG-Legacy**, '
-             'Interface Profile **IntProf-Leaf103** mit Port 1/20 und Switch Profile **SwProf-Leaf103** für Node 103.'),
-        task('L2Out', 'Im Tenant Shop **Networking > L2Outs**, **Create L2Out**: Name **Legacy**, Bridge Domain **BD-Migration**, '
-             'Encap **vlan-300**, Domain L2Dom-Legacy, Path leaf103 eth1/20, External EPG **LegacyNet**.'),
-        task('Contract', 'Contract **migration** (Filter **default** aus common): LegacyNet *Provided*, EPG **Neu** *Consumed*.',
-             'Ein L2Out hat ein eigenes External EPG (eigener pcTag) – auch im selben BD braucht es einen Contract.'),
-        task('Erster Test', 'Ping von web2 zu old-srv. Warum scheitert er? Lies den Schritt im Ergebnis.'),
-        task('ARP Flooding', 'Im **BD-Migration** unter Policy > General **ARP Flooding** aktivieren und erneut testen.',
-             'Ohne Unicast Routing kann die ACI kein ARP Glean machen. Den ARP-Request für einen unbekannten Host muss sie dann fluten.'),
-    ],
-    checks=[check('L2Out Legacy ohne F0467', 'nofaults', under='uni/tn-Shop/l2out-Legacy', code='F0467'),
-            check('L2Out Legacy auf leaf103 eth1/20', 'exists', dn='uni/tn-Shop/l2out-Legacy/lnodep-default/lifp-default/rspathL2OutAtt-[topology/pod-1/paths-103/pathep-[eth1/20]]'),
-            check('ARP Flooding im BD-Migration', 'exists', dn='uni/tn-Shop/BD-BD-Migration', attrs={'arpFlood': 'yes'}),
-            check('web2 → old-srv Ping', 'traffic', src='web2', dst='old-srv', proto='icmp', expect=True)],
+          'steht **old-srv** (10.10.50.20) – ein Altsystem, das nie von selbst sendet.\n\nFür die Migrationsphase ist zwischen dem alten '
+          'Netz und der EPG Neu freier Verkehr abgenommen (Filter *default* aus common).',
+    requirements=['Das alte Netz ist als L2Out **Legacy** an BD-Migration angebunden, über leaf103 eth1/20 mit VLAN 300.',
+                  'web2 erreicht old-srv, obwohl old-srv nie von selbst sendet.',
+                  'Das Gateway bleibt auf dem Legacy-Router: keine Gateway-Adresse für 10.10.50.0/24 in der ACI.',
+                  'Das alte Netz wird nur an diesem einen Port angebunden.'],
+    limits=['Der Legacy-Switch wird als Host-Gruppe hinter einem Port simuliert; Spanning Tree des Altnetzes ist nicht modelliert '
+            '(siehe Lab 28 für MCP).'],
+    hints=['**Konzept:** Eine BD ohne Unicast Routing kann unbekannte Ziele nicht selbst per ARP suchen. Wer nie sendet, wird nie '
+           'gelernt – dann muss die Fabric die Anfrage an alle Ports der BD verteilen.',
+           '**Objekte:** External Bridged Domain mit VLAN Pool, AAEP, Policy Group und Profile für leaf103 eth1/20. Im Tenant ein L2Out '
+           'mit BD, Encap, Pfad und External EPG; ein Contract zur EPG Neu. In der BD die ARP-Einstellungen.',
+           '**Prüfschritte:** Traffic Inspector web2 → old-srv: Der Schritt „ARP“ sagt, warum es scheitert. EP Tracker old-srv: gelernt?',
+           '**Lösung:** VLAN Pool vlan-300, L2Dom-Legacy, AAEP, IPG und Profile für 103/eth1/20. L2Out Legacy (BD-Migration, vlan-300, '
+           'Pfad eth1/20, External EPG LegacyNet). Contract migration (Filter default): LegacyNet stellt bereit, Neu konsumiert. '
+           'Am BD-Migration **ARP Flooding** an; Unicast Routing bleibt aus, kein Subnetz.'],
+    cause='Es gibt keine Anbindung des alten Netzes. Ohne ARP Flooding erreicht die ARP-Anfrage den stillen Host nicht.',
+    config=[SERVER_ACCESS, shop_tenant(), MIG14], hosts=[WEB2, OLD14], tasks=[],
+    checks=[check('Keine Konfigurationsfehler (F0467) im Tenant Shop', 'nofaults', under='uni/tn-Shop', code='F0467'),
+            check('L2Out Legacy an leaf103 eth1/20', 'class', cls='l2extRsPathL2OutAtt', under='uni/tn-Shop/l2out-Legacy/',
+                  attrs={'tDn': path(103, 'eth1/20')}),
+            check('web2 → old-srv Ping', 'traffic', src='web2', dst='old-srv', proto='icmp', expect=True),
+            check('Kein Gateway für 10.10.50.0/24 in der ACI', 'class', cls='fvSubnet', under='uni/tn-Shop/BD-BD-Migration/', expect=False),
+            check('Unicast Routing im BD-Migration bleibt aus', 'exists', dn='uni/tn-Shop/BD-BD-Migration', attrs={'unicastRoute': 'no'}),
+            check('Das alte Netz hängt nur an einem Port', 'class', cls='l2extRsPathL2OutAtt', under='uni/tn-Shop/', max=1, category='security')],
+    questions=[{'id': 'q1', 'q': 'Warum scheitert der Ping, obwohl das L2Out steht?',
+                'options': ['old-srv ist still und ohne Unicast Routing gibt es kein ARP Glean – ohne ARP Flooding erreicht ihn die Anfrage nicht',
+                            'Weil der Contract fehlt', 'Weil das VLAN falsch ist', 'Weil L2Outs kein ICMP können'],
+                'answer': 0, 'explain': 'Mit Unicast Routing und BD-Subnetz könnte die ACI per Glean suchen; in der Migrationsphase gibt es beides nicht.'},
+               {'id': 'q2', 'q': 'Warum braucht es einen Contract, obwohl alles in derselben BD liegt?',
+                'options': ['Das External EPG des L2Outs ist eine eigene Sicherheitszone mit eigenem pcTag', 'Braucht es nicht',
+                            'Wegen des VLANs', 'Weil L2Outs immer geroutet werden'],
+                'answer': 0, 'explain': 'Wie bei zwei EPGs im selben BD (Lab 34): Bridging ist nicht Policy.'}],
     solution='Access: `' + json.dumps(L2ACC14) + '`\n\nTenant: `' + json.dumps(L2OUT14) + '`\n\nUnd am BD: `arpFlood=yes`. '
              'In der Migrationsphase typisch: L2 Unknown Unicast *Flood*, ARP Flooding *an*, Unicast Routing *aus*.')
-
 
 # ----------------------------------------------------------------------------
 # Lab 15 - Transit Routing und Route Control

@@ -43,8 +43,8 @@ Untersucht wurden:
 | Ergebnis des Traffic-Tests nur `ok` + Text | keine maschinenlesbare Ursache, keine Policy-Referenz, keine Trennung „Pfad kaputt“ vs. „Policy“ | **behoben**: verdict, reason, location, policy, hint, path |
 | Kein Modell für Zieldienste | „Policy erlaubt“ wurde mit „Dienst erreichbar“ gleichgesetzt | **behoben**: Feld *Dienste*, `SERVICE_NOT_LISTENING`, getrennt vom Least-Privilege-Check |
 | Lab-Bewertung ohne Sicherheits-Kategorie | Ein Permit-any fiel nur auf, wenn zufällig ein negativer Test existierte | **behoben**: Kategorie `security`, Check `exposure` |
-| Labs sind Klickanleitungen | Die Lösung steht in der Aufgabe, wenig Transfer | behoben für 01 bis 07, 11, 13 und die neuen Labs 32 bis 45; übrige Labs offen (B-01) |
-| Hinweise einstufig, kein Prüfungsmodus | | **behoben** in der Engine; genutzt von den Labs 01 bis 07, 11, 13, 32 bis 45 |
+| Labs sind Klickanleitungen | Die Lösung steht in der Aufgabe, wenig Transfer | behoben für 01 bis 14 außer 08 und die neuen Labs 32 bis 45; übrige Labs offen (B-01) |
+| Hinweise einstufig, kein Prüfungsmodus | | **behoben** in der Engine; genutzt von den Labs 01 bis 14 außer 08, 32 bis 45 |
 | Lab-Generator nicht deterministisch (Zeitstempel in Lab 25) | Generierte Dateien änderten sich bei jedem Lauf | **behoben** |
 | Intra-EPG-Contracts nicht ausgewertet | Verkehr innerhalb einer EPG ließ sich nur ganz oder gar nicht erlauben | **behoben**: `fvRsIntraEpg` wird ausgewertet, Lab 38 |
 | vzInTerm/vzOutTerm fehlen | „Apply Both Directions“ aus nicht modellierbar | offen (B-06) |
@@ -57,6 +57,6 @@ Untersucht wurden:
 
 1. **Der Abnahmefall als neues Lab-Format** (Lab 32): Anforderungen, Least Privilege, getrennte Bewertung, Hinweise, Prüfungsmodus. Er setzt das Muster für alle weiteren Labs. → *umgesetzt*
 2. **Traffic Inspector mit Ursache und angewandter Regel**: Hier entsteht der Wechsel vom VLAN/ACL-Denken zum Policy-Modell, wenn sichtbar wird „Routing grün, Policy rot, weil …“. → *umgesetzt*
-3. Bestehende Contract- und Access-Labs ins neue Format überführen (B-01) und die fehlenden Grundlagen-Labs ergänzen. → *umgesetzt für 01 bis 07, 11, 13 sowie neu 33 bis 45*
+3. Bestehende Contract- und Access-Labs ins neue Format überführen (B-01) und die fehlenden Grundlagen-Labs ergänzen. → *umgesetzt für 01 bis 14 außer 08 sowie neu 33 bis 45*
 4. Ereignisse für Endpoint Move und Link-Ausfall als Grundlage der Troubleshooting-Labs. → *umgesetzt (Labs 36, 37)*
 5. OT-Szenario. → *umgesetzt (Lab 40)*

@@ -5,61 +5,110 @@
  "level": "Mittel",
  "duration": "30 min",
  "fabric": "discovered",
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 01"
+ ],
+ "tools": [
+  "Tenants > mgmt",
+  "Fabric > Fabric Policies",
+  "CLI: show ntp peer-status, show clock"
+ ],
  "goals": [
   "Static Node Management Addresses im Tenant mgmt vergeben",
-  "Die NTP-Kette Date and Time Policy → Pod Policy Group → Pod Profile bauen",
-  "Mit show ntp peer-status prüfen"
+  "Verstehen, wie eine Fabric Policy über Policy Groups und Profile auf die Switches wirkt",
+  "Den Zustand per CLI prüfen"
  ],
- "intro": "Die Fabric läuft, aber die Switches haben weder eine Management-Adresse noch eine synchrone Uhrzeit. Ohne NTP stimmen die Zeitstempel in Faults, Events und im Audit Log nicht – bei der Fehlersuche ein echtes Problem.\n\nDas OOB-Netz ist **192.168.10.0/24**, Gateway **192.168.10.1**, der NTP-Server **192.168.10.250**.",
- "tasks": [
-  {
-   "title": "Management-Adressen",
-   "text": "**Tenants > mgmt > Node Management Addresses > Static Node Management Addresses**: Für jeden Switch eine Adresse **192.168.10.<Node-ID>/24** mit Gateway 192.168.10.1 (z. B. leaf101 → 192.168.10.101/24).",
-   "hint": "Das sind sechs Einträge: 101, 102, 103, 104, 201, 202."
-  },
-  {
-   "title": "Date and Time Policy",
-   "text": "**Fabric > Fabric Policies > Policies > Pod > Date and Time > default**: NTP-Server **192.168.10.250** mit Management EPG **default** (Out-of-Band) eintragen."
-  },
-  {
-   "title": "Pod Policy Group",
-   "text": "**Fabric > Fabric Policies > Pods > Policy Groups**: **PodPol** mit Date Time Policy **default**."
-  },
-  {
-   "title": "Pod Profile",
-   "text": "**Pods > Profiles > default**: Im Pod Selector **default** die Fabric Policy Group **PodPol** eintragen.",
-   "hint": "Ohne diese Zuordnung wirkt die Date and Time Policy nirgends – das ist der häufigste Fehler."
-  },
-  {
-   "title": "Prüfen",
-   "text": "Auf einem Switch `show ntp peer-status`: Der Server muss mit `*` markiert sein. `show clock` zeigt die Zeitquelle."
-  }
+ "intro": "Die Fabric läuft, aber die Switches haben weder eine Management-Adresse noch eine synchrone Uhrzeit. Ohne NTP stimmen die Zeitstempel in Faults, Events und im Audit Log nicht – bei der Fehlersuche ein echtes Problem.\n\nDas OOB-Netz ist **192.168.10.0/24**, Gateway **192.168.10.1**. Der einzige freigegebene Zeitserver ist **192.168.10.250** im OOB-Netz.",
+ "requirements": [
+  "Jeder Switch (101–104, 201, 202) hat die OOB-Adresse 192.168.10.<Node-ID>/24 mit Gateway 192.168.10.1.",
+  "Alle Switches sind mit 192.168.10.250 synchron, erreicht über das OOB-Netz.",
+  "Es wird keine andere Zeitquelle eingetragen."
  ],
+ "limits": [
+  "NTP ist vereinfacht: synchron ja/nein mit Grund. Stratum, Authentifizierung und Drift werden nicht modelliert."
+ ],
+ "hints": [
+  "**Konzept:** Fabric Policies wirken nicht von selbst. Eine Policy (z. B. für Datum und Uhrzeit) hängt an einer Policy Group, und die Policy Group muss über ein Profil den Switches zugeordnet sein.",
+  "**Objekte:** *Tenants > mgmt > Node Management Addresses*. *Fabric > Fabric Policies > Policies > Pod > Date and Time*, *Pods > Policy Groups*, *Pods > Profiles*.",
+  "**Prüfschritte:** `show ntp peer-status` auf einem Switch: Steht der Server mit `*` da? Wenn nicht, zeigt *Fabric > Inventory* bzw. die Bewertung den Grund (z. B. keine Pod Policy Group, keine Management-Adresse).",
+  "**Lösung:** Sechs Static Node Management Addresses (OOB, default). In der Date and Time Policy default den Server 192.168.10.250 mit Management EPG OOB default. Pod Policy Group (z. B. PodPol) mit dieser Date Time Policy, im Pod Profile default dem Selector zuordnen."
+ ],
+ "cause": "Keine Management-Adressen, kein NTP-Server, und keine Pod Policy Group ist dem Pod zugeordnet.",
+ "tasks": [],
  "checks": [
   {
-   "desc": "Management-Adresse leaf101",
-   "type": "exists",
-   "dn": "uni/tn-mgmt/mgmtp-default/oob-default/rsooBStNode-[topology/pod-1/node-101]"
+   "desc": "Alle sechs Switches haben eine OOB-Adresse (zusätzlich zum APIC)",
+   "type": "class",
+   "cls": "mgmtRsOoBStNode",
+   "under": "uni/tn-mgmt/mgmtp-default/oob-default/",
+   "min": 7
   },
   {
-   "desc": "Management-Adresse spine201",
+   "desc": "leaf101 hat 192.168.10.101/24",
    "type": "exists",
-   "dn": "uni/tn-mgmt/mgmtp-default/oob-default/rsooBStNode-[topology/pod-1/node-201]"
+   "dn": "uni/tn-mgmt/mgmtp-default/oob-default/rsooBStNode-[topology/pod-1/node-101]",
+   "attrs": {
+    "addr": "192.168.10.101/24",
+    "gw": "192.168.10.1"
+   }
   },
   {
-   "desc": "NTP-Server in der Date and Time Policy",
+   "desc": "spine201 hat 192.168.10.201/24",
    "type": "exists",
-   "dn": "uni/fabric/time-default/ntpprov-192.168.10.250"
-  },
-  {
-   "desc": "Pod Profile default nutzt eine Pod Policy Group",
-   "type": "exists",
-   "dn": "uni/fabric/funcprof/podpgrp-PodPol"
+   "dn": "uni/tn-mgmt/mgmtp-default/oob-default/rsooBStNode-[topology/pod-1/node-201]",
+   "attrs": {
+    "addr": "192.168.10.201/24",
+    "gw": "192.168.10.1"
+   }
   },
   {
    "desc": "Alle Switches NTP-synchron",
    "type": "ntp",
    "min": 6
+  },
+  {
+   "desc": "Nur die freigegebene Zeitquelle ist eingetragen",
+   "type": "class",
+   "cls": "datetimeNtpProv",
+   "max": 1,
+   "category": "security"
+  },
+  {
+   "desc": "Die freigegebene Zeitquelle wird genutzt",
+   "type": "exists",
+   "dn": "uni/fabric/time-default/ntpprov-192.168.10.250",
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Der NTP-Server ist in der Date and Time Policy eingetragen, trotzdem ist kein Switch synchron. Was fehlt am häufigsten?",
+   "options": [
+    "Die Zuordnung der Pod Policy Group im Pod Profile",
+    "Ein Contract",
+    "Ein zweiter NTP-Server",
+    "Ein Neustart"
+   ],
+   "answer": 0,
+   "explain": "Ohne Zuordnung wirkt die Policy auf keinen Switch."
+  },
+  {
+   "id": "q2",
+   "q": "Warum ist eine fremde Zeitquelle ein Sicherheitsthema?",
+   "options": [
+    "Falsche Zeit verfälscht Logs und Audit-Trails und kann Zertifikatsprüfungen stören",
+    "Ist sie nicht",
+    "Weil NTP verschlüsselt",
+    "Wegen der Lizenz"
+   ],
+   "answer": 0,
+   "explain": "Nachvollziehbarkeit hängt an einer vertrauenswürdigen Zeit."
   }
  ],
  "solution": "Adressen: `mgmtRsOoBStNode` unter `uni/tn-mgmt/mgmtp-default/oob-default` mit `tDn=topology/pod-1/node-101`, `addr=192.168.10.101/24`, `gw=192.168.10.1`. NTP: `datetimeNtpProv name=192.168.10.250` unter `uni/fabric/time-default` mit `datetimeRsNtpProvToEpg tDn=uni/tn-mgmt/mgmtp-default/oob-default`. Pod: `fabricPodPGrp PodPol` mit `fabricRsTimePol` (`tnDatetimePolName=default`) und `fabricRsPodPGrp tDn=uni/fabric/funcprof/podpgrp-PodPol` am Selector `pods-default-typ-ALL`.",

@@ -2,7 +2,7 @@
 
 Die Tabelle vergleicht den geplanten Lernpfad (26 Labs) mit den vorhandenen Lab-Dateien in `labs/`.
 
-**Format neu** (Labs 01 bis 07, 11, 13 und 32 bis 45) heißt, das Lab hat:
+**Format neu** (Labs 01 bis 14 außer 08 und 32 bis 45) heißt, das Lab hat:
 
 - Anforderungen statt Klickanleitung
 - vier Hinweisstufen
@@ -38,7 +38,7 @@ Startbar sind nur Labs, die es als Datei gibt. Die Spalte *Stand* gilt für die 
 | 16 | Endpoint Move | **36 Endpoint Move nachvollziehen** | vollständig (neu) | Endpoint-Verlauf im EP Tracker; alte Bindung als Sicherheitsrisiko |
 | 17 | Interface-Ausfall vs. Policy-Drop | **37 Interface-Ausfall oder Policy-Drop?** | vollständig (neu) | drei Ursachen: PORT_ADMIN_DOWN, POLICY_IMPLICIT_DENY, LINK_DOWN |
 | 18 | Mehrere unabhängige Fehler | 07 Troubleshooting (sechs Tickets) | vollständig (neu) | mit Least-Privilege-Nebenbedingung |
-| 19 | Einfacher L3Out | 06 L3Out OSPF (neu), 09 eBGP (alt) | vollständig (neu) | MTU/EXSTART, MP-BGP, App-Netz bleibt intern |
+| 19 | Einfacher L3Out | 06 L3Out OSPF, 09 eBGP | vollständig (neu) | MTU/EXSTART, MP-BGP, App-Netz bleibt intern |
 | 20 | Routingfehler vs. fehlender External-EPG-Contract | **41 Routingfehler oder fehlender Contract?** | vollständig (neu) | erst ROUTE_MISSING (kein MP-BGP), dann POLICY_IMPLICIT_DENY |
 | 21 | Fehlender Rückweg | **42 Fehlender Rückweg** | vollständig (neu) | RETURN_ROUTE_MISSING; App-Netz darf nicht angekündigt werden |
 | 22 | Preferred Group | **39 Preferred Group für eine Migration** | vollständig (neu) | Nicht-Mitglied bleibt geschützt; kein VRF unenforced |
@@ -52,5 +52,5 @@ Weitere vorhandene Labs außerhalb dieses Pfads:
 - 00 Day 0
 - 05 vPC (neues Format)
 - 08 REST-API
-- 10 bis 12 (OOB/NTP, Static Leaf und Taboo – 11 im neuen Format, VMM)
-- 14 bis 31: L2Out, Transit Routing, PBR, L3Out-Varianten, AAA, In-Band, ESG, Firmware, Export/Import, Monitoring, DHCP Relay, MCP, Multi-Pod, Remote Leaf, Multi-Site
+- 10 bis 12 (OOB/NTP, Static Leaf und Taboo, VMM – alle im neuen Format)
+- 14 (L2Out, neues Format) und 15 bis 31: Transit Routing, PBR, L3Out-Varianten, AAA, In-Band, ESG, Firmware, Export/Import, Monitoring, DHCP Relay, MCP, Multi-Pod, Remote Leaf, Multi-Site

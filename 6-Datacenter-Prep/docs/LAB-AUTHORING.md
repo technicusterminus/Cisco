@@ -37,7 +37,7 @@ Jede Prüfung hat `desc`, `type` und `category`. Die Kategorie ist `function` (S
 | `traffic` | `src`, `dst`, `proto`, `port`, `expect`, optional `reason` (Präfix, z. B. `POLICY_`), `via` | Connectivity-Engine. Mit `reason` zählt ein Block nur aus diesem Grund (z. B. „durch Policy“, nicht „Pfad kaputt“) |
 | `exposure` | `src`, `dst`, `allow` (z. B. `['tcp/443']`), optional `probes` | Least Privilege: Die Policy darf für keinen anderen typischen Dienst eine neue Verbindung erlauben. Gewertet wird die Policy-Entscheidung, unabhängig vom Dienstmodell |
 | `endpoint` | `host`, optional `epg`, `pathType` (`port`, `pc`, `vpc`), `expect` | Endpoint gelernt, optional über einen bestimmten Pfadtyp (z. B. vPC statt Einzelport). `expect=False`: darf nicht gelernt sein (Fremdgerät) |
-| `exists` / `class` | `dn` bzw. `cls`, `attrs`, `under`; bei `class` zusätzlich `expect` (False = darf es nicht geben) oder `max` (höchstens so viele) | Objekt mit Attributen vorhanden. Nur verwenden, wenn die Aufgabe das Objekt wirklich verlangt, sonst lieber Verhalten prüfen |
+| `exists` / `class` | `dn` bzw. `cls`, `attrs`, `under`; bei `class` zusätzlich `expect` (False = darf es nicht geben), `max` (höchstens so viele) oder `min` (mindestens so viele) | Objekt mit Attributen vorhanden. Nur verwenden, wenn die Aufgabe das Objekt wirklich verlangt, sonst lieber Verhalten prüfen |
 | `nofaults` | `under`, optional `code` | keine Faults |
 | `router`, `learned`, `route`, `bfd`, `bgptimer` | siehe vorhandene Labs | externe Nachbarschaften und Routen |
 | `snapshot` | `prefix` | Ein Config-Snapshot mit diesem Namensanfang wurde nach dem Lab-Start angelegt |
