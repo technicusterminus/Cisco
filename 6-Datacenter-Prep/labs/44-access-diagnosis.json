@@ -1,0 +1,775 @@
+{
+ "id": "44-access-diagnosis",
+ "title": "44 Access-Diagnose: drei Server, drei Ursachen",
+ "topic": "Access Policies / Troubleshooting",
+ "level": "Mittel",
+ "duration": "30 min",
+ "fabric": "discovered",
+ "kind": "troubleshooting",
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Labs 02 und 03"
+ ],
+ "tools": [
+  "Traffic Inspector",
+  "Faults (Tenant > Faults)",
+  "EP Tracker",
+  "CLI: show vlan extended, show endpoint, moquery -c faultInst"
+ ],
+ "goals": [
+  "Die Access-Kette vom Server bis zur EPG Glied für Glied prüfen",
+  "F0467-Faults lesen und der richtigen Ursache zuordnen",
+  "Nur das freigeben, was gebraucht wird"
+ ],
+ "intro": "Der Webshop bekommt eine Datenbank. Nach dem Rollout melden drei Teams Probleme. Verkabelung und Server-Konfiguration sind geprüft und dürfen nicht verändert werden.\n\n- web1: leaf101 eth1/1, VLAN 110 · web2: leaf102 eth1/3, VLAN 110 (EPG Web)\n- app1: leaf102 eth1/2, VLAN 120 (EPG App)\n- db1: leaf102 eth1/8, VLAN 250 (EPG DB, VLAN vom DB-Team vorgegeben)\n\nDie Contracts web-to-app (TCP 8080, Ping) und app-to-db (TCP 5432) sind abgenommen.",
+ "requirements": [
+  "Ticket 1: „web1 erreicht app1 nicht auf TCP 8080.“",
+  "Ticket 2: „web2 erreicht app1 nicht, obwohl er genauso konfiguriert ist wie web1.“",
+  "Ticket 3: „app1 erreicht db1 nicht auf TCP 5432.“",
+  "Die VLANs der Server und die Contracts bleiben, wie sie sind.",
+  "An leaf101 eth1/9 hängt ein unbekanntes Gerät. Es darf in keiner EPG gelernt werden."
+ ],
+ "limits": [
+  "Die Fault-Texte (F0467, invalid-vlan / invalid-path) folgen dem APIC-Muster; der Wortlaut ist vereinfacht.",
+  "Server senden in der Simulation genau ein VLAN (Trunk) und reagieren auf alle Ports, solange kein Dienstmodell gesetzt ist."
+ ],
+ "hints": [
+  "**Konzept:** Ein Endpoint wird nur gelernt, wenn die ganze Kette steht: Port → Interface Policy Group → AAEP → Domain → VLAN Pool, und an der EPG Domain plus Static Port mit dem VLAN, das der Server sendet.",
+  "**Ebene:** Alle drei Tickets enden im Traffic Inspector mit EP_NOT_LEARNED – die Policy wird gar nicht erst geprüft. Die Details stehen in den Faults der EPGs und in der Begründung beim Endpoint.",
+  "**Prüfschritte:** Faults im Tenant Shop lesen (F0467, debug message). Für web2 die Begründung im Traffic Inspector mit der Static-Port-Konfiguration vergleichen. Für db1: Liegt VLAN 250 im Pool der Domain?",
+  "**Lösung:** Ticket 1: EPG App mit der Physical Domain PhysDom-Server verknüpfen. Ticket 2: Static Port von web2 auf vlan-110 korrigieren (stand auf vlan-111). Ticket 3: VLAN 250 als Encap Block in den Pool VLAN-Pool-Server aufnehmen. Das Gerät an eth1/9 bleibt ungelernt, solange keine EPG dort deployed ist – also kein Static Leaf (ganzer Leaf) für Web."
+ ],
+ "cause": "Ticket 1: EPG App ohne Domain (F0467 invalid-vlan). Ticket 2: Static Port web2 mit vlan-111, der Server sendet 110. Ticket 3: vlan-250 liegt nicht im VLAN Pool der Domain (F0467 invalid-vlan).",
+ "config": [
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "infraInfra": {
+       "attributes": {},
+       "children": [
+        {
+         "fvnsVlanInstP": {
+          "attributes": {
+           "name": "VLAN-Pool-Server",
+           "allocMode": "static"
+          },
+          "children": [
+           {
+            "fvnsEncapBlk": {
+             "attributes": {
+              "from": "vlan-100",
+              "to": "vlan-199"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAttEntityP": {
+          "attributes": {
+           "name": "AAEP-Server"
+          },
+          "children": [
+           {
+            "infraRsDomP": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraFuncP": {
+          "attributes": {},
+          "children": [
+           {
+            "infraAccPortGrp": {
+             "attributes": {
+              "name": "IPG-Server-Access"
+             },
+             "children": [
+              {
+               "infraRsAttEntP": {
+                "attributes": {
+                 "tDn": "uni/infra/attentp-AAEP-Server"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAccPortP": {
+          "attributes": {
+           "name": "IntProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraHPortS": {
+             "attributes": {
+              "name": "Server-Ports",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraPortBlk": {
+                "attributes": {
+                 "name": "block2",
+                 "fromPort": "1",
+                 "toPort": "10"
+                }
+               }
+              },
+              {
+               "infraRsAccBaseGrp": {
+                "attributes": {
+                 "tDn": "uni/infra/funcprof/accportgrp-IPG-Server-Access"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraNodeP": {
+          "attributes": {
+           "name": "SwProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraLeafS": {
+             "attributes": {
+              "name": "101-102",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraNodeBlk": {
+                "attributes": {
+                 "name": "blk",
+                 "from_": "101",
+                 "to_": "102"
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "infraRsAccPortP": {
+             "attributes": {
+              "tDn": "uni/infra/accportprof-IntProf-Leaf101-102"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "physDomP": {
+       "attributes": {
+        "name": "PhysDom-Server"
+       },
+       "children": [
+        {
+         "infraRsVlanNs": {
+          "attributes": {
+           "tDn": "uni/infra/vlanns-[VLAN-Pool-Server]-static"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Shop"
+    },
+    "children": [
+     {
+      "fvCtx": {
+       "attributes": {
+        "name": "Prod"
+       }
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Web"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.10.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-App"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.20.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-DB"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.30.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzFilter": {
+       "attributes": {
+        "name": "tcp-8080"
+       },
+       "children": [
+        {
+         "vzEntry": {
+          "attributes": {
+           "name": "tcp-8080",
+           "etherT": "ip",
+           "prot": "tcp",
+           "dFromPort": "8080",
+           "dToPort": "8080"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzFilter": {
+       "attributes": {
+        "name": "pgsql"
+       },
+       "children": [
+        {
+         "vzEntry": {
+          "attributes": {
+           "name": "pgsql",
+           "etherT": "ip",
+           "prot": "tcp",
+           "dFromPort": "5432",
+           "dToPort": "5432"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzBrCP": {
+       "attributes": {
+        "name": "web-to-app",
+        "scope": "context"
+       },
+       "children": [
+        {
+         "vzSubj": {
+          "attributes": {
+           "name": "subj",
+           "revFltPorts": "yes"
+          },
+          "children": [
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "tcp-8080"
+             }
+            }
+           },
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "icmp"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzBrCP": {
+       "attributes": {
+        "name": "app-to-db",
+        "scope": "context"
+       },
+       "children": [
+        {
+         "vzSubj": {
+          "attributes": {
+           "name": "subj",
+           "revFltPorts": "yes"
+          },
+          "children": [
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "pgsql"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Webshop"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Web"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Web"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/1]",
+              "encap": "vlan-110",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/3]",
+              "encap": "vlan-111",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsCons": {
+             "attributes": {
+              "tnVzBrCPName": "web-to-app"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "App"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-App"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/2]",
+              "encap": "vlan-120",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsProv": {
+             "attributes": {
+              "tnVzBrCPName": "web-to-app"
+             }
+            }
+           },
+           {
+            "fvRsCons": {
+             "attributes": {
+              "tnVzBrCPName": "app-to-db"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "DB"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-DB"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/8]",
+              "encap": "vlan-250",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsProv": {
+             "attributes": {
+              "tnVzBrCPName": "app-to-db"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "hosts": [
+  {
+   "name": "web1",
+   "mac": "00:50:56:10:10:11",
+   "ip": "10.10.10.11/24",
+   "gw": "10.10.10.1",
+   "vlan": 110,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/1"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Webserver"
+  },
+  {
+   "name": "web2",
+   "mac": "00:50:56:10:10:12",
+   "ip": "10.10.10.12/24",
+   "gw": "10.10.10.1",
+   "vlan": 110,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/3"
+    ]
+   ],
+   "bond": "none",
+   "descr": "zweiter Webserver"
+  },
+  {
+   "name": "app1",
+   "mac": "00:50:56:10:20:11",
+   "ip": "10.10.20.11/24",
+   "gw": "10.10.20.1",
+   "vlan": 120,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/2"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Applikationsserver"
+  },
+  {
+   "name": "db1",
+   "mac": "00:50:56:10:30:11",
+   "ip": "10.10.30.11/24",
+   "gw": "10.10.30.1",
+   "vlan": 250,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/8"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Datenbankserver (VLAN vom DB-Team vorgegeben)"
+  },
+  {
+   "name": "pc-x",
+   "mac": "00:50:56:66:00:09",
+   "ip": "10.10.10.99/24",
+   "gw": "10.10.10.1",
+   "vlan": 110,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/9"
+    ]
+   ],
+   "bond": "none",
+   "descr": "unbekanntes Gerät am freien Port"
+  }
+ ],
+ "tasks": [],
+ "checks": [
+  {
+   "desc": "Ticket 1: web1 → app1 TCP 8080",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "app1",
+   "proto": "tcp",
+   "port": 8080,
+   "expect": true
+  },
+  {
+   "desc": "Ticket 2: web2 → app1 TCP 8080",
+   "type": "traffic",
+   "src": "web2",
+   "dst": "app1",
+   "proto": "tcp",
+   "port": 8080,
+   "expect": true
+  },
+  {
+   "desc": "Ticket 3: app1 → db1 TCP 5432",
+   "type": "traffic",
+   "src": "app1",
+   "dst": "db1",
+   "proto": "tcp",
+   "port": 5432,
+   "expect": true
+  },
+  {
+   "desc": "db1 ist in EPG DB gelernt",
+   "type": "endpoint",
+   "host": "db1",
+   "epg": "uni/tn-Shop/ap-Webshop/epg-DB"
+  },
+  {
+   "desc": "Keine Konfigurationsfehler (F0467) im Tenant Shop",
+   "type": "nofaults",
+   "under": "uni/tn-Shop",
+   "code": "F0467"
+  },
+  {
+   "desc": "Unbekanntes Gerät an leaf101 eth1/9 wird nicht gelernt",
+   "type": "endpoint",
+   "host": "pc-x",
+   "expect": false,
+   "category": "security"
+  },
+  {
+   "desc": "Web erreicht die Datenbank nicht",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "db1",
+   "proto": "tcp",
+   "port": 5432,
+   "expect": false,
+   "reason": "POLICY_",
+   "category": "security"
+  },
+  {
+   "desc": "Least Privilege App → DB: nur TCP 5432",
+   "type": "exposure",
+   "src": "app1",
+   "dst": "db1",
+   "allow": [
+    "tcp/5432"
+   ],
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Warum zeigt der Traffic Inspector bei Ticket 1 keine Policy-Entscheidung?",
+   "options": [
+    "Weil app1 nicht gelernt ist – ohne Endpoint keine EPG und damit kein Contract-Lookup",
+    "Weil der Contract fehlt",
+    "Weil die Policy auf dem Spine geprüft wird",
+    "Weil ICMP nicht erlaubt ist"
+   ],
+   "answer": 0,
+   "explain": "Die Policy (Zoning Rules) gilt zwischen EPGs. Ein Paket eines ungelernten Hosts wird gar nicht klassifiziert – darum zuerst die Access-Kette."
+  },
+  {
+   "id": "q2",
+   "q": "web2: Static Port vlan-111, der Server sendet VLAN 110. Gibt es einen Fault?",
+   "options": [
+    "Nein – die Konfiguration ist gültig, sie passt nur nicht zum Server",
+    "Ja, F0467 invalid-vlan",
+    "Ja, ein Fault am Leaf-Port",
+    "Ja, weil VLAN 111 nicht im Pool ist"
+   ],
+   "answer": 0,
+   "explain": "vlan-111 liegt im Pool, das Deployment klappt. Der APIC weiß nicht, was der Server sendet; den Widerspruch sieht man erst am fehlenden Endpoint."
+  },
+  {
+   "id": "q3",
+   "q": "Warum ist ein Static Leaf (EPG auf dem ganzen leaf101) für web-Server hier falsch?",
+   "options": [
+    "Er deployed die EPG auf allen Ports des Leafs mit passender Domain – auch auf eth1/9 mit dem fremden Gerät",
+    "Static Leaf gibt es nicht",
+    "Er ist gleichwertig zum Static Port",
+    "Er funktioniert nur mit vPC"
+   ],
+   "answer": 0,
+   "explain": "Least Privilege gilt auch im Access-Teil: EPGs nur dort deployen, wo ihre Server hängen."
+  }
+ ],
+ "solution": "Ticket 1: `POST /api/mo/uni/tn-Shop/ap-Webshop/epg-App.json` mit `{\"fvAEPg\":{\"attributes\":{},\"children\":[{\"fvRsDomAtt\":{\"attributes\":{\"tDn\":\"uni/phys-PhysDom-Server\"}}}]}}`.\n\nTicket 2: Static Port `topology/pod-1/paths-102/pathep-[eth1/3]` mit `encap` **vlan-110**.\n\nTicket 3: `POST /api/mo/uni/infra/vlanns-[VLAN-Pool-Server]-static.json` mit einem `fvnsEncapBlk` vlan-250 bis vlan-250.",
+ "routers": [],
+ "vcenters": [],
+ "devices": [],
+ "aaa": [],
+ "switches": [],
+ "solutionConfig": [
+  [
+   "uni/tn-Shop/ap-Webshop/epg-App",
+   {
+    "fvAEPg": {
+     "attributes": {},
+     "children": [
+      {
+       "fvRsDomAtt": {
+        "attributes": {
+         "tDn": "uni/phys-PhysDom-Server"
+        }
+       }
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "uni/tn-Shop/ap-Webshop/epg-Web",
+   {
+    "fvAEPg": {
+     "attributes": {},
+     "children": [
+      {
+       "fvRsPathAtt": {
+        "attributes": {
+         "tDn": "topology/pod-1/paths-102/pathep-[eth1/3]",
+         "encap": "vlan-110"
+        }
+       }
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "uni/infra/vlanns-[VLAN-Pool-Server]-static",
+   {
+    "fvnsVlanInstP": {
+     "attributes": {},
+     "children": [
+      {
+       "fvnsEncapBlk": {
+        "attributes": {
+         "from": "vlan-250",
+         "to": "vlan-250"
+        }
+       }
+      }
+     ]
+    }
+   }
+  ]
+ ]
+}

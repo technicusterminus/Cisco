@@ -7,7 +7,7 @@ from .model import CLASSES, split_dn
 from .engine import ip_of, pnum, vlan_num
 from .query import eval_filter, out_attrs
 
-APIC_HELP = """Verfuegbare Befehle auf dem APIC:
+APIC_HELP = """Verfuegbare Befehle auf dem APIC (Ausgabe aus dem Simulator, Format vereinfacht; [S] = simulator-spezifisch):
   acidiag fnvread                     Fabric-Knoten und ihr Zustand
   moquery -c <Klasse> [-f '<filter>'] Objekte einer Klasse, z. B. moquery -c fvBD
   moquery -d <dn>                     ein Objekt, z. B. moquery -d uni/tn-common
@@ -24,12 +24,12 @@ APIC_HELP = """Verfuegbare Befehle auf dem APIC:
   show vmware domain name <Domain>    VMM Domain mit vCenter, Port Groups, Hosts
   show firmware upgrade status        Versionen und laufende Upgrades je Node
   show firmware repository            Images im Firmware Repository
-  show snapshot | show export-config  Config Snapshots und Export-/Import-Jobs
-  show snmp | show logging server     SNMP Policy und Syslog-/Trap-Ziele mit Zustand
+  show snapshot | show export-config  [S] Config Snapshots und Export-/Import-Jobs
+  show snmp | show logging server     [S] SNMP Policy und Syslog-/Trap-Ziele mit Zustand
   ssh <leaf>                          zur Leaf-/Spine-CLI wechseln (z. B. ssh leaf101)
   Filter-Beispiel: moquery -c fvAEPg -f 'fv.AEPg.name=="Web"'"""
 
-LEAF_HELP = """Verfuegbare Befehle auf Leaf/Spine:
+LEAF_HELP = """Verfuegbare Befehle auf Leaf/Spine (Ausgabe aus dem Simulator, Format an NX-OS angelehnt):
   show version
   show lldp neighbors
   show interface status
@@ -65,6 +65,28 @@ LEAF_HELP = """Verfuegbare Befehle auf Leaf/Spine:
             show bgp vpnv4 unicast summary vrf overlay-1 | show coop internal info ip-db (Spine)
   exit                                zurueck zum APIC"""
 
+# Herkunft eines Befehls (B-14). 'device': Den Befehl gibt es so auf APIC bzw. Leaf (nach Cisco-Dokumentation, nicht gegen ein
+# Geraet geprueft), die Ausgabe kommt aus der Engine und ist vereinfacht. 'sim': Form am APIC nicht belegt, nur im Simulator.
+SIM_ONLY_APIC = ('show snapshot', 'show export-config', 'show snmp', 'show logging server')
+
+# Nicht unterstuetzte Befehle: (Muster, Ort 'apic'|'leaf'|None, unterstuetzter Diagnoseweg)
+UNSUPPORTED_HINTS = [
+    (r'^(conf(igure)?( t(erminal)?)?|config)\b', None,
+     'Die CLI ist in der Simulation nur lesend. Konfiguriert wird ueber die GUI oder die REST-API (POST /api/mo/...json).'),
+    (r'^show run(ning-config)?\b', None,
+     'Konfiguration lesen: "moquery -c <Klasse>" oder "moquery -d <dn>" auf dem APIC, REST: GET /api/mo/<dn>.json?rsp-subtree=full.'),
+    (r'^(ping|traceroute|tracert)\b', None,
+     'Erreichbarkeit pruefen: Traffic Inspector (Operations > Visibility & Troubleshooting) oder auf dem Leaf "iping -V <Tenant:VRF> <IP>".'),
+    (r'^show (ip route|interface|vlan|zoning-rule|lldp|cdp|mac|ip arp|vpc|port-channel|ip ospf|bgp|bfd)\b', 'apic',
+     'Im Simulator gibt es diesen Befehl auf dem Leaf: "ssh leaf101", dann den Befehl erneut.'),
+    (r'^show endpoint\b', 'apic', 'Auf dem APIC heisst er "show endpoints", auf dem Leaf "show endpoint".'),
+    (r'^(moquery|acidiag|show (tenant|faults|epg|bridge-domain|endpoints|firmware|controller|fabric membership))\b', 'leaf',
+     'Das ist ein APIC-Befehl: "exit" fuehrt zurueck zum APIC.'),
+    (r'^show (log|logging|event|audit)', None,
+     'Faults: "show faults" auf dem APIC; Events und Audit-Log: System > History in der GUI, REST: GET /api/class/aaaModLR.json.'),
+    (r'^show (ip )?(int|interface)', 'leaf', 'Unterstuetzt: "show interface status" und "show interface eth1/<n>".'),
+]
+
 
 def _pkg(cls):
     m = re.match(r'^([a-z0-9]+)([A-Z].*)$', cls)
@@ -98,17 +120,39 @@ class Cli:
         self.e = eng
         self.sim = sim
         self.request = None
+        self.kind = None   # 'device' | 'sim' | 'unsupported' (Herkunft der letzten Ausgabe, fuer die Oberflaeche)
 
     def run(self, node, cmd):
         cmd = cmd.strip()
+        self.kind = None
         if not cmd:
             return ''
         if node in ('apic1', 'apic', '1', ''):
-            return self.apic(cmd)
+            out = self.apic(cmd)
+            if self.kind is None:
+                self.kind = 'sim' if re.sub(r'\s+', ' ', cmd).startswith(SIM_ONLY_APIC) else 'device'
+            return out
         n = self._node(node)
         if n is None:
             return '%% Knoten %s ist nicht erreichbar (nicht registriert/aktiv)' % node
-        return self.switch(n, cmd)
+        out = self.switch(n, cmd)
+        if self.kind is None:
+            self.kind = 'device'
+        return out
+
+    def unsupported(self, cmd, where):
+        """Nicht unterstuetzter Befehl: klar sagen, dass es an der Simulation liegt, und einen unterstuetzten Diagnoseweg nennen."""
+        self.kind = 'unsupported'
+        c = re.sub(r'\s+', ' ', cmd.strip())
+        pre = '%% ' if where == 'apic' else '% '
+        out = [pre + 'In der Simulation nicht unterstuetzt: "%s" (Grenze des Simulators, keine Aussage ueber das echte Geraet)' % c]
+        for pat, loc, hint in UNSUPPORTED_HINTS:
+            if (loc is None or loc == where) and re.match(pat, c):
+                out.append('  Stattdessen: ' + hint)
+                break
+        else:
+            out.append('  "help" zeigt die unterstuetzten Befehle. Fuer Erreichbarkeit: Traffic Inspector.')
+        return '\n'.join(out)
 
     def _node(self, name):
         for nid, n in self.e.nodes.items():
@@ -210,7 +254,7 @@ class Cli:
                 if n['state'] == 'active':
                     out.append(' %-11s %-4d %-5d %-9s %s' % (n['role'], n.get('pod', e.pod), nid, n['name'], e.node_version(n['serial'])))
             return '\n'.join(out)
-        return '%% Unbekannter Befehl. "help" zeigt die verfuegbaren Befehle.'
+        return self.unsupported(cmd, 'apic')
 
     def moquery(self, cmd):
         try:
@@ -403,7 +447,7 @@ class Cli:
             return extra
         if c.startswith('show ip route') or c.startswith('show ip ospf') or c.startswith('show bgp'):
             return '% Bitte VRF angeben, z. B. "show ip route vrf Tenant:VRF"'
-        return '% Invalid command. "help" zeigt die verfuegbaren Befehle.'
+        return self.unsupported(cmd, 'leaf')
 
     def endpoints(self, nid, args):
         e = self.e

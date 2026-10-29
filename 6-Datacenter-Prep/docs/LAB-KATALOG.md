@@ -2,7 +2,7 @@
 
 Die Tabelle vergleicht den geplanten Lernpfad (26 Labs) mit den vorhandenen Lab-Dateien in `labs/`.
 
-**Format neu** (Labs 02, 03, 04, 07 und 32 bis 43) heißt, das Lab hat:
+**Format neu** (Labs 02, 03, 04, 07 und 32 bis 45) heißt, das Lab hat:
 
 - Anforderungen statt Klickanleitung
 - vier Hinweisstufen
@@ -24,17 +24,17 @@ Startbar sind nur Labs, die es als Datei gibt. Die Spalte *Stand* gilt für die 
 | 02 | Tenant, VRF, BD, Application Profile | 03 Tenant, VRF, BD, EPG | vollständig (neu) | |
 | 03 | Zwei Endpoints in derselben EPG | **33 Zwei Endpoints in derselben EPG** | vollständig (neu) | Prüft auch: ohne Contract gelöst |
 | 04 | Zwei EPGs in derselben BD | **34 Zwei EPGs in derselben BD** | vollständig (neu) | Bridging grün, Policy rot; ICMP-Gegenrichtung als Lernpunkt |
-| 05 | Verschiedene BDs im selben VRF | 03, 32 | teilweise | Routing grün, Policy rot: im Traffic-Test von Lab 32 sichtbar |
+| 05 | Verschiedene BDs im selben VRF | **45 Zwei Bridge Domains, eine VRF** | vollständig (neu) | BD in falscher VRF und falsches Gateway-Subnetz; Route Leaking als Abkürzung scheitert |
 | 06 | Vollständige Access-Policy-Kette | 02 Access Policies | vollständig (neu) | Namen frei wählbar außer der Domain, Fremdgerät an freiem Port |
-| 07 | Fehlende Domain-Zuordnung | 02 Access Policies (Domain fehlt im Ausgangszustand) | teilweise (neu) | F0467, `EP_NOT_LEARNED`; ein eigenes Diagnose-Lab fehlt |
-| 08 | VLAN außerhalb des Pools | 07 Troubleshooting (Ticket 1) | teilweise (neu) | |
-| 09 | Fehlerhaftes Static Path Binding | 33 (fehlende Bindung), 07 (Ticket 2: Port nicht im Selector) | teilweise (neu) | falsches VLAN an der Bindung noch ohne Lab |
+| 07 | Fehlende Domain-Zuordnung | **44 Access-Diagnose** (Ticket 1), 02 | vollständig (neu) | F0467 invalid-vlan, `EP_NOT_LEARNED` |
+| 08 | VLAN außerhalb des Pools | **44 Access-Diagnose** (Ticket 3), 07 (Ticket 1) | vollständig (neu) | Server-VLAN ist vorgegeben; die Bindung umzubiegen besteht nicht |
+| 09 | Fehlerhaftes Static Path Binding | **44 Access-Diagnose** (Ticket 2), 33, 07 | vollständig (neu) | falsches VLAN an der Bindung erzeugt keinen Fault, nur einen ungelernten Endpoint; Static Leaf als Abkürzung lernt das Fremdgerät |
 | 10 | Consumer und Provider | 04, 32, 35 | vollständig (neu) | |
 | 11 | HTTPS erlauben, SSH blockieren | **32 Least Privilege** | **vollständig (neu)** | Abnahmefall, siehe `tests/test_acceptance.py` |
 | 12 | ICMP und TCP getrennt | 04, 32, 34 | vollständig (neu) | |
 | 13 | Falscher Port, falsche Richtung | **35 Falscher Port, falsche Richtung** | vollständig (neu) | zwei unabhängige Fehler, permit any scheitert |
 | 14 | Intra-EPG Isolation | **38 Innerhalb einer EPG einschränken** | vollständig (neu) | Isolation allein reicht nicht; Intra-EPG-Contract mit Least Privilege |
-| 15 | Fehlendes Endpoint Learning | 07 Troubleshooting (Ticket 5) | teilweise (neu) | |
+| 15 | Fehlendes Endpoint Learning | 44 Access-Diagnose (alle Tickets), 07 (Ticket 5) | vollständig (neu) | drei Ursachen für `EP_NOT_LEARNED` unterscheiden |
 | 16 | Endpoint Move | **36 Endpoint Move nachvollziehen** | vollständig (neu) | Endpoint-Verlauf im EP Tracker; alte Bindung als Sicherheitsrisiko |
 | 17 | Interface-Ausfall vs. Policy-Drop | **37 Interface-Ausfall oder Policy-Drop?** | vollständig (neu) | drei Ursachen: PORT_ADMIN_DOWN, POLICY_IMPLICIT_DENY, LINK_DOWN |
 | 18 | Mehrere unabhängige Fehler | 07 Troubleshooting (sechs Tickets) | vollständig (neu) | mit Least-Privilege-Nebenbedingung |

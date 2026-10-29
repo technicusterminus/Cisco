@@ -485,6 +485,7 @@ def _run(eng, sim, src, dst, proto='icmp', port=0):
     t.path = {'src': sh['name'], 'srcLeafs': leafs(shs), 'srcEpg': shs['epg']}
 
     if D['kind'] == 'host':
+        t.path['dst'] = D['h']['name']
         r = _host_checks(eng, t, D, 'Ziel')
         if not r:
             return t.result()

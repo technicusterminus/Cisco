@@ -297,3 +297,12 @@ table.mx td.mxc.ok { background: #e6f5ec; color: #1b7a3d; } table.mx td.mxc.bad 
 fieldset.quiz { border: 1px solid var(--line); border-radius: 4px; margin: 8px 0; padding: 6px 10px; }
 fieldset.quiz legend { font-weight: 600; padding: 0 4px; }
 .okc { color: #1d7a43; } .badc { color: #a12b2b; }
+/* Pfad aus dem Traffic-Test in der Topologie */
+svg.topo .hl { stroke-width: 6; stroke-linecap: round; opacity: .75; }
+svg.topo .hl.ok { stroke: #0d5f82; } svg.topo .hl.bad { stroke: #c94a4a; } svg.topo .hl.off { stroke: #b9c2c9; stroke-dasharray: 6 5; opacity: .6; }
+svg.topo .xmark { fill: #c94a4a; font-size: 22px; font-weight: 800; }
+.trace-topo .topowrap { overflow-x: auto; }
+/* Policy-Matrix */
+table.pmatrix td.pm { cursor: pointer; font-size: 12px; max-width: 220px; }
+table.pmatrix td.pm-none { color: #8a96a0; } table.pmatrix td.pm-some { background: #e7f6ec; } table.pmatrix td.pm-all { background: #fbe9e9; font-weight: 700; }
+table.pmatrix td.pm-self { outline: 1px dashed #b9c2c9; outline-offset: -3px; }

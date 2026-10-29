@@ -8,7 +8,8 @@ const Term = {
 
   build(container, node, floating) {
     let cur = node || 'apic1';
-    const out = h('pre', { class: 'term-out' }, (cur === 'apic1' ? 'Application Policy Infrastructure Controller (Datacenter Prep)\n' : 'Cisco NX-OS (ACI mode, Datacenter Prep)\n') + '"help" zeigt die Befehle, "ssh leaf101" wechselt zum Switch.\n\n');
+    const out = h('pre', { class: 'term-out' }, (cur === 'apic1' ? 'Application Policy Infrastructure Controller (Datacenter Prep)\n' : 'Cisco NX-OS (ACI mode, Datacenter Prep)\n') + '"help" zeigt die Befehle, "ssh leaf101" wechselt zum Switch.\n' +
+      'Simulation: Ausgaben kommen aus dem Simulator, das Format ist vereinfacht. Die CLI ist nur lesend.\n\n');
     const pr = h('span', { class: 'term-pr' }, this.prompt(cur));
     const inp = h('input', { class: 'term-in', spellcheck: 'false', autocomplete: 'off' });
     const nodeSel = h('select', { class: 'term-node' });
@@ -38,7 +39,7 @@ const Term = {
       } else if (cmd.trim()) {
         try {
           const r = await API.post('/sim/cli', { node: cur, cmd }, true);
-          out.textContent += r.output + '\n';
+          out.textContent += r.output + '\n' + (r.kind === 'sim' ? '[simulator-spezifischer Befehl – am APIC so nicht belegt]\n' : '');
           if (r.reboot) { inp.disabled = true; setTimeout(() => location.reload(), 2500); }
         } catch (e) { out.textContent += 'Fehler: ' + (e.text || e.message) + '\n'; }
       }

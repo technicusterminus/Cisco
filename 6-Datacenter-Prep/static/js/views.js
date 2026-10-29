@@ -31,7 +31,7 @@ function traceCard(r) {
   const v = VERDICT[r.verdict] || VERDICT.UNRESOLVED;
   const bad = r.steps.find(s => s.ok === false);
   const path = r.path;
-  let strip = null;
+  let strip = null, topo = null;
   if (path) {
     // Stationen nur so, wie der Pfad sie wirklich hat: gleicher Leaf = lokal, sonst ueber die Fabric
     const sl = (path.srcLeafs || []).join(' / ') || '—', dl = (path.dstLeafs || []).join(' / ') || '—';
@@ -43,6 +43,9 @@ function traceCard(r) {
       : bad.layer === 'fabric' ? (local ? 'srcLeaf' : 'fabric') : ['routing', 'forwarding'].includes(bad.layer) ? 'srcLeaf' : 'dst';
     const failAt = failKey ? hops.findIndex(x => x[0] === failKey) : -1;
     const lbl = !bad ? '' : bad.layer === 'policy' ? '✖ Policy verwirft' : bad.layer === 'service' ? '✖ Dienst fehlt' : bad.layer === 'physical' ? '✖ kein Link' : '✖ Drop hier';
+    topo = App.state && App.state.nodes ? Views.topologySvg(App.state, { trace: {
+      hops: hops.map(([key]) => key === 'src' ? { t: 'host', name: path.src } : key === 'dst' ? { t: 'host', name: path.dst } : key === 'fabric' ? { t: 'fabric' }
+        : { t: 'leaf', names: (key === 'srcLeaf' ? path.srcLeafs : path.dstLeafs) || [] }), failAt } }) : null;
     strip = h('div', { class: 'tpath', role: 'list', 'aria-label': 'Pfad' }, hops.map(([, k, n], i) => {
       const st = failAt === -1 || i < failAt ? 'ok' : i === failAt ? 'bad' : 'off';
       return h('div', { class: 'thop ' + st, role: 'listitem' }, h('span', { class: 'muted small' }, k), h('b', null, n), h('span', { class: 'small' }, st === 'ok' ? '✔ ok' : st === 'bad' ? lbl : '– nicht erreicht'));
@@ -57,7 +60,9 @@ function traceCard(r) {
       h('div', null, h('b', null, 'Ursache: '), h('code', null, r.reason), r.location ? h('span', null, ' · Ort: ', h('b', null, r.location)) : null),
       r.explain ? h('div', null, r.explain) : null,
       r.hint ? h('div', { class: 'trace-hint' }, h('b', null, 'Nächster Diagnoseschritt: '), r.hint) : null) : null,
-    strip, pol ? h('div', null, h('h4', null, 'Angewandte Policy'), pol) : null,
+    strip, topo ? h('details', { class: 'trace-topo' }, h('summary', null, 'Pfad in der Topologie'), topo,
+      h('div', { class: 'muted small' }, 'Blau: erreicht · Rot mit ✖: hier endet der Test · gestrichelt: nicht erreicht. Über welchen Spine VXLAN läuft, wird nicht unterschieden.')) : null,
+    pol ? h('div', null, h('h4', null, 'Angewandte Policy'), pol) : null,
     h('details', { open: r.verdict !== 'ALLOW' }, h('summary', null, 'Alle Prüfschritte (' + r.steps.length + ')'),
       h('ol', null, r.steps.map(s => h('li', { class: s.ok === false ? 'bad' : s.ok ? 'ok' : 'info' }, h('b', null, (s.ok === false ? '✖ ' : s.ok ? '✔ ' : 'ℹ ') + s.title),
         s.code && s.ok === false ? h('code', { class: 'small', style: { marginLeft: '6px' } }, s.code) : null, s.detail ? h('div', { class: 'muted' }, s.detail) : null)))),
@@ -393,6 +398,36 @@ const Views = {
     w.appendChild(out);
   },
 
+  async 'ops/policy'(w) {
+    const draw = async vrf => {
+      const m = await API.get('/sim/policymatrix' + (vrf ? '?vrf=' + encodeURIComponent(vrf) : ''), true);
+      clear(w);
+      const sel = h('select', { onchange: () => draw(sel.value) }, m.vrfs.map(v => h('option', { value: v, selected: v === m.vrf }, v.replace(/^uni\/tn-/, '').replace('/ctx-', ':'))));
+      w.appendChild(paneHead('Policy-Matrix', 'Welche Dienste erlaubt die Policy zwischen den EPGs eines VRF? Zeile = Quelle (baut auf), Spalte = Ziel'));
+      w.appendChild(h('div', { class: 'card' }, h('div', { class: 'traffic' }, h('label', null, 'VRF'), sel),
+        h('p', { class: 'muted small' }, 'Berechnet mit derselben Policy-Entscheidung wie Traffic Inspector und Lab-Bewertung, für ' + m.probes.length +
+          ' typische Dienste (' + m.probes.slice(0, 8).join(', ') + ' …). Bewertet wird die Anfrage einer neuen Verbindung, nicht Antwortverkehr, nicht Endpoint-Lernen oder Routing. ' +
+          '„alles“ heißt: jeder geprüfte Dienst ist offen.')));
+      if (!m.classes.length) { w.appendChild(h('div', { class: 'card note' }, 'In diesem VRF gibt es keine EPGs.')); return; }
+      const detail = h('div');
+      const cell = (s, d) => {
+        const c = m.cells[s.dn][d.dn];
+        const txt = c.all ? 'alles' : c.open.length ? c.open.join(', ') : '—';
+        const cls = c.all ? 'pm-all' : c.open.length ? 'pm-some' : 'pm-none';
+        return h('td', { class: 'pm ' + cls + (s.dn === d.dn ? ' pm-self' : ''), title: (c.rules.join(', ') || c.codes.join(', ')),
+          onclick: () => { clear(detail).appendChild(h('div', { class: 'card' }, h('div', { class: 'card-h' }, s.name + ' → ' + d.name),
+            h('p', null, h('b', null, 'Offen: '), c.open.join(', ') || 'nichts'), h('p', null, h('b', null, 'Regeln: '), c.rules.join(', ') || '—'),
+            h('p', null, h('b', null, 'Codes: '), c.codes.join(', ')),
+            h('button', { class: 'btn small', onclick: () => App.go('ops', 'vis') }, 'Im Traffic Inspector testen'))); } }, txt);
+      };
+      w.appendChild(h('div', { class: 'card', style: { overflowX: 'auto' } }, h('table', { class: 'grid pmatrix' },
+        h('thead', null, h('tr', null, h('th', null, 'Quelle ↓ / Ziel →'), m.classes.map(c => h('th', null, c.name, c.kind === 'ext' ? ' (extern)' : '')))),
+        h('tbody', null, m.classes.map(s => h('tr', null, h('th', null, s.name, s.kind === 'ext' ? ' (extern)' : ''), m.classes.map(d => cell(s, d))))))));
+      w.appendChild(detail);
+    };
+    await draw();
+  },
+
   async 'ops/ep'(w) {
     const q = h('input', { placeholder: 'IP oder MAC, z. B. 10.1.1.10', style: { width: '260px' } });
     const res = h('div');
@@ -497,6 +532,23 @@ const Views = {
         s.push('<text x="' + mx + '" y="' + my + '" class="plab">' + port.replace('eth', '') + '</text>');
       });
     });
+    const tr = opts && opts.trace;
+    if (tr) {
+      // Pfad aus dem Traffic-Test: Stationen in Koordinaten uebersetzen, Abschnitte nach Ergebnis einfaerben
+      const box2 = (x, y, hh) => ({ x, y, top: y - hh / 2, bot: y + hh / 2 });
+      const at = hop => hop.t === 'host' ? bottom.filter(b => b.kind === 'host' && b.o.name === hop.name).map(b => box2(b.x, b.y, 34))
+        : hop.t === 'fabric' ? spines.filter(n => n.state === 'active' && pos[n.serial]).map(n => box2(pos[n.serial][0], pos[n.serial][1], 38))
+          : nodes.filter(n => (hop.names || []).includes(n.name) && pos[n.serial]).map(n => box2(pos[n.serial][0], pos[n.serial][1], 38));
+      const pts = tr.hops.map(at);
+      for (let i = 0; i < pts.length - 1; i++) {
+        const cls = tr.failAt === -1 || i < tr.failAt - 1 ? 'ok' : i === tr.failAt - 1 ? 'bad' : 'off';
+        pts[i].forEach(a => pts[i + 1].forEach(b => {
+          const [y1, y2] = b.y < a.y ? [a.top, b.bot] : [a.bot, b.top];
+          s.push('<line x1="' + a.x + '" y1="' + y1 + '" x2="' + b.x + '" y2="' + y2 + '" class="hl ' + cls + '"/>');
+        }));
+      }
+      if (tr.failAt >= 0 && pts[tr.failAt]) pts[tr.failAt].forEach(p => s.push('<text x="' + (p.x + 60) + '" y="' + (p.y + 7) + '" class="xmark">✖</text>'));
+    }
     const box = (x, y, w2, hh, cls, l1, l2, data) => s.push('<g class="nd ' + cls + '" data-k="' + data + '"><rect x="' + (x - w2 / 2) + '" y="' + (y - hh / 2) + '" width="' + w2 + '" height="' + hh + '" rx="6"/><text x="' + x + '" y="' + (y - 2) + '" class="t1">' + l1 + '</text><text x="' + x + '" y="' + (y + 12) + '" class="t2">' + l2 + '</text></g>');
     nodes.forEach(n => {
       const p = pos[n.serial];

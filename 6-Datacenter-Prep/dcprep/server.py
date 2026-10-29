@@ -1644,7 +1644,7 @@ def make_handler(hub):
                         S.changed()
                     elif S.sim.get('touch_clean'):
                         S.save()
-                    return self.send(200, {'output': out})
+                    return self.send(200, {'output': out, 'kind': cli.kind})
                 if rest == 'hosts':
                     if b.get('op') == 'bulk':
                         n = S.bulk_hosts(b.get('csv'), b.get('replace'))
@@ -1679,6 +1679,8 @@ def make_handler(hub):
                     return self.send(200, {'ok': True})
                 if rest == 'coverage':
                     return self.send(200, coverage.report(S.store, (q.get('dn') or [''])[0]))
+                if rest == 'policymatrix':
+                    return self.send(200, flows.policy_matrix(S, (q.get('vrf') or [''])[0] or None))
                 if rest == 'flows':
                     if method == 'POST':
                         if b.get('op') == 'matrix':

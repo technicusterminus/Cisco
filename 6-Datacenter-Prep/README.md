@@ -179,8 +179,10 @@ Unter *Simulation > Labs & Stände* laden. Jedes Lab setzt die Konfiguration auf
 | 41 | Routingfehler oder fehlender Contract? Externer Verkehr Schritt für Schritt (neues Format) | 25 min |
 | 42 | Fehlender Rückweg: nur ankündigen, was außen gebraucht wird (neues Format) | 20 min |
 | 43 | Change mit Snapshot absichern und zurückrollen (neues Format) | 20 min |
+| 44 | Access-Diagnose: drei Server, drei Ursachen (Domain, VLAN Pool, Static Port; neues Format) | 30 min |
+| 45 | Zwei Bridge Domains, eine VRF: Routing ohne L3Out (neues Format) | 20 min |
 
-**Neues Lab-Format** (Labs 02, 03, 04, 07 und 32 bis 43): Statt einer Klickanleitung gibt es Anforderungen. Der Rest im Überblick:
+**Neues Lab-Format** (Labs 02, 03, 04, 07 und 32 bis 45): Statt einer Klickanleitung gibt es Anforderungen. Der Rest im Überblick:
 
 - **Hinweise** in vier Stufen: Konzept, Objekte, Prüfschritt, Lösung. Die Oberfläche zählt, wie viele genutzt wurden.
 - **Bewertung** getrennt nach *Funktion* und *Sicherheit / Least Privilege*. Eine Permit-any-Abkürzung funktioniert zwar, besteht aber nicht.
@@ -197,6 +199,8 @@ Den Stand gegenüber dem geplanten Lernpfad zeigt [docs/LAB-KATALOG.md](docs/LAB
 - angewandte Regel für Anfrage und Antwort (Contract, Filter, Richtung) und der Pfad über die Leafs
 
 Reason Codes und das Dienstmodell der Hosts (Feld *Dienste*) sind simulator-spezifisch.
+
+Unter **Pfad in der Topologie** zeigt der Traffic Inspector denselben Test in der Fabric-Grafik: erreichte Abschnitte blau, die Stelle, an der der Test endet, rot mit ✖. Die **Policy-Matrix** (*Operations > Policy-Matrix*) zeigt je VRF für jedes EPG-Paar, welche typischen Dienste die Policy für eine neue Verbindung erlaubt – berechnet mit derselben Entscheidung wie Traffic Inspector und Lab-Bewertung.
 
 **Ereignisse:** In der Hosttabelle (*Simulation > Topologie & Hosts*) lässt sich der Link eines Hosts trennen und wieder verbinden; ein umgesteckter Host (anderer Port im Host-Dialog) ist ein Endpoint Move. Der **EP Tracker** zeigt pro Host den Verlauf: gelernt, umgezogen, nicht mehr gelernt, Link down/up. Die Event-Codes S9101–S9103 sind simulator-spezifisch.
 
@@ -231,6 +235,8 @@ Welche Übungswelt ein REST-Aufruf trifft: Von diesem Rechner aus ohne weitere A
 
 Über **CLI** oben rechts oder unter *Fabric > Inventory > Switch > CLI*. Mit `ssh leaf101` wechselst du vom APIC zum Switch, mit `exit` zurück.
 
+Die CLI ist nur lesend und führt nie Shell-Befehle aus. Die Befehle in der Tabelle gibt es so auf APIC bzw. Leaf (nach Cisco-Dokumentation, nicht gegen ein Gerät geprüft); die Ausgabe kommt aus der Engine und ist im Format vereinfacht. Mit **[S]** markierte Befehle sind simulator-spezifisch. Ein nicht unterstützter Befehl meldet „In der Simulation nicht unterstützt“ – das ist eine Grenze des Simulators, keine Aussage über das echte Gerät – und nennt einen unterstützten Weg (z. B. `moquery` statt `show running-config`, Traffic Inspector statt `ping`). Die REST-Antwort von `POST /sim/cli` enthält dazu `kind`: `device`, `sim` oder `unsupported`.
+
 | APIC | Leaf/Spine |
 |---|---|
 | `acidiag fnvread`, `acidiag avread`, `cat /data/data_admin/sam_exported.config` | `show version`, `show lldp neighbors`, `show cdp neighbors`, `show interface status`, `show interface eth1/x` |
@@ -241,7 +247,7 @@ Welche Übungswelt ein REST-Aufruf trifft: Von diesem Rechner aus ohne weitere A
 | | `show ip eigrp neighbors vrf T:V`, `show bfd neighbors vrf T:V`, `show track` |
 | `acidiag touch clean`, `acidiag reboot` (Werkszustand) | `iping -V T:V <ip>` (Ping vom Leaf, weckt stille Hosts per Glean), `show vpc brief`, `show port-channel summary`, `show ntp peer-status` |
 | `show firmware upgrade status`, `show firmware repository` | `show mcp internal info interface all`, `show interface status err-disabled` |
-| `show snmp`, `show logging server`, `show snapshot` (Export-/Import-Jobs) | `show ip dhcp relay`, `show qos classes` |
+| `show snmp`, `show logging server`, `show snapshot` (Export-/Import-Jobs) – simulator-spezifisch [S] | `show ip dhcp relay`, `show qos classes` |
 | | Spine/Remote Leaf: `show ip ospf neighbors vrf overlay-1` (OSPF zum IPN, ISN oder WAN) |
 | | Underlay: `show ip route vrf overlay-1`, `show isis adjacency vrf overlay-1`, `show bgp vpnv4 unicast summary vrf overlay-1`, auf Spines `show coop internal info ip-db` |
 

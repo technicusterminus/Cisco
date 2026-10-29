@@ -129,3 +129,34 @@ def run(S):
     out = {'ts': now_ts(), 'results': res, 'passed': sum(1 for r in res if r['pass']), 'total': len(res), 'ms': int((time.time() - t0) * 1000)}
     S.sim['expect_last'] = out
     return out
+
+
+def policy_matrix(S, vrf=None):
+    """EPG x EPG je VRF: welche typischen Dienste die Policy fuer eine neue Verbindung erlaubt.
+    Rechnet direkt mit Engine.packet (dieselbe Entscheidung wie Traffic-Test und Lab-Bewertung), ohne Endpoints.
+    Antwortrichtung und Pfad (Endpoint, Routing) gehoeren nicht dazu."""
+    from .engine import EPHEMERAL
+    e = S.engine
+    vrfs = sorted({c['vrf'] for c in e.cls.values() if c.get('vrf')})
+    vrf = vrf if vrf in vrfs else (vrfs[0] if vrfs else None)
+    probes = list(S.EXPOSURE_PROBES) + ['tcp/1', 'udp/65000']
+    classes = sorted((c for c in e.cls.values() if c.get('vrf') == vrf and c['kind'] in ('epg', 'esg', 'ext')),
+                     key=lambda c: (c['kind'] != 'epg', c['dn']))
+    cells = {}
+    for s in classes:
+        row = cells.setdefault(s['dn'], {})
+        for d in classes:
+            open_, rules, codes = [], set(), set()
+            for pr in probes:
+                proto, _, port = pr.partition('/')
+                port = int(port or 0)
+                act, why = e.packet(s, d, proto, EPHEMERAL if port else None, port or None, 'syn')
+                codes.add(e.last_code)
+                if act == 'permit':
+                    open_.append(pr)
+                    if e.last_rule and e.last_rule.get('contract'):
+                        rules.add(e.short(e.last_rule['contract']))
+            row[d['dn']] = {'open': open_, 'all': len(open_) == len(probes), 'rules': sorted(rules),
+                            'codes': sorted(c for c in codes if c)}
+    return {'vrfs': vrfs, 'vrf': vrf, 'probes': probes,
+            'classes': [{'dn': c['dn'], 'name': e.short(c['dn']), 'kind': c['kind']} for c in classes], 'cells': cells}
