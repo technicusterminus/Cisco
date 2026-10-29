@@ -8,7 +8,7 @@ Material für die Prüfung **350-401 ENCOR v1.2** (Implementing and Operating Ci
 | [Anki-Deck EN](Anki/EN/) | 1.981 Karten auf Englisch mit deutschen Erklärungen, davon 429 MC im Prüfungsstil und 136 Show-Karten |
 | [Prüfungssimulation](Pruefungssimulation/) | 241 Fragen, davon 43 Exhibits und 21 zum Ordnen und Zuordnen; Prüfungsmodus mit 60 Fragen in 75 Minuten |
 | [Trainer](Trainer/) | Rechentrainer (BGP, STP, OSPF, EIGRP, QoS) und Ticket-Trainer mit den 134 Lab-Tickets |
-| [Labs](#labs) | 27 Labs für CML und EVE-NG, 23 davon auch für Packet Tracer, mit 134 eingebauten Fehlern; dazu Python-Drills und zwei Fallstudien-Pakete |
+| [Labs](#labs) | 28 Labs für CML, 27 davon auch für EVE-NG und 23 für Packet Tracer, mit 138 eingebauten Fehlern; dazu Python-Drills und zwei Fallstudien-Pakete |
 | [Lernplan](LERNPLAN.md) | 10 Wochen, verbindet Deck, Labs, Trainer und Simulation |
 | [Cheatsheet](ENCOR-Cheatsheet.pdf) | 4 Seiten zum Ausdrucken |
 
@@ -33,7 +33,7 @@ Jedes Lab hat drei Teile: **Bauen** (Schritt für Schritt, mit Prüfbefehl nach 
 
 | Plattform | Umfang | Hinweis |
 |---|---|---|
-| [CML](CML-Labs/) | 27 Labs mit Bau- und Reparatur-Topologie, dazu Python-Drills (20) und Fallstudien (21, 22) | Referenz, deckt alle Ziele ab |
+| [CML](CML-Labs/) | 28 Labs mit Bau- und Reparatur-Topologie (Lab 31 MST vertieft nur hier), dazu Python-Drills (20) und Fallstudien (21, 22) | Referenz, deckt alle Ziele ab |
 | [EVE-NG](EVE-NG-Labs/) | dieselben 27 Labs als Import-ZIP (je Lab „Bauen“ und „Reparieren“ mit Startkonfiguration), dazu Node- und Kabeltabellen für den Aufbau von Hand | Interface-Namen wie in CML |
 | [Packet Tracer](Packet-Tracer-Labs/) | 23 Labs mit 117 Fehlern | Multicast, LISP, VXLAN und RESTCONF/EEM nur in CML oder EVE-NG |
 

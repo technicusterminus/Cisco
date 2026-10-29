@@ -2,7 +2,7 @@
 
 Diese Labs ergänzen das Anki-Kompendium (1.776 Karten). Die Karten bauen Wissen auf, in den Labs wendest du es an: **bauen, reparieren, üben**. Jedes der 47 Prüfungsziele des Kompendiums (`Ziel::…`) ist mindestens einem Lab zugeordnet.
 
-**Inhalt:** 27 CML-Labs (24 Themen-Labs und 3 Capstones, zusammen 134 eingebaute Fehler zum Reparieren), ein Python-/API-Drill-Paket mit automatischen Tests, zwei Fallstudien-Pakete für Themen, die sich nicht sinnvoll simulieren lassen.
+**Inhalt:** 28 CML-Labs (25 Themen-Labs und 3 Capstones, zusammen 138 eingebaute Fehler zum Reparieren), ein Python-/API-Drill-Paket mit automatischen Tests, zwei Fallstudien-Pakete für Themen, die sich nicht sinnvoll simulieren lassen.
 
 **Andere Plattformen:** Dieselben Labs gibt es für [Packet Tracer](../Packet-Tracer-Labs/) (soweit PT die Funktionen kann) und [EVE-NG](../EVE-NG-Labs/).
 
@@ -53,6 +53,7 @@ Diese Labs ergänzen das Anki-Kompendium (1.776 Karten). Die Karten bauen Wissen
 | [28](28-OSPF-Areatypen-Summary-Auth/) | OSPF vertieft: Area-Typen, Summarisierung und Authentifizierung | 3.2.b | 4 | 6 | 100 min |
 | [29](29-PBR-Quelle-Anwendung/) | Policy-Based Routing nach Quelle und Anwendung | 3.2.d | 6 | 5 | 75 min |
 | [30](30-Capstone-Routing-Troubleshooting/) | Capstone: Routing-Fehlersuche (OSPF, EIGRP, BGP, Redistribution) | 3.2.a, 3.2.b, 3.2.c | 5 | 8 | 150 min |
+| [31](31-MST-Regionen-PVST-Interop/) | MST vertieft: Regionen, Instanzen, Pfadkosten und PVST-Interop (nur CML) | 3.1.c | 8 | 4 | 100 min |
 | [20](20-Python-REST-Drills) | Python-/API-Drills (lokal, mit Tests) | 6.1, 6.2, 6.3, 6.4, 6.5, 6.7 | – | – | – |
 | [21](21-Design-Fallstudien.md) | Fallstudien: Design, WAN, Fabric, Virtualisierung, Catalyst Center | 1.1.a, 1.1.b, 1.2.a, 1.2.b, 1.3.a, 1.3.b, 2.1.a, 2.1.b, 2.1.c, 4.5 | – | – | – |
 | [22](22-Security-Szenarien.md) | Security-Szenarien (REST, Threat Defense, Endpoint, NGFW, TrustSec/MACsec) | 5.3, 5.4.a, 5.4.b, 5.4.c, 5.4.d | – | – | – |
@@ -79,7 +80,7 @@ Pro Ziel mit direkten Links zu Aufgaben und Lösungen: **[ZIELE.md](ZIELE.md)**.
 | `2.3.b` | VXLAN | 14 | 16 |
 | `3.1.a` | 802.1Q und Trunks | 31 | 05, 23 |
 | `3.1.b` | EtherChannel | 34 | 05, 23 |
-| `3.1.c` | RSTP, MST und Schutzfunktionen | 65 | 06, 23 |
+| `3.1.c` | RSTP, MST und Schutzfunktionen | 65 | 06, 23, 31 |
 | `3.2.a` | EIGRP und OSPF vergleichen | 45 | 01, 02, 25, 27, 30 |
 | `3.2.b` | OSPFv2 und OSPFv3 | 86 | 01, 02, 23, 24, 27, 28, 30 |
 | `3.2.c` | Direktes eBGP | 61 | 03, 24, 26, 30 |
