@@ -25,6 +25,8 @@ Jedes Lab gibt es als fertiges EVE-NG-Lab in zwei Varianten: **Bauen** (Ausgangs
 
 **Images:** Die Lab-Dateien nennen kein Image. EVE-NG nimmt beim Laden das neueste installierte Image des passenden Templates (vIOS, vIOS-L2, CSRv 1000v, Nexus 9000v). Ist für ein Template kein Image installiert, startet der Node nicht. Dann das Image nachinstallieren oder den Node per Rechtsklick → *Edit* auf ein vorhandenes Image stellen.
 
+**vIOS-L2 und Trunks:** Das Image unterstützt ISL und Dot1Q. Vor `switchport mode trunk` muss deshalb `switchport trunk encapsulation dot1q` stehen, sonst lehnt der Switch den Trunk-Modus ab. Die Konfigurationsdateien und die Importe enthalten die Zeile.
+
 Die ZIP-Dateien erzeugt [`tools/build_eve_import.py`](tools/build_eve_import.py) aus den CML-Topologien und den Konfigurationsdateien. Wer eine Konfiguration ändert, baut sie im Paketordner neu: `python3 EVE-NG-Labs/tools/build_eve_import.py --paket ENCOR`.
 
 ## Manuell aufbauen (ohne Import)
