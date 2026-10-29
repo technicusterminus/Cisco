@@ -165,6 +165,10 @@ Karten im Deck: 65 (`tag:Ziel::3.1.c`)
   - Aufgaben: [Teil A Bauen](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-a--bauen) · [Teil B Reparieren](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-b--reparieren) · [Teil C Üben](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-c--üben)
   - Lösungen: [`solutions/`](23-Capstone-Campus-Edge-Troubleshooting/solutions/) · [`FAULTS.md`](23-Capstone-Campus-Edge-Troubleshooting/solutions/FAULTS.md) · [Antworten Teil C](23-Capstone-Campus-Edge-Troubleshooting/README.md#teil-c--üben)
   - Topologien: [`topology.yaml`](23-Capstone-Campus-Edge-Troubleshooting/topology.yaml) (bauen) · [`topology-repair.yaml`](23-Capstone-Campus-Edge-Troubleshooting/topology-repair.yaml) (reparieren)
+- **Lab 31 – MST vertieft: Regionen, Instanzen, Pfadkosten und PVST-Interop** (4 Fehler zum Reparieren, 100 min)
+  - Aufgaben: [Teil A Bauen](31-MST-Regionen-PVST-Interop/README.md#teil-a--bauen) · [Teil B Reparieren](31-MST-Regionen-PVST-Interop/README.md#teil-b--reparieren) · [Teil C Üben](31-MST-Regionen-PVST-Interop/README.md#teil-c--üben)
+  - Lösungen: [`solutions/`](31-MST-Regionen-PVST-Interop/solutions/) · [`FAULTS.md`](31-MST-Regionen-PVST-Interop/solutions/FAULTS.md) · [Antworten Teil C](31-MST-Regionen-PVST-Interop/README.md#teil-c--üben)
+  - Topologien: [`topology.yaml`](31-MST-Regionen-PVST-Interop/topology.yaml) (bauen) · [`topology-repair.yaml`](31-MST-Regionen-PVST-Interop/topology-repair.yaml) (reparieren)
 
 ## 3.2.a – EIGRP und OSPF vergleichen
 
