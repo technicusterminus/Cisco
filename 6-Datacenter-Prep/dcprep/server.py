@@ -441,8 +441,10 @@ class Sim:
                     info = ('%d passende Einträge im Audit-Log' % len(hit)) if hit else 'nicht im Audit-Log'
                 elif t == 'endpoint':
                     hs = e.hosts.get(c['host'], {})
-                    ok = bool(hs.get('learned') and (not c.get('epg') or hs.get('epg') == c['epg'])) == c.get('expect', True)
-                    info = 'gelernt in %s' % e.short(hs.get('epg')) if hs.get('learned') else 'nicht gelernt'
+                    ok = bool(hs.get('learned') and (not c.get('epg') or hs.get('epg') == c['epg'])
+                              and (not c.get('pathType') or e.paths.get(hs.get('path'), {}).get('type') == c['pathType'])) == c.get('expect', True)
+                    info = ('gelernt in %s ueber %s' % (e.short(hs.get('epg')), e.path_label(hs['path'])) if hs.get('learned')
+                            else 'nicht gelernt')
                 elif t == 'nofaults':
                     fl = [d for d in self.store.by_class('faultInst') if d.startswith(c.get('under', ''))
                           and (not c.get('code') or self.store.attrs(d)['code'] == c['code'])]
@@ -604,7 +606,7 @@ class Sim:
                 open_.append(pr)
         if open_:
             return False, 'Zusaetzlich offen: %s (geprueft: %d typische Dienste)' % (', '.join(open_), len(probes))
-        return True, 'Nur %s offen (geprueft: %d typische Dienste)' % (', '.join(sorted(allow)) or 'nichts', len(probes))
+        return True, ('Nur %s offen' % ', '.join(sorted(allow)) if allow else 'Nichts offen') + ' (geprueft: %d typische Dienste)' % len(probes)
 
     # -------------------------------------------------------------- Fortschritt
     def progress(self):

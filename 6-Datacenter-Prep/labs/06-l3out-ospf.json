@@ -5,13 +5,44 @@
  "level": "Fortgeschritten",
  "duration": "45 min",
  "fabric": "discovered",
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Labs 02 und 32"
+ ],
+ "tools": [
+  "Tenant > Networking > L3Outs",
+  "Simulation > Externe Router",
+  "Traffic Inspector",
+  "CLI: show ip ospf neighbors vrf, show ip route vrf"
+ ],
  "goals": [
   "Ein L3Out mit OSPF und Routed Interface bauen",
-  "Das MTU-Problem (EXSTART) erkennen und lösen",
-  "External EPG, Contract und Advertised Externally zusammenbringen",
-  "Die Rolle des MP-BGP Route Reflectors verstehen"
+  "Eine hängende OSPF-Nachbarschaft diagnostizieren",
+  "External EPG, Contract und Routenankündigung zusammenbringen",
+  "Verstehen, wie externe Routen zu den anderen Leafs kommen"
  ],
- "intro": "Der WAN-Router **wan1** hängt an **leaf103 eth1/48** (Routed, 172.16.0.2/30, OSPF **Area 0.0.0.1**, MTU **1500**). Er kennt das Internet (8.8.8.0/24, 1.1.1.0/24) und kündigt eine Default Route an. web1 soll ins Internet (Ping und HTTPS), app1 nicht.\n\nTenant Shop mit Web, App und Contract web-to-app ist vorhanden. Die BGP Route Reflector Policy ist **nicht** konfiguriert.",
+ "intro": "Der WAN-Router **wan1** hängt an **leaf103 eth1/48**: Routed Interface 172.16.0.2/30, OSPF Area **0.0.0.1** (regular), Interface-MTU **1500**. Er kennt das Internet (8.8.8.0/24, 1.1.1.0/24) und kündigt eine Default Route an. wan1 gehört dem Provider und wird nicht verändert. Die ACI-Seite des Transfernetzes ist 172.16.0.1/30.\n\nDer Tenant Shop mit Web, App und Contract web-to-app läuft. Für leaf103 gibt es noch keine Access Policies. web1 hängt an leaf101, app1 an leaf102.",
+ "requirements": [
+  "Die OSPF-Nachbarschaft zu wan1 kommt stabil hoch.",
+  "web1 erreicht das Internet per Ping und HTTPS.",
+  "Von Web nach außen ist nichts anderes erlaubt.",
+  "app1 bleibt ohne Internetzugang, und das App-Netz 10.10.20.0/24 wird nach außen nicht angekündigt."
+ ],
+ "limits": [
+  "OSPF ist vereinfacht: Nachbarschaftszustände, MTU-Abgleich, Area-Typ und Timer. LSA-Typen und SPF werden nicht modelliert.",
+  "Die Router ID 1.1.1.103 ist ein Vorschlag; jede eindeutige ID funktioniert."
+ ],
+ "hints": [
+  "**Konzept:** Ein L3Out hat drei Teile: das Routing zum Nachbarn (Node, Interface, Protokoll), die Klassifizierung externer Netze (External EPG) und die Policy (Contract). Damit andere Leafs die externen Routen kennen, verteilt die Fabric sie intern per MP-BGP – dafür braucht es Route Reflectors auf den Spines.",
+  "**Objekte:** L3 Domain mit VLAN Pool, AAEP, Policy Group und Profile für leaf103 eth1/48. L3Out mit VRF, Domain, OSPF-Area, Node Profile, Interface Profile (Routed Interface), External EPG und Contract. Am BD-Web: Scope und L3Out-Verknüpfung. *System > System Settings > BGP Route Reflector*.",
+  "**Prüfschritte:** `show ip ospf neighbors vrf Shop:Prod` auf leaf103: Bleibt es bei EXSTART, die MTU beider Seiten vergleichen. Traffic Inspector web1 → 8.8.8.8: Scheitert „Routing“ auf leaf101, fehlt die Route dort – `show ip route vrf Shop:Prod` auf leaf101 und leaf103 vergleichen. Kennt wan1 10.10.10.0/24 (*Simulation > Externe Router*)?",
+  "**Lösung:** Access-Kette mit L3Dom-WAN (VLAN 300–399), L3Out WAN (VRF Prod, OSPF Area 0.0.0.1), Node 103 mit Router ID, Routed Interface eth1/48 172.16.0.1/30 mit **MTU 1500** (oder OSPF Interface Policy mit MTU ignore), External EPG 0.0.0.0/0, Contract nur mit icmp und tcp/443 (Internet stellt bereit, Web konsumiert), BD-Web Subnetz Advertised Externally und mit dem L3Out verknüpft, BGP Route Reflector (AS 65001, spine201/202). BD-App bleibt privat."
+ ],
+ "cause": "Es gibt weder Access Policies noch L3Out für leaf103. Die ACI nutzt MTU 9000, wan1 1500 (OSPF hängt in EXSTART). Ohne BGP Route Reflector kennen leaf101/102 die externen Routen nicht.",
  "config": [
   {
    "polUni": {
@@ -440,42 +471,7 @@
    "staticBack": []
   }
  ],
- "tasks": [
-  {
-   "title": "Access Policies für den Border Leaf",
-   "text": "L3 Domain **L3Dom-WAN** (VLAN Pool **VLAN-Pool-WAN** 300-399, static), AAEP **AAEP-WAN** mit der L3 Domain, Policy Group **IPG-WAN**, Interface Profile **IntProf-Leaf103** mit Port 1/48 und Switch Profile **SwProf-Leaf103** für Node 103."
-  },
-  {
-   "title": "L3Out",
-   "text": "Im Tenant Shop: L3Out **WAN**, VRF Prod, L3 Domain L3Dom-WAN, **OSPF** Area **0.0.0.1** (regular)."
-  },
-  {
-   "title": "Node- und Interface-Profil",
-   "text": "Logical Node Profile **border**, Node **103** mit Router ID **1.1.1.103**. Logical Interface Profile **eth48** mit OSPF Interface Profile (Policy default) und einem **Routed Interface** auf leaf103 eth1/48 mit **172.16.0.1/30**."
-  },
-  {
-   "title": "Nachbarschaft prüfen",
-   "text": "Unter **Simulation > Externe Router** oder auf leaf103 mit `show ip ospf neighbors vrf Shop:Prod`. Warum bleibt die Nachbarschaft in **EXSTART** hängen? Behebe es.",
-   "hint": "Die ACI nutzt bei MTU *inherit* 9000 Byte, der Router 1500. Entweder MTU am Interface auf 1500 setzen oder in einer eigenen OSPF Interface Policy *MTU ignore* aktivieren."
-  },
-  {
-   "title": "External EPG",
-   "text": "External EPG **Internet** mit Subnetz **0.0.0.0/0** (External Subnets for External EPG)."
-  },
-  {
-   "title": "Contract",
-   "text": "Contract **web-to-internet** mit den Filtern icmp und **https** (tcp/443). Internet = Provider, Web = Consumer."
-  },
-  {
-   "title": "Route nach außen",
-   "text": "Am **BD-Web**: Subnetz auf **Advertised Externally** stellen und den BD mit dem L3Out **WAN** verknüpfen. Prüfe, ob wan1 jetzt 10.10.10.0/24 kennt."
-  },
-  {
-   "title": "Traffic testen",
-   "text": "Ping von web1 zu **8.8.8.8**. Wenn es scheitert: Wo genau? Tipp: web1 hängt an leaf101, das L3Out an leaf103. Prüfe `show ip route vrf Shop:Prod` auf beiden Leafs.",
-   "hint": "System > System Settings > BGP Route Reflector: AS 65001, spine201 und spine202."
-  }
- ],
+ "tasks": [],
  "checks": [
   {
    "desc": "OSPF-Nachbarschaft zu wan1 ist FULL",
@@ -501,13 +497,33 @@
    "expect": true
   },
   {
+   "desc": "wan1 kennt 10.10.10.0/24",
+   "type": "learned",
+   "router": "wan1",
+   "prefix": "10.10.10.0/24",
+   "expect": true
+  },
+  {
    "desc": "web1 → 8.8.8.8 SSH blockiert",
    "type": "traffic",
    "src": "web1",
    "dst": "8.8.8.8",
    "proto": "tcp",
    "port": 22,
-   "expect": false
+   "expect": false,
+   "reason": "POLICY_",
+   "category": "security"
+  },
+  {
+   "desc": "Least Privilege Web → Internet: nur Ping und HTTPS",
+   "type": "exposure",
+   "src": "web1",
+   "dst": "8.8.8.8",
+   "allow": [
+    "icmp",
+    "tcp/443"
+   ],
+   "category": "security"
   },
   {
    "desc": "app1 → 8.8.8.8 blockiert",
@@ -515,7 +531,42 @@
    "src": "app1",
    "dst": "8.8.8.8",
    "proto": "icmp",
-   "expect": false
+   "expect": false,
+   "category": "security"
+  },
+  {
+   "desc": "10.10.20.0/24 wird nicht angekündigt",
+   "type": "learned",
+   "router": "wan1",
+   "prefix": "10.10.20.0/24",
+   "expect": false,
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Die Nachbarschaft bleibt in EXSTART. Was ist die wahrscheinlichste Ursache?",
+   "options": [
+    "Unterschiedliche Interface-MTU (ACI 9000, Router 1500)",
+    "Falsche Area",
+    "Kein Contract",
+    "Falsches VLAN"
+   ],
+   "answer": 0,
+   "explain": "Beim Austausch der Database Descriptions passen die MTUs nicht; Area- oder Timer-Fehler verhindern schon den Zustand 2-WAY."
+  },
+  {
+   "id": "q2",
+   "q": "leaf103 kennt 8.8.8.0/24, leaf101 nicht. Was fehlt?",
+   "options": [
+    "MP-BGP in der Fabric (BGP Route Reflector Policy)",
+    "Ein zweites L3Out auf leaf101",
+    "Ein Contract",
+    "OSPF auf leaf101"
+   ],
+   "answer": 0,
+   "explain": "Der Border Leaf verteilt externe Routen per MP-BGP über die Spines (Route Reflectors) an die anderen Leafs."
   }
  ],
  "solution": "Wichtige Objekte: `l3extOut WAN` mit `l3extRsEctx(Prod)`, `l3extRsL3DomAtt(uni/l3dom-L3Dom-WAN)`, `ospfExtP areaId=0.0.0.1`; `l3extRsNodeL3OutAtt tDn=topology/pod-1/node-103 rtrId=1.1.1.103`; `l3extRsPathL3OutAtt tDn=topology/pod-1/paths-103/pathep-[eth1/48] ifInstT=l3-port addr=172.16.0.1/30 mtu=1500` plus `ospfIfP`; `l3extInstP Internet` mit `l3extSubnet 0.0.0.0/0` und `fvRsProv web-to-internet`; BD-Web: `fvSubnet scope=public` und `fvRsBDToOut WAN`. Dazu die BGP Route Reflector Policy (AS 65001, RR 201/202).",

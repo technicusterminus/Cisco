@@ -398,6 +398,10 @@ class TestRequirementLabs(unittest.TestCase):
         '02-access-policies': ['AAEP', 'Attachable', 'Policy Group', 'Switch Profile', 'Interface Profile', 'VLAN Pool'],
         '03-tenant-epg': ['Static Port', 'fvRsPathAtt', 'Domain-Zuordnung'],
         '04-contracts': ['vzAny', 'EPG Collection', 'Consumer', 'Provider', 'Reverse', 'konsumiert'],
+        '05-vpc-lacp': ['Protection Group', 'fabricExplicitGEp', 'IPG-vPC', 'Port Channel Policy', 'lacpLagPol', 'protpaths', 'Policy Group'],
+        '06-l3out-ospf': ['Route Reflector', 'MP-BGP', 'MTU ignore', 'Advertised', 'EXSTART', 'web-to-internet', '9000'],
+        '11-static-leaf-taboo': ['Static Leaf', 'Taboo', 'fvRsNodeAtt', 'vzTaboo', 'no-ping'],
+        '13-shared-services': ['Global', 'Export', 'vzCPIf', 'Shared between', 'Imported', 'fvRsConsIf', 'Consumer', 'Provider'],
         '07-troubleshooting': ['8080', 'Unicast Routing', 'BD-Bakup', 'Reverse', '149', 'Port Block'],
         '32-https-least-privilege': ['Consumer', 'Provider', 'web-to-app-https', 'Reverse'],
         '33-same-epg': ['Static Port', 'fvRsPathAtt'],
@@ -793,6 +797,83 @@ class TestSegmentationLabs(unittest.TestCase):
         self.S.load_lab('40-it-ot-segmentation')
         self.assertEqual(trace.run(self.S.engine, self.S.sim, 'plc1', 'plc2', 'tcp', 502)['verdict'], 'ALLOW')
         self.assertEqual(trace.run(self.S.engine, self.S.sim, 'scada1', 'plc1', 'tcp', 502)['reason'], 'POLICY_IMPLICIT_DENY')
+
+
+class TestConvertedLabs(unittest.TestCase):
+    """B-01: alte Labs im Anforderungsformat. Die Musterloesung besteht (TestLabs), typische Abkuerzungen nicht."""
+
+    ANY = mo('vzFilter', {'name': 'any'}, mo('vzEntry', {'name': 'any'}))
+
+    def setUp(self):
+        self.S = Sim(tempfile.mkdtemp(), 'admin')
+        self.S.sim['settings']['discoverySeconds'] = 0
+
+    def apply(self, *items):
+        for dn, body in items:
+            post(self.S.store, dn, body)
+        self.S.changed()
+
+    def by(self):
+        return {c['desc']: c['ok'] for c in self.S.check_lab()['checks']}
+
+    def test_lab05_static_channel_suspends_lacp_server(self):
+        lab = self.S.load_lab('05-vpc-lacp')
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+        self.apply(('uni/infra/lacplagp-LACP-Active', mo('lacpLagPol', {'mode': 'off'})))
+        by = self.by()
+        self.assertFalse(by['db1 gelernt in EPG DB'], 'Mode On: der LACP-Server suspendiert seine Links')
+        self.assertIn('LACP', ' '.join(self.S.engine.hosts['db1']['reasons']))
+
+    def test_lab05_permit_any_to_db_fails_security(self):
+        lab = self.S.load_lab('05-vpc-lacp')
+        sol = copy.deepcopy(lab['solutionConfig'])
+        self.apply(*sol)
+        self.apply(('uni/tn-Shop', mo('fvTenant', {}, self.ANY, mo('vzBrCP', {'name': 'all'}, mo('vzSubj', {'name': 's', 'revFltPorts': 'yes'},
+                    mo('vzRsSubjFiltAtt', {'tnVzFilterName': 'any'}))),
+                    mo('fvAp', {'name': 'Webshop'}, mo('fvAEPg', {'name': 'DB'}, mo('fvRsProv', {'tnVzBrCPName': 'all'})),
+                       mo('fvAEPg', {'name': 'App'}, mo('fvRsCons', {'tnVzBrCPName': 'all'}))))))
+        by = self.by()
+        self.assertTrue(by['app1 → db1 TCP 3306'])
+        self.assertFalse(by['Least Privilege App → DB: nur TCP 3306'])
+
+    def test_lab06_advertising_app_net_fails_security(self):
+        lab = self.S.load_lab('06-l3out-ospf')
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+        self.apply(('uni/tn-Shop/BD-BD-App', mo('fvBD', {}, mo('fvSubnet', {'ip': '10.10.20.1/24', 'scope': 'public'}),
+                                                  mo('fvRsBDToOut', {'tnL3extOutName': 'WAN'}))),
+                   ('uni/tn-Shop/ap-Webshop/epg-App', mo('fvAEPg', {}, mo('fvRsCons', {'tnVzBrCPName': 'web-to-internet'}))))
+        by = self.by()
+        self.assertFalse(by['10.10.20.0/24 wird nicht angekündigt'])
+        self.assertFalse(by['app1 → 8.8.8.8 blockiert'])
+
+    def test_lab11_removing_icmp_from_contract_is_not_a_taboo(self):
+        lab = self.S.load_lab('11-static-leaf-taboo')
+        self.apply(('uni/tn-Shop/ap-Webshop/epg-App', mo('fvAEPg', {}, mo('fvRsNodeAtt', {'tDn': 'topology/pod-1/node-102', 'encap': 'vlan-120'}))),
+                   ('uni/tn-Shop/brc-web-to-app/subj-subj', mo('vzSubj', {}, mo('vzRsSubjFiltAtt', {'tnVzFilterName': 'icmp', 'status': 'deleted'}))))
+        r = trace.run(self.S.engine, self.S.sim, 'web1', 'app1', 'icmp')
+        self.assertEqual(r['reason'], 'POLICY_IMPLICIT_DENY')
+        by = self.by()
+        self.assertTrue(by['app2 gelernt in EPG App'])
+        self.assertFalse(by['Ping zu app1 verboten, unabhängig von Contracts'], 'ohne Taboo erlaubt der naechste ICMP-Contract wieder')
+
+    def test_lab11_static_port_for_app2_is_not_the_ask(self):
+        self.S.load_lab('11-static-leaf-taboo')
+        self.apply(('uni/tn-Shop/ap-Webshop/epg-App', mo('fvAEPg', {}, mo('fvRsPathAtt', {
+            'tDn': 'topology/pod-1/paths-102/pathep-[eth1/3]', 'encap': 'vlan-120'}))))
+        by = self.by()
+        self.assertTrue(by['app2 gelernt in EPG App'])
+        self.assertFalse(by['Keine eigene Port-Bindung für app2'])
+
+    def test_lab13_global_permit_any_fails_least_privilege(self):
+        lab = self.S.load_lab('13-shared-services')
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+        self.apply(('uni/tn-Shared/brc-dns/subj-subj', mo('vzSubj', {}, mo('vzRsSubjFiltAtt', {'tnVzFilterName': 'default'}))))
+        by = self.by()
+        self.assertTrue(by['web1 → dns1 UDP 53'])
+        self.assertFalse(by['Least Privilege Web → DNS: nur UDP 53'])
 
 
 class TestOperationsLabs(unittest.TestCase):

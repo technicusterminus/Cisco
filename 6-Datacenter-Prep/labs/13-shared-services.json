@@ -5,12 +5,41 @@
  "level": "Fortgeschritten",
  "duration": "35 min",
  "fabric": "discovered",
- "goals": [
-  "Einen Contract mit Scope global in einen anderen Tenant exportieren",
-  "Provider-Subnetz an der EPG und Consumer-Subnetz mit \"Shared between VRFs\" setzen",
-  "Verstehen, warum Route Leaking in der ACI an den Contract gekoppelt ist"
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
  ],
- "intro": "Der zentrale DNS-Server **dns1** (10.99.0.53) steht im Tenant **Shared**, VRF **Services**, EPG **DNS**. Die Webserver im Tenant **Shop** (VRF Prod) sollen ihn per **DNS (UDP 53)** erreichen – sonst nichts. Die App-Server dürfen gar nicht zum DNS.\n\nZwischen zwei VRFs gibt es in der ACI erst Routen, wenn ein Contract die EPGs verbindet und die Subnetze als *shared* markiert sind.",
+ "prerequisites": [
+  "Labs 32 und 45"
+ ],
+ "tools": [
+  "Tenant Shared und Tenant Shop",
+  "Traffic Inspector",
+  "CLI: show ip route vrf, show zoning-rule"
+ ],
+ "goals": [
+  "Einen Dienst aus einem anderen Tenant und einer anderen VRF bereitstellen",
+  "Verstehen, warum Route Leaking in der ACI an den Contract gekoppelt ist",
+  "Nur das freigeben, was gebraucht wird"
+ ],
+ "intro": "Der zentrale DNS-Server **dns1** (10.99.0.53/24) steht im Tenant **Shared**, VRF **Services**, EPG **DNS**. Der Tenant Shared gehört dem Infrastruktur-Team; der Tenant **Shop** (VRF Prod) dem Webshop-Team.\n\n- web1: 10.10.10.11, EPG Web (Shop)\n- app1: 10.10.20.11, EPG App (Shop)\n- dns1: 10.99.0.53, EPG DNS (Shared)",
+ "requirements": [
+  "Die Webserver erreichen dns1 per DNS über UDP 53 – sonst nichts.",
+  "Die App-Server erreichen dns1 nicht.",
+  "dns1 baut keine Verbindungen in den Tenant Shop auf.",
+  "Der Dienst wird im Tenant Shared definiert; Shop nutzt ihn nur. Die VRFs bleiben getrennt (kein Zusammenlegen)."
+ ],
+ "limits": [
+  "Inter-VRF-Verkehr wird in der Simulation am Consumer-Leaf entschieden; Details wie die pcTag-Vergabe aus dem globalen Bereich werden nicht gezeigt."
+ ],
+ "hints": [
+  "**Konzept:** Zwischen zwei VRFs gibt es in der ACI keine Routen „einfach so“. Erst ein Contract zwischen den EPGs löst das Route Leaking aus – und die beteiligten Subnetze müssen dafür freigegeben sein.",
+  "**Objekte:** Contract-Scope (VRF, Tenant, Global), *Export Contract* in den anderen Tenant (Contract Interface), am Provider das Subnetz an der EPG, am Consumer das BD-Subnetz – jeweils *Shared between VRFs*.",
+  "**Prüfschritte:** Traffic Inspector web1 → dns1 UDP 53: Steht dort INTERVRF_LEAK_MISSING, fehlt Scope oder Subnetz. Auf leaf101 `show ip route vrf Shop:Prod`: Ist 10.99.0.0/24 da?",
+  "**Lösung:** Im Tenant Shared Filter udp/53 und Contract dns mit Scope Global, EPG DNS stellt bereit, an der EPG DNS das Subnetz 10.99.0.1/24 *Shared between VRFs*. Contract nach Shop exportieren, an der EPG Web als Consumed Contract Interface. BD-Web-Subnetz zusätzlich *Shared between VRFs*. BD-App bleibt unverändert."
+ ],
+ "cause": "Es gibt keinen Contract zwischen Web und DNS; ohne ihn und ohne Shared-Subnetze leakt die ACI keine Routen.",
  "config": [
   {
    "polUni": {
@@ -503,36 +532,8 @@
    "descr": "zentraler DNS-Server"
   }
  ],
- "tasks": [
-  {
-   "title": "Filter und Contract",
-   "text": "Im Tenant **Shared**: Filter **dns** (udp, Destination Port dns/53) und Contract **dns** mit **Scope Global**. Die EPG **DNS** stellt ihn bereit (**Provided**).",
-   "hint": "Scope VRF (context) wirkt nur innerhalb eines VRFs, Scope Tenant nur innerhalb des Tenants."
-  },
-  {
-   "title": "Provider-Subnetz",
-   "text": "Unter der EPG **DNS** (nicht der BD!) das Subnetz **10.99.0.1/24** mit Scope *Shared between VRFs* anlegen.",
-   "hint": "Beim Provider muss das Subnetz für das Route Leaking an der EPG stehen."
-  },
-  {
-   "title": "Contract exportieren",
-   "text": "Rechtsklick auf den Contract **dns** > **Export Contract**: Name **dns**, Ziel-Tenant **Shop**. Im Tenant Shop erscheint er unter **Contracts > Imported**."
-  },
-  {
-   "title": "Consumer",
-   "text": "An der EPG **Web** im Tenant Shop **Add Consumed Contract Interface** mit **dns**. Am **BD-Web** das Subnetz 10.10.10.1/24 zusätzlich auf *Shared between VRFs* stellen."
-  },
-  {
-   "title": "Prüfen",
-   "text": "web1 → dns1 UDP 53 klappt, TCP 22 nicht, app1 → dns1 gar nicht. Auf leaf101: `show ip route vrf Shop:Prod` – die Route 10.99.0.0/24 ist geleakt."
-  }
- ],
+ "tasks": [],
  "checks": [
-  {
-   "desc": "Imported Contract dns im Tenant Shop",
-   "type": "exists",
-   "dn": "uni/tn-Shop/cif-dns"
-  },
   {
    "desc": "web1 → dns1 UDP 53",
    "type": "traffic",
@@ -543,13 +544,20 @@
    "expect": true
   },
   {
-   "desc": "web1 → dns1 TCP 22 blockiert",
-   "type": "traffic",
+   "desc": "Der Dienst ist im Tenant Shared definiert",
+   "type": "class",
+   "cls": "vzBrCP",
+   "under": "uni/tn-Shared/"
+  },
+  {
+   "desc": "Least Privilege Web → DNS: nur UDP 53",
+   "type": "exposure",
    "src": "web1",
    "dst": "dns1",
-   "proto": "tcp",
-   "port": 22,
-   "expect": false
+   "allow": [
+    "udp/53"
+   ],
+   "category": "security"
   },
   {
    "desc": "app1 → dns1 blockiert",
@@ -558,7 +566,51 @@
    "dst": "dns1",
    "proto": "udp",
    "port": 53,
-   "expect": false
+   "expect": false,
+   "category": "security"
+  },
+  {
+   "desc": "dns1 baut keine Verbindungen zu Web auf",
+   "type": "exposure",
+   "src": "dns1",
+   "dst": "web1",
+   "allow": [],
+   "category": "security"
+  },
+  {
+   "desc": "dns1 erreicht app1 nicht",
+   "type": "traffic",
+   "src": "dns1",
+   "dst": "app1",
+   "proto": "icmp",
+   "expect": false,
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Warum reicht ein Contract mit Scope VRF (context) hier nicht?",
+   "options": [
+    "Er gilt nur innerhalb einer VRF – Shop und Shared haben verschiedene VRFs und Tenants",
+    "Er reicht",
+    "Weil UDP nicht erlaubt ist",
+    "Weil der Contract im falschen AP liegt"
+   ],
+   "answer": 0,
+   "explain": "Über Tenant- und VRF-Grenzen hinweg braucht es Scope Global (bzw. Tenant innerhalb eines Tenants)."
+  },
+  {
+   "id": "q2",
+   "q": "Wo steht beim Provider das Subnetz für das Route Leaking?",
+   "options": [
+    "An der EPG des Providers, mit Shared between VRFs",
+    "Nur am BD",
+    "Am L3Out",
+    "Nirgends"
+   ],
+   "answer": 0,
+   "explain": "So leakt nur das Netz des Dienstes, nicht automatisch alles im BD."
   }
  ],
  "solution": "Tenant Shared: `vzBrCP dns scope=global` mit Filter udp/53, an der EPG DNS `fvRsProv` und `fvSubnet ip=10.99.0.1/24 scope=private,shared`. Export: `vzCPIf name=dns` im Tenant Shop mit `vzRsIf tDn=uni/tn-Shared/brc-dns`. Consumer: `fvRsConsIf tnVzCPIfName=dns` an der EPG Web und `fvSubnet 10.10.10.1/24 scope=private,shared` am BD-Web.",
