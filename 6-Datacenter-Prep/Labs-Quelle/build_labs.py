@@ -2403,6 +2403,142 @@ lab(id='43-change-snapshot', title='43 Change mit Snapshot absichern und zurück
 
 
 # ----------------------------------------------------------------------------
+# Lab 44 - Access-Diagnose: drei Server, drei Ursachen
+# ----------------------------------------------------------------------------
+WEB2_44 = host('web2', '00:50:56:10:10:12', '10.10.10.12/24', '10.10.10.1', 110, [[L102, 'eth1/3']], descr='zweiter Webserver')
+DB1 = host('db1', '00:50:56:10:30:11', '10.10.30.11/24', '10.10.30.1', 250, [[L102, 'eth1/8']], descr='Datenbankserver (VLAN vom DB-Team vorgegeben)')
+FOREIGN44 = host('pc-x', '00:50:56:66:00:09', '10.10.10.99/24', '10.10.10.1', 110, [[L101, 'eth1/9']], descr='unbekanntes Gerät am freien Port')
+SHOP44 = mo('fvTenant', {'name': 'Shop'}, mo('fvCtx', {'name': 'Prod'}),
+            bd('BD-Web', 'Prod', '10.10.10.1/24'), bd('BD-App', 'Prod', '10.10.20.1/24'), bd('BD-DB', 'Prod', '10.10.30.1/24'),
+            filt('tcp-8080', {'name': 'tcp-8080', 'etherT': 'ip', 'prot': 'tcp', 'dFromPort': '8080', 'dToPort': '8080'}),
+            filt('pgsql', {'name': 'pgsql', 'etherT': 'ip', 'prot': 'tcp', 'dFromPort': '5432', 'dToPort': '5432'}),
+            contract('web-to-app', ['tcp-8080', 'icmp']), contract('app-to-db', ['pgsql']),
+            mo('fvAp', {'name': 'Webshop'},
+               epg('Web', 'BD-Web', ports=[(path(101, 'eth1/1'), 110), (path(102, 'eth1/3'), 111)], cons=['web-to-app']),
+               epg('App', 'BD-App', dom=None, ports=[(path(102, 'eth1/2'), 120)], prov=['web-to-app'], cons=['app-to-db']),
+               epg('DB', 'BD-DB', ports=[(path(102, 'eth1/8'), 250)], prov=['app-to-db'])))
+SOL44 = [['uni/tn-Shop/ap-Webshop/epg-App', mo('fvAEPg', {}, mo('fvRsDomAtt', {'tDn': 'uni/phys-PhysDom-Server'}))],
+         ['uni/tn-Shop/ap-Webshop/epg-Web', mo('fvAEPg', {}, mo('fvRsPathAtt', {'tDn': path(102, 'eth1/3'), 'encap': 'vlan-110'}))],
+         ['uni/infra/vlanns-[VLAN-Pool-Server]-static', mo('fvnsVlanInstP', {}, mo('fvnsEncapBlk', {'from': 'vlan-250', 'to': 'vlan-250'}))]]
+lab(id='44-access-diagnosis', title='44 Access-Diagnose: drei Server, drei Ursachen', topic='Access Policies / Troubleshooting',
+    level='Mittel', duration='30 min', fabric='discovered', kind='troubleshooting', modes=['guided', 'exam'],
+    prerequisites=['Labs 02 und 03'], tools=['Traffic Inspector', 'Faults (Tenant > Faults)', 'EP Tracker',
+                                            'CLI: show vlan extended, show endpoint, moquery -c faultInst'],
+    goals=['Die Access-Kette vom Server bis zur EPG Glied für Glied prüfen', 'F0467-Faults lesen und der richtigen Ursache zuordnen',
+           'Nur das freigeben, was gebraucht wird'],
+    intro='Der Webshop bekommt eine Datenbank. Nach dem Rollout melden drei Teams Probleme. Verkabelung und Server-Konfiguration '
+          'sind geprüft und dürfen nicht verändert werden.\n\n'
+          '- web1: leaf101 eth1/1, VLAN 110 · web2: leaf102 eth1/3, VLAN 110 (EPG Web)\n'
+          '- app1: leaf102 eth1/2, VLAN 120 (EPG App)\n- db1: leaf102 eth1/8, VLAN 250 (EPG DB, VLAN vom DB-Team vorgegeben)\n\n'
+          'Die Contracts web-to-app (TCP 8080, Ping) und app-to-db (TCP 5432) sind abgenommen.',
+    requirements=['Ticket 1: „web1 erreicht app1 nicht auf TCP 8080.“',
+                  'Ticket 2: „web2 erreicht app1 nicht, obwohl er genauso konfiguriert ist wie web1.“',
+                  'Ticket 3: „app1 erreicht db1 nicht auf TCP 5432.“',
+                  'Die VLANs der Server und die Contracts bleiben, wie sie sind.',
+                  'An leaf101 eth1/9 hängt ein unbekanntes Gerät. Es darf in keiner EPG gelernt werden.'],
+    limits=['Die Fault-Texte (F0467, invalid-vlan / invalid-path) folgen dem APIC-Muster; der Wortlaut ist vereinfacht.',
+            'Server senden in der Simulation genau ein VLAN (Trunk) und reagieren auf alle Ports, solange kein Dienstmodell gesetzt ist.'],
+    hints=['**Konzept:** Ein Endpoint wird nur gelernt, wenn die ganze Kette steht: Port → Interface Policy Group → AAEP → Domain → '
+           'VLAN Pool, und an der EPG Domain plus Static Port mit dem VLAN, das der Server sendet.',
+           '**Ebene:** Alle drei Tickets enden im Traffic Inspector mit EP_NOT_LEARNED – die Policy wird gar nicht erst geprüft. '
+           'Die Details stehen in den Faults der EPGs und in der Begründung beim Endpoint.',
+           '**Prüfschritte:** Faults im Tenant Shop lesen (F0467, debug message). Für web2 die Begründung im Traffic Inspector mit '
+           'der Static-Port-Konfiguration vergleichen. Für db1: Liegt VLAN 250 im Pool der Domain?',
+           '**Lösung:** Ticket 1: EPG App mit der Physical Domain PhysDom-Server verknüpfen. Ticket 2: Static Port von web2 auf vlan-110 '
+           'korrigieren (stand auf vlan-111). Ticket 3: VLAN 250 als Encap Block in den Pool VLAN-Pool-Server aufnehmen. '
+           'Das Gerät an eth1/9 bleibt ungelernt, solange keine EPG dort deployed ist – also kein Static Leaf (ganzer Leaf) für Web.'],
+    cause='Ticket 1: EPG App ohne Domain (F0467 invalid-vlan). Ticket 2: Static Port web2 mit vlan-111, der Server sendet 110. '
+          'Ticket 3: vlan-250 liegt nicht im VLAN Pool der Domain (F0467 invalid-vlan).',
+    config=[SERVER_ACCESS, SHOP44], hosts=[WEB1, WEB2_44, APP1, DB1, FOREIGN44], tasks=[],
+    checks=[check('Ticket 1: web1 → app1 TCP 8080', 'traffic', src='web1', dst='app1', proto='tcp', port=8080, expect=True),
+            check('Ticket 2: web2 → app1 TCP 8080', 'traffic', src='web2', dst='app1', proto='tcp', port=8080, expect=True),
+            check('Ticket 3: app1 → db1 TCP 5432', 'traffic', src='app1', dst='db1', proto='tcp', port=5432, expect=True),
+            check('db1 ist in EPG DB gelernt', 'endpoint', host='db1', epg='uni/tn-Shop/ap-Webshop/epg-DB'),
+            check('Keine Konfigurationsfehler (F0467) im Tenant Shop', 'nofaults', under='uni/tn-Shop', code='F0467'),
+            check('Unbekanntes Gerät an leaf101 eth1/9 wird nicht gelernt', 'endpoint', host='pc-x', expect=False, category='security'),
+            check('Web erreicht die Datenbank nicht', 'traffic', src='web1', dst='db1', proto='tcp', port=5432, expect=False,
+                  reason='POLICY_', category='security'),
+            check('Least Privilege App → DB: nur TCP 5432', 'exposure', src='app1', dst='db1', allow=['tcp/5432'], category='security')],
+    questions=[{'id': 'q1', 'q': 'Warum zeigt der Traffic Inspector bei Ticket 1 keine Policy-Entscheidung?',
+                'options': ['Weil app1 nicht gelernt ist – ohne Endpoint keine EPG und damit kein Contract-Lookup',
+                            'Weil der Contract fehlt', 'Weil die Policy auf dem Spine geprüft wird', 'Weil ICMP nicht erlaubt ist'],
+                'answer': 0, 'explain': 'Die Policy (Zoning Rules) gilt zwischen EPGs. Ein Paket eines ungelernten Hosts wird gar nicht '
+                                        'klassifiziert – darum zuerst die Access-Kette.'},
+               {'id': 'q2', 'q': 'web2: Static Port vlan-111, der Server sendet VLAN 110. Gibt es einen Fault?',
+                'options': ['Nein – die Konfiguration ist gültig, sie passt nur nicht zum Server', 'Ja, F0467 invalid-vlan',
+                            'Ja, ein Fault am Leaf-Port', 'Ja, weil VLAN 111 nicht im Pool ist'],
+                'answer': 0, 'explain': 'vlan-111 liegt im Pool, das Deployment klappt. Der APIC weiß nicht, was der Server sendet; '
+                                        'den Widerspruch sieht man erst am fehlenden Endpoint.'},
+               {'id': 'q3', 'q': 'Warum ist ein Static Leaf (EPG auf dem ganzen leaf101) für web-Server hier falsch?',
+                'options': ['Er deployed die EPG auf allen Ports des Leafs mit passender Domain – auch auf eth1/9 mit dem fremden Gerät',
+                            'Static Leaf gibt es nicht', 'Er ist gleichwertig zum Static Port', 'Er funktioniert nur mit vPC'],
+                'answer': 0, 'explain': 'Least Privilege gilt auch im Access-Teil: EPGs nur dort deployen, wo ihre Server hängen.'}],
+    solution='Ticket 1: `POST /api/mo/uni/tn-Shop/ap-Webshop/epg-App.json` mit `{"fvAEPg":{"attributes":{},"children":[{"fvRsDomAtt":'
+             '{"attributes":{"tDn":"uni/phys-PhysDom-Server"}}}]}}`.\n\nTicket 2: Static Port `' + path(102, 'eth1/3') + '` mit '
+             '`encap` **vlan-110**.\n\nTicket 3: `POST /api/mo/uni/infra/vlanns-[VLAN-Pool-Server]-static.json` mit einem '
+             '`fvnsEncapBlk` vlan-250 bis vlan-250.')
+
+
+# ----------------------------------------------------------------------------
+# Lab 45 - Zwei Bridge Domains in einer VRF
+# ----------------------------------------------------------------------------
+TEST1 = host('test1', '00:50:56:10:90:11', '10.10.90.11/24', '10.10.90.1', 190, [[L101, 'eth1/8']], descr='Testserver (Testumgebung)')
+SHOP45 = mo('fvTenant', {'name': 'Shop'}, mo('fvCtx', {'name': 'Prod'}), mo('fvCtx', {'name': 'Test'}),
+            bd('BD-Web', 'Prod', '10.10.10.1/24'), bd('BD-App', 'Test', '10.10.21.1/24'), bd('BD-Test', 'Test', '10.10.90.1/24'),
+            filt('tcp-8080', {'name': 'tcp-8080', 'etherT': 'ip', 'prot': 'tcp', 'dFromPort': '8080', 'dToPort': '8080'}),
+            contract('web-to-app', ['tcp-8080', 'icmp']),
+            mo('fvAp', {'name': 'Webshop'},
+               epg('Web', 'BD-Web', ports=[(path(101, 'eth1/1'), 110)], cons=['web-to-app']),
+               epg('App', 'BD-App', ports=[(path(102, 'eth1/2'), 120)], prov=['web-to-app'])),
+            mo('fvAp', {'name': 'Labor'}, epg('Test', 'BD-Test', ports=[(path(101, 'eth1/8'), 190)])))
+SOL45 = mo('fvTenant', {'name': 'Shop'}, mo('fvBD', {'name': 'BD-App'}, mo('fvRsCtx', {'tnFvCtxName': 'Prod'}),
+                                            mo('fvSubnet', {'ip': '10.10.21.1/24', 'status': 'deleted'}),
+                                            mo('fvSubnet', {'ip': '10.10.20.1/24', 'scope': 'private'})))
+lab(id='45-two-bds-one-vrf', title='45 Zwei Bridge Domains, eine VRF', topic='Tenant / Routing', level='Einstieg',
+    duration='20 min', fabric='discovered', kind='troubleshooting', modes=['guided', 'exam'],
+    prerequisites=['Lab 03'], tools=['Traffic Inspector', 'Tenant > Networking > Bridge Domains', 'CLI: show ip route vrf, show endpoint'],
+    goals=['Verstehen, wann Routing zwischen zwei BDs ohne L3Out funktioniert', 'Gateway des Servers und BD-Subnetz abgleichen',
+           'VRF-Trennung als Sicherheitsgrenze erhalten'],
+    intro='Web und App liegen in eigenen Bridge Domains und sollen über die Fabric geroutet miteinander sprechen (TCP 8080). '
+          'Der Contract web-to-app ist da, trotzdem kommt nichts an. In der VRF Test steht ein Testserver, der vom Webshop getrennt '
+          'bleiben muss.\n\n- web1: 10.10.10.11/24, Gateway 10.10.10.1, leaf101 eth1/1, VLAN 110 (EPG Web)\n'
+          '- app1: 10.10.20.11/24, Gateway 10.10.20.1, leaf102 eth1/2, VLAN 120 (EPG App)\n'
+          '- test1: 10.10.90.11/24, leaf101 eth1/8, VLAN 190 (EPG Test)',
+    requirements=['web1 erreicht app1 auf TCP 8080 und per Ping.',
+                  'Die Adressen und Gateways der Server bleiben unverändert.',
+                  'test1 erreicht weder Web noch App.',
+                  'Kein Route Leaking und keine neuen Contracts.'],
+    limits=['Inter-VRF-Verkehr (Shared Services) ist hier bewusst nicht gefragt.'],
+    hints=['**Konzept:** Zwei BDs in derselben VRF routet der Leaf selbst (Pervasive Gateway), ein L3Out ist nicht nötig. '
+           'Voraussetzung: beide BDs in derselben VRF und das BD-Subnetz ist das Gateway der Server.',
+           '**Ebene:** Routing, nicht Policy. Der Traffic Inspector zeigt, an welchem Schritt es scheitert: Gateway oder VRF.',
+           '**Prüfschritte:** BD-App öffnen: Welche VRF, welches Subnetz? Mit Gateway und Adresse von app1 vergleichen. '
+           'CLI auf leaf102: `show ip route vrf Shop:Prod`.',
+           '**Lösung:** BD-App in die VRF Prod legen und das Subnetz 10.10.21.1/24 durch 10.10.20.1/24 ersetzen. '
+           'Die VRF Test bleibt für test1 allein; Route Leaking wäre die falsche Abkürzung.'],
+    cause='BD-App hängt in der VRF Test und hat das Subnetz 10.10.21.1/24, app1 erwartet das Gateway 10.10.20.1.',
+    config=[SERVER_ACCESS, SHOP45], hosts=[WEB1, APP1, TEST1], tasks=[],
+    checks=[check('web1 → app1 TCP 8080', 'traffic', src='web1', dst='app1', proto='tcp', port=8080, expect=True),
+            check('web1 → app1 Ping', 'traffic', src='web1', dst='app1', proto='icmp', expect=True),
+            check('Web und App liegen in derselben VRF wie geplant (Prod)', 'class', cls='fvRsCtx', under='uni/tn-Shop/BD-BD-App/',
+                  attrs={'tnFvCtxName': 'Prod'}),
+            check('app1 baut keine Verbindung zu web1 auf (TCP 8080)', 'traffic', src='app1', dst='web1', proto='tcp', port=8080,
+                  expect=False, reason='POLICY_'),
+            check('test1 → app1 bleibt getrennt', 'traffic', src='test1', dst='app1', proto='icmp', expect=False, category='security'),
+            check('test1 → web1 bleibt getrennt', 'traffic', src='test1', dst='web1', proto='icmp', expect=False, category='security'),
+            check('Least Privilege Web → App: nur TCP 8080 und Ping', 'exposure', src='web1', dst='app1', allow=['tcp/8080', 'icmp'],
+                  category='security')],
+    questions=[{'id': 'q1', 'q': 'Wer routet zwischen BD-Web und BD-App, wenn beide in der VRF Prod liegen?',
+                'options': ['Jeder Leaf mit der VRF selbst (Pervasive Gateway, Anycast)', 'Ein externer Router über einen L3Out',
+                            'Die Spines', 'Der APIC'],
+                'answer': 0, 'explain': 'Das BD-Subnetz ist auf allen Leafs mit der BD dasselbe Gateway; geroutet wird am Ingress-Leaf.'},
+               {'id': 'q2', 'q': 'Warum ist nach der Korrektur trotzdem ein Contract nötig?',
+                'options': ['Die VRF ist enforced: Zwischen zwei EPGs gilt Implicit Deny, egal ob geroutet oder gebridged',
+                            'Wegen des Routings', 'Ist er nicht', 'Wegen der VLANs'],
+                'answer': 0, 'explain': 'Routing und Policy sind getrennte Schritte. Routing macht das Ziel erreichbar, der Contract erlaubt den Fluss.'}],
+    solution='`POST /api/mo/uni.json` mit `' + json.dumps(SOL45) + '`')
+
+# ----------------------------------------------------------------------------
 # Maschinenlesbare Musterloesungen (fuer die Tests: [URL-DN, Body])
 # ----------------------------------------------------------------------------
 BGP_RR = ['uni/fabric/bgpInstP-default', mo('bgpInstPol', {}, mo('bgpAsP', {'asn': '65001'}),
@@ -2550,6 +2686,8 @@ SOLUTIONS = {
                                                                    mo('fvRsCons', {'tnVzBrCPName': 'web-to-app-https'}))],
                               ['uni/tn-Shop/ap-Webshop/epg-App', mo('fvAEPg', {}, mo('fvRsCons', {'tnVzBrCPName': 'web-to-app-https', 'status': 'deleted'}),
                                                                    mo('fvRsProv', {'tnVzBrCPName': 'web-to-app-https'}))]],
+    '44-access-diagnosis': SOL44,
+    '45-two-bds-one-vrf': [['uni', SOL45]],
 }
 
 

@@ -1,0 +1,672 @@
+{
+ "id": "45-two-bds-one-vrf",
+ "title": "45 Zwei Bridge Domains, eine VRF",
+ "topic": "Tenant / Routing",
+ "level": "Einstieg",
+ "duration": "20 min",
+ "fabric": "discovered",
+ "kind": "troubleshooting",
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 03"
+ ],
+ "tools": [
+  "Traffic Inspector",
+  "Tenant > Networking > Bridge Domains",
+  "CLI: show ip route vrf, show endpoint"
+ ],
+ "goals": [
+  "Verstehen, wann Routing zwischen zwei BDs ohne L3Out funktioniert",
+  "Gateway des Servers und BD-Subnetz abgleichen",
+  "VRF-Trennung als Sicherheitsgrenze erhalten"
+ ],
+ "intro": "Web und App liegen in eigenen Bridge Domains und sollen über die Fabric geroutet miteinander sprechen (TCP 8080). Der Contract web-to-app ist da, trotzdem kommt nichts an. In der VRF Test steht ein Testserver, der vom Webshop getrennt bleiben muss.\n\n- web1: 10.10.10.11/24, Gateway 10.10.10.1, leaf101 eth1/1, VLAN 110 (EPG Web)\n- app1: 10.10.20.11/24, Gateway 10.10.20.1, leaf102 eth1/2, VLAN 120 (EPG App)\n- test1: 10.10.90.11/24, leaf101 eth1/8, VLAN 190 (EPG Test)",
+ "requirements": [
+  "web1 erreicht app1 auf TCP 8080 und per Ping.",
+  "Die Adressen und Gateways der Server bleiben unverändert.",
+  "test1 erreicht weder Web noch App.",
+  "Kein Route Leaking und keine neuen Contracts."
+ ],
+ "limits": [
+  "Inter-VRF-Verkehr (Shared Services) ist hier bewusst nicht gefragt."
+ ],
+ "hints": [
+  "**Konzept:** Zwei BDs in derselben VRF routet der Leaf selbst (Pervasive Gateway), ein L3Out ist nicht nötig. Voraussetzung: beide BDs in derselben VRF und das BD-Subnetz ist das Gateway der Server.",
+  "**Ebene:** Routing, nicht Policy. Der Traffic Inspector zeigt, an welchem Schritt es scheitert: Gateway oder VRF.",
+  "**Prüfschritte:** BD-App öffnen: Welche VRF, welches Subnetz? Mit Gateway und Adresse von app1 vergleichen. CLI auf leaf102: `show ip route vrf Shop:Prod`.",
+  "**Lösung:** BD-App in die VRF Prod legen und das Subnetz 10.10.21.1/24 durch 10.10.20.1/24 ersetzen. Die VRF Test bleibt für test1 allein; Route Leaking wäre die falsche Abkürzung."
+ ],
+ "cause": "BD-App hängt in der VRF Test und hat das Subnetz 10.10.21.1/24, app1 erwartet das Gateway 10.10.20.1.",
+ "config": [
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "infraInfra": {
+       "attributes": {},
+       "children": [
+        {
+         "fvnsVlanInstP": {
+          "attributes": {
+           "name": "VLAN-Pool-Server",
+           "allocMode": "static"
+          },
+          "children": [
+           {
+            "fvnsEncapBlk": {
+             "attributes": {
+              "from": "vlan-100",
+              "to": "vlan-199"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAttEntityP": {
+          "attributes": {
+           "name": "AAEP-Server"
+          },
+          "children": [
+           {
+            "infraRsDomP": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraFuncP": {
+          "attributes": {},
+          "children": [
+           {
+            "infraAccPortGrp": {
+             "attributes": {
+              "name": "IPG-Server-Access"
+             },
+             "children": [
+              {
+               "infraRsAttEntP": {
+                "attributes": {
+                 "tDn": "uni/infra/attentp-AAEP-Server"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAccPortP": {
+          "attributes": {
+           "name": "IntProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraHPortS": {
+             "attributes": {
+              "name": "Server-Ports",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraPortBlk": {
+                "attributes": {
+                 "name": "block2",
+                 "fromPort": "1",
+                 "toPort": "10"
+                }
+               }
+              },
+              {
+               "infraRsAccBaseGrp": {
+                "attributes": {
+                 "tDn": "uni/infra/funcprof/accportgrp-IPG-Server-Access"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraNodeP": {
+          "attributes": {
+           "name": "SwProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraLeafS": {
+             "attributes": {
+              "name": "101-102",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraNodeBlk": {
+                "attributes": {
+                 "name": "blk",
+                 "from_": "101",
+                 "to_": "102"
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "infraRsAccPortP": {
+             "attributes": {
+              "tDn": "uni/infra/accportprof-IntProf-Leaf101-102"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "physDomP": {
+       "attributes": {
+        "name": "PhysDom-Server"
+       },
+       "children": [
+        {
+         "infraRsVlanNs": {
+          "attributes": {
+           "tDn": "uni/infra/vlanns-[VLAN-Pool-Server]-static"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Shop"
+    },
+    "children": [
+     {
+      "fvCtx": {
+       "attributes": {
+        "name": "Prod"
+       }
+      }
+     },
+     {
+      "fvCtx": {
+       "attributes": {
+        "name": "Test"
+       }
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Web"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.10.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-App"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Test"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.21.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Test"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Test"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.90.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzFilter": {
+       "attributes": {
+        "name": "tcp-8080"
+       },
+       "children": [
+        {
+         "vzEntry": {
+          "attributes": {
+           "name": "tcp-8080",
+           "etherT": "ip",
+           "prot": "tcp",
+           "dFromPort": "8080",
+           "dToPort": "8080"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzBrCP": {
+       "attributes": {
+        "name": "web-to-app",
+        "scope": "context"
+       },
+       "children": [
+        {
+         "vzSubj": {
+          "attributes": {
+           "name": "subj",
+           "revFltPorts": "yes"
+          },
+          "children": [
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "tcp-8080"
+             }
+            }
+           },
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "icmp"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Webshop"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Web"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Web"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/1]",
+              "encap": "vlan-110",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsCons": {
+             "attributes": {
+              "tnVzBrCPName": "web-to-app"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "App"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-App"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/2]",
+              "encap": "vlan-120",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsProv": {
+             "attributes": {
+              "tnVzBrCPName": "web-to-app"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Labor"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Test"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Test"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/8]",
+              "encap": "vlan-190",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "hosts": [
+  {
+   "name": "web1",
+   "mac": "00:50:56:10:10:11",
+   "ip": "10.10.10.11/24",
+   "gw": "10.10.10.1",
+   "vlan": 110,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/1"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Webserver"
+  },
+  {
+   "name": "app1",
+   "mac": "00:50:56:10:20:11",
+   "ip": "10.10.20.11/24",
+   "gw": "10.10.20.1",
+   "vlan": 120,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/2"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Applikationsserver"
+  },
+  {
+   "name": "test1",
+   "mac": "00:50:56:10:90:11",
+   "ip": "10.10.90.11/24",
+   "gw": "10.10.90.1",
+   "vlan": 190,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/8"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Testserver (Testumgebung)"
+  }
+ ],
+ "tasks": [],
+ "checks": [
+  {
+   "desc": "web1 → app1 TCP 8080",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "app1",
+   "proto": "tcp",
+   "port": 8080,
+   "expect": true
+  },
+  {
+   "desc": "web1 → app1 Ping",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "app1",
+   "proto": "icmp",
+   "expect": true
+  },
+  {
+   "desc": "Web und App liegen in derselben VRF wie geplant (Prod)",
+   "type": "class",
+   "cls": "fvRsCtx",
+   "under": "uni/tn-Shop/BD-BD-App/",
+   "attrs": {
+    "tnFvCtxName": "Prod"
+   }
+  },
+  {
+   "desc": "app1 baut keine Verbindung zu web1 auf (TCP 8080)",
+   "type": "traffic",
+   "src": "app1",
+   "dst": "web1",
+   "proto": "tcp",
+   "port": 8080,
+   "expect": false,
+   "reason": "POLICY_"
+  },
+  {
+   "desc": "test1 → app1 bleibt getrennt",
+   "type": "traffic",
+   "src": "test1",
+   "dst": "app1",
+   "proto": "icmp",
+   "expect": false,
+   "category": "security"
+  },
+  {
+   "desc": "test1 → web1 bleibt getrennt",
+   "type": "traffic",
+   "src": "test1",
+   "dst": "web1",
+   "proto": "icmp",
+   "expect": false,
+   "category": "security"
+  },
+  {
+   "desc": "Least Privilege Web → App: nur TCP 8080 und Ping",
+   "type": "exposure",
+   "src": "web1",
+   "dst": "app1",
+   "allow": [
+    "tcp/8080",
+    "icmp"
+   ],
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Wer routet zwischen BD-Web und BD-App, wenn beide in der VRF Prod liegen?",
+   "options": [
+    "Jeder Leaf mit der VRF selbst (Pervasive Gateway, Anycast)",
+    "Ein externer Router über einen L3Out",
+    "Die Spines",
+    "Der APIC"
+   ],
+   "answer": 0,
+   "explain": "Das BD-Subnetz ist auf allen Leafs mit der BD dasselbe Gateway; geroutet wird am Ingress-Leaf."
+  },
+  {
+   "id": "q2",
+   "q": "Warum ist nach der Korrektur trotzdem ein Contract nötig?",
+   "options": [
+    "Die VRF ist enforced: Zwischen zwei EPGs gilt Implicit Deny, egal ob geroutet oder gebridged",
+    "Wegen des Routings",
+    "Ist er nicht",
+    "Wegen der VLANs"
+   ],
+   "answer": 0,
+   "explain": "Routing und Policy sind getrennte Schritte. Routing macht das Ziel erreichbar, der Contract erlaubt den Fluss."
+  }
+ ],
+ "solution": "`POST /api/mo/uni.json` mit `{\"fvTenant\": {\"attributes\": {\"name\": \"Shop\"}, \"children\": [{\"fvBD\": {\"attributes\": {\"name\": \"BD-App\"}, \"children\": [{\"fvRsCtx\": {\"attributes\": {\"tnFvCtxName\": \"Prod\"}}}, {\"fvSubnet\": {\"attributes\": {\"ip\": \"10.10.21.1/24\", \"status\": \"deleted\"}}}, {\"fvSubnet\": {\"attributes\": {\"ip\": \"10.10.20.1/24\", \"scope\": \"private\"}}}]}}]}}`",
+ "routers": [],
+ "vcenters": [],
+ "devices": [],
+ "aaa": [],
+ "switches": [],
+ "solutionConfig": [
+  [
+   "uni",
+   {
+    "fvTenant": {
+     "attributes": {
+      "name": "Shop"
+     },
+     "children": [
+      {
+       "fvBD": {
+        "attributes": {
+         "name": "BD-App"
+        },
+        "children": [
+         {
+          "fvRsCtx": {
+           "attributes": {
+            "tnFvCtxName": "Prod"
+           }
+          }
+         },
+         {
+          "fvSubnet": {
+           "attributes": {
+            "ip": "10.10.21.1/24",
+            "status": "deleted"
+           }
+          }
+         },
+         {
+          "fvSubnet": {
+           "attributes": {
+            "ip": "10.10.20.1/24",
+            "scope": "private"
+           }
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  ]
+ ]
+}

@@ -6,7 +6,7 @@ Alle Punkte sind offen. Erledigt ist, was in `docs/GAP-ANALYSE.md` als „behobe
 
 | # | Punkt | Begründung | Umfang |
 |---|---|---|---|
-| B-01 | Weitere Labs ins Anforderungsformat überführen (als Nächstes 05, 06, 11, 13; erledigt: 02, 03, 04, 07) | Die Lösung steht bei den übrigen Labs in der Aufgabe | je Lab Inhalt + Tests wie `test_acceptance.py` |
+| B-01 | Weitere Labs ins Anforderungsformat überführen (als Nächstes 05, 06, 11, 13; erledigt: 02, 03, 04, 07; neu im Format: 32 bis 45) | Die Lösung steht bei den übrigen Labs in der Aufgabe | je Lab Inhalt + Tests wie `test_acceptance.py` |
 | B-08 | Topologie: Overlays für EPG, BD, VRF und Policy (Pfad und Drop-Punkt aus dem Traffic-Test sind umgesetzt) | Zusammenhänge sichtbar machen | Frontend |
 | B-09 | Dark Mode und Tastaturbedienung (Fokus-Reihenfolge, Shortcuts) | Barrierefreiheit | CSS-Tokens, Frontend |
 | B-12 | Change-History: welche Änderung wann, mit Diff, aus allen Bedienwegen | „Änderungen sicher planen“ | Store-Hook |
@@ -17,7 +17,6 @@ Alle Punkte sind offen. Erledigt ist, was in `docs/GAP-ANALYSE.md` als „behobe
 |---|---|---|
 | B-07 | Simulierte Uhr statt Wanduhr für Discovery, Upgrades und Fault-Lebenszyklus (soaking → raised → retaining) | Determinismus |
 | B-13 | Diagnoseprozess erfassen: ausgeführte Traffic-Tests und CLI-Befehle je Lab-Sitzung protokollieren und anzeigen, ohne die Denkweise zu „bewerten“ | optionaler Troubleshooting-Modus |
-| B-14 | CLI-Ausgabe als „verifiziert“ oder „simulator-spezifisch“ kennzeichnen; bei nicht unterstützten Befehlen einen Diagnoseweg vorschlagen | Ehrlichkeit des Terminals |
 
 ## Phase 4: Erweiterungen
 

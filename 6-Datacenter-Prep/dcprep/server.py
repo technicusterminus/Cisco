@@ -1644,7 +1644,7 @@ def make_handler(hub):
                         S.changed()
                     elif S.sim.get('touch_clean'):
                         S.save()
-                    return self.send(200, {'output': out})
+                    return self.send(200, {'output': out, 'kind': cli.kind})
                 if rest == 'hosts':
                     if b.get('op') == 'bulk':
                         n = S.bulk_hosts(b.get('csv'), b.get('replace'))

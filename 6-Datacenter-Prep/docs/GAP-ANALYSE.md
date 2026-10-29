@@ -43,12 +43,13 @@ Untersucht wurden:
 | Ergebnis des Traffic-Tests nur `ok` + Text | keine maschinenlesbare Ursache, keine Policy-Referenz, keine Trennung „Pfad kaputt“ vs. „Policy“ | **behoben**: verdict, reason, location, policy, hint, path |
 | Kein Modell für Zieldienste | „Policy erlaubt“ wurde mit „Dienst erreichbar“ gleichgesetzt | **behoben**: Feld *Dienste*, `SERVICE_NOT_LISTENING`, getrennt vom Least-Privilege-Check |
 | Lab-Bewertung ohne Sicherheits-Kategorie | Ein Permit-any fiel nur auf, wenn zufällig ein negativer Test existierte | **behoben**: Kategorie `security`, Check `exposure` |
-| Labs sind Klickanleitungen | Die Lösung steht in der Aufgabe, wenig Transfer | behoben für 02, 03, 04, 07 und die neuen Labs 32 bis 35; übrige Labs offen (B-01) |
-| Hinweise einstufig, kein Prüfungsmodus | | **behoben** in der Engine; genutzt von den Labs 02, 03, 04, 07, 32 bis 35 |
+| Labs sind Klickanleitungen | Die Lösung steht in der Aufgabe, wenig Transfer | behoben für 02, 03, 04, 07 und die neuen Labs 32 bis 45; übrige Labs offen (B-01) |
+| Hinweise einstufig, kein Prüfungsmodus | | **behoben** in der Engine; genutzt von den Labs 02, 03, 04, 07, 32 bis 45 |
 | Lab-Generator nicht deterministisch (Zeitstempel in Lab 25) | Generierte Dateien änderten sich bei jedem Lauf | **behoben** |
 | Intra-EPG-Contracts nicht ausgewertet | Verkehr innerhalb einer EPG ließ sich nur ganz oder gar nicht erlauben | **behoben**: `fvRsIntraEpg` wird ausgewertet, Lab 38 |
 | vzInTerm/vzOutTerm fehlen | „Apply Both Directions“ aus nicht modellierbar | offen (B-06) |
 | Endpoint Move und Link-Ausfall nicht als Ereignis | Labs 16, 17 nicht möglich, Link-Probleme erschienen als EP_NOT_LEARNED | **behoben**: Events S9101–S9103, Endpoint-Verlauf, Codes LINK_DOWN/PORT_ADMIN_DOWN, Labs 36 und 37 |
+| CLI meldete nicht unterstützte Befehle wie ein echtes Gerät („Invalid command“) | Lernende konnten Grenzen des Simulators nicht von echten Fehlbedienungen unterscheiden | **behoben**: Herkunft je Ausgabe (`device`/`sim`/`unsupported`), Diagnoseweg bei nicht unterstützten Befehlen, `TestCliHonesty` |
 | Prioritäten zwischen vzAny, EPG-Regeln und Taboo vereinfacht | mögliche Fehlaussagen bei überlappenden Regeln | offen, zuerst gegen echtes ACI prüfen |
 
 ## 4. Was zuerst den größten Lernnutzen bringt

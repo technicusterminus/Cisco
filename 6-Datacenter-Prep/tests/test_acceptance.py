@@ -411,6 +411,8 @@ class TestRequirementLabs(unittest.TestCase):
         '41-route-or-contract': ['Route Reflector', 'MP-BGP', 'BGP', 'konsumiert', 'fvRsCons'],
         '42-return-path': ['Advertised', 'public', 'fvRsBDToOut', 'Associated', 'Rückweg'],
         '43-change-snapshot': ['Config Rollbacks', 'Port 8443'],
+        '44-access-diagnosis': ['fvRsDomAtt', 'Encap Block', 'vlan-111', 'VLAN 111', 'ohne Domain', 'Pool'],
+        '45-two-bds-one-vrf': ['10.10.21', 'VRF Test liegt', 'fvRsCtx', 'Subnetz ersetzen'],
     }
 
     def setUp(self):
@@ -652,6 +654,51 @@ class TestTroubleshootingLabs(unittest.TestCase):
         self.assertEqual(trace.run(self.S.engine, self.S.sim, 'web1', 'web3', 'icmp')['reason'], 'LINK_DOWN', 'Ticket 3 bleibt physisch')
 
 
+    def test_lab44_three_access_causes_and_faults(self):
+        self.S.load_lab('44-access-diagnosis')
+        e = self.S.engine
+        for src, dst, port in (('web1', 'app1', 8080), ('web2', 'app1', 8080), ('app1', 'db1', 5432)):
+            self.assertEqual(trace.run(e, self.S.sim, src, dst, 'tcp', port)['reason'], 'EP_NOT_LEARNED', (src, dst))
+        self.assertIn('vlan-111', ' '.join(e.hosts['web2']['reasons']))
+        faults = sorted(self.S.store.attrs(f)['descr'] for f in self.S.store.by_class('faultInst') if '/tn-Shop/' in f)
+        self.assertEqual(len(faults), 2, 'App ohne Domain und DB mit VLAN ausserhalb des Pools, web2 ohne Fault')
+        self.assertTrue(all('F0467' == self.S.store.attrs(f)['code'] for f in self.S.store.by_class('faultInst') if '/tn-Shop/' in f))
+
+    def test_lab44_static_leaf_shortcut_learns_foreign_device(self):
+        lab = self.S.load_lab('44-access-diagnosis')
+        self.apply(lab['solutionConfig'][0], lab['solutionConfig'][2],
+                   ('uni/tn-Shop/ap-Webshop/epg-Web', mo('fvAEPg', {}, mo('fvRsNodeAtt', {'tDn': 'topology/pod-1/node-101', 'encap': 'vlan-110'}),
+                                                       mo('fvRsNodeAtt', {'tDn': 'topology/pod-1/node-102', 'encap': 'vlan-110'}))))
+        by = self.by()
+        self.assertTrue(by['Ticket 1: web1 → app1 TCP 8080'] and by['Ticket 3: app1 → db1 TCP 5432'])
+        self.assertFalse(by['Unbekanntes Gerät an leaf101 eth1/9 wird nicht gelernt'])
+
+    def test_lab44_changing_the_db_vlan_is_not_a_fix(self):
+        lab = self.S.load_lab('44-access-diagnosis')
+        self.apply(lab['solutionConfig'][0], lab['solutionConfig'][1],
+                   ('uni/tn-Shop/ap-Webshop/epg-DB', mo('fvAEPg', {}, mo('fvRsPathAtt', {
+                       'tDn': 'topology/pod-1/paths-102/pathep-[eth1/8]', 'encap': 'vlan-130'}))))
+        by = self.by()
+        self.assertTrue(by['Keine Konfigurationsfehler (F0467) im Tenant Shop'], 'gueltige Konfiguration ...')
+        self.assertFalse(by['Ticket 3: app1 → db1 TCP 5432'], '... passt aber nicht zum Server (sendet VLAN 250)')
+
+    def test_lab45_routing_not_policy_and_leak_shortcut_fails(self):
+        lab = self.S.load_lab('45-two-bds-one-vrf')
+        self.assertEqual(trace.run(self.S.engine, self.S.sim, 'web1', 'app1', 'tcp', 8080)['reason'], 'INTERVRF_LEAK_MISSING')
+        # Abkuerzung: Gateway korrigieren, BD in VRF Test lassen, Contract auf Scope Tenant mit Shared-Subnetzen
+        self.apply(('uni', mo('fvTenant', {'name': 'Shop'},
+                              mo('fvBD', {'name': 'BD-App'}, mo('fvSubnet', {'ip': '10.10.21.1/24', 'status': 'deleted'})),
+                              mo('vzBrCP', {'name': 'web-to-app', 'scope': 'tenant'}))))
+        self.apply(('uni/tn-Shop/BD-BD-App', mo('fvBD', {}, mo('fvSubnet', {'ip': '10.10.20.1/24', 'scope': 'private,shared'}))),
+                   ('uni/tn-Shop/BD-BD-Web', mo('fvBD', {}, mo('fvSubnet', {'ip': '10.10.10.1/24', 'scope': 'private,shared'}))))
+        by = self.by()
+        self.assertFalse(by['Web und App liegen in derselben VRF wie geplant (Prod)'])
+        self.assertTrue(by['test1 → app1 bleibt getrennt'], 'Die Trennung allein erkennt die Abkuerzung nicht ...')
+        self.S.load_lab('45-two-bds-one-vrf')
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()), '... die Musterloesung besteht')
+
+
 class TestSegmentationLabs(unittest.TestCase):
     """Labs 38 (Intra-EPG), 39 (Preferred Group), 40 (IT/OT): Loesung besteht, Abkuerzungen scheitern."""
 
@@ -869,3 +916,45 @@ class TestPolicyMatrix(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestCliHonesty(unittest.TestCase):
+    """B-14: Das Terminal sagt, was echt ist, was simulator-spezifisch ist und was es nicht kann."""
+
+    def setUp(self):
+        self.S = Sim(tempfile.mkdtemp(), 'admin')
+        self.S.sim['settings']['discoverySeconds'] = 0
+        self.S.load_lab(LAB)
+        self.cli = Cli(self.S.engine, self.S.sim)
+
+    def run_(self, node, cmd):
+        return self.cli.run(node, cmd), self.cli.kind
+
+    def test_known_commands_are_marked_by_origin(self):
+        self.assertEqual(self.run_('apic1', 'show tenant')[1], 'device')
+        self.assertEqual(self.run_('leaf101', 'show zoning-rule')[1], 'device')
+        self.assertEqual(self.run_('apic1', 'show snmp')[1], 'sim')
+        self.assertIn('[S]', self.run_('apic1', 'help')[0])
+
+    def test_unsupported_commands_name_a_supported_path(self):
+        cases = {('apic1', 'show running-config tenant Shop'): 'moquery',
+                 ('leaf101', 'show running-config'): 'moquery',
+                 ('apic1', 'show ip route vrf Shop:Prod'): 'ssh leaf101',
+                 ('leaf101', 'moquery -c fvBD'): 'exit',
+                 ('leaf101', 'ping 10.10.20.11'): 'Traffic Inspector',
+                 ('apic1', 'configure terminal'): 'REST-API',
+                 ('apic1', 'frobnicate'): 'help'}
+        for (node, cmd), hint in cases.items():
+            with self.subTest(cmd=cmd):
+                out, kind = self.run_(node, cmd)
+                self.assertEqual(kind, 'unsupported')
+                self.assertIn('In der Simulation nicht unterstuetzt', out)
+                self.assertIn('Stattdessen' if hint != 'help' else '"help"', out)
+                self.assertIn(hint, out)
+
+    def test_no_shell_and_no_config_change(self):
+        before = json.dumps(self.S.store.dump_config(), sort_keys=True, default=str)
+        for cmd in ('ls; rm -rf /', '$(id)', 'bash', 'python3 -c "print(1)"', 'conf t'):
+            out, kind = self.run_('apic1', cmd)
+            self.assertEqual(kind, 'unsupported', cmd)
+        self.assertEqual(json.dumps(self.S.store.dump_config(), sort_keys=True, default=str), before)

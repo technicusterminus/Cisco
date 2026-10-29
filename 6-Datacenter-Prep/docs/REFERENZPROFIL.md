@@ -41,7 +41,7 @@ Status-Begriffe in dieser Datei:
 | Datenebene | **nicht unterstützt** | Es fließen keine Pakete. Der Traffic-Test berechnet die Entscheidung aus Konfiguration und Zustand |
 | Zieldienst auf Hosts | simulator-spezifisch | Feld *Dienste* (z. B. `tcp/443`). Leer bedeutet: Der Host antwortet auf jedem Port |
 | REST-API | Teilumfang | Abfragen und Fehler im APIC-Format. Unbekannte Attribute werden ohne `--strict` angenommen |
-| CLI | Teilumfang | Liste unter `help`. Ausgaben kommen aus dem Engine-Zustand, das Layout ist an NX-OS angelehnt und nicht bitgenau |
+| CLI | Teilumfang | Liste unter `help`. Ausgaben kommen aus dem Engine-Zustand, das Layout ist an NX-OS angelehnt und nicht bitgenau. Die Befehlsnamen stammen aus der Cisco-Dokumentation und sind nicht gegen ein Gerät geprüft; `show snapshot`, `show export-config`, `show snmp`, `show logging server` sind in dieser Form nicht belegt und als simulator-spezifisch [S] markiert (`SIM_ONLY_APIC` in `cli.py`). Nicht unterstützte Befehle melden „In der Simulation nicht unterstützt“ mit Diagnoseweg. Nur lesend, keine Shell |
 
 ## 3. Connectivity-Engine: Diagnosemodell
 
