@@ -188,6 +188,7 @@ Unter *Simulation > Labs & Stände* laden. Jedes Lab setzt die Konfiguration auf
 - **Bewertung** getrennt nach *Funktion* und *Sicherheit / Least Privilege*. Eine Permit-any-Abkürzung funktioniert zwar, besteht aber nicht.
 - **Verständnisfragen** werden getrennt gezählt.
 - **Geführter Modus** oder **Prüfungsmodus** (ohne Hinweise, Lösung und Diagnosetexte), wählbar beim Start.
+- **Diagnoseprotokoll** auf der Lab-Karte: alle Traffic-Tests, CLI-Befehle, Hinweise und Prüfläufe der Sitzung mit Ergebnis. Es dient dem Nachvollziehen und wird nicht bewertet.
 
 Den Stand gegenüber dem geplanten Lernpfad zeigt [docs/LAB-KATALOG.md](docs/LAB-KATALOG.md), wie man Labs schreibt [docs/LAB-AUTHORING.md](docs/LAB-AUTHORING.md).
 

@@ -346,6 +346,19 @@ class Sim:
     def lab_session(self):
         return self.sim.get('labSession') or {'mode': 'guided', 'hints': 0, 'answers': {}, 'checks': 0}
 
+    LAB_LOG_MAX = 200
+
+    def lab_log(self, kind, what, result=''):
+        """Diagnoseprotokoll der Lab-Sitzung (B-13): was wurde ausgefuehrt, mit welchem Ergebnis. Wird angezeigt, nie bewertet."""
+        if not self.sim.get('lab'):
+            return
+        ses = self.lab_session()
+        log = ses.setdefault('log', [])
+        log.append({'kind': kind, 'what': what, 'result': result, 'at': now_ts()})
+        del log[:-self.LAB_LOG_MAX]
+        self.sim['labSession'] = ses
+        self.save()   # Protokoll, Hinweise und Antworten ueberstehen einen Neustart
+
     def lab_public(self, lab):
         """Lab fuer die Oberflaeche: im Pruefungsmodus ohne Hinweise und Loesung, Fragen ohne Antwort."""
         if not lab:
@@ -354,6 +367,7 @@ class Sim:
         exam = ses['mode'] == 'exam'
         out = {k: lab.get(k) for k in ('id', 'title', 'intro', 'goals', 'level', 'topic', 'prerequisites', 'tools', 'limits', 'requirements')}
         out['mode'] = ses['mode']
+        out['log'] = ses.get('log', [])
         out['modes'] = lab.get('modes') or ['guided']
         out['tasks'] = [{k: v for k, v in t.items() if not (exam and k == 'hint')} for t in lab.get('tasks', [])]
         hints = lab.get('hints') or []
@@ -374,8 +388,11 @@ class Sim:
         if ses['mode'] == 'exam':
             raise AciError(403, 'Im Pruefungsmodus gibt es keine Hinweise', 403)
         hints = lab.get('hints') or []
+        before = ses['hints']
         ses['hints'] = max(ses['hints'], min(int(level), len(hints)))
         self.sim['labSession'] = ses
+        if ses['hints'] > before:
+            self.lab_log('hint', 'Hinweis Stufe %d' % ses['hints'])
         return {'hints': hints[:ses['hints']], 'used': ses['hints'], 'count': len(hints)}
 
     def lab_answer(self, qid, choice):
@@ -386,6 +403,7 @@ class Sim:
         ses = self.lab_session()
         ses['answers'][qid] = int(choice)
         self.sim['labSession'] = ses
+        self.lab_log('answer', 'Frage %s beantwortet' % qid)
         return self.lab_public(lab)['answers'][qid]
 
     def check_lab(self, count=True):
@@ -582,6 +600,8 @@ class Sim:
         out = {'id': lab['id'], 'title': lab['title'], 'checks': res, 'categories': cats, 'understanding': und,
                'mode': ses['mode'], 'hintsUsed': ses['hints'], 'checkRuns': ses['checks'],
                'passed': sum(1 for r in res if r['ok']), 'total': len(res)}
+        if count:
+            self.lab_log('check', 'Lab prüfen', '%d von %d' % (out['passed'], out['total']))
         self.record_progress(out)
         return out
 
@@ -1630,6 +1650,9 @@ def make_handler(hub):
                                            'nodes': {str(k): v for k, v in e.ntp['nodes'].items()}})
                 if rest == 'traffic':
                     r = trace.run(e, S.sim, b.get('src'), b.get('dst'), b.get('proto', 'icmp'), b.get('port', 0))
+                    S.lab_log('traffic', '%s → %s %s%s' % (b.get('src'), b.get('dst'), b.get('proto', 'icmp'),
+                                                           '/%s' % b['port'] if b.get('port') else ''),
+                              '%s %s' % (r.get('verdict', ''), r.get('reason', '')))
                     new = [n for n in r.pop('woken', []) if n not in S.sim.setdefault('woken', [])]
                     if new:
                         S.sim['woken'].extend(new)
@@ -1638,6 +1661,8 @@ def make_handler(hub):
                 if rest == 'cli':
                     cli = Cli(e, S.sim)
                     out = cli.run(b.get('node', 'apic1'), b.get('cmd', ''))
+                    if b.get('cmd', '').strip():
+                        S.lab_log('cli', '%s# %s' % (b.get('node', 'apic1'), b.get('cmd', '').strip()[:200]), cli.kind or '')
                     if cli.request == 'factory':
                         S.reset('factory', keep_sim=True)
                         S.save()
@@ -1799,6 +1824,8 @@ def make_handler(hub):
                     return self.send(200, {'ok': True, 'title': lab['title']})
                 if rest == 'labs/check':
                     return self.send(200, S.check_lab() or {'checks': []})
+                if rest == 'labs/log':
+                    return self.send(200, S.lab_session().get('log', []))
                 if rest == 'labs/hint':
                     return self.send(200, S.lab_hint(b.get('level', 1)))
                 if rest == 'labs/answer':

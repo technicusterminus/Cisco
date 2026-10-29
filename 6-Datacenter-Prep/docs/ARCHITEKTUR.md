@@ -51,4 +51,4 @@ Ein Prozess, ein Python-Paket (`dcprep/`), eine statische Weboberfläche (`stati
 
 ## Lab-Sitzung
 
-`sim.labSession = {mode, hints, answers, checks}`. Sie wird bei jedem Lab-Start und Reset neu angelegt, ist Teil des Spielstands und verändert nie die Konfiguration. `lab_public()` liefert der Oberfläche nur, was der Modus erlaubt.
+`sim.labSession = {mode, hints, answers, checks, started, log}`. Sie wird bei jedem Lab-Start und Reset neu angelegt, ist Teil des Spielstands und verändert nie die Konfiguration. `log` ist das Diagnoseprotokoll (`Sim.lab_log`, höchstens 200 Einträge): Traffic-Tests und CLI-Befehle über HTTP, Hinweise, Antworten und Prüfläufe. Es wird angezeigt (`GET /sim/labs/log`, Lab-Karte), fließt aber nie in die Bewertung ein. `lab_public()` liefert der Oberfläche nur, was der Modus erlaubt.

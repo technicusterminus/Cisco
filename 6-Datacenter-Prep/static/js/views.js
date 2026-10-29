@@ -825,6 +825,7 @@ const Views = {
           h('div', { class: 'kpi' }, h('span', null, 'Hinweise genutzt'), h('b', null, exam ? 'Prüfung' : String(r.hintsUsed || 0)))),
         groups.map(g => h('div', null, h('h4', null, CAT[g] || g),
           h('ol', null, r.checks.filter(c => (c.category || 'function') === g).map(c => h('li', { class: c.ok ? 'ok' : 'bad' }, h('b', null, (c.ok ? '✔ ' : '✖ ') + c.desc), c.info ? h('div', { class: 'muted' }, c.info) : null)))))));
+      if (logDet.open) drawLog(await API.sim('labs/log'));
     };
     const hintBox = h('div');
     const drawHints = hs => {
@@ -842,6 +843,18 @@ const Views = {
         h('input', { type: 'radio', name: 'q-' + q.id, checked: cur.answers && cur.answers[q.id] && cur.answers[q.id].choice === i,
           onchange: async () => show(await API.sim('labs/answer', { id: q.id, choice: i })) }), h('span', null, o))), fb);
     })) : null;
+    const KIND = { traffic: 'Traffic-Test', cli: 'CLI', check: 'Bewertung', hint: 'Hinweis', answer: 'Frage' };
+    const logBox = h('div');
+    const drawLog = log => {
+      clear(logBox);
+      if (!log.length) { logBox.appendChild(h('p', { class: 'muted small' }, 'Noch nichts ausgeführt.')); return; }
+      logBox.appendChild(table([{ l: 'Zeit', f: x => new Date(x.at).toLocaleTimeString('de-DE') }, { l: 'Art', f: x => KIND[x.kind] || x.kind },
+        { l: 'Was', f: x => h('code', null, x.what) }, { l: 'Ergebnis', f: x => x.result }], log.slice().reverse()));
+    };
+    drawLog(cur.log || []);
+    const logDet = h('details', { class: 'lablog' }, h('summary', null, 'Diagnoseprotokoll (wird nicht bewertet)'),
+      h('p', { class: 'muted small' }, 'Deine Traffic-Tests, CLI-Befehle, Hinweise und Prüfläufe in dieser Lab-Sitzung – zum Nachvollziehen des eigenen Vorgehens.'), logBox);
+    logDet.addEventListener('toggle', async () => { if (logDet.open) drawLog(await API.sim('labs/log')); });
     const sol = h('div', { style: { display: 'none' } }, md(cur.solution || ''));
     return h('div', { class: 'card lab' }, h('div', { class: 'card-h' }, 'Aktuelles Lab: ' + cur.title, ' ', h('span', { class: 'pill ' + (exam ? 'warn' : 'acc') }, exam ? 'Prüfungsmodus' : 'Geführter Modus')),
       md(cur.intro || ''),
@@ -852,7 +865,7 @@ const Views = {
         h('ol', { class: 'tasks' }, cur.tasks.map(t => h('li', null, h('b', null, t.title), md(t.text), t.hint ? h('details', null, h('summary', null, 'Tipp'), md(t.hint)) : null)))) : null,
       cur.tools && cur.tools.length ? h('details', null, h('summary', null, 'Werkzeuge'), h('ul', null, cur.tools.map(g => h('li', null, g)))) : null,
       cur.limits && cur.limits.length ? h('details', null, h('summary', null, 'Grenzen dieses Szenarios'), h('ul', null, cur.limits.map(g => h('li', null, g)))) : null,
-      hintBox, quiz,
+      hintBox, quiz, logDet,
       h('div', { class: 'formbtns' }, h('button', { class: 'btn', onclick: () => Saves.saveDialog() }, '💾 Stand speichern'),
         h('button', { class: 'btn', onclick: onReset }, '↺ Auf Default zurücksetzen'),
         h('button', { class: 'btn', onclick: () => App.go('ops', 'vis') }, 'Traffic Inspector'),

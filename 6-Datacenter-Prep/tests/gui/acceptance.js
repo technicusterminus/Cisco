@@ -94,6 +94,10 @@ const SOLUTION = { fvTenant: { attributes: { name: 'Shop' }, children: [
     let r = await labCheck();
     check(r.includes('bestanden') && r.includes('7 von 7') && r.includes('Sicherheit / Least Privilege'), 'Lab bestanden: 7 von 7, Funktion und Sicherheit getrennt');
     await shot('04-bestanden');
+    await p.click('.card.lab details.lablog summary'); await p.waitForTimeout(400);
+    const log = await p.innerText('.card.lab details.lablog');
+    check(log.includes('web1 → app1 tcp/443') && log.includes('DROP POLICY_IMPLICIT_DENY') && log.includes('7 von 7'),
+      'Diagnoseprotokoll zeigt Traffic-Tests und Prüflauf');
 
     // 5. Neuladen behält Stand und Fortschritt
     await p.reload(); await p.waitForSelector('.tabs');

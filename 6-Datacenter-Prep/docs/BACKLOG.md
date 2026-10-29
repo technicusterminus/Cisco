@@ -16,7 +16,6 @@ Alle Punkte sind offen. Erledigt ist, was in `docs/GAP-ANALYSE.md` als „behobe
 | # | Punkt | Begründung |
 |---|---|---|
 | B-07 | Simulierte Uhr statt Wanduhr für Discovery, Upgrades und Fault-Lebenszyklus (soaking → raised → retaining) | Determinismus |
-| B-13 | Diagnoseprozess erfassen: ausgeführte Traffic-Tests und CLI-Befehle je Lab-Sitzung protokollieren und anzeigen, ohne die Denkweise zu „bewerten“ | optionaler Troubleshooting-Modus |
 
 ## Phase 4: Erweiterungen
 

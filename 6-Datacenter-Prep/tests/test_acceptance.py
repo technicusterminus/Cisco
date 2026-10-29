@@ -391,6 +391,26 @@ class TestOverHttp(unittest.TestCase):
         self.assertEqual(row['modes'], ['guided', 'exam'])
 
 
+    def test_diagnosis_log_records_without_grading_or_changes(self):
+        """B-13: Traffic-Tests, CLI und Pruefungen landen im Protokoll der Lab-Sitzung, auch im Pruefungsmodus, ohne Bewertung."""
+        self.assertEqual(self.req('POST', '/api/aaaLogin.json', {'aaaUser': {'attributes': {'name': 'admin', 'pwd': 'admin'}}})[0], 200)
+        self.assertEqual(self.req('POST', '/sim/labs/load', {'id': LAB, 'mode': 'exam'})[0], 200)
+        self.assertEqual(self.req('GET', '/sim/labs/log')[1], [])
+        self.req('POST', '/sim/traffic', {'src': 'web1', 'dst': 'app1', 'proto': 'tcp', 'port': 443})
+        self.req('POST', '/sim/cli', {'node': 'leaf101', 'cmd': 'show zoning-rule'})
+        self.req('POST', '/sim/cli', {'node': 'apic1', 'cmd': 'show running-config'})
+        st, chk = self.req('POST', '/sim/labs/check', {})
+        st, log = self.req('GET', '/sim/labs/log')
+        self.assertEqual([x['kind'] for x in log], ['traffic', 'cli', 'cli', 'check'])
+        self.assertEqual(log[0]['what'], 'web1 → app1 tcp/443')
+        self.assertEqual(log[0]['result'], 'DROP POLICY_IMPLICIT_DENY')
+        self.assertEqual([log[1]['result'], log[2]['result']], ['device', 'unsupported'])
+        self.assertEqual(log[3]['result'], '%d von %d' % (chk['passed'], chk['total']))
+        self.assertNotIn('log', json.dumps(chk['checks']), 'Das Protokoll fliesst nicht in die Bewertung ein')
+        self.assertEqual(self.req('POST', '/sim/labs/op', {'op': 'reset', 'id': LAB})[0], 200)
+        self.assertEqual(self.req('GET', '/sim/labs/log')[1], [], 'Neue Sitzung, leeres Protokoll')
+
+
 class TestRequirementLabs(unittest.TestCase):
     """Alle Labs im Anforderungsformat: Aufbau, keine Loesung im Aufgabentext, Abkuerzungen scheitern."""
 
