@@ -117,7 +117,7 @@ Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, wor
 1. **VLANs anlegen.** Lege auf allen Switches VLAN 10 (USERS), 20 (SERVERS) und 99 (NATIVE) an. Stelle VTP auf `vtp mode transparent`.
    - **Prüfen:** `show vlan brief` zeigt die drei VLANs, `show vtp status` den Modus Transparent.
    - **Denkfrage:** Warum ist ein neuer Switch im VTP-Modus Server oder Client gefährlich?
-2. **Trunk zum Router.** Mache SW1 Fa0/5 zum festen Trunk (`switchport mode trunk`, `switchport nonegotiate`), mit Native VLAN 99 und den erlaubten VLANs 10 und 20. R1 bekommt die Subinterfaces `Gi0/0.10` und `Gi0/0.20` mit `encapsulation dot1Q` und je einer IP-Adresse.
+2. **Trunk zum Router.** Mache SW1 Fa0/5 zum festen Trunk (`switchport trunk encapsulation dot1q`, `switchport mode trunk`, `switchport nonegotiate`), mit Native VLAN 99 und den erlaubten VLANs 10 und 20. R1 bekommt die Subinterfaces `Gi0/0.10` und `Gi0/0.20` mit `encapsulation dot1Q` und je einer IP-Adresse.
    - **Prüfen:** `show interfaces trunk` auf SW1 listet den Trunk. Später pingt H1 sein Gateway 10.10.10.1.
 3. **EtherChannel mit LACP.** Bündle die beiden Links SW1–SW2 zu Po1: SW1 `channel-group 1 mode active`, SW2 `mode passive`. Konfiguriere Po1 als Trunk (VLAN 10 und 20, Native 99).
    - **Prüfen:** `show etherchannel summary` zeigt `Po1(SU)` und beide Ports mit `(P)`.
