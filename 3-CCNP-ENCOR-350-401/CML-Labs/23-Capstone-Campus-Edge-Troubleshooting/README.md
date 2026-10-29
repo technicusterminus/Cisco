@@ -58,7 +58,7 @@ Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, wor
 
 Dieses Lab ist vor allem zum Reparieren gedacht (Teil B). Wenn du es selbst bauen willst, gehe Schicht für Schicht vor und prüfe nach jeder Stufe, bevor du weitermachst.
 
-1. **Layer 2.** Lege VLAN 10 und 20 auf SW1 und SW2 an. Bündle die Links zu Po1 mit LACP (SW1 `active`, SW2 `passive`). Die Ports zu R1 und R2 werden feste Trunks (`switchport mode trunk`, `nonegotiate`, erlaubt 10 und 20). Die Ports von H10 und H20 sind Access-Ports mit PortFast. SW1 bekommt `spanning-tree vlan 10,20 priority 4096`, SW2 61440.
+1. **Layer 2.** Lege VLAN 10 und 20 auf SW1 und SW2 an. Bündle die Links zu Po1 mit LACP (SW1 `active`, SW2 `passive`). Die Ports zu R1 und R2 werden feste Trunks (`switchport trunk encapsulation dot1q`, `switchport mode trunk`, `nonegotiate`, erlaubt 10 und 20). Die Ports von H10 und H20 sind Access-Ports mit PortFast. SW1 bekommt `spanning-tree vlan 10,20 priority 4096`, SW2 61440.
    - **Prüfen:** `show etherchannel summary` zeigt `Po1(SU)`. `show spanning-tree root` zeigt SW1 als Root für beide VLANs.
    - **Denkfrage:** Warum bekommt SW2 bewusst die schlechteste Priorität 61440?
 2. **Gateway-Redundanz.** Lege auf R1 und R2 die Subinterfaces `Gi0/0.10` und `.20` an. Konfiguriere HSRP Version 2 mit den Gruppen 10 und 20. R1 bekommt Priorität 110 und `preempt`.

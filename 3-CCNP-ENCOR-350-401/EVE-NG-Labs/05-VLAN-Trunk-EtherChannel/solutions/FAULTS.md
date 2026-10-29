@@ -25,10 +25,12 @@
 
 ```diff
 - interface Port-channel2
+-  switchport trunk encapsulation dot1q
 -  switchport mode trunk
 -  switchport trunk native vlan 99
 -  switchport trunk allowed vlan 10,20
 + interface Port-channel2
++  switchport trunk encapsulation dot1q
 +  switchport mode trunk
 +  switchport trunk native vlan 99
 +  switchport trunk allowed vlan 10

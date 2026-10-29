@@ -15,6 +15,8 @@ Diese Labs ergänzen das Anki-Kompendium (1.776 Karten). Die Karten bauen Wissen
 | `README.md` | Teil A Aufgaben, Teil B Tickets, Verifikation, Teil C Transferfragen mit Antworten, Prüfungsbezug |
 | `solutions/*.cfg` | Musterlösung je Gerät (ohne Basis-IP-Adressen) |
 
+**IOSvL2 und Trunks:** Die Switch-Images unterstützen ISL und Dot1Q. Vor `switchport mode trunk` muss deshalb `switchport trunk encapsulation dot1q` stehen, sonst lehnt der Switch den Trunk-Modus ab. Topologien und Lösungen enthalten die Zeile.
+
 ## So arbeitest du ein Lab durch
 
 1. **Teil A: Bauen.** Lies zuerst das Ziel des Labs und die Skizze. Baue dann Schritt für Schritt und prüfe jeden Schritt mit den Befehlen aus „Verifikation“. Erst am Ende vergleichst du mit `solutions/`.
