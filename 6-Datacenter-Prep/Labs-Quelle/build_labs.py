@@ -180,29 +180,38 @@ lab(id='00-day0-apic-setup', title='00 Day 0: APIC-Ersteinrichtung', topic='Fabr
 # ----------------------------------------------------------------------------
 # Lab 01 - Fabric Discovery
 # ----------------------------------------------------------------------------
-lab(id='01-fabric-discovery', title='01 Fabric Discovery und BGP Route Reflector', topic='Fabric-Inbetriebnahme',
-    level='Einstieg', duration='20 min', fabric='empty',
+lab(id='01-fabric-discovery', title='01 Fabric Discovery: physische und logische Sicht', topic='Fabric-Inbetriebnahme',
+    level='Einstieg', duration='30 min', fabric='empty', kind='requirements', modes=['guided', 'exam'],
+    prerequisites=[], tools=['Fabric > Inventory > Fabric Membership', 'Fabric > Inventory > Topology', 'System > System Settings',
+                             'CLI: acidiag fnvread, show lldp neighbors, show vrf, show endpoint'],
     goals=['Die Reihenfolge der Fabric Discovery verstehen (APIC-Leaf, Spines, übrige Leafs)',
-           'Switches unter Fabric Membership registrieren', 'Den MP-BGP Route Reflector für die Fabric einrichten'],
-    intro='Die Fabric ist frisch verkabelt, aber noch kein Switch ist registriert. Der APIC sieht per LLDP zunächst '
-          'nur die Leafs, an denen er direkt hängt. Erst wenn ein Switch registriert und aktiv ist, entdeckt die '
-          'Fabric dessen Nachbarn.\n\n**Ausgangslage:** 1 APIC, 2 Spines, 4 Leafs, alles unregistriert. Ein '
-          'Discovery-Schritt dauert im Simulator 20 Sekunden (einstellbar unter Simulation > Einstellungen).',
-    tasks=[
-        task('Leafs am APIC registrieren', 'Öffne **Fabric > Inventory > Fabric Membership > Nodes Pending '
-             'Registration** und registriere die Switches nach dieser Tabelle:\n'
-             '- SAL1931LA01 → Node ID **101**, Name **leaf101**\n- SAL1931LA02 → Node ID **102**, Name **leaf102**',
-             'Pod ID bleibt 1. Nach der Registrierung wechselt der Status auf *discovering*, dann auf *active*.'),
-        task('Spines registrieren', 'Sobald leaf101 aktiv ist, erscheinen die Spines. Registriere:\n'
-             '- FDO2219SP01 → **201**, **spine201**\n- FDO2219SP02 → **202**, **spine202**',
-             'Die Spines erscheinen erst, wenn ein Leaf mit Uplink zu ihnen aktiv ist.'),
-        task('Restliche Leafs registrieren', '- SAL1931LA03 → **103**, **leaf103**\n- SAL1931LA04 → **104**, **leaf104**'),
-        task('Kontrolle per CLI', 'Öffne die CLI (oben rechts) und prüfe auf dem APIC mit `acidiag fnvread`, dass alle '
-             'sechs Switches *active* sind. Schau dir mit `ssh leaf101` und `show lldp neighbors` die Nachbarn an.'),
-        task('BGP Route Reflector', 'Unter **System > System Settings > BGP Route Reflector** die Fabric-AS **65001** '
-             'eintragen und **spine201** und **spine202** (Node 201 und 202) als Route Reflector hinzufügen.',
-             'Ohne diese Policy verteilt die Fabric keine externen Routen von L3Outs an die anderen Leafs.'),
-    ],
+           'Physische Sicht (Switches, Links) und logische Sicht (Tenant, VRF, BD, EPG) auseinanderhalten',
+           'Sehen, dass die logische Konfiguration erst wirkt, wenn die physische Fabric steht'],
+    intro='Die Fabric ist frisch verkabelt, aber noch kein Switch ist registriert. Der APIC sieht per LLDP zunächst nur die Leafs, an '
+          'denen er direkt hängt. Ein Discovery-Schritt dauert im Simulator 20 Sekunden (einstellbar unter *Simulation > Einstellungen*).\n\n'
+          'Die Konfiguration des Webshops liegt schon auf dem APIC: Tenant Shop mit VRF Prod, den BDs Web und App, den EPGs Web und App '
+          'und dem Contract web-to-app (TCP 8080, Ping). web1 hängt an leaf101 eth1/1, app1 an leaf102 eth1/2.\n\n'
+          '**Namensplan:**\n\n| Seriennummer | Node ID | Name |\n|---|---|---|\n| SAL1931LA01 | 101 | leaf101 |\n'
+          '| SAL1931LA02 | 102 | leaf102 |\n| SAL1931LA03 | 103 | leaf103 |\n| SAL1931LA04 | 104 | leaf104 |\n'
+          '| FDO2219SP01 | 201 | spine201 |\n| FDO2219SP02 | 202 | spine202 |\n\nDie Fabric nutzt das AS 65001.',
+    requirements=['Alle sechs Switches sind nach dem Namensplan registriert und aktiv.',
+                  'Die Fabric kann externe Routen intern verteilen (AS 65001, beide Spines übernehmen diese Rolle).',
+                  'Der Webshop funktioniert: web1 erreicht app1 auf TCP 8080 und per Ping.',
+                  'An der Policy des Webshops wird nichts geändert.'],
+    limits=['Discovery ist vereinfacht: LLDP-Nachbarschaft, Registrierung, Zustände discovering/active. DHCP, TEP-Vergabe im Detail '
+            'und Firmware-Abgleich beim Join werden nicht gezeigt.'],
+    hints=['**Konzept:** Physisch entdeckt die Fabric sich schrittweise: Erst wenn ein Switch registriert und aktiv ist, sieht der APIC '
+           'dessen Nachbarn. Logisch ist der Tenant nur eine Beschreibung – deployed wird er erst auf aktive Leafs, an denen seine '
+           'Endpoints hängen.',
+           '**Wo:** *Fabric > Inventory > Fabric Membership* (Nodes Pending Registration), *Fabric > Inventory > Topology*, '
+           '*System > System Settings > BGP Route Reflector*.',
+           '**Prüfschritte:** `acidiag fnvread` auf dem APIC. Auf leaf101 `show lldp neighbors`. Nach der Registrierung: `show vrf` '
+           'auf leaf101 und leaf103 vergleichen – wo ist die VRF Shop:Prod deployed und warum?',
+           '**Lösung:** Erst leaf101 und leaf102 registrieren, dann spine201 und spine202, dann leaf103 und leaf104 (jeweils nach '
+           'Namensplan). BGP Route Reflector: AS 65001, Nodes 201 und 202. Den Tenant nicht anfassen; web1 und app1 werden gelernt, '
+           'sobald ihre Leafs aktiv sind.'],
+    cause='Kein Switch ist registriert. Die Tenant-Konfiguration kann deshalb nirgends deployed werden, web1 und app1 sind nicht gelernt.',
+    config=[SERVER_ACCESS, shop_tenant(with_contracts=True)], hosts=[WEB1, APP1], tasks=[],
     checks=[check('leaf101 aktiv (101)', 'node', serial=L101, id=101, name='leaf101'),
             check('leaf102 aktiv (102)', 'node', serial=L102, id=102, name='leaf102'),
             check('spine201 aktiv (201)', 'node', serial='FDO2219SP01', id=201, name='spine201'),
@@ -210,8 +219,27 @@ lab(id='01-fabric-discovery', title='01 Fabric Discovery und BGP Route Reflector
             check('leaf103 aktiv (103)', 'node', serial=L103, id=103, name='leaf103'),
             check('leaf104 aktiv (104)', 'node', serial=L104, id=104, name='leaf104'),
             check('Fabric-AS 65001', 'exists', dn='uni/fabric/bgpInstP-default/as', attrs={'asn': '65001'}),
-            check('spine201 ist Route Reflector', 'exists', dn='uni/fabric/bgpInstP-default/rr/node-201'),
-            check('spine202 ist Route Reflector', 'exists', dn='uni/fabric/bgpInstP-default/rr/node-202')],
+            check('spine201 verteilt Routen in der Fabric', 'exists', dn='uni/fabric/bgpInstP-default/rr/node-201'),
+            check('spine202 verteilt Routen in der Fabric', 'exists', dn='uni/fabric/bgpInstP-default/rr/node-202'),
+            check('web1 → app1 TCP 8080', 'traffic', src='web1', dst='app1', proto='tcp', port=8080, expect=True),
+            check('web1 → app1 Ping', 'traffic', src='web1', dst='app1', proto='icmp', expect=True),
+            check('web1 → app1 SSH bleibt blockiert', 'traffic', src='web1', dst='app1', proto='tcp', port=22, expect=False,
+                  reason='POLICY_', category='security'),
+            check('Policy unverändert: Web → App nur TCP 8080 und Ping', 'exposure', src='web1', dst='app1',
+                  allow=['tcp/8080', 'icmp'], category='security')],
+    questions=[{'id': 'q1', 'q': 'Warum erscheinen die Spines erst, nachdem leaf101 aktiv ist?',
+                'options': ['Der APIC sieht nur direkte LLDP-Nachbarn aktiver Switches; die Spines hängen an den Leafs, nicht am APIC',
+                            'Spines werden immer zuletzt registriert, egal wie verkabelt', 'Weil die Spines ein anderes Image brauchen',
+                            'Weil die Route Reflector Policy fehlt'],
+                'answer': 0, 'explain': 'Discovery folgt der Verkabelung: APIC → Leaf → Spine → übrige Leafs.'},
+               {'id': 'q2', 'q': 'Nach der Registrierung: Auf welchen Leafs ist die VRF Shop:Prod deployed?',
+                'options': ['Auf leaf101 und leaf102 – dort hängen Endpoints ihrer EPGs', 'Auf allen vier Leafs', 'Nur auf den Spines',
+                            'Nur auf dem APIC'],
+                'answer': 0, 'explain': 'Die ACI deployed VRF, BD und EPG nur dort, wo sie gebraucht werden (`show vrf` auf leaf103 zeigt sie nicht).'},
+               {'id': 'q3', 'q': 'Was ist physisch, was logisch?',
+                'options': ['Physisch: Switches, Links, Ports. Logisch: Tenant, VRF, BD, EPG, Contract',
+                            'Physisch: BD und VRF. Logisch: Ports', 'Alles ist logisch', 'EPGs sind physische Ports'],
+                'answer': 0, 'explain': 'Die Access Policies verbinden beide Welten: Sie sagen, welche Ports welche VLANs für welche Domain tragen.'}],
     solution='Fabric Membership: die sechs Seriennummern in der Reihenfolge leaf101/leaf102 → spine201/spine202 → '
              'leaf103/leaf104 registrieren. Per REST geht das mit `POST /api/mo/uni/controller/nodeidentpol.json` und '
              '`{"fabricNodeIdentP":{"attributes":{"serial":"SAL1931LA01","nodeId":"101","name":"leaf101"}}}`.\n\n'

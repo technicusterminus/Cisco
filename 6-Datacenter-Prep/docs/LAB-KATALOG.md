@@ -2,7 +2,7 @@
 
 Die Tabelle vergleicht den geplanten Lernpfad (26 Labs) mit den vorhandenen Lab-Dateien in `labs/`.
 
-**Format neu** (Labs 02 bis 07, 11, 13 und 32 bis 45) heißt, das Lab hat:
+**Format neu** (Labs 01 bis 07, 11, 13 und 32 bis 45) heißt, das Lab hat:
 
 - Anforderungen statt Klickanleitung
 - vier Hinweisstufen
@@ -20,7 +20,7 @@ Startbar sind nur Labs, die es als Datei gibt. Die Spalte *Stand* gilt für die 
 
 | Soll | Thema | Vorhandenes Lab | Stand | Bemerkung |
 |---|---|---|---|---|
-| 01 | Fabric-Komponenten, physische und logische Sicht | 01 Fabric Discovery | teilweise | Discovery und Rollen, keine eigene Übung zur logischen Sicht |
+| 01 | Fabric-Komponenten, physische und logische Sicht | 01 Fabric Discovery | vollständig (neu) | Tenant liegt bereit und wirkt erst nach der Discovery; VRF nur auf Leafs mit Endpoints |
 | 02 | Tenant, VRF, BD, Application Profile | 03 Tenant, VRF, BD, EPG | vollständig (neu) | |
 | 03 | Zwei Endpoints in derselben EPG | **33 Zwei Endpoints in derselben EPG** | vollständig (neu) | Prüft auch: ohne Contract gelöst |
 | 04 | Zwei EPGs in derselben BD | **34 Zwei EPGs in derselben BD** | vollständig (neu) | Bridging grün, Policy rot; ICMP-Gegenrichtung als Lernpunkt |

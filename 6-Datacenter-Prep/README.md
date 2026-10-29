@@ -136,7 +136,7 @@ Unter *Simulation > Labs & Stände* laden. Jedes Lab setzt die Konfiguration auf
 | Lab | Thema | Dauer |
 |---|---|---|
 | 00 | Day 0: APIC-Ersteinrichtung mit Setup-Dialog | 20 min |
-| 01 | Fabric Discovery und BGP Route Reflector | 20 min |
+| 01 | Fabric Discovery: physische und logische Sicht (neues Format) | 30 min |
 | 02 | Access Policies: vom VLAN zum Port, Fault F0467 (neues Format) | 30 min |
 | 03 | Tenant, VRF, Bridge Domains und EPGs (neues Format) | 30 min |
 | 04 | Contracts, Filter und vzAny (neues Format) | 35 min |
@@ -182,7 +182,7 @@ Unter *Simulation > Labs & Stände* laden. Jedes Lab setzt die Konfiguration auf
 | 44 | Access-Diagnose: drei Server, drei Ursachen (Domain, VLAN Pool, Static Port; neues Format) | 30 min |
 | 45 | Zwei Bridge Domains, eine VRF: Routing ohne L3Out (neues Format) | 20 min |
 
-**Neues Lab-Format** (Labs 02 bis 07, 11, 13 und 32 bis 45): Statt einer Klickanleitung gibt es Anforderungen. Der Rest im Überblick:
+**Neues Lab-Format** (Labs 01 bis 07, 11, 13 und 32 bis 45): Statt einer Klickanleitung gibt es Anforderungen. Der Rest im Überblick:
 
 - **Hinweise** in vier Stufen: Konzept, Objekte, Prüfschritt, Lösung. Die Oberfläche zählt, wie viele genutzt wurden.
 - **Bewertung** getrennt nach *Funktion* und *Sicherheit / Least Privilege*. Eine Permit-any-Abkürzung funktioniert zwar, besteht aber nicht.

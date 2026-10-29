@@ -398,6 +398,7 @@ class TestRequirementLabs(unittest.TestCase):
         '02-access-policies': ['AAEP', 'Attachable', 'Policy Group', 'Switch Profile', 'Interface Profile', 'VLAN Pool'],
         '03-tenant-epg': ['Static Port', 'fvRsPathAtt', 'Domain-Zuordnung'],
         '04-contracts': ['vzAny', 'EPG Collection', 'Consumer', 'Provider', 'Reverse', 'konsumiert'],
+        '01-fabric-discovery': ['Route Reflector', 'MP-BGP', 'Pending', 'nodeidentpol'],
         '05-vpc-lacp': ['Protection Group', 'fabricExplicitGEp', 'IPG-vPC', 'Port Channel Policy', 'lacpLagPol', 'protpaths', 'Policy Group'],
         '06-l3out-ospf': ['Route Reflector', 'MP-BGP', 'MTU ignore', 'Advertised', 'EXSTART', 'web-to-internet', '9000'],
         '11-static-leaf-taboo': ['Static Leaf', 'Taboo', 'fvRsNodeAtt', 'vzTaboo', 'no-ping'],
@@ -815,6 +816,15 @@ class TestConvertedLabs(unittest.TestCase):
 
     def by(self):
         return {c['desc']: c['ok'] for c in self.S.check_lab()['checks']}
+
+    def test_lab01_logical_config_waits_for_physical_fabric(self):
+        lab = self.S.load_lab('01-fabric-discovery')
+        self.assertEqual(trace.run(self.S.engine, self.S.sim, 'web1', 'app1', 'tcp', 8080)['reason'], 'SWITCH_INACTIVE')
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+        cli = Cli(self.S.engine, self.S.sim)
+        self.assertIn('Shop:Prod', cli.run('leaf101', 'show vrf'))
+        self.assertNotIn('Shop:Prod', cli.run('leaf103', 'show vrf'), 'VRF nur dort, wo Endpoints ihrer EPGs haengen (Frage q2)')
 
     def test_lab05_static_channel_suspends_lacp_server(self):
         lab = self.S.load_lab('05-vpc-lacp')
