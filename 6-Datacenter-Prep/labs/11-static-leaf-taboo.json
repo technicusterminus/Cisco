@@ -5,11 +5,40 @@
  "level": "Mittel",
  "duration": "25 min",
  "fabric": "discovered",
- "goals": [
-  "Eine EPG per Static Leaf auf alle passenden Ports eines Leafs bringen",
-  "Mit einem Taboo Contract Verkehr trotz Contract sperren"
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
  ],
- "intro": "Der Webshop läuft: web1 erreicht app1 auf TCP 8080 und per Ping (Contract web-to-app). Neu ist **app2** an **leaf102 eth1/3** (VLAN 120). Das Team möchte nicht für jeden App-Server einen Static Port pflegen. Außerdem verlangt die Security-Abteilung, dass die App-Server **nicht pingbar** sind – egal, was die Contracts erlauben.",
+ "prerequisites": [
+  "Labs 03 und 32"
+ ],
+ "tools": [
+  "Tenant Shop > EPG App",
+  "Traffic Inspector",
+  "CLI: show vlan extended, show zoning-rule"
+ ],
+ "goals": [
+  "Eine EPG auf alle passenden Ports eines Leafs bringen und die Folgen kennen",
+  "Verkehr unabhängig von den Contracts verbieten"
+ ],
+ "intro": "Der Webshop läuft: web1 erreicht app1 auf TCP 8080 und per Ping (Contract web-to-app). Neu ist **app2** an **leaf102 eth1/3** (VLAN 120). Auf leaf102 hängen nur App-Server; das Team möchte dort nicht für jeden neuen Server eine eigene Port-Bindung pflegen.\n\nAußerdem verlangt die Security-Abteilung, dass die App-Server **nicht pingbar** sind – auch dann nicht, wenn später jemand einen Contract mit ICMP anlegt.",
+ "requirements": [
+  "app2 und jeder künftige App-Server an leaf102 (VLAN 120) landen automatisch in der EPG App.",
+  "Für app2 wird keine eigene Port-Bindung angelegt.",
+  "Ping zu den App-Servern ist verboten, unabhängig von den Contracts. Der Contract web-to-app bleibt unverändert.",
+  "TCP 8080 von Web zu App funktioniert weiter."
+ ],
+ "limits": [
+  "Die Bindung pro Leaf deployt die EPG auf allen Ports des Leafs, deren Access Policy die Domain der EPG enthält – das ist hier gewollt, an Leafs mit gemischten Geräten wäre es ein Risiko (siehe Lab 44)."
+ ],
+ "hints": [
+  "**Konzept:** Eine EPG lässt sich statt pro Port auch pro Leaf binden. Für Verbote, die über allen Contracts stehen, gibt es eine eigene Contract-Art, die an der EPG als Schutz hängt.",
+  "**Objekte:** An der EPG App: *Static Leafs* und *Contracts > Taboo Contract*. Im Tenant: *Contracts > Taboos* mit Subject und Filter (icmp aus common).",
+  "**Prüfschritte:** Auf leaf102 `show vlan extended`: Auf welchen Ports liegt vlan-120? Traffic Inspector web1 → app1 ICMP: Der Reason Code zeigt, ob ein Taboo oder nur ein fehlender Contract verbietet.",
+  "**Lösung:** An der EPG App Static Leaf Node 102, vlan-120. Taboo Contract no-ping (Subject mit Filter icmp) und an der EPG App als Taboo Contract eintragen. Den Contract web-to-app nicht anfassen."
+ ],
+ "cause": "app2 hat keine Bindung zur EPG App. Ping ist per Contract web-to-app erlaubt.",
  "config": [
   {
    "polUni": {
@@ -421,25 +450,7 @@
    "descr": "zweiter App-Server"
   }
  ],
- "tasks": [
-  {
-   "title": "Static Leaf",
-   "text": "In der EPG **App** unter **Static Leafs**: Node **102**, Encap **vlan-120**, Mode Trunk.",
-   "hint": "Ein Static Leaf deployt die EPG auf allen Ports des Leafs, deren Access Policy die Domain der EPG enthält."
-  },
-  {
-   "title": "Prüfen",
-   "text": "app2 ist jetzt in der EPG App gelernt. Auf leaf102: `show vlan extended` – auf welchen Ports liegt vlan-120?"
-  },
-  {
-   "title": "Taboo Contract",
-   "text": "Unter **Contracts > Taboos** den Taboo Contract **no-ping** mit einem Subject und dem Filter **icmp** (aus common) anlegen. An der EPG **App** unter **Contracts** als **Taboo Contract** hinzufügen."
-  },
-  {
-   "title": "Testen",
-   "text": "Ping web1 → app1 ist blockiert, TCP 8080 funktioniert weiter."
-  }
- ],
+ "tasks": [],
  "checks": [
   {
    "desc": "app2 gelernt in EPG App",
@@ -448,7 +459,17 @@
    "epg": "uni/tn-Shop/ap-Webshop/epg-App"
   },
   {
-   "desc": "web1 → app2 TCP 8080 erlaubt",
+   "desc": "Keine eigene Port-Bindung für app2",
+   "type": "class",
+   "cls": "fvRsPathAtt",
+   "under": "uni/tn-Shop/ap-Webshop/epg-App/",
+   "attrs": {
+    "tDn": "topology/pod-1/paths-102/pathep-[eth1/3]"
+   },
+   "expect": false
+  },
+  {
+   "desc": "web1 → app2 TCP 8080",
    "type": "traffic",
    "src": "web1",
    "dst": "app2",
@@ -457,21 +478,69 @@
    "expect": true
   },
   {
-   "desc": "web1 → app1 Ping blockiert (Taboo)",
-   "type": "traffic",
-   "src": "web1",
-   "dst": "app1",
-   "proto": "icmp",
-   "expect": false
-  },
-  {
-   "desc": "web1 → app1 TCP 8080 weiter erlaubt",
+   "desc": "web1 → app1 TCP 8080",
    "type": "traffic",
    "src": "web1",
    "dst": "app1",
    "proto": "tcp",
    "port": 8080,
    "expect": true
+  },
+  {
+   "desc": "Ping zu app1 verboten, unabhängig von Contracts",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "app1",
+   "proto": "icmp",
+   "expect": false,
+   "reason": "POLICY_TABOO",
+   "category": "security"
+  },
+  {
+   "desc": "Ping zu app2 verboten, unabhängig von Contracts",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "app2",
+   "proto": "icmp",
+   "expect": false,
+   "reason": "POLICY_TABOO",
+   "category": "security"
+  },
+  {
+   "desc": "Least Privilege Web → App: nur TCP 8080",
+   "type": "exposure",
+   "src": "web1",
+   "dst": "app2",
+   "allow": [
+    "tcp/8080"
+   ],
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Warum nicht einfach den Filter icmp aus dem Contract web-to-app entfernen?",
+   "options": [
+    "Dann ist Ping nur bis zum nächsten Contract mit ICMP verboten – der Taboo gilt über allen Contracts",
+    "Das geht technisch nicht",
+    "Weil dann auch TCP 8080 blockiert ist",
+    "Kein Unterschied"
+   ],
+   "answer": 0,
+   "explain": "Die Anforderung „unabhängig von den Contracts“ erfüllt nur eine Regel mit höherer Priorität."
+  },
+  {
+   "id": "q2",
+   "q": "Ein Notebook wird an leaf102 eth1/9 gesteckt und sendet VLAN 120. Was passiert?",
+   "options": [
+    "Es landet in der EPG App, weil die Bindung für den ganzen Leaf gilt",
+    "Nichts, es braucht eine eigene Bindung",
+    "Der Port wird deaktiviert",
+    "Es landet in der EPG Web"
+   ],
+   "answer": 0,
+   "explain": "Der Komfort hat einen Preis: Jeder passende Port des Leafs gehört zur EPG."
   }
  ],
  "solution": "Static Leaf: `fvRsNodeAtt tDn=topology/pod-1/node-102 encap=vlan-120` an der EPG App. Taboo: `vzTaboo no-ping` mit `vzTSubj` und `vzRsDenyRule tnVzFilterName=icmp`, an der EPG `fvRsProtBy tnVzTabooName=no-ping`.",

@@ -391,6 +391,26 @@ class TestOverHttp(unittest.TestCase):
         self.assertEqual(row['modes'], ['guided', 'exam'])
 
 
+    def test_diagnosis_log_records_without_grading_or_changes(self):
+        """B-13: Traffic-Tests, CLI und Pruefungen landen im Protokoll der Lab-Sitzung, auch im Pruefungsmodus, ohne Bewertung."""
+        self.assertEqual(self.req('POST', '/api/aaaLogin.json', {'aaaUser': {'attributes': {'name': 'admin', 'pwd': 'admin'}}})[0], 200)
+        self.assertEqual(self.req('POST', '/sim/labs/load', {'id': LAB, 'mode': 'exam'})[0], 200)
+        self.assertEqual(self.req('GET', '/sim/labs/log')[1], [])
+        self.req('POST', '/sim/traffic', {'src': 'web1', 'dst': 'app1', 'proto': 'tcp', 'port': 443})
+        self.req('POST', '/sim/cli', {'node': 'leaf101', 'cmd': 'show zoning-rule'})
+        self.req('POST', '/sim/cli', {'node': 'apic1', 'cmd': 'show running-config'})
+        st, chk = self.req('POST', '/sim/labs/check', {})
+        st, log = self.req('GET', '/sim/labs/log')
+        self.assertEqual([x['kind'] for x in log], ['traffic', 'cli', 'cli', 'check'])
+        self.assertEqual(log[0]['what'], 'web1 → app1 tcp/443')
+        self.assertEqual(log[0]['result'], 'DROP POLICY_IMPLICIT_DENY')
+        self.assertEqual([log[1]['result'], log[2]['result']], ['device', 'unsupported'])
+        self.assertEqual(log[3]['result'], '%d von %d' % (chk['passed'], chk['total']))
+        self.assertNotIn('log', json.dumps(chk['checks']), 'Das Protokoll fliesst nicht in die Bewertung ein')
+        self.assertEqual(self.req('POST', '/sim/labs/op', {'op': 'reset', 'id': LAB})[0], 200)
+        self.assertEqual(self.req('GET', '/sim/labs/log')[1], [], 'Neue Sitzung, leeres Protokoll')
+
+
 class TestRequirementLabs(unittest.TestCase):
     """Alle Labs im Anforderungsformat: Aufbau, keine Loesung im Aufgabentext, Abkuerzungen scheitern."""
 
@@ -398,6 +418,15 @@ class TestRequirementLabs(unittest.TestCase):
         '02-access-policies': ['AAEP', 'Attachable', 'Policy Group', 'Switch Profile', 'Interface Profile', 'VLAN Pool'],
         '03-tenant-epg': ['Static Port', 'fvRsPathAtt', 'Domain-Zuordnung'],
         '04-contracts': ['vzAny', 'EPG Collection', 'Consumer', 'Provider', 'Reverse', 'konsumiert'],
+        '01-fabric-discovery': ['Route Reflector', 'MP-BGP', 'Pending', 'nodeidentpol'],
+        '05-vpc-lacp': ['Protection Group', 'fabricExplicitGEp', 'IPG-vPC', 'Port Channel Policy', 'lacpLagPol', 'protpaths', 'Policy Group'],
+        '06-l3out-ospf': ['Route Reflector', 'MP-BGP', 'MTU ignore', 'Advertised', 'EXSTART', 'web-to-internet', '9000'],
+        '09-l3out-bgp': ['Route Reflector', 'Remote AS', 'bgpPeerP', 'web-to-isp', 'Advertised', 'VLAN Pool'],
+        '10-mgmt-ntp': ['Pod Policy Group', 'Pod Profile', 'Date and Time', 'PodPol', 'fabricRsPodPGrp'],
+        '12-vmm-vcenter': ['Dynamic', 'dynamisch', 'Resolution', 'VLAN-Pool-VMM', 'vmmDomP', 'Immediate'],
+        '14-l2out-migration': ['ARP Flooding', 'arpFlood', 'External Bridged', 'l2extOut', 'Glean', 'LegacyNet'],
+        '11-static-leaf-taboo': ['Static Leaf', 'Taboo', 'fvRsNodeAtt', 'vzTaboo', 'no-ping'],
+        '13-shared-services': ['Global', 'Export', 'vzCPIf', 'Shared between', 'Imported', 'fvRsConsIf', 'Consumer', 'Provider'],
         '07-troubleshooting': ['8080', 'Unicast Routing', 'BD-Bakup', 'Reverse', '149', 'Port Block'],
         '32-https-least-privilege': ['Consumer', 'Provider', 'web-to-app-https', 'Reverse'],
         '33-same-epg': ['Static Port', 'fvRsPathAtt'],
@@ -793,6 +822,128 @@ class TestSegmentationLabs(unittest.TestCase):
         self.S.load_lab('40-it-ot-segmentation')
         self.assertEqual(trace.run(self.S.engine, self.S.sim, 'plc1', 'plc2', 'tcp', 502)['verdict'], 'ALLOW')
         self.assertEqual(trace.run(self.S.engine, self.S.sim, 'scada1', 'plc1', 'tcp', 502)['reason'], 'POLICY_IMPLICIT_DENY')
+
+
+class TestConvertedLabs(unittest.TestCase):
+    """B-01: alte Labs im Anforderungsformat. Die Musterloesung besteht (TestLabs), typische Abkuerzungen nicht."""
+
+    ANY = mo('vzFilter', {'name': 'any'}, mo('vzEntry', {'name': 'any'}))
+
+    def setUp(self):
+        self.S = Sim(tempfile.mkdtemp(), 'admin')
+        self.S.sim['settings']['discoverySeconds'] = 0
+
+    def apply(self, *items):
+        for dn, body in items:
+            post(self.S.store, dn, body)
+        self.S.changed()
+
+    def by(self):
+        return {c['desc']: c['ok'] for c in self.S.check_lab()['checks']}
+
+    def test_lab01_logical_config_waits_for_physical_fabric(self):
+        lab = self.S.load_lab('01-fabric-discovery')
+        self.assertEqual(trace.run(self.S.engine, self.S.sim, 'web1', 'app1', 'tcp', 8080)['reason'], 'SWITCH_INACTIVE')
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+        cli = Cli(self.S.engine, self.S.sim)
+        self.assertIn('Shop:Prod', cli.run('leaf101', 'show vrf'))
+        self.assertNotIn('Shop:Prod', cli.run('leaf103', 'show vrf'), 'VRF nur dort, wo Endpoints ihrer EPGs haengen (Frage q2)')
+
+    def test_lab05_static_channel_suspends_lacp_server(self):
+        lab = self.S.load_lab('05-vpc-lacp')
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+        self.apply(('uni/infra/lacplagp-LACP-Active', mo('lacpLagPol', {'mode': 'off'})))
+        by = self.by()
+        self.assertFalse(by['db1 gelernt in EPG DB'], 'Mode On: der LACP-Server suspendiert seine Links')
+        self.assertIn('LACP', ' '.join(self.S.engine.hosts['db1']['reasons']))
+
+    def test_lab05_permit_any_to_db_fails_security(self):
+        lab = self.S.load_lab('05-vpc-lacp')
+        sol = copy.deepcopy(lab['solutionConfig'])
+        self.apply(*sol)
+        self.apply(('uni/tn-Shop', mo('fvTenant', {}, self.ANY, mo('vzBrCP', {'name': 'all'}, mo('vzSubj', {'name': 's', 'revFltPorts': 'yes'},
+                    mo('vzRsSubjFiltAtt', {'tnVzFilterName': 'any'}))),
+                    mo('fvAp', {'name': 'Webshop'}, mo('fvAEPg', {'name': 'DB'}, mo('fvRsProv', {'tnVzBrCPName': 'all'})),
+                       mo('fvAEPg', {'name': 'App'}, mo('fvRsCons', {'tnVzBrCPName': 'all'}))))))
+        by = self.by()
+        self.assertTrue(by['app1 → db1 TCP 3306'])
+        self.assertFalse(by['Least Privilege App → DB: nur TCP 3306'])
+
+    def test_lab06_advertising_app_net_fails_security(self):
+        lab = self.S.load_lab('06-l3out-ospf')
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+        self.apply(('uni/tn-Shop/BD-BD-App', mo('fvBD', {}, mo('fvSubnet', {'ip': '10.10.20.1/24', 'scope': 'public'}),
+                                                  mo('fvRsBDToOut', {'tnL3extOutName': 'WAN'}))),
+                   ('uni/tn-Shop/ap-Webshop/epg-App', mo('fvAEPg', {}, mo('fvRsCons', {'tnVzBrCPName': 'web-to-internet'}))))
+        by = self.by()
+        self.assertFalse(by['10.10.20.0/24 wird nicht angekündigt'])
+        self.assertFalse(by['app1 → 8.8.8.8 blockiert'])
+
+    def test_lab11_removing_icmp_from_contract_is_not_a_taboo(self):
+        lab = self.S.load_lab('11-static-leaf-taboo')
+        self.apply(('uni/tn-Shop/ap-Webshop/epg-App', mo('fvAEPg', {}, mo('fvRsNodeAtt', {'tDn': 'topology/pod-1/node-102', 'encap': 'vlan-120'}))),
+                   ('uni/tn-Shop/brc-web-to-app/subj-subj', mo('vzSubj', {}, mo('vzRsSubjFiltAtt', {'tnVzFilterName': 'icmp', 'status': 'deleted'}))))
+        r = trace.run(self.S.engine, self.S.sim, 'web1', 'app1', 'icmp')
+        self.assertEqual(r['reason'], 'POLICY_IMPLICIT_DENY')
+        by = self.by()
+        self.assertTrue(by['app2 gelernt in EPG App'])
+        self.assertFalse(by['Ping zu app1 verboten, unabhängig von Contracts'], 'ohne Taboo erlaubt der naechste ICMP-Contract wieder')
+
+    def test_lab11_static_port_for_app2_is_not_the_ask(self):
+        self.S.load_lab('11-static-leaf-taboo')
+        self.apply(('uni/tn-Shop/ap-Webshop/epg-App', mo('fvAEPg', {}, mo('fvRsPathAtt', {
+            'tDn': 'topology/pod-1/paths-102/pathep-[eth1/3]', 'encap': 'vlan-120'}))))
+        by = self.by()
+        self.assertTrue(by['app2 gelernt in EPG App'])
+        self.assertFalse(by['Keine eigene Port-Bindung für app2'])
+
+    def test_lab13_global_permit_any_fails_least_privilege(self):
+        lab = self.S.load_lab('13-shared-services')
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+        self.apply(('uni/tn-Shared/brc-dns/subj-subj', mo('vzSubj', {}, mo('vzRsSubjFiltAtt', {'tnVzFilterName': 'default'}))))
+        by = self.by()
+        self.assertTrue(by['web1 → dns1 UDP 53'])
+        self.assertFalse(by['Least Privilege Web → DNS: nur UDP 53'])
+
+
+    def test_lab09_permit_any_to_internet_fails(self):
+        lab = self.S.load_lab('09-l3out-bgp')
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+        self.apply(('uni/tn-Shop/brc-web-to-isp/subj-subj', mo('vzSubj', {}, mo('vzRsSubjFiltAtt', {'tnVzFilterName': 'default'}))))
+        by = self.by()
+        self.assertTrue(by['web1 → 1.1.1.1 Ping'])
+        self.assertFalse(by['Least Privilege Web → Internet: nur Ping'])
+        self.assertFalse(by['Least Privilege Provider → Web: nur Ping'])
+
+    def test_lab10_second_time_source_fails_security(self):
+        lab = self.S.load_lab('10-mgmt-ntp')
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+        self.apply(('uni/fabric/time-default', mo('datetimePol', {}, mo('datetimeNtpProv', {'name': 'pool.ntp.org'}))))
+        self.assertFalse(self.by()['Nur die freigegebene Zeitquelle ist eingetragen'])
+
+    def test_lab12_vmm_vms_follow_the_same_policy(self):
+        lab = self.S.load_lab('12-vmm-vcenter')
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+        r = trace.run(self.S.engine, self.S.sim, 'web-vm1', 'app-vm1', 'tcp', 22)
+        self.assertEqual(r['reason'], 'POLICY_IMPLICIT_DENY')
+
+    def test_lab14_gateway_in_aci_breaks_guardrail(self):
+        lab = self.S.load_lab('14-l2out-migration')
+        self.assertIn(trace.run(self.S.engine, self.S.sim, 'web2', 'old-srv', 'icmp')['reason'], ('EP_NOT_LEARNED', 'ARP_UNRESOLVED'))
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+        # Abkuerzung: Gateway in die ACI holen (Unicast Routing + Subnetz) statt ARP Flooding -> doppeltes Gateway
+        self.apply(('uni/tn-Shop/BD-BD-Migration', mo('fvBD', {'unicastRoute': 'yes'}, mo('fvSubnet', {'ip': '10.10.50.1/24'}))))
+        by = self.by()
+        self.assertFalse(by['Kein Gateway für 10.10.50.0/24 in der ACI'])
+        self.assertFalse(by['Unicast Routing im BD-Migration bleibt aus'])
 
 
 class TestOperationsLabs(unittest.TestCase):

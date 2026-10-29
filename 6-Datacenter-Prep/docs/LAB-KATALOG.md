@@ -2,7 +2,7 @@
 
 Die Tabelle vergleicht den geplanten Lernpfad (26 Labs) mit den vorhandenen Lab-Dateien in `labs/`.
 
-**Format neu** (Labs 02, 03, 04, 07 und 32 bis 45) heißt, das Lab hat:
+**Format neu** (Labs 01 bis 14 außer 08 und 32 bis 45) heißt, das Lab hat:
 
 - Anforderungen statt Klickanleitung
 - vier Hinweisstufen
@@ -20,7 +20,7 @@ Startbar sind nur Labs, die es als Datei gibt. Die Spalte *Stand* gilt für die 
 
 | Soll | Thema | Vorhandenes Lab | Stand | Bemerkung |
 |---|---|---|---|---|
-| 01 | Fabric-Komponenten, physische und logische Sicht | 01 Fabric Discovery | teilweise | Discovery und Rollen, keine eigene Übung zur logischen Sicht |
+| 01 | Fabric-Komponenten, physische und logische Sicht | 01 Fabric Discovery | vollständig (neu) | Tenant liegt bereit und wirkt erst nach der Discovery; VRF nur auf Leafs mit Endpoints |
 | 02 | Tenant, VRF, BD, Application Profile | 03 Tenant, VRF, BD, EPG | vollständig (neu) | |
 | 03 | Zwei Endpoints in derselben EPG | **33 Zwei Endpoints in derselben EPG** | vollständig (neu) | Prüft auch: ohne Contract gelöst |
 | 04 | Zwei EPGs in derselben BD | **34 Zwei EPGs in derselben BD** | vollständig (neu) | Bridging grün, Policy rot; ICMP-Gegenrichtung als Lernpunkt |
@@ -38,19 +38,19 @@ Startbar sind nur Labs, die es als Datei gibt. Die Spalte *Stand* gilt für die 
 | 16 | Endpoint Move | **36 Endpoint Move nachvollziehen** | vollständig (neu) | Endpoint-Verlauf im EP Tracker; alte Bindung als Sicherheitsrisiko |
 | 17 | Interface-Ausfall vs. Policy-Drop | **37 Interface-Ausfall oder Policy-Drop?** | vollständig (neu) | drei Ursachen: PORT_ADMIN_DOWN, POLICY_IMPLICIT_DENY, LINK_DOWN |
 | 18 | Mehrere unabhängige Fehler | 07 Troubleshooting (sechs Tickets) | vollständig (neu) | mit Least-Privilege-Nebenbedingung |
-| 19 | Einfacher L3Out | 06 L3Out OSPF, 09 eBGP | vollständig (alt) | |
+| 19 | Einfacher L3Out | 06 L3Out OSPF, 09 eBGP | vollständig (neu) | MTU/EXSTART, MP-BGP, App-Netz bleibt intern |
 | 20 | Routingfehler vs. fehlender External-EPG-Contract | **41 Routingfehler oder fehlender Contract?** | vollständig (neu) | erst ROUTE_MISSING (kein MP-BGP), dann POLICY_IMPLICIT_DENY |
 | 21 | Fehlender Rückweg | **42 Fehlender Rückweg** | vollständig (neu) | RETURN_ROUTE_MISSING; App-Netz darf nicht angekündigt werden |
 | 22 | Preferred Group | **39 Preferred Group für eine Migration** | vollständig (neu) | Nicht-Mitglied bleibt geschützt; kein VRF unenforced |
 | 23 | vzAny | 04 Contracts und vzAny | vollständig (neu) | Lösung pro EPG wird ebenfalls anerkannt (dokumentiert) |
-| 24 | Inter-VRF Shared Services | 13 Shared Services | vollständig (alt) | |
+| 24 | Inter-VRF Shared Services | 13 Shared Services | vollständig (neu) | Least Privilege in beide Richtungen, Dienst im Provider-Tenant |
 | 25 | Fehlerhafte Änderung per Snapshot zurücksetzen | **43 Change mit Snapshot absichern und zurückrollen** | vollständig (neu) | bewertet Snapshot nach Lab-Start, eingespielten Change (Audit-Log) und vollständigen Rollback |
 | 26 | IT-/OT-Segmentierung | **40 IT-/OT-Segmentierung einer Fertigungslinie** | vollständig (neu) | fünf Zonen, 18 Prüfungen, davon 10 Least-Privilege-Prüfungen inkl. lateraler Kommunikation; didaktisch, ohne Sicherheitsgarantie |
 
 Weitere vorhandene Labs außerhalb dieses Pfads:
 
 - 00 Day 0
-- 05 vPC
+- 05 vPC (neues Format)
 - 08 REST-API
-- 10 bis 12 (OOB/NTP, Taboo, VMM)
-- 14 bis 31: L2Out, Transit Routing, PBR, L3Out-Varianten, AAA, In-Band, ESG, Firmware, Export/Import, Monitoring, DHCP Relay, MCP, Multi-Pod, Remote Leaf, Multi-Site
+- 10 bis 12 (OOB/NTP, Static Leaf und Taboo, VMM – alle im neuen Format)
+- 14 (L2Out, neues Format) und 15 bis 31: Transit Routing, PBR, L3Out-Varianten, AAA, In-Band, ESG, Firmware, Export/Import, Monitoring, DHCP Relay, MCP, Multi-Pod, Remote Leaf, Multi-Site

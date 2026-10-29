@@ -5,12 +5,43 @@
  "level": "Mittel",
  "duration": "35 min",
  "fabric": "discovered",
- "goals": [
-  "Eine Explicit vPC Protection Group anlegen",
-  "Eine vPC Interface Policy Group mit LACP bauen",
-  "Einen vPC-Pfad als Static Port verwenden"
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
  ],
- "intro": "Der Datenbankserver **db1** (10.10.30.11/24, VLAN 130) ist mit zwei NICs per **LACP active** an **leaf103 eth1/10** und **leaf104 eth1/10** angeschlossen. Der Tenant Shop mit Web und App läuft schon.",
+ "prerequisites": [
+  "Labs 02 und 03"
+ ],
+ "tools": [
+  "Fabric > Access Policies",
+  "Tenant Shop",
+  "Traffic Inspector",
+  "CLI: show vpc brief, show port-channel summary, show endpoint"
+ ],
+ "goals": [
+  "Einen Server mit LACP redundant über zwei Leafs anbinden",
+  "Die Access-Kette für ein Bundle über zwei Switches bauen",
+  "Erkennen, warum ein LACP-Server ohne passendes Gegenstück verschwindet"
+ ],
+ "intro": "Der Datenbankserver **db1** (10.10.30.11/24, Gateway 10.10.30.1, VLAN 130) hat zwei NICs im Bond mit **LACP active**: eine an **leaf103 eth1/10**, eine an **leaf104 eth1/10**. Der Server ist fertig konfiguriert und wird nicht verändert.\n\nDer Tenant Shop mit Web, App und Contract web-to-app läuft. Für leaf103 und leaf104 gibt es noch keine Access Policies.",
+ "requirements": [
+  "db1 wird in einer neuen EPG **DB** (Tenant Shop, AP Webshop) gelernt, mit eigenem Subnetz 10.10.30.0/24 in der VRF Prod.",
+  "Beide Links von db1 sind aktiv und bilden **ein** Bundle über leaf103 und leaf104 – fällt ein Leaf aus, bleibt db1 erreichbar.",
+  "app1 erreicht db1 auf TCP 3306 (MySQL).",
+  "Sonst darf niemand zur Datenbank, auch nicht Web. Die Datenbank baut selbst keine Verbindungen auf."
+ ],
+ "limits": [
+  "LACP wird vereinfacht: aktiv/passiv, Bundle ja/nein und suspendierte Links. Timer, System-Priority und Hashing fehlen.",
+  "Ein Leaf-Ausfall wird hier nicht durchgespielt; bewertet wird, dass der Server über ein vPC-Bundle gelernt ist."
+ ],
+ "hints": [
+  "**Konzept:** Ein Bond über zwei Switches braucht auf der ACI-Seite einen vPC: Die zwei Leafs werden ein vPC-Paar, und die Ports beider Leafs hängen an derselben Policy Group vom Typ vPC. Sendet der Server LACP, muss auch die ACI LACP sprechen.",
+  "**Objekte:** Switch Policies (vPC-Paar 103/104), Interface Policies (LACP), eine PC/VPC Interface Policy Group mit dem AAEP, Interface- und Switch-Profil für 103/104. Im Tenant: BD, EPG DB mit Domain und Static Port auf den vPC-Pfad, Contract.",
+  "**Prüfschritte:** Auf leaf103 `show vpc brief` und `show port-channel summary`. Ist db1 nicht gelernt, nennt der Traffic Inspector den Grund (z. B. „LACP: ACI erwartet …“ oder „Links nicht im selben vPC-Pfad“).",
+  "**Lösung:** Explicit vPC Protection Group 103/104 (z. B. ID 34), Port Channel Policy mit Mode LACP Active, vPC Policy Group mit AAEP-Server und dieser Policy, Selector für Port 1/10 auf 103/104. Im Tenant BD-DB 10.10.30.1/24, EPG DB mit PhysDom-Server und Static Port `protpaths-103-104/pathep-[<Policy Group>]` vlan-130. Contract für tcp/3306: DB stellt bereit, App konsumiert."
+ ],
+ "cause": "Für leaf103/104 fehlt die ganze Access-Kette, das vPC-Paar und die EPG DB; ohne LACP auf der ACI-Seite bleibt der Bond suspendiert.",
  "config": [
   {
    "polUni": {
@@ -426,46 +457,8 @@
    "descr": "Datenbank mit LACP-Bond"
   }
  ],
- "tasks": [
-  {
-   "title": "vPC-Domäne",
-   "text": "**Fabric > Access Policies > Policies > Switch > Virtual Port Channel default**: Explicit vPC Protection Group **vpc-103-104**, ID **34**, Switches 103 und 104."
-  },
-  {
-   "title": "Port Channel Policy",
-   "text": "**Policies > Interface > Port Channel**: **LACP-Active** mit Mode *LACP Active*."
-  },
-  {
-   "title": "vPC Policy Group",
-   "text": "**Policy Groups > PC/VPC Interface**: **IPG-vPC-db1**, Typ *Virtual Port Channel*, AAEP **AAEP-Server**, Port Channel Policy LACP-Active."
-  },
-  {
-   "title": "Interface- und Switch-Profil",
-   "text": "Interface Profile **IntProf-Leaf103-104** mit Selector **db1** für Port 1/10 → IPG-vPC-db1. Switch Profile **SwProf-Leaf103-104** für die Nodes 103-104."
-  },
-  {
-   "title": "Tenant",
-   "text": "Im Tenant Shop: **BD-DB** mit **10.10.30.1/24** im VRF Prod, EPG **DB** im AP Webshop mit Domain PhysDom-Server und Static Port **Virtual Port Channel** IPG-vPC-db1, **vlan-130**.",
-   "hint": "Den vPC-Pfad gibt es erst, wenn die vPC Policy Group auf Ports beider Leafs angewendet ist."
-  },
-  {
-   "title": "Contract",
-   "text": "Filter **mysql** (tcp/3306), Contract **app-to-db**: DB provided, App consumed."
-  },
-  {
-   "title": "Prüfen",
-   "text": "Auf leaf103: `show vpc brief` und `show port-channel summary`. Was passiert, wenn du die Port Channel Policy auf *Static Channel - Mode On* stellst?"
-  }
- ],
+ "tasks": [],
  "checks": [
-  {
-   "desc": "vPC-Gruppe 103/104",
-   "type": "class",
-   "cls": "fabricExplicitGEp",
-   "attrs": {
-    "id": "34"
-   }
-  },
   {
    "desc": "db1 gelernt in EPG DB",
    "type": "endpoint",
@@ -473,7 +466,13 @@
    "epg": "uni/tn-Shop/ap-Webshop/epg-DB"
   },
   {
-   "desc": "app1 → db1 TCP 3306 erlaubt",
+   "desc": "db1 hängt als ein Bundle an leaf103 und leaf104",
+   "type": "endpoint",
+   "host": "db1",
+   "pathType": "vpc"
+  },
+  {
+   "desc": "app1 → db1 TCP 3306",
    "type": "traffic",
    "src": "app1",
    "dst": "db1",
@@ -482,16 +481,62 @@
    "expect": true
   },
   {
-   "desc": "web1 → db1 blockiert",
+   "desc": "web1 → db1 TCP 3306 blockiert",
    "type": "traffic",
    "src": "web1",
    "dst": "db1",
    "proto": "tcp",
    "port": 3306,
-   "expect": false
+   "expect": false,
+   "reason": "POLICY_",
+   "category": "security"
+  },
+  {
+   "desc": "Least Privilege App → DB: nur TCP 3306",
+   "type": "exposure",
+   "src": "app1",
+   "dst": "db1",
+   "allow": [
+    "tcp/3306"
+   ],
+   "category": "security"
+  },
+  {
+   "desc": "Die Datenbank baut keine Verbindungen zu App auf",
+   "type": "exposure",
+   "src": "db1",
+   "dst": "app1",
+   "allow": [],
+   "category": "security"
   }
  ],
- "solution": "Access-Teil: `{\"polUni\": {\"attributes\": {}, \"children\": [{\"infraInfra\": {\"attributes\": {}, \"children\": [{\"fvnsVlanInstP\": {\"attributes\": {\"name\": \"VLAN-Pool-Server\", \"allocMode\": \"static\"}, \"children\": [{\"fvnsEncapBlk\": {\"attributes\": {\"from\": \"vlan-100\", \"to\": \"vlan-199\"}}}]}}, {\"infraAttEntityP\": {\"attributes\": {\"name\": \"AAEP-Server\"}, \"children\": [{\"infraRsDomP\": {\"attributes\": {\"tDn\": \"uni/phys-PhysDom-Server\"}}}]}}, {\"lacpLagPol\": {\"attributes\": {\"name\": \"LACP-Active\", \"mode\": \"active\"}}}, {\"infraFuncP\": {\"attributes\": {}, \"children\": [{\"infraAccBndlGrp\": {\"attributes\": {\"name\": \"IPG-vPC-db1\", \"lagT\": \"node\"}, \"children\": [{\"infraRsAttEntP\": {\"attributes\": {\"tDn\": \"uni/infra/attentp-AAEP-Server\"}}}, {\"infraRsLacpPol\": {\"attributes\": {\"tnLacpLagPolName\": \"LACP-Active\"}}}]}}]}}, {\"infraAccPortP\": {\"attributes\": {\"name\": \"IntProf-Leaf103-104\"}, \"children\": [{\"infraHPortS\": {\"attributes\": {\"name\": \"db1\", \"type\": \"range\"}, \"children\": [{\"infraPortBlk\": {\"attributes\": {\"name\": \"block2\", \"fromPort\": \"10\", \"toPort\": \"10\"}}}, {\"infraRsAccBaseGrp\": {\"attributes\": {\"tDn\": \"uni/infra/funcprof/accbundle-IPG-vPC-db1\"}}}]}}]}}, {\"infraNodeP\": {\"attributes\": {\"name\": \"SwProf-Leaf103-104\"}, \"children\": [{\"infraLeafS\": {\"attributes\": {\"name\": \"103-104\", \"type\": \"range\"}, \"children\": [{\"infraNodeBlk\": {\"attributes\": {\"name\": \"blk\", \"from_\": \"103\", \"to_\": \"104\"}}}]}}, {\"infraRsAccPortP\": {\"attributes\": {\"tDn\": \"uni/infra/accportprof-IntProf-Leaf103-104\"}}}]}}]}}, {\"physDomP\": {\"attributes\": {\"name\": \"PhysDom-Server\"}, \"children\": [{\"infraRsVlanNs\": {\"attributes\": {\"tDn\": \"uni/infra/vlanns-[VLAN-Pool-Server]-static\"}}}]}}]}}`\n\nvPC-Pfad für den Static Port: `topology/pod-1/protpaths-103-104/pathep-[IPG-vPC-db1]`. Mit Mode On statt LACP sendet die ACI keine LACP-PDUs, der Host suspendiert seine Links und db1 verschwindet.",
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Die Port Channel Policy steht auf „Static Channel - Mode On“, der Server sendet LACP. Was passiert?",
+   "options": [
+    "Der Server bekommt keine LACP-Antwort, suspendiert seine Links und db1 wird nicht gelernt",
+    "Es funktioniert genauso",
+    "Nur ein Link wird genutzt",
+    "Der APIC meldet einen Fault an der EPG"
+   ],
+   "answer": 0,
+   "explain": "Mode On sendet keine LACP-PDUs. Ein LACP-Server nimmt die Links dann nicht ins Bundle."
+  },
+  {
+   "id": "q2",
+   "q": "Warum reicht je ein Static Port auf leaf103 eth1/10 und leaf104 eth1/10 nicht?",
+   "options": [
+    "Zwei Einzelports sind zwei Pfade – der Bond des Servers braucht einen gemeinsamen vPC-Pfad",
+    "Weil Static Ports nur auf einem Leaf gehen",
+    "Das reicht",
+    "Weil VLAN 130 fehlt"
+   ],
+   "answer": 0,
+   "explain": "Der Server sieht zwei Links zu „einem“ Partner. Das bildet in der ACI erst der vPC ab."
+  }
+ ],
+ "solution": "Access-Teil: `{\"polUni\": {\"attributes\": {}, \"children\": [{\"infraInfra\": {\"attributes\": {}, \"children\": [{\"fvnsVlanInstP\": {\"attributes\": {\"name\": \"VLAN-Pool-Server\", \"allocMode\": \"static\"}, \"children\": [{\"fvnsEncapBlk\": {\"attributes\": {\"from\": \"vlan-100\", \"to\": \"vlan-199\"}}}]}}, {\"infraAttEntityP\": {\"attributes\": {\"name\": \"AAEP-Server\"}, \"children\": [{\"infraRsDomP\": {\"attributes\": {\"tDn\": \"uni/phys-PhysDom-Server\"}}}]}}, {\"lacpLagPol\": {\"attributes\": {\"name\": \"LACP-Active\", \"mode\": \"active\"}}}, {\"infraFuncP\": {\"attributes\": {}, \"children\": [{\"infraAccBndlGrp\": {\"attributes\": {\"name\": \"IPG-vPC-db1\", \"lagT\": \"node\"}, \"children\": [{\"infraRsAttEntP\": {\"attributes\": {\"tDn\": \"uni/infra/attentp-AAEP-Server\"}}}, {\"infraRsLacpPol\": {\"attributes\": {\"tnLacpLagPolName\": \"LACP-Active\"}}}]}}]}}, {\"infraAccPortP\": {\"attributes\": {\"name\": \"IntProf-Leaf103-104\"}, \"children\": [{\"infraHPortS\": {\"attributes\": {\"name\": \"db1\", \"type\": \"range\"}, \"children\": [{\"infraPortBlk\": {\"attributes\": {\"name\": \"block2\", \"fromPort\": \"10\", \"toPort\": \"10\"}}}, {\"infraRsAccBaseGrp\": {\"attributes\": {\"tDn\": \"uni/infra/funcprof/accbundle-IPG-vPC-db1\"}}}]}}]}}, {\"infraNodeP\": {\"attributes\": {\"name\": \"SwProf-Leaf103-104\"}, \"children\": [{\"infraLeafS\": {\"attributes\": {\"name\": \"103-104\", \"type\": \"range\"}, \"children\": [{\"infraNodeBlk\": {\"attributes\": {\"name\": \"blk\", \"from_\": \"103\", \"to_\": \"104\"}}}]}}, {\"infraRsAccPortP\": {\"attributes\": {\"tDn\": \"uni/infra/accportprof-IntProf-Leaf103-104\"}}}]}}]}}, {\"physDomP\": {\"attributes\": {\"name\": \"PhysDom-Server\"}, \"children\": [{\"infraRsVlanNs\": {\"attributes\": {\"tDn\": \"uni/infra/vlanns-[VLAN-Pool-Server]-static\"}}}]}}]}}`\n\nvPC-Paar: `fabricExplicitGEp` vpc-103-104, ID 34, Nodes 103 und 104 unter `uni/fabric/protpol`.\n\nStatic Port der EPG DB: `topology/pod-1/protpaths-103-104/pathep-[IPG-vPC-db1]`, vlan-130. Filter mysql (tcp/3306), Contract app-to-db: DB stellt bereit, App konsumiert.",
  "routers": [],
  "vcenters": [],
  "devices": [],

@@ -1,41 +1,441 @@
 {
  "id": "01-fabric-discovery",
- "title": "01 Fabric Discovery und BGP Route Reflector",
+ "title": "01 Fabric Discovery: physische und logische Sicht",
  "topic": "Fabric-Inbetriebnahme",
  "level": "Einstieg",
- "duration": "20 min",
+ "duration": "30 min",
  "fabric": "empty",
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [],
+ "tools": [
+  "Fabric > Inventory > Fabric Membership",
+  "Fabric > Inventory > Topology",
+  "System > System Settings",
+  "CLI: acidiag fnvread, show lldp neighbors, show vrf, show endpoint"
+ ],
  "goals": [
   "Die Reihenfolge der Fabric Discovery verstehen (APIC-Leaf, Spines, übrige Leafs)",
-  "Switches unter Fabric Membership registrieren",
-  "Den MP-BGP Route Reflector für die Fabric einrichten"
+  "Physische Sicht (Switches, Links) und logische Sicht (Tenant, VRF, BD, EPG) auseinanderhalten",
+  "Sehen, dass die logische Konfiguration erst wirkt, wenn die physische Fabric steht"
  ],
- "intro": "Die Fabric ist frisch verkabelt, aber noch kein Switch ist registriert. Der APIC sieht per LLDP zunächst nur die Leafs, an denen er direkt hängt. Erst wenn ein Switch registriert und aktiv ist, entdeckt die Fabric dessen Nachbarn.\n\n**Ausgangslage:** 1 APIC, 2 Spines, 4 Leafs, alles unregistriert. Ein Discovery-Schritt dauert im Simulator 20 Sekunden (einstellbar unter Simulation > Einstellungen).",
- "tasks": [
+ "intro": "Die Fabric ist frisch verkabelt, aber noch kein Switch ist registriert. Der APIC sieht per LLDP zunächst nur die Leafs, an denen er direkt hängt. Ein Discovery-Schritt dauert im Simulator 20 Sekunden (einstellbar unter *Simulation > Einstellungen*).\n\nDie Konfiguration des Webshops liegt schon auf dem APIC: Tenant Shop mit VRF Prod, den BDs Web und App, den EPGs Web und App und dem Contract web-to-app (TCP 8080, Ping). web1 hängt an leaf101 eth1/1, app1 an leaf102 eth1/2.\n\n**Namensplan:**\n\n| Seriennummer | Node ID | Name |\n|---|---|---|\n| SAL1931LA01 | 101 | leaf101 |\n| SAL1931LA02 | 102 | leaf102 |\n| SAL1931LA03 | 103 | leaf103 |\n| SAL1931LA04 | 104 | leaf104 |\n| FDO2219SP01 | 201 | spine201 |\n| FDO2219SP02 | 202 | spine202 |\n\nDie Fabric nutzt das AS 65001.",
+ "requirements": [
+  "Alle sechs Switches sind nach dem Namensplan registriert und aktiv.",
+  "Die Fabric kann externe Routen intern verteilen (AS 65001, beide Spines übernehmen diese Rolle).",
+  "Der Webshop funktioniert: web1 erreicht app1 auf TCP 8080 und per Ping.",
+  "An der Policy des Webshops wird nichts geändert."
+ ],
+ "limits": [
+  "Discovery ist vereinfacht: LLDP-Nachbarschaft, Registrierung, Zustände discovering/active. DHCP, TEP-Vergabe im Detail und Firmware-Abgleich beim Join werden nicht gezeigt."
+ ],
+ "hints": [
+  "**Konzept:** Physisch entdeckt die Fabric sich schrittweise: Erst wenn ein Switch registriert und aktiv ist, sieht der APIC dessen Nachbarn. Logisch ist der Tenant nur eine Beschreibung – deployed wird er erst auf aktive Leafs, an denen seine Endpoints hängen.",
+  "**Wo:** *Fabric > Inventory > Fabric Membership* (Nodes Pending Registration), *Fabric > Inventory > Topology*, *System > System Settings > BGP Route Reflector*.",
+  "**Prüfschritte:** `acidiag fnvread` auf dem APIC. Auf leaf101 `show lldp neighbors`. Nach der Registrierung: `show vrf` auf leaf101 und leaf103 vergleichen – wo ist die VRF Shop:Prod deployed und warum?",
+  "**Lösung:** Erst leaf101 und leaf102 registrieren, dann spine201 und spine202, dann leaf103 und leaf104 (jeweils nach Namensplan). BGP Route Reflector: AS 65001, Nodes 201 und 202. Den Tenant nicht anfassen; web1 und app1 werden gelernt, sobald ihre Leafs aktiv sind."
+ ],
+ "cause": "Kein Switch ist registriert. Die Tenant-Konfiguration kann deshalb nirgends deployed werden, web1 und app1 sind nicht gelernt.",
+ "config": [
   {
-   "title": "Leafs am APIC registrieren",
-   "text": "Öffne **Fabric > Inventory > Fabric Membership > Nodes Pending Registration** und registriere die Switches nach dieser Tabelle:\n- SAL1931LA01 → Node ID **101**, Name **leaf101**\n- SAL1931LA02 → Node ID **102**, Name **leaf102**",
-   "hint": "Pod ID bleibt 1. Nach der Registrierung wechselt der Status auf *discovering*, dann auf *active*."
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "infraInfra": {
+       "attributes": {},
+       "children": [
+        {
+         "fvnsVlanInstP": {
+          "attributes": {
+           "name": "VLAN-Pool-Server",
+           "allocMode": "static"
+          },
+          "children": [
+           {
+            "fvnsEncapBlk": {
+             "attributes": {
+              "from": "vlan-100",
+              "to": "vlan-199"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAttEntityP": {
+          "attributes": {
+           "name": "AAEP-Server"
+          },
+          "children": [
+           {
+            "infraRsDomP": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraFuncP": {
+          "attributes": {},
+          "children": [
+           {
+            "infraAccPortGrp": {
+             "attributes": {
+              "name": "IPG-Server-Access"
+             },
+             "children": [
+              {
+               "infraRsAttEntP": {
+                "attributes": {
+                 "tDn": "uni/infra/attentp-AAEP-Server"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAccPortP": {
+          "attributes": {
+           "name": "IntProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraHPortS": {
+             "attributes": {
+              "name": "Server-Ports",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraPortBlk": {
+                "attributes": {
+                 "name": "block2",
+                 "fromPort": "1",
+                 "toPort": "10"
+                }
+               }
+              },
+              {
+               "infraRsAccBaseGrp": {
+                "attributes": {
+                 "tDn": "uni/infra/funcprof/accportgrp-IPG-Server-Access"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraNodeP": {
+          "attributes": {
+           "name": "SwProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraLeafS": {
+             "attributes": {
+              "name": "101-102",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraNodeBlk": {
+                "attributes": {
+                 "name": "blk",
+                 "from_": "101",
+                 "to_": "102"
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "infraRsAccPortP": {
+             "attributes": {
+              "tDn": "uni/infra/accportprof-IntProf-Leaf101-102"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "physDomP": {
+       "attributes": {
+        "name": "PhysDom-Server"
+       },
+       "children": [
+        {
+         "infraRsVlanNs": {
+          "attributes": {
+           "tDn": "uni/infra/vlanns-[VLAN-Pool-Server]-static"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
   },
   {
-   "title": "Spines registrieren",
-   "text": "Sobald leaf101 aktiv ist, erscheinen die Spines. Registriere:\n- FDO2219SP01 → **201**, **spine201**\n- FDO2219SP02 → **202**, **spine202**",
-   "hint": "Die Spines erscheinen erst, wenn ein Leaf mit Uplink zu ihnen aktiv ist."
-  },
-  {
-   "title": "Restliche Leafs registrieren",
-   "text": "- SAL1931LA03 → **103**, **leaf103**\n- SAL1931LA04 → **104**, **leaf104**"
-  },
-  {
-   "title": "Kontrolle per CLI",
-   "text": "Öffne die CLI (oben rechts) und prüfe auf dem APIC mit `acidiag fnvread`, dass alle sechs Switches *active* sind. Schau dir mit `ssh leaf101` und `show lldp neighbors` die Nachbarn an."
-  },
-  {
-   "title": "BGP Route Reflector",
-   "text": "Unter **System > System Settings > BGP Route Reflector** die Fabric-AS **65001** eintragen und **spine201** und **spine202** (Node 201 und 202) als Route Reflector hinzufügen.",
-   "hint": "Ohne diese Policy verteilt die Fabric keine externen Routen von L3Outs an die anderen Leafs."
+   "fvTenant": {
+    "attributes": {
+     "name": "Shop"
+    },
+    "children": [
+     {
+      "fvCtx": {
+       "attributes": {
+        "name": "Prod"
+       }
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Web"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.10.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-App"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.20.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Webshop"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Web"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Web"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/1]",
+              "encap": "vlan-110",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsCons": {
+             "attributes": {
+              "tnVzBrCPName": "web-to-app"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "App"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-App"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/2]",
+              "encap": "vlan-120",
+              "mode": "regular"
+             }
+            }
+           },
+           {
+            "fvRsProv": {
+             "attributes": {
+              "tnVzBrCPName": "web-to-app"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzFilter": {
+       "attributes": {
+        "name": "tcp-8080"
+       },
+       "children": [
+        {
+         "vzEntry": {
+          "attributes": {
+           "name": "tcp-8080",
+           "etherT": "ip",
+           "prot": "tcp",
+           "dFromPort": "8080",
+           "dToPort": "8080"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzBrCP": {
+       "attributes": {
+        "name": "web-to-app",
+        "scope": "context"
+       },
+       "children": [
+        {
+         "vzSubj": {
+          "attributes": {
+           "name": "subj",
+           "revFltPorts": "yes"
+          },
+          "children": [
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "tcp-8080"
+             }
+            }
+           },
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "icmp"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
   }
  ],
+ "hosts": [
+  {
+   "name": "web1",
+   "mac": "00:50:56:10:10:11",
+   "ip": "10.10.10.11/24",
+   "gw": "10.10.10.1",
+   "vlan": 110,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/1"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Webserver"
+  },
+  {
+   "name": "app1",
+   "mac": "00:50:56:10:20:11",
+   "ip": "10.10.20.11/24",
+   "gw": "10.10.20.1",
+   "vlan": 120,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/2"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Applikationsserver"
+  }
+ ],
+ "tasks": [],
  "checks": [
   {
    "desc": "leaf101 aktiv (101)",
@@ -88,19 +488,94 @@
    }
   },
   {
-   "desc": "spine201 ist Route Reflector",
+   "desc": "spine201 verteilt Routen in der Fabric",
    "type": "exists",
    "dn": "uni/fabric/bgpInstP-default/rr/node-201"
   },
   {
-   "desc": "spine202 ist Route Reflector",
+   "desc": "spine202 verteilt Routen in der Fabric",
    "type": "exists",
    "dn": "uni/fabric/bgpInstP-default/rr/node-202"
+  },
+  {
+   "desc": "web1 → app1 TCP 8080",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "app1",
+   "proto": "tcp",
+   "port": 8080,
+   "expect": true
+  },
+  {
+   "desc": "web1 → app1 Ping",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "app1",
+   "proto": "icmp",
+   "expect": true
+  },
+  {
+   "desc": "web1 → app1 SSH bleibt blockiert",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "app1",
+   "proto": "tcp",
+   "port": 22,
+   "expect": false,
+   "reason": "POLICY_",
+   "category": "security"
+  },
+  {
+   "desc": "Policy unverändert: Web → App nur TCP 8080 und Ping",
+   "type": "exposure",
+   "src": "web1",
+   "dst": "app1",
+   "allow": [
+    "tcp/8080",
+    "icmp"
+   ],
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Warum erscheinen die Spines erst, nachdem leaf101 aktiv ist?",
+   "options": [
+    "Der APIC sieht nur direkte LLDP-Nachbarn aktiver Switches; die Spines hängen an den Leafs, nicht am APIC",
+    "Spines werden immer zuletzt registriert, egal wie verkabelt",
+    "Weil die Spines ein anderes Image brauchen",
+    "Weil die Route Reflector Policy fehlt"
+   ],
+   "answer": 0,
+   "explain": "Discovery folgt der Verkabelung: APIC → Leaf → Spine → übrige Leafs."
+  },
+  {
+   "id": "q2",
+   "q": "Nach der Registrierung: Auf welchen Leafs ist die VRF Shop:Prod deployed?",
+   "options": [
+    "Auf leaf101 und leaf102 – dort hängen Endpoints ihrer EPGs",
+    "Auf allen vier Leafs",
+    "Nur auf den Spines",
+    "Nur auf dem APIC"
+   ],
+   "answer": 0,
+   "explain": "Die ACI deployed VRF, BD und EPG nur dort, wo sie gebraucht werden (`show vrf` auf leaf103 zeigt sie nicht)."
+  },
+  {
+   "id": "q3",
+   "q": "Was ist physisch, was logisch?",
+   "options": [
+    "Physisch: Switches, Links, Ports. Logisch: Tenant, VRF, BD, EPG, Contract",
+    "Physisch: BD und VRF. Logisch: Ports",
+    "Alles ist logisch",
+    "EPGs sind physische Ports"
+   ],
+   "answer": 0,
+   "explain": "Die Access Policies verbinden beide Welten: Sie sagen, welche Ports welche VLANs für welche Domain tragen."
   }
  ],
  "solution": "Fabric Membership: die sechs Seriennummern in der Reihenfolge leaf101/leaf102 → spine201/spine202 → leaf103/leaf104 registrieren. Per REST geht das mit `POST /api/mo/uni/controller/nodeidentpol.json` und `{\"fabricNodeIdentP\":{\"attributes\":{\"serial\":\"SAL1931LA01\",\"nodeId\":\"101\",\"name\":\"leaf101\"}}}`.\n\nBGP Route Reflector: `uni/fabric/bgpInstP-default/as` mit `asn=65001`, darunter `rr/node-201` und `rr/node-202`.",
- "config": [],
- "hosts": [],
  "routers": [],
  "vcenters": [],
  "devices": [],

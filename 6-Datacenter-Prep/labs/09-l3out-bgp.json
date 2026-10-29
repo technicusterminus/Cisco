@@ -5,12 +5,42 @@
  "level": "Fortgeschritten",
  "duration": "45 min",
  "fabric": "discovered",
- "goals": [
-  "eBGP-L3Out mit Routed Sub-Interface bauen",
-  "VLAN für Sub-Interfaces in der L3 Domain bereitstellen",
-  "BGP-Peer, Remote-AS und Fabric-AS richtig setzen"
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
  ],
- "intro": "Der Provider-Router **isp1** hängt an **leaf104 eth1/47** und spricht **eBGP** über ein 802.1Q-Sub-Interface **VLAN 301** (172.16.1.2/30, AS **65100**). Er erwartet die ACI als AS **65001** und kündigt eine Default Route an.\n\nTenant Shop mit Web, App und web-to-app ist vorhanden. BGP Route Reflector Policy und Access Policies für leaf104 fehlen.",
+ "prerequisites": [
+  "Lab 06"
+ ],
+ "tools": [
+  "Tenant > Networking > L3Outs",
+  "Simulation > Externe Router",
+  "Traffic Inspector",
+  "CLI: show bgp ipv4 unicast summary vrf, show ip route vrf"
+ ],
+ "goals": [
+  "Einen eBGP-L3Out über ein 802.1Q-Sub-Interface bauen",
+  "Fabric-AS, Remote-AS und Peer-Adresse richtig zuordnen",
+  "Nur das ankündigen und erlauben, was der Provider braucht"
+ ],
+ "intro": "Der Provider-Router **isp1** hängt an **leaf104 eth1/47**. Er spricht **eBGP** über ein 802.1Q-Sub-Interface **VLAN 301**, Adresse 172.16.1.2/30, AS **65100**, und erwartet die ACI als AS **65001** mit der Adresse 172.16.1.1/30. Er kündigt eine Default Route an. isp1 gehört dem Provider und wird nicht verändert.\n\nDer Tenant Shop mit Web, App und web-to-app läuft. Für leaf104 gibt es noch keine Access Policies. web1 hängt an leaf101.",
+ "requirements": [
+  "Die BGP-Session zu isp1 ist aufgebaut.",
+  "web1 erreicht das Internet per Ping, sonst nichts.",
+  "Der Provider darf web1 zur Überwachung anpingen, sonst nichts.",
+  "app1 bleibt ohne Internet; das App-Netz 10.10.20.0/24 wird dem Provider nicht angekündigt."
+ ],
+ "limits": [
+  "BGP ist vereinfacht: Session-Zustand, AS-Prüfung, Peer-Adresse, Timer und Passwort. Attribute wie Local Preference, MED und Communities werden nicht ausgewertet."
+ ],
+ "hints": [
+  "**Konzept:** Bei eBGP muss beides stimmen: die Layer-3-Verbindung (Sub-Interface mit VLAN, Adresse) und die BGP-Parameter (eigene AS, Peer-Adresse, Remote AS). Die eigene AS der ACI ist die Fabric-AS.",
+  "**Objekte:** L3 Domain mit einem VLAN Pool, der VLAN 301 enthält; AAEP, Policy Group, Profile für leaf104 eth1/47. L3Out mit BGP, Node Profile, Interface Profile mit Routed Sub-Interface und BGP Peer. *System > System Settings > BGP Route Reflector* für die Fabric-AS.",
+  "**Prüfschritte:** `show bgp ipv4 unicast summary vrf Shop:Prod` auf leaf104: Idle/Active statt Established? Remote AS, Peer-Adresse und VLAN vergleichen. Danach Traffic Inspector web1 → 1.1.1.1 und *Simulation > Externe Router*: Was kennt isp1?",
+  "**Lösung:** Fabric-AS 65001 mit spine201/202 als Route Reflector. L3Dom-ISP mit VLAN-Pool 300–310, Access-Kette für 104/eth1/47. L3Out ISP (VRF Prod, BGP), Node 104 mit Router ID, Sub-Interface eth1/47 vlan-301 172.16.1.1/30, BGP Peer 172.16.1.2 Remote AS 65100. External EPG 0.0.0.0/0, Contract nur icmp (Internet stellt bereit, Web konsumiert), BD-Web Advertised Externally und mit ISP verknüpft. BD-App bleibt privat."
+ ],
+ "cause": "Es gibt weder Fabric-AS noch Access Policies noch L3Out für leaf104.",
  "config": [
   {
    "polUni": {
@@ -439,33 +469,7 @@
    "staticBack": []
   }
  ],
- "tasks": [
-  {
-   "title": "Fabric-AS",
-   "text": "BGP Route Reflector Policy: AS **65001**, spine201 und spine202 als Route Reflector."
-  },
-  {
-   "title": "Access Policies",
-   "text": "L3 Domain **L3Dom-ISP** mit VLAN Pool **VLAN-Pool-ISP** (vlan-300 bis vlan-310, static), AAEP **AAEP-ISP**, Policy Group **IPG-ISP**, Interface Profile für Port 1/47 und Switch Profile für Node 104."
-  },
-  {
-   "title": "L3Out",
-   "text": "L3Out **ISP**, VRF Prod, L3 Domain L3Dom-ISP, Routing-Protokoll **BGP**. Node Profile mit Node 104 (Router ID 1.1.1.104). Interface Profile mit **Routed Sub-Interface** eth1/47, **vlan-301**, **172.16.1.1/30**."
-  },
-  {
-   "title": "BGP-Peer",
-   "text": "Am Interface einen BGP Peer **172.16.1.2** mit Remote AS **65100** anlegen.",
-   "hint": "Den Peer findest du unter dem Interface im Baum (BGP Peers)."
-  },
-  {
-   "title": "Policy und Ankündigung",
-   "text": "External EPG **Internet** (0.0.0.0/0), Contract **web-to-isp** (icmp) mit Internet als Provider und Web als Consumer, BD-Web *Advertised Externally* und mit L3Out ISP verknüpft."
-  },
-  {
-   "title": "Prüfen",
-   "text": "Auf leaf104: `show bgp ipv4 unicast summary vrf Shop:Prod`. Ping von web1 zu 1.1.1.1."
-  }
- ],
+ "tasks": [],
  "checks": [
   {
    "desc": "BGP zu isp1 Established",
@@ -490,11 +494,66 @@
    "expect": true
   },
   {
+   "desc": "Least Privilege Web → Internet: nur Ping",
+   "type": "exposure",
+   "src": "web1",
+   "dst": "1.1.1.1",
+   "allow": [
+    "icmp"
+   ],
+   "category": "security"
+  },
+  {
+   "desc": "Least Privilege Provider → Web: nur Ping",
+   "type": "exposure",
+   "src": "isp1",
+   "dst": "web1",
+   "allow": [
+    "icmp"
+   ],
+   "category": "security"
+  },
+  {
    "desc": "app1 → 1.1.1.1 blockiert",
    "type": "traffic",
    "src": "app1",
    "dst": "1.1.1.1",
-   "expect": false
+   "expect": false,
+   "category": "security"
+  },
+  {
+   "desc": "10.10.20.0/24 wird nicht angekündigt",
+   "type": "learned",
+   "router": "isp1",
+   "prefix": "10.10.20.0/24",
+   "expect": false,
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Die Session bleibt in „Active“. Der Router meldet „bad remote AS 65000“. Was ist falsch?",
+   "options": [
+    "Die Fabric-AS (eigene AS der ACI) passt nicht zu dem, was der Provider erwartet",
+    "Das VLAN",
+    "Der Contract",
+    "Die Router ID"
+   ],
+   "answer": 0,
+   "explain": "Der Provider prüft die AS, die die ACI im OPEN meldet – das ist die Fabric-AS."
+  },
+  {
+   "id": "q2",
+   "q": "Warum braucht das Sub-Interface ein VLAN aus dem Pool der L3 Domain?",
+   "options": [
+    "Das Encap des Sub-Interfaces wird wie jedes Encap gegen die Domain des L3Outs geprüft",
+    "Braucht es nicht",
+    "Weil BGP VLANs zählt",
+    "Wegen des Contracts"
+   ],
+   "answer": 0,
+   "explain": "Fehlt VLAN 301 im Pool, gibt es einen Fault am L3Out und das Interface kommt nicht hoch."
   }
  ],
  "solution": "Interface: `l3extRsPathL3OutAtt tDn=topology/pod-1/paths-104/pathep-[eth1/47] ifInstT=sub-interface encap=vlan-301 addr=172.16.1.1/30`, darunter `bgpPeerP addr=172.16.1.2` mit `bgpAsP asn=65100`. Am L3Out `bgpExtP`. Ohne Fabric-AS (bgpAsP unter uni/fabric/bgpInstP-default) startet BGP nicht.",

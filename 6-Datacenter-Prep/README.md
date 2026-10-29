@@ -136,20 +136,20 @@ Unter *Simulation > Labs & Stände* laden. Jedes Lab setzt die Konfiguration auf
 | Lab | Thema | Dauer |
 |---|---|---|
 | 00 | Day 0: APIC-Ersteinrichtung mit Setup-Dialog | 20 min |
-| 01 | Fabric Discovery und BGP Route Reflector | 20 min |
+| 01 | Fabric Discovery: physische und logische Sicht (neues Format) | 30 min |
 | 02 | Access Policies: vom VLAN zum Port, Fault F0467 (neues Format) | 30 min |
 | 03 | Tenant, VRF, Bridge Domains und EPGs (neues Format) | 30 min |
 | 04 | Contracts, Filter und vzAny (neues Format) | 35 min |
-| 05 | vPC mit LACP für einen Datenbankserver | 35 min |
-| 06 | L3Out mit OSPF ins WAN (MTU-Problem, MP-BGP) | 45 min |
+| 05 | vPC mit LACP für einen Datenbankserver (neues Format) | 35 min |
+| 06 | L3Out mit OSPF ins WAN (MTU-Problem, MP-BGP; neues Format) | 45 min |
 | 07 | Troubleshooting: sechs Tickets (neues Format) | 45 min |
 | 08 | Automatisierung über die REST-API | 30 min |
-| 09 | L3Out mit eBGP über Sub-Interface | 45 min |
-| 10 | OOB-Management und NTP | 30 min |
-| 11 | Static Leaf und Taboo Contracts | 25 min |
-| 12 | VMM-Integration mit VMware vCenter | 40 min |
-| 13 | Shared Services: Route Leaking zwischen Tenants | 35 min |
-| 14 | L2Out und Migration: stille Hosts und ARP Flooding | 40 min |
+| 09 | L3Out mit eBGP über Sub-Interface (neues Format) | 45 min |
+| 10 | OOB-Management und NTP (neues Format) | 30 min |
+| 11 | Static Leaf und Taboo Contracts (neues Format) | 25 min |
+| 12 | VMM-Integration mit VMware vCenter (neues Format) | 40 min |
+| 13 | Shared Services: Route Leaking zwischen Tenants (neues Format) | 35 min |
+| 14 | L2Out und Migration: stille Hosts und ARP Flooding (neues Format) | 40 min |
 | 15 | Transit Routing und Route Control | 40 min |
 | 16 | Service Graph mit Policy-Based Redirect (Firewall) | 45 min |
 | 17 | L3Out: SVI auf vPC mit Secondary IP und BFD | 40 min |
@@ -182,12 +182,13 @@ Unter *Simulation > Labs & Stände* laden. Jedes Lab setzt die Konfiguration auf
 | 44 | Access-Diagnose: drei Server, drei Ursachen (Domain, VLAN Pool, Static Port; neues Format) | 30 min |
 | 45 | Zwei Bridge Domains, eine VRF: Routing ohne L3Out (neues Format) | 20 min |
 
-**Neues Lab-Format** (Labs 02, 03, 04, 07 und 32 bis 45): Statt einer Klickanleitung gibt es Anforderungen. Der Rest im Überblick:
+**Neues Lab-Format** (Labs 01 bis 14 außer 08 und 32 bis 45): Statt einer Klickanleitung gibt es Anforderungen. Der Rest im Überblick:
 
 - **Hinweise** in vier Stufen: Konzept, Objekte, Prüfschritt, Lösung. Die Oberfläche zählt, wie viele genutzt wurden.
 - **Bewertung** getrennt nach *Funktion* und *Sicherheit / Least Privilege*. Eine Permit-any-Abkürzung funktioniert zwar, besteht aber nicht.
 - **Verständnisfragen** werden getrennt gezählt.
 - **Geführter Modus** oder **Prüfungsmodus** (ohne Hinweise, Lösung und Diagnosetexte), wählbar beim Start.
+- **Diagnoseprotokoll** auf der Lab-Karte: alle Traffic-Tests, CLI-Befehle, Hinweise und Prüfläufe der Sitzung mit Ergebnis. Es dient dem Nachvollziehen und wird nicht bewertet.
 
 Den Stand gegenüber dem geplanten Lernpfad zeigt [docs/LAB-KATALOG.md](docs/LAB-KATALOG.md), wie man Labs schreibt [docs/LAB-AUTHORING.md](docs/LAB-AUTHORING.md).
 

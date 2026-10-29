@@ -5,12 +5,42 @@
  "level": "Fortgeschritten",
  "duration": "40 min",
  "fabric": "discovered",
- "goals": [
-  "Eine vCenter VMM Domain mit dynamischem VLAN Pool anlegen",
-  "Port Groups Tenant|AP|EPG vom APIC erzeugen lassen",
-  "Resolution Immediacy und LLDP-Discovery zum ESXi verstehen"
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
  ],
- "intro": "Im Webshop kommen virtuelle Server dazu. Im vCenter **vcsa01** (192.168.10.50, Datacenter **DC-Frankfurt**, Benutzer **administrator@vsphere.local**, Passwort **Lab12!vc**) gibt es den Distributed Switch **VDS-Prod** mit den Hosts **esx01** (leaf101 eth1/11) und **esx02** (leaf102 eth1/11). Die VMs **web-vm1** und **app-vm1** sind schon auf die Port Groups `Shop|Webshop|Web` und `Shop|Webshop|App` eingestellt – nur gibt es diese Port Groups noch nicht.\n\nPolicy Group **IPG-ESXi** und Selector für Port 1/11 sind vorhanden, das AAEP **AAEP-ESXi** ist aber noch leer. Den Zustand im vCenter siehst du unter **Simulation > vCenter**.",
+ "prerequisites": [
+  "Labs 02 und 03"
+ ],
+ "tools": [
+  "Virtual Networking > VMM Domains",
+  "Simulation > vCenter",
+  "Traffic Inspector",
+  "CLI: show vlan extended, show endpoint"
+ ],
+ "goals": [
+  "Eine vCenter VMM Domain anlegen und mit den EPGs verbinden",
+  "Verstehen, wer bei VMM die VLANs vergibt",
+  "Port Groups Tenant|AP|EPG vom APIC erzeugen lassen"
+ ],
+ "intro": "Im Webshop kommen virtuelle Server dazu. Im vCenter **vcsa01** (192.168.10.50, Datacenter **DC-Frankfurt**, Benutzer **administrator@vsphere.local**, Passwort **Lab12!vc**, nur Labor) gibt es den Distributed Switch **VDS-Prod** mit den Hosts **esx01** (leaf101 eth1/11) und **esx02** (leaf102 eth1/11). Die VMs **web-vm1** und **app-vm1** sind schon auf die Port Groups `Shop|Webshop|Web` und `Shop|Webshop|App` eingestellt – nur gibt es diese Port Groups noch nicht.\n\nPolicy Group **IPG-ESXi** und Selector für Port 1/11 sind vorhanden, das AAEP **AAEP-ESXi** ist aber noch leer. Den Zustand im vCenter siehst du unter **Simulation > vCenter**. Die VLANs 1000–1099 sind für die Virtualisierung reserviert.",
+ "requirements": [
+  "Der APIC ist mit vcsa01 verbunden und verwaltet VDS-Prod (VMM Domain **VDS-Prod**).",
+  "web-vm1 landet in der EPG Web, app-vm1 in der EPG App – ohne dass jemand im vCenter Port Groups anlegt.",
+  "web-vm1 erreicht app-vm1 und app-vm1 ist auch vom Bare-Metal-Server web1 erreichbar (Contract web-to-app).",
+  "Für VMs gelten dieselben Regeln wie für Bare Metal: zwischen Web und App nur, was web-to-app erlaubt."
+ ],
+ "limits": [
+  "vCenter wird simuliert: Verbindung, Port Groups, VLAN-Vergabe, VM-Zuordnung und LLDP-Sicht der ESXi-Hosts. vMotion und Host-Profile fehlen."
+ ],
+ "hints": [
+  "**Konzept:** Bei VMM vergibt der APIC die VLANs selbst und legt die Port Groups im vCenter an. Dafür braucht er eine VMM Domain mit Zugangsdaten und einen VLAN-Bereich, aus dem er frei wählen darf.",
+  "**Objekte:** VLAN Pool (Allocation Mode!), VMM Domain mit Credential und Controller, AAEP der ESXi-Ports mit dieser Domain, an den EPGs die VMM-Domain-Zuordnung.",
+  "**Prüfschritte:** *Simulation > vCenter*: Gibt es die Port Groups, welche VLANs? Unter *Operational* der VMM Domain: verbunden? (Fault S0606, wenn nicht). Auf leaf101 `show endpoint`: Learning Source *learned,vmm*.",
+  "**Lösung:** VLAN Pool VLAN-Pool-VMM mit *Dynamic Allocation* (vlan-1000 bis vlan-1099). VMM Domain VDS-Prod mit Credential und Controller vcsa01 (Datacenter DC-Frankfurt). AAEP-ESXi mit der VMM Domain. An Web und App *Add VMM Domain Association* mit Resolution Immediacy Immediate."
+ ],
+ "cause": "Es gibt keine VMM Domain; der APIC kennt das vCenter nicht und legt keine Port Groups an.",
  "config": [
   {
    "polUni": {
@@ -541,30 +571,7 @@
    ]
   }
  ],
- "tasks": [
-  {
-   "title": "Dynamischer VLAN Pool",
-   "text": "**Fabric > Access Policies > Pools > VLAN**: **VLAN-Pool-VMM** mit *Dynamic Allocation* und dem Encap Block vlan-1000 bis vlan-1099.",
-   "hint": "Ein statischer Pool reicht nicht: Der APIC vergibt die VLANs für die Port Groups selbst."
-  },
-  {
-   "title": "VMM Domain",
-   "text": "**Virtual Networking > VMM Domains > VMware**, Rechtsklick **Create vCenter Domain**: Name **VDS-Prod**, VLAN Pool VLAN-Pool-VMM, AAEP **AAEP-ESXi**, Credential **vc-admin** und Controller **vcsa01** mit IP und Datacenter.",
-   "hint": "Der Datacenter-Name muss exakt stimmen. Unter **Operational** der Domain siehst du, ob der APIC verbunden ist (Fault S0606, wenn nicht)."
-  },
-  {
-   "title": "EPGs anbinden",
-   "text": "An den EPGs **Web** und **App** jeweils **Add VMM Domain Association** mit VDS-Prod, Resolution Immediacy **Immediate**."
-  },
-  {
-   "title": "Prüfen",
-   "text": "Unter **Simulation > vCenter** erscheinen die Port Groups mit VLANs aus dem Pool, die VMs werden gelernt. Auf leaf101: `show vlan extended` und `show endpoint` – Learning Source *learned,vmm*."
-  },
-  {
-   "title": "Experiment",
-   "text": "Stelle die Resolution Immediacy an der EPG App auf **On Demand** und lösche app-vm1. Was passiert mit dem VLAN auf leaf102?"
-  }
- ],
+ "tasks": [],
  "checks": [
   {
    "desc": "VMM Domain VDS-Prod mit vCenter verbunden",
@@ -599,6 +606,64 @@
    "dst": "app-vm1",
    "proto": "icmp",
    "expect": true
+  },
+  {
+   "desc": "web-vm1 → app-vm1 SSH blockiert",
+   "type": "traffic",
+   "src": "web-vm1",
+   "dst": "app-vm1",
+   "proto": "tcp",
+   "port": 22,
+   "expect": false,
+   "reason": "POLICY_",
+   "category": "security"
+  },
+  {
+   "desc": "Least Privilege VM Web → VM App: nur TCP 8080 und Ping",
+   "type": "exposure",
+   "src": "web-vm1",
+   "dst": "app-vm1",
+   "allow": [
+    "tcp/8080",
+    "icmp"
+   ],
+   "category": "security"
+  },
+  {
+   "desc": "app-vm1 baut außer Ping keine Verbindungen zu web-vm1 auf",
+   "type": "exposure",
+   "src": "app-vm1",
+   "dst": "web-vm1",
+   "allow": [
+    "icmp"
+   ],
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Warum braucht die VMM Domain einen VLAN Pool mit Dynamic Allocation?",
+   "options": [
+    "Der APIC wählt die VLANs für die Port Groups selbst aus dem Bereich",
+    "Weil vCenter keine statischen VLANs kennt",
+    "Weil sonst LLDP nicht geht",
+    "Braucht sie nicht"
+   ],
+   "answer": 0,
+   "explain": "Bei Static Allocation müsste jemand das VLAN pro EPG festlegen – das ist nicht der VMM-Weg."
+  },
+  {
+   "id": "q2",
+   "q": "Resolution Immediacy „On Demand“: Wann kommt das VLAN auf leaf102?",
+   "options": [
+    "Erst wenn eine VM der EPG auf einem Host an leaf102 läuft",
+    "Sofort beim Speichern",
+    "Nie",
+    "Nach einem Neustart"
+   ],
+   "answer": 0,
+   "explain": "On Demand spart Ressourcen auf den Leafs, macht die Fehlersuche aber weniger offensichtlich."
   }
  ],
  "solution": "Domain: `{\"polUni\": {\"attributes\": {}, \"children\": [{\"infraInfra\": {\"attributes\": {}, \"children\": [{\"fvnsVlanInstP\": {\"attributes\": {\"name\": \"VLAN-Pool-VMM\", \"allocMode\": \"dynamic\"}, \"children\": [{\"fvnsEncapBlk\": {\"attributes\": {\"from\": \"vlan-1000\", \"to\": \"vlan-1099\"}}}]}}, {\"infraAttEntityP\": {\"attributes\": {\"name\": \"AAEP-ESXi\"}, \"children\": [{\"infraRsDomP\": {\"attributes\": {\"tDn\": \"uni/vmmp-VMware/dom-VDS-Prod\"}}}]}}]}}, {\"vmmProvP\": {\"attributes\": {\"vendor\": \"VMware\"}, \"children\": [{\"vmmDomP\": {\"attributes\": {\"name\": \"VDS-Prod\"}, \"children\": [{\"infraRsVlanNs\": {\"attributes\": {\"tDn\": \"uni/infra/vlanns-[VLAN-Pool-VMM]-dynamic\"}}}, {\"vmmUsrAccP\": {\"attributes\": {\"name\": \"vc-admin\", \"usr\": \"administrator@vsphere.local\", \"pwd\": \"Lab12!vc\"}}}, {\"vmmCtrlrP\": {\"attributes\": {\"name\": \"vcsa01\", \"hostOrIp\": \"192.168.10.50\", \"rootContName\": \"DC-Frankfurt\"}, \"children\": [{\"vmmRsAcc\": {\"attributes\": {\"tDn\": \"uni/vmmp-VMware/dom-VDS-Prod/usracc-vc-admin\"}}}]}}]}}]}}]}}`\n\nAn der EPG: `fvRsDomAtt tDn=uni/vmmp-VMware/dom-VDS-Prod resImedcy=immediate`. Die Port Group heißt `Tenant|Application Profile|EPG`.",
