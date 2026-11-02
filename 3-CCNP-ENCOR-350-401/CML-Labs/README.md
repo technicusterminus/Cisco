@@ -1,6 +1,6 @@
 # CCNP ENCOR 350-401 v1.2 – Labs zum Kompendium
 
-Diese Labs ergänzen das Anki-Kompendium (1.776 Karten). Die Karten bauen Wissen auf, in den Labs wendest du es an: **bauen, reparieren, üben**. Jedes der 47 Prüfungsziele des Kompendiums (`Ziel::…`) ist mindestens einem Lab zugeordnet.
+Diese Labs ergänzen das Anki-Kompendium (1.779 Karten). Die Karten bauen Wissen auf, in den Labs wendest du es an: **bauen, reparieren, üben**. Jedes der 47 Prüfungsziele des Kompendiums (`Ziel::…`) ist mindestens einem Lab zugeordnet.
 
 **Inhalt:** 28 CML-Labs (25 Themen-Labs und 3 Capstones, zusammen 138 eingebaute Fehler zum Reparieren), ein Python-/API-Drill-Paket mit automatischen Tests, zwei Fallstudien-Pakete für Themen, die sich nicht sinnvoll simulieren lassen.
 
