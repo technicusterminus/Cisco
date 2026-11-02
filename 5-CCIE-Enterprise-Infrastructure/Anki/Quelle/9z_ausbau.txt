@@ -1,0 +1,488 @@
+# 2.1.a | SD-Access: Fabric-Rollen und Underlay
+S: https://www.cisco.com/c/en/us/td/docs/solutions/CVD/Campus/cisco-sda-design-guide.html | Cisco SD-Access Design Guide
+
+Q: Was ist ein Fabric in a Box, und wann setzt du es ein?
+A: **Ein einzelner Switch oder Stack übernimmt Control Plane, Border und Edge gleichzeitig.** Das passt für kleine Standorte ohne eigenes Underlay-Netz. Die Rollen sind so nur so redundant wie das Gerät oder der Stack selbst.
+T: Wissen Mittel
+
+Q: Was ist ein Extended Node, und welche Rolle hat er im Fabric?
+A: **Ein Layer-2-Switch, der per 802.1Q-Trunk an einem Edge Node hängt und selbst keine Fabric-Rolle hat.** Der Edge Node registriert die Endpunkte am Extended Node und setzt Policy durch. Der Extended Node erweitert so die Portanzahl, ohne selbst LISP oder VXLAN zu sprechen.
+T: Wissen Mittel
+
+Q: Wie unterscheiden sich Fabric-Enabled Wireless und Over-the-Top (OTT)?
+A: **Fabric-Enabled: Die APs hängen an Edge Nodes, der Datenverkehr der Clients geht per VXLAN in das Fabric, und die WLC registriert die Clients im Control Plane Node. OTT: CAPWAP-Daten laufen unverändert zur WLC, das Fabric transportiert sie nur.** Nur Fabric-Enabled bringt Anycast Gateway, SGT und Policy am Edge für WLAN-Clients. Die CAPWAP-Steuerung zur WLC bleibt in beiden Fällen bestehen.
+T: Vergleich Schwer
+
+Q: In welchem Netz liegen die Fabric-APs, und wie bekommen sie Verbindung zur WLC?
+A: **Die APs hängen in einem Infrastruktur-Pool im Virtual Network INFRA_VN, das Catalyst Center automatisch anlegt.** Die APs bauen CAPWAP zur WLC auf. Die WLC läuft entweder außerhalb des Fabrics (über den Border erreichbar) oder als Embedded Wireless Controller im Fabric.
+T: Wissen Schwer
+
+Q: Welche Aufgaben hat Catalyst Center im SD-Access, und welche liegen bei der ISE?
+A: **Catalyst Center automatisiert das Fabric (Design, Provisioning, LAN Automation) und liefert Assurance. Die ISE authentifiziert Endpunkte und hält die Policy (SGT, SGACL).** Beide tauschen Daten über pxGrid und ERS aus. Catalyst Center ist nicht im Datenpfad.
+T: Vergleich Mittel
+
+Q: Was passiert mit dem Fabric, wenn Catalyst Center ausfällt?
+A: **Das Fabric läuft weiter, denn Control Plane und Data Plane liegen auf den Geräten.** Es gibt nur keine Änderungen, keine Automation und keine Assurance, bis Catalyst Center zurück ist. Auch die ISE bleibt für die Authentisierung nötig.
+T: Wissen Mittel
+
+Q: Was ist eine Fabric Site, und was ist eine Fabric Domain?
+A: **Eine Fabric Site hat ihre eigene Control Plane, Border und Edge Nodes. Eine Fabric Domain fasst mehrere Sites zusammen, die über einen Transit verbunden sind.** Der Transit ist entweder IP Transit oder SD-Access Transit. Pro Site fällt die Control Plane eigenständig aus oder bleibt erhalten.
+T: Vergleich Mittel
+
+# 2.1.b | SD-Access: Segmentierung, Anycast Gateway und Transit
+S: https://www.cisco.com/c/en/us/td/docs/solutions/CVD/Campus/cisco-sda-design-guide.html | Cisco SD-Access Design Guide
+
+Q: Wie gelangt das SGT eines Endpunkts über ein Netz, das kein VXLAN-GPO spricht?
+A: **Per Inline Tagging im Ethernet-Header (Cisco Meta Data) auf Links zwischen TrustSec-fähigen Geräten, oder per SXP, das IP-zu-SGT-Zuordnungen über TCP-Sitzungen verteilt.** SXP nutzt standardmäßig TCP-Port 64999. Inline Tagging braucht Hardware-Unterstützung auf jedem Hop.
+T: Wissen Schwer
+
+Q: Wo setzt SD-Access die SGACL durch, und was gilt standardmäßig?
+A: **Die SGACL greift am Ziel (Egress), meist am Edge Node, an dem der Zielendpunkt hängt.** Das Standardverhalten steht in der Policy-Matrix. Cisco TrustSec erlaubt Default Permit oder Default Deny. Mit Default Deny braucht jedes Paar aus Quell- und Ziel-SGT eine eigene Freigabe.
+T: Wissen Schwer
+
+Q: Welche Übergabe-Optionen hat ein Border Node in der Praxis?
+A: **Layer-3-Handoff mit VRF-Lite pro VN (meist eBGP), Layer-2-Handoff für einzelne VLANs, oder SD-Access Transit zu anderen Sites.** Mit dem Layer-2-Handoff lässt sich ein Subnetz zwischen Fabric und Altnetz teilen, etwa während einer Migration. Der Layer-3-Handoff ist der Standard.
+T: Wissen Mittel
+
+Q: Was kann ein Endpunkt im Fabric tun, bevor die Authentisierung abgeschlossen ist?
+A: **Das hängt vom Port-Modus ab: Im Closed Mode kommt nur EAPoL durch, im Low-Impact- oder Open-Mode gilt eine Vor-Authentisierungs-ACL oder voller Zugriff.** Die Wahl legt man in der Catalyst-Center-Port-Zuweisung fest. Critical VLAN und Critical SGT greifen, wenn kein RADIUS-Server antwortet.
+T: Wissen Schwer
+
+Q: Wie verhält sich ein Edge Node, wenn er kein Ziel in der Fabric findet, aber ein Default Border existiert?
+A: **Er sendet den Verkehr per VXLAN an den Border Node, der als Default für alle EIDs außerhalb des Fabrics dient.** Der Edge speichert dafür eine Negative Map-Reply-Antwort des Control Plane Nodes. Der Border macht dann die normale IP-Weiterleitung.
+T: Wissen Mittel
+
+Q: Warum braucht ein Fusion Router bei SD-Access mit Shared Services VRF Leaking?
+A: **Die VNs sind voneinander getrennt, Shared Services wie DHCP, DNS und ISE liegen aber meist in einem eigenen VRF oder im globalen Netz.** Der Fusion Router leakt gezielt Routen zwischen den VRFs, damit alle VNs die Dienste erreichen, aber nicht einander. Die Leaking-Richtung steuert man mit Route Targets oder Route-Maps.
+T: Wissen Schwer
+
+# 2.2.a | SD-WAN: Architektur und Komponenten
+S: https://www.cisco.com/c/en/us/td/docs/routers/sdwan/configuration/sdwan-xe-gs-book/system-overview.html | Cisco SD-WAN Overview
+
+Q: Wie unterscheiden sich Controller Mode und Autonomous Mode auf einem Catalyst-8000-Router?
+A: **Im Controller Mode bekommt der Router seine Konfiguration von vManage und nimmt am SD-WAN-Fabric teil. Im Autonomous Mode arbeitet er als normales IOS XE mit eigener CLI-Konfiguration.** Den Wechsel löst man mit `controller-mode enable` aus, dabei geht die lokale Konfiguration verloren.
+T: Vergleich Mittel
+
+Q: Wie kommt ein neuer WAN Edge per Zero-Touch-Provisioning zu seinen Controllern?
+A: **Er bezieht über DHCP eine Adresse, löst per DNS ein Cloud-Redirect-Ziel (PnP Connect) auf und bekommt dort die vBond-Adresse.** Danach baut er die Control Connection zu vBond auf und lernt vSmart und vManage. Die Seriennummer muss in der Whitelist stehen und das Zertifikat gültig sein.
+T: Wissen Mittel
+
+Q: Warum müssen Organization Name und Zertifikate auf Controllern und Edges zusammenpassen?
+A: **Die Geräte prüfen gegenseitig Zertifikat und Organization Name. Stimmen sie nicht überein, bleibt die Control Connection unten.** Der Name steht in der `organization-name`-Einstellung und im Zertifikat (OU). Auch die Zeit muss stimmen, denn abgelaufene oder noch nicht gültige Zertifikate scheitern.
+T: Wissen Schwer
+
+Q: Warum ist eine korrekte Uhrzeit für SD-WAN-Control-Connections wichtig?
+A: **DTLS und TLS prüfen die Gültigkeit der Zertifikate. Eine falsche Uhrzeit lässt die Prüfung scheitern.** Ein häufiger Fehler ist ein WAN Edge ohne NTP, der nach dem Booten eine Systemzeit weit vor dem Zertifikatsbeginn hat.
+T: Wissen Mittel
+
+Q: Was ist der Unterschied zwischen einem TLOC Extension und einem zweiten WAN-Interface?
+A: **Eine TLOC Extension leiht einem WAN Edge ohne eigenen Zugang den Transport eines Nachbarn am selben Standort.** Der Nachbar leitet den Verkehr über eine Layer-2-Verbindung weiter. So nutzen beide Edges beide Transporte, ohne dass jeder an jedem Provider hängt.
+T: Wissen Schwer
+
+Q: Wozu dient Cloud OnRamp for SaaS?
+A: **Der WAN Edge misst die Pfadqualität zu einer SaaS-Anwendung (z. B. Microsoft 365) über mehrere Wege und wählt den besten.** Das gilt für den direkten Internetzugang am Standort und für Wege über Hub oder Gateway. Die Messung läuft per HTTP-Probes.
+T: Wissen Mittel
+
+Q: Wozu dient Cloud OnRamp for Multicloud (IaaS)?
+A: **Es verbindet SD-WAN-Standorte mit virtuellen Netzen in AWS, Azure oder Google über virtuelle WAN Edges im Cloud-Transit.** vManage automatisiert Aufbau und Verbindung. Die Cloud-Seite erscheint im SD-WAN wie ein weiterer Standort.
+T: Wissen Mittel
+
+Q: Zwei WAN Edges sollen einen Tunnel bilden. Standort 10 nutzt Color mpls mit `restrict`, Standort 20 nur biz-internet.
+```
+! Standort 10
+interface GigabitEthernet1
+ tunnel-interface
+  color mpls restrict
+! Standort 20
+interface GigabitEthernet1
+ tunnel-interface
+  color biz-internet
+```
+Warum steht zwischen beiden Standorten keine BFD-Sitzung?
+A: **`restrict` erlaubt Tunnel nur zu TLOCs derselben Color, und die Colors sind verschieden.** Ohne `restrict` bildet ein Interface mit privater Color Tunnel zu anderen Colors, soweit die Adressen erreichbar sind. Soll Standort 10 trotzdem mit 20 sprechen, entfernst du `restrict` oder fügst auf Standort 20 ein mpls-Interface hinzu.
+T: Exhibit Schwer
+
+Q: Ein WAN Edge in Standort 100 bleibt ohne Control Connection zu vSmart. Die Konfiguration unterscheidet sich im Namen.
+```
+! WAN Edge
+system
+ organization-name ORG-A
+! vSmart und vBond
+system
+ organization-name ORG-B
+```
+Was ist die Ursache?
+A: **Die Organization Names sind verschieden.** Die Geräte lehnen dann die gegenseitige Authentisierung ab. Setze auf allen Geräten denselben Namen, der zum Zertifikat passt, und starte die Control Connection neu.
+T: Exhibit Mittel
+
+# 2.2.b | SD-WAN: Templates und Policies
+S: https://www.cisco.com/c/en/us/td/docs/routers/sdwan/configuration/policies/ios-xe-17/policies-book-xe.html | Cisco SD-WAN Policies
+
+Q: Wie steuert eine Centralized Control Policy den Weg, den Standorte zueinander nehmen?
+A: **vSmart wendet sie auf OMP-Routen und TLOCs an, bevor er sie weitergibt, und kann Next-Hop-TLOCs, Preferences und Tags verändern oder Routen verwerfen.** Die Policy wirkt auf die Richtung inbound oder outbound relativ zu vSmart und auf eine Site-Liste. Sie ändert nicht den Verkehr selbst, sondern die Routing-Informationen.
+T: Wissen Schwer
+
+Q: Wie leitest du Verkehr eines bestimmten Dienstes (z. B. Firewall) im Service Chaining zu?
+A: **Der Standort mit der Firewall kündigt per OMP eine Service Route an. Eine Control oder Data Policy leitet Verkehr per `service`-Aktion zu diesem Standort.** Der Verkehr geht durch den Tunnel zur Firewall und von dort weiter. Fällt die Firewall aus, kann die Policy auf einen Fallback zeigen.
+T: Wissen Schwer
+
+Q: Wie lässt du den Verkehr eines VPNs direkt ins Internet ausbrechen (Direct Internet Access)?
+A: **Mit NAT am WAN-Interface im VPN 0 und einer Route im Service-VPN, die auf VPN 0 zeigt, oder per Data Policy mit der Aktion `nat use-vpn 0`.** Ohne NAT am Transport-Interface erreichen private Quelladressen das Internet nicht. Die Data Policy erlaubt, nur ausgewählten Verkehr auszubrechen.
+T: Szenario Schwer
+
+Q: Wie hängen SLA-Klassen, App-Route-Policy und BFD zusammen?
+A: **BFD misst Loss, Latenz und Jitter pro Tunnel. Die App-Route-Policy vergleicht die Werte mit der SLA-Klasse und wählt Tunnel, die sie erfüllen.** Das BFD-Intervall bestimmt, wie schnell der Edge Veränderungen sieht. Kürzere Intervalle erhöhen die Last auf kleinen Geräten.
+T: Wissen Mittel
+
+Q: Wozu dient eine VPN-Membership-Policy?
+A: **Sie legt fest, welche Standorte welche VPNs von vSmart empfangen.** Ein Standort erhält nur Routen der VPNs, die für ihn erlaubt sind. Das begrenzt zum Beispiel PCI-VPNs auf die Standorte, die sie wirklich brauchen.
+T: Wissen Mittel
+
+Q: Was bewirkt eine Localized Policy mit QoS-Zuordnung auf einem WAN Edge?
+A: **Sie klassifiziert und priorisiert Verkehr am Interface, unabhängig von der zentralen Policy.** Typisch sind Class Maps, Queues (LLQ, WFQ) und Shaping. Die Policy wird per Device Template angewendet und gilt nur für das Gerät.
+T: Wissen Mittel
+
+# 3.1.b | IPsec und IKE
+S: https://www.rfc-editor.org/rfc/rfc7296 | RFC 7296: Internet Key Exchange Version 2
+
+Q: Die IKEv2-Sitzung kommt nicht hoch. Im Debug steht NO_PROPOSAL_CHOSEN. Was prüfst du?
+A: **Die Proposals beider Seiten: Verschlüsselung, Integrität, PRF und DH-Gruppe müssen eine gemeinsame Kombination haben.** Der Responder lehnt ab, wenn keine seiner Optionen im Angebot des Initiators steht. Bei IKEv2 prüfst du zudem, ob die richtige Policy und das passende Proposal an den Peer gebunden sind.
+T: Szenario Mittel
+
+Q: Wie sieht eine minimale IKEv2-Konfiguration auf IOS XE aus, und welche Bausteine hängen woran?
+A:
+```
+crypto ikev2 proposal P1
+ encryption aes-cbc-256
+ integrity sha256
+ group 14
+crypto ikev2 policy POL1
+ proposal P1
+crypto ikev2 keyring KR1
+ peer SITE2
+  address 203.0.113.2
+  pre-shared-key <schluessel>
+crypto ikev2 profile PROF1
+ match identity remote address 203.0.113.2 255.255.255.255
+ authentication remote pre-share
+ authentication local pre-share
+ keyring local KR1
+```
+Das IKEv2-Profile wird im IPsec-Profile oder in der Crypto Map referenziert.
+T: CLI Schwer
+
+# 3.1.c | DMVPN
+S: https://www.rfc-editor.org/rfc/rfc2332 | RFC 2332: NBMA Next Hop Resolution Protocol
+
+Q: In einer DMVPN-Phase-3-Umgebung laufen Spoke-zu-Spoke-Pakete weiterhin über den Hub.
+```
+! Hub
+interface Tunnel0
+ ip nhrp network-id 1
+ ip nhrp redirect
+! Spoke
+interface Tunnel0
+ ip nhrp network-id 1
+ ip nhrp nhs 172.16.0.1
+```
+Was fehlt?
+A: **Auf dem Spoke fehlt `ip nhrp shortcut`.** Der Hub schickt zwar einen NHRP-Redirect, aber der Spoke legt keine Shortcut-Route an und sendet weiter an den Hub. Mit `ip nhrp shortcut` am Spoke entsteht der direkte Tunnel.
+T: Exhibit Mittel
+
+# 3.2.a | MPLS und LDP
+S: https://www.rfc-editor.org/rfc/rfc5036 | RFC 5036: LDP Specification
+
+Q: Was bewirkt Penultimate Hop Popping, und welchen Label-Wert nutzt es?
+A: **Der vorletzte Router entfernt das Transport-Label, damit der letzte Router nur noch einen Lookup machen muss.** Der Egress-Router kündigt dafür das Implicit-Null-Label (Wert 3) an. Mit Explicit Null (Wert 0) bleibt das Label zum Egress erhalten, zum Beispiel für QoS-Markierungen in den EXP-Bits.
+T: Wissen Mittel
+
+Q: Zwischen zwei Routern bleibt die LDP-Nachbarschaft in der Discovery, die Sitzung baut sich nicht auf. Die Hellos kommen an.
+```
+R1# show mpls ldp discovery
+ Local LDP Identifier:
+    10.0.0.1:0
+    Discovery Sources:
+    Interfaces:
+        GigabitEthernet0/0 (ldp): xmit/recv
+            LDP Id: 10.0.0.2:0; no route
+```
+Warum scheitert die Sitzung?
+A: **R1 hat keine Route zur Transportadresse 10.0.0.2.** LDP baut die TCP-Sitzung (Port 646) zur Router-ID auf. Die Loopback-Adresse muss im IGP stehen, als /32 und ohne Summarization.
+T: Exhibit Mittel
+
+Q: Wie viele Labels trägt ein Paket im MPLS-L3VPN-Core, und wofür steht jedes?
+A: **Zwei: Das äußere Transport-Label (LDP) bringt das Paket zum Egress-PE, das innere VPN-Label (MP-BGP) wählt dort das VRF.** Die P-Router sehen nur das äußere Label. Durch Penultimate Hop Popping kommt beim Egress-PE oft nur das VPN-Label an.
+T: Wissen Mittel
+
+# 3.2.b | MPLS L3VPN
+S: https://www.rfc-editor.org/rfc/rfc4364 | RFC 4364: BGP/MPLS IP VPNs
+
+Q: Auf PE2 erscheinen die Routen von Kunde A nicht im VRF.
+```
+! PE1
+vrf definition CUST-A
+ rd 65000:100
+ address-family ipv4
+  route-target export 65000:100
+! PE2
+vrf definition CUST-A
+ rd 65000:100
+ address-family ipv4
+  route-target import 65000:200
+```
+Was ist die Ursache?
+A: **PE2 importiert Route Target 65000:200, PE1 exportiert aber 65000:100.** Ein VRF übernimmt nur VPNv4-Routen, deren Route Target zu einem Import passt. Der RD unterscheidet die Präfixe, entscheidet aber nicht über den Import.
+T: Exhibit Mittel
+
+Q: Zwischen zwei PE-Routern stehen keine VPNv4-Präfixe, obwohl die BGP-Sitzung up ist.
+```
+router bgp 65000
+ neighbor 10.0.0.2 remote-as 65000
+ neighbor 10.0.0.2 update-source Loopback0
+ address-family ipv4
+  neighbor 10.0.0.2 activate
+```
+Was fehlt?
+A: **Der Nachbar ist nicht unter `address-family vpnv4` aktiviert.** Die Sitzung läuft nur für IPv4. Ergänze `address-family vpnv4` mit `neighbor 10.0.0.2 activate` und `neighbor 10.0.0.2 send-community extended`.
+T: Exhibit Mittel
+
+# 4.1.b | Layer-2-Sicherheit und 802.1X
+S: https://www.rfc-editor.org/rfc/rfc3748 | RFC 3748: Extensible Authentication Protocol
+
+Q: Clients im VLAN 10 bekommen keine Adresse, obwohl der DHCP-Server am Uplink hängt.
+```
+ip dhcp snooping
+ip dhcp snooping vlan 10
+!
+interface GigabitEthernet0/24
+ description Uplink zum DHCP-Server
+ switchport mode trunk
+```
+Was fehlt?
+A: **Der Uplink-Port ist nicht als Trusted Port konfiguriert.** DHCP Snooping verwirft DHCP-Antworten, die an nicht vertrauenswürdigen Ports eintreffen. Setze `ip dhcp snooping trust` am Uplink.
+T: Exhibit Leicht
+
+Q: Wie hängen DHCP Snooping und Dynamic ARP Inspection zusammen?
+A: **DAI prüft ARP-Pakete an nicht vertrauenswürdigen Ports gegen die Snooping-Bindungstabelle (IP, MAC, VLAN, Port).** Ohne Snooping-Tabelle verwirft DAI legitime ARP-Pakete von Hosts mit statischer IP. Dafür gibt es ARP-ACLs mit `arp access-list` und `ip arp inspection filter`.
+T: Wissen Mittel
+
+Q: Was löst bei DAI die Err-Disable-Reaktion aus?
+A: **Eine ARP-Rate über der Grenze am Port, standardmäßig 15 Pakete pro Sekunde an nicht vertrauenswürdigen Ports.** Einen Trust-Port oder höhere Rate setzt man mit `ip arp inspection trust` oder `ip arp inspection limit rate`. Wiederherstellung per `errdisable recovery cause arp-inspection`.
+T: Wissen Schwer
+
+Q: Was bewirkt `authentication event server dead action authorize vlan 99` auf einem 802.1X-Port?
+A: **Fällt der RADIUS-Server aus, weist der Switch neue Endpunkte dem VLAN 99 zu (Critical VLAN).** Bereits authentisierte Sitzungen laufen weiter. Mit `authentication event server alive action reinitialize` startet die Authentisierung wieder, sobald der Server antwortet.
+T: Wissen Schwer
+
+Q: Wie unterscheiden sich die Host-Modi `single-host`, `multi-host`, `multi-domain` und `multi-auth`?
+A: **Single-Host erlaubt eine MAC pro Port. Multi-Host authentisiert nur den ersten Host und lässt dann alle durch. Multi-Domain erlaubt je einen Host in Daten- und Voice-VLAN. Multi-Auth authentisiert jeden Host einzeln.** Multi-Auth ist die sicherste Wahl, wenn ein Hub oder Telefon mit PC am Port hängt.
+T: Vergleich Mittel
+
+# 4.1.c | uRPF, IPv6 First Hop Security und ACLs
+S: https://www.rfc-editor.org/rfc/rfc3704 | RFC 3704: Ingress Filtering for Multihomed Networks
+
+Q: Wie verhält sich uRPF im Loose Mode, wenn der Router nur eine Default-Route hat?
+A: **Die Default-Route zählt nicht, sofern `allow-default` fehlt, daher fallen Pakete mit unbekannter Quelle weg.** Mit `ip verify unicast source reachable-via any allow-default` gilt auch die Default-Route als Treffer, und nahezu alles passiert. Strict Mode (`rx`) prüft zusätzlich das eingehende Interface.
+T: Wissen Schwer
+
+Q: Wann verwirft uRPF im Strict Mode legitime Pakete?
+A: **Bei asymmetrischem Routing: Das Paket kommt auf einem anderen Interface an, als die Rückroute nutzt.** Das betrifft Multihoming und ECMP. Dort nutzt man Loose Mode.
+T: Wissen Mittel
+
+# 4.2.a | QoS
+S: https://www.rfc-editor.org/rfc/rfc3246 | RFC 3246: An Expedited Forwarding PHB
+
+Q: Eine Policy-Map enthält diese Klasse.
+```
+policy-map WAN-OUT
+ class VOICE
+  priority 1000
+ class class-default
+  fair-queue
+```
+Wann begrenzt `priority 1000` den Verkehr der Klasse VOICE auf 1 Mbit/s?
+A: **Nur bei Überlast am Interface.** Die LLQ-Klasse wird bei freier Bandbreite nicht gedrosselt. Bei Stau begrenzt ein impliziter Policer den Verkehr auf den konfigurierten Wert, der Rest wird verworfen.
+T: Exhibit Schwer
+
+Q: Warum nutzt du bei Hierarchical QoS einen Shaper in der Parent-Policy?
+A: **Der Parent shapt auf die vertraglich zugesicherte Rate, und die Child-Policy priorisiert darin.** Ohne Shaper würde der Provider auf seiner Seite verwerfen, und zwar ohne Rücksicht auf deine Klassen. Der Shaper sorgt dafür, dass der Stau bei dir entsteht.
+T: Wissen Mittel
+
+# 4.3.a | FHRP, NTP und DHCP
+S: https://www.rfc-editor.org/rfc/rfc5905 | RFC 5905: Network Time Protocol Version 4
+
+Q: Der Router bleibt als unsynchronisiert stehen, obwohl der NTP-Server erreichbar ist.
+```
+ntp authenticate
+ntp authentication-key 1 md5 GEHEIM
+ntp server 10.0.0.10 key 1
+```
+Was fehlt?
+A: **`ntp trusted-key 1`.** Ohne den Eintrag akzeptiert der Router keine Pakete, die mit Schlüssel 1 signiert sind. Der Schlüssel muss außerdem auf beiden Seiten gleich sein.
+T: Exhibit Mittel
+
+Q: Auf zwei Routern läuft HSRP. Der Active-Router verliert seinen Uplink, aber der Standby übernimmt nicht.
+```
+interface GigabitEthernet0/1
+ standby 1 ip 10.1.1.1
+ standby 1 priority 110
+ standby 1 track 1 decrement 5
+```
+Der Partner hat Priorität 100 und `standby 1 preempt`. Warum bleibt R1 aktiv?
+A: **Die Priorität sinkt nur auf 105 und bleibt damit über 100.** Der Standby hat daher keinen Grund zur Übernahme. Setze den Decrement-Wert größer als die Differenz (z. B. `decrement 20`) und `preempt` auch auf R1.
+T: Exhibit Schwer
+
+# 4.3.b | NAT, IP SLA und Monitoring
+S: https://www.rfc-editor.org/rfc/rfc3022 | RFC 3022: Traditional IP Network Address Translator
+
+Q: In welcher Reihenfolge arbeitet ein Router bei NAT und Routing, und warum ist das wichtig?
+A: **Inside nach Outside: erst Routing, dann NAT. Outside nach Inside: erst NAT, dann Routing.** Deshalb muss die Route zum Ziel auch für die nicht übersetzte Adresse stimmen. Bei eingehendem Verkehr sieht die Route also schon die übersetzte Inside-Local-Adresse.
+T: Wissen Schwer
+
+Q: Ein Standardrouten-Failover soll bei Ausfall des Providers umschalten.
+```
+ip sla 1
+ icmp-echo 198.51.100.1 source-interface GigabitEthernet0/0
+ frequency 5
+ip sla schedule 1 life forever start-time now
+track 1 ip sla 1 reachability
+ip route 0.0.0.0 0.0.0.0 198.51.100.1 track 1
+ip route 0.0.0.0 0.0.0.0 203.0.113.1 10
+```
+Welche Route steht in der Tabelle, wenn die Probe fehlschlägt?
+A: **Die Route über 203.0.113.1 mit Distanz 10.** Sie war schon in der Konfiguration, aber ihre höhere Distanz hielt sie aus der Tabelle. Die getrackte Route fällt weg, sobald das Objekt down geht.
+T: Exhibit Mittel
+
+Q: SNMPv3 liefert nach `authPriv`-Anfrage keine Antwort.
+```
+snmp-server group MON v3 auth
+snmp-server user mon1 MON v3 auth sha AuthPass priv aes 128 PrivPass
+```
+Was ist die Ursache?
+A: **Die Gruppe verlangt nur `auth`, der Benutzer nutzt aber `priv`.** Setze die Gruppe auf `priv`. Das Sicherheitsniveau der Anfrage muss zum Niveau der Gruppe passen.
+T: Exhibit Mittel
+
+Q: Flexible NetFlow zeigt keine Daten, obwohl Record, Exporter und Monitor existieren.
+```
+flow monitor MON1
+ record netflow ipv4 original-input
+ exporter EXP1
+interface GigabitEthernet0/0
+ description Uplink
+```
+Was fehlt?
+A: **Der Monitor ist nicht am Interface angewendet.** Setze am Interface `ip flow monitor MON1 input` (und bei Bedarf `output`). Ohne diese Zeile erfasst der Router keinen Verkehr.
+T: Exhibit Leicht
+
+# 5.1.a | Datenformate und Modelle
+S: https://www.rfc-editor.org/rfc/rfc6241 | RFC 6241: NETCONF
+
+Q: Ein NETCONF-Client sendet diese Anfrage an ein IOS-XE-Gerät.
+```
+<get-config>
+  <source><running/></source>
+  <filter type="subtree">
+    <native xmlns="http://cisco.com/ns/yang/Cisco-IOS-XE-native">
+      <hostname/>
+    </native>
+  </filter>
+</get-config>
+```
+Was liefert das Gerät zurück?
+A: **Nur den Hostnamen aus der Running Config.** Der Subtree-Filter schränkt die Antwort auf das leere Element `hostname` ein, und das Gerät füllt es mit dem Wert. Ohne Filter käme die gesamte Konfiguration.
+T: Exhibit Mittel
+
+Q: Ein RESTCONF-Client sendet diesen PUT, der nur die Beschreibung enthält.
+```
+PUT /restconf/data/Cisco-IOS-XE-native:native/interface/GigabitEthernet=1
+{"Cisco-IOS-XE-native:GigabitEthernet": {"name": "1", "description": "Uplink"}}
+```
+Was passiert mit den übrigen Einstellungen des Interfaces?
+A: **Sie werden ersetzt: PUT überschreibt die Ressource komplett, alles außer Name und Beschreibung fällt weg.** Für eine Teiländerung nutzt du PATCH. Das gilt etwa für eine IP-Adresse am Interface.
+T: Exhibit Schwer
+
+Q: Welche Subscribe-Modi kennt gNMI, und wie unterscheiden sie sich?
+A: **Stream (dauerhaft: sample, on-change oder target-defined), Once (ein Mal alle Daten) und Poll (der Client fordert bei Bedarf an).** gNMI nutzt gRPC über HTTP/2, in der Regel mit TLS. Der übliche Port auf IOS XE ist 9339.
+S: https://github.com/openconfig/reference/blob/master/rpc/gnmi/gnmi-specification.md | gNMI Specification
+T: Wissen Mittel
+
+Q: Auf einem Router läuft dieses Telemetrie-Abonnement.
+```
+telemetry ietf subscription 101
+ encoding encode-kvgpb
+ filter xpath /interfaces-ios-xe-oper:interfaces/interface/statistics
+ stream yang-push
+ update-policy periodic 6000
+ receiver ip address 10.1.1.1 57500 protocol grpc-tcp
+```
+Wie oft sendet das Gerät Daten?
+A: **Alle 60 Sekunden.** Der Wert bei `periodic` steht in Hundertstelsekunden, 6000 sind also 60 s. Das Gerät baut die Verbindung zum Empfänger selbst auf (Dial-Out).
+T: Exhibit Mittel
+
+# 5.1.b | Telemetrie, EEM und Guest Shell
+S: https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/eem/configuration/xe-16/eem-xe-16-book.html | Cisco EEM Guide
+
+Q: Ein EEM-Applet reagiert auf einen Link-Down, aber die Konfigurationsänderung kommt nicht an.
+```
+event manager applet LINKDOWN
+ event syslog pattern "changed state to down"
+ action 1.0 cli command "interface GigabitEthernet0/1"
+ action 2.0 cli command "description DOWN"
+```
+Was fehlt?
+A: **Die CLI-Aktionen starten nicht im Konfigurationsmodus.** Ergänze `action 0.1 cli command "enable"` und `action 0.2 cli command "configure terminal"` vor den Interface-Befehlen. Applets öffnen keine Sitzung im privilegierten Modus von selbst.
+T: Exhibit Mittel
+
+# 5.1.b | Ansible, Terraform und Jinja2
+S: https://docs.ansible.com/ansible/latest/collections/cisco/ios/ios_config_module.html | Ansible: cisco.ios.ios_config
+
+Q: Was ist Idempotenz bei Ansible und Terraform, und warum ist sie wichtig?
+A: **Eine Ausführung führt immer zum selben Endzustand, und eine zweite ändert nichts mehr.** Ansible meldet dann `changed=0`, Terraform zeigt im Plan keine Änderung. Das erlaubt Wiederholung ohne Nebenwirkung und macht Abweichungen sichtbar.
+T: Wissen Mittel
+
+Q: Welche Inventory-Variablen braucht Ansible, um ein IOS-XE-Gerät per SSH zu konfigurieren?
+A: **`ansible_connection: ansible.netcommon.network_cli`, `ansible_network_os: cisco.ios.ios`, dazu `ansible_user` und `ansible_password`.** Ohne `ansible_network_os` weiß Ansible nicht, welche Modulfamilie zur CLI passt. Passwörter gehören in einen Vault.
+T: Wissen Mittel
+
+Q: Ein Ansible-Playbook enthält diesen Task.
+```
+- name: Beschreibung setzen
+  cisco.ios.ios_config:
+    parents: interface GigabitEthernet0/1
+    lines:
+      - description Uplink
+    save_when: modified
+```
+Was macht er, und wann meldet er eine Änderung?
+A: **Er setzt die Beschreibung am Interface und speichert die Konfiguration, wenn sie sich geändert hat.** Stimmt die Zeile schon, meldet der Task `ok` ohne `changed`. `parents` gibt den Konfigurationsabschnitt vor.
+T: Exhibit Mittel
+
+Q: Ein Jinja2-Template wird mit der unten stehenden Variablen gerendert (Leerzeilen weggelassen).
+```
+{% for v in vlans %}
+vlan {{ v.id }}
+ name {{ v.name }}
+{% endfor %}
+vlans: [{id: 10, name: USER}, {id: 20, name: VOICE}]
+```
+Welche Konfiguration entsteht?
+A: **`vlan 10`, ` name USER`, `vlan 20`, ` name VOICE`, jeweils in eigenen Zeilen.** Die Schleife läuft einmal pro Listeneintrag. Jinja2 ersetzt `{{ ... }}` durch den Wert und führt `{% ... %}` aus.
+T: Exhibit Leicht
+
+Q: Wie arbeitet Terraform mit einem Netzwerkgerät, und wofür steht die State-Datei?
+A: **Du beschreibst den Sollzustand deklarativ. `terraform plan` vergleicht ihn mit dem State und dem Gerät, `terraform apply` setzt die Differenz um.** Der State speichert, welche Ressourcen Terraform verwaltet. Geht er verloren, verliert Terraform den Bezug zu den Objekten.
+S: https://developer.hashicorp.com/terraform/intro | Terraform: Introduction
+T: Wissen Mittel
+
+Q: Ein Skript soll nicht erreichbare Geräte aus einer Catalyst-Center-Antwort ausgeben.
+```
+data = {"response": [
+  {"hostname": "sw1", "reachabilityStatus": "Reachable"},
+  {"hostname": "sw2", "reachabilityStatus": "Unreachable"}], "version": "1.0"}
+for d in data["response"]:
+    if d["reachabilityStatus"] != "Reachable":
+        print(d["hostname"])
+```
+Was gibt es aus?
+A: **`sw2`.** Das Skript läuft über die Liste unter dem Schlüssel `response` und gibt jeden Host aus, dessen Status nicht `Reachable` ist. Catalyst Center liefert die Nutzdaten in diesem Schlüssel.
+T: Exhibit Leicht

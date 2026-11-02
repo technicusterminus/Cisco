@@ -1,7 +1,7 @@
 # Anki-Deck: CCIE Enterprise Infrastructure
 
-**Aktuelle Version:** 1.1 (Stand 23.10.2026) · **542 Karten** (358 Wissens- und Übungskarten, 184 Befehlskarten)
-**Datei:** [`CCIE-EI_Kompendium_1.1_DE.apkg`](CCIE-EI_Kompendium_1.1_DE.apkg)
+**Aktuelle Version:** 1.2 (Stand 02.11.2026) · **604 Karten** (420 Wissens- und Übungskarten, 184 Befehlskarten)
+**Datei:** [`CCIE-EI_Kompendium_1.2_DE.apkg`](CCIE-EI_Kompendium_1.2_DE.apkg)
 
 Grundlage sind die öffentlichen Prüfungsthemen von Cisco für CCIE Enterprise Infrastructure v1.1. Das Deck deckt den Theorieteil ab. Für die Labprüfung brauchst du zusätzlich viel Praxis, die Karten ersetzen sie nicht.
 
@@ -12,12 +12,12 @@ Ohne die Befehlskarten, deren Verteilung im Abschnitt „Befehlsreferenz“ steh
 | Domäne | Inhalt | Karten |
 |---|---|---:|
 | 1 Network Infrastructure | Switching, Routing-Konzepte, EIGRP, OSPF, BGP, Multicast | 226 |
-| 2 Software Defined Infrastructure | SD-Access, SD-WAN | 28 |
-| 3 Transport Technologies | GRE, IPsec, DMVPN, MPLS, L3VPN | 37 |
-| 4 Security und Services | AAA, CoPP, Layer-2-Security, QoS, FHRP, NAT, Monitoring | 50 |
-| 5 Automation und Programmierbarkeit | Datenformate, NETCONF, RESTCONF, EEM, Guest Shell | 17 |
+| 2 Software Defined Infrastructure | SD-Access, SD-WAN | 56 |
+| 3 Transport Technologies | GRE, IPsec, DMVPN, MPLS, L3VPN | 45 |
+| 4 Security und Services | AAA, CoPP, Layer-2-Security, QoS, FHRP, NAT, Monitoring | 65 |
+| 5 Automation und Programmierbarkeit | Datenformate, NETCONF, RESTCONF, EEM, Ansible, Terraform, Jinja2 | 28 |
 
-Domäne 1 ist am dichtesten, weil dort die meisten Details und die meisten Troubleshooting-Situationen liegen. Die Domänen 2 bis 5 sind kompakter und bilden die Grundlagen ab. Sie wachsen in späteren Versionen.
+Domäne 1 ist am dichtesten, weil dort die meisten Details und die meisten Troubleshooting-Situationen liegen. Die Domänen 2 bis 5 sind kompakter. Version 1.2 hat sie um 62 Karten erweitert, vor allem um Exhibits und Fehlersuche.
 
 ## So ist eine Karte aufgebaut
 
@@ -25,7 +25,7 @@ Domäne 1 ist am dichtesten, weil dort die meisten Details und die meisten Troub
 - **Antwort:** beginnt fett mit dem direkten Treffer, danach folgen ein, zwei Sätze zum Mechanismus. Bei CLI-Karten steht die Konfiguration im Codeblock.
 - **Quellen:** RFCs und Cisco-Dokumente zum Nachlesen.
 
-Kartentypen: Wissen (160), CLI (85), Vergleich (44), Szenario (31), Prüfungsfalle (21), Rechnen (11), Exhibit (6), Befehl (184).
+Kartentypen: Wissen (194), CLI (86), Vergleich (49), Szenario (33), Prüfungsfalle (21), Rechnen (11), Exhibit (26), Befehl (184).
 
 ## Import
 
@@ -53,11 +53,13 @@ Die Befehlskarten stehen in [`Quelle/9_befehle.txt`](Quelle/9_befehle.txt) und w
 
 | Suche im Browser oder als gefiltertes Deck | Was du bekommst |
 |---|---|
-| `tag:Modus::Zug` | kurze Karten ohne Code, gut für unterwegs (227 Karten) |
+| `tag:Modus::Zug` | kurze Karten ohne Code, gut für unterwegs (254 Karten) |
 | `tag:Fokus::Falle` | typische Prüfungsfallen (21 Karten) |
+| `tag:Fokus::Exhibit` | Konfigurationen und Ausgaben zum Analysieren (26 Karten) |
+| `tag:Neu::1_2` | alle Karten, die mit Version 1.2 dazukamen (62 Karten) |
 | `tag:Typ::CLI` | Konfiguration und Befehle |
 | `tag:Ziel::1.5*` | alles zu einem Prüfungsziel, hier BGP |
-| `tag:Stufe::Schwer` | die anspruchsvollen Karten (95 Karten, ohne Befehlskarten) |
+| `tag:Stufe::Schwer` | die anspruchsvollen Karten (115 Karten, ohne Befehlskarten) |
 | `tag:Fokus::Befehle` | Befehle abfragen: Aufgabe vorne, Syntax hinten (184 Karten) |
 
 ## Hinweis zur Qualität
@@ -77,5 +79,6 @@ Das Skript prüft beim Bauen, ob jede Frage mit „?“ endet, jede Antwort fett
 
 ## Versionen
 
+- **1.2 (02.11.2026):** 62 neue Karten in den Domänen 2 bis 5, davon 20 Exhibits, Tag `Neu::1_2`. SD-Access (Fabric in a Box, Extended Node, Wireless, Handoff), SD-WAN (Controller Mode, ZTP, Colors, Cloud OnRamp), IKEv2, DMVPN, LDP, L3VPN, DHCP Snooping, DAI, 802.1X, QoS, NTP, HSRP, NAT, SNMPv3, NetFlow, NETCONF, RESTCONF, Telemetrie, Ansible, Jinja2 und Terraform. Bestehende Karten unverändert, Update-Import behält den Lernstand.
 - **1.1 (23.10.2026):** 184 Befehlskarten, Tag `Fokus::Befehle`. Bestehende Karten unverändert, Update-Import behält den Lernstand.
 - **1.0 (22.10.2026):** erste Version mit 358 Karten.
