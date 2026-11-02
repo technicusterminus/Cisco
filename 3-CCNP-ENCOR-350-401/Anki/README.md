@@ -1,6 +1,6 @@
 # Anki-Deck: CCNP ENCOR 350-401 v1.2
 
-**Aktuelle Version:** 5.3 (Stand 02.11.2026) · **1.776 Karten** (1.431 Wissens- und Übungskarten, 345 Befehlskarten)
+**Aktuelle Version:** 5.3 (Stand 02.11.2026) · **1.779 Karten** (1.431 Wissens- und Übungskarten, 348 Befehlskarten)
 **Datei:** [`ENCOR_v1.2_Kompendium_5.3_DE.apkg`](ENCOR_v1.2_Kompendium_5.3_DE.apkg)
 
 > **Neu:** Es gibt eine [englische Version](EN/) mit 1.981 Karten: Fragen und Begriffe auf Englisch wie in der Prüfung, Erklärungen auf Deutsch, dazu 429 MC-Karten im Prüfungsstil und 136 Show-Karten mit echten Ausgaben.
@@ -49,11 +49,11 @@ Jede Karte hat eine feste ID (`E12-<Blueprint-Punkt>-<Nr>`) sowie Ziel, Thema, T
 | Vertiefung | 54 | Warum funktioniert etwas so? |
 | Prüfungsfalle | 43 | Typische Stolpersteine |
 | Rechnen | 25 | Subnetze, Wildcards, Overhead, Metriken |
-| Befehl | 345 | Aufgabe vorne, Syntax mit Modus hinten |
+| Befehl | 348 | Aufgabe vorne, Syntax mit Modus hinten |
 
 ## Befehlsreferenz
 
-345 Karten fragen Befehle ab wie eine Befehlstabelle zum Abdecken: Vorne steht die Aufgabe („Welcher Befehl zeigt …?“, „Wie legst du … an?“), hinten die genaue Syntax. Platzhalter stehen in spitzen Klammern (`<vlan-id>`), Optionales in eckigen (`[detail]`), Alternativen in geschweiften (`{in | out}`). Unter der Syntax steht der Konfigurationsmodus und in einem Satz, was der Befehl bewirkt oder worauf du achten musst.
+348 Karten fragen Befehle ab wie eine Befehlstabelle zum Abdecken: Vorne steht die Aufgabe („Welcher Befehl zeigt …?“, „Wie legst du … an?“), hinten die genaue Syntax. Platzhalter stehen in spitzen Klammern (`<vlan-id>`), Optionales in eckigen (`[detail]`), Alternativen in geschweiften (`{in | out}`). Unter der Syntax steht der Konfigurationsmodus und in einem Satz, was der Befehl bewirkt oder worauf du achten musst.
 
 | Suche | Was du bekommst |
 |---|---|
@@ -64,7 +64,7 @@ Jede Karte hat eine feste ID (`E12-<Blueprint-Punkt>-<Nr>`) sowie Ziel, Thema, T
 
 Tipp: Schreib die Syntax auf oder tipp sie ins Lab, bevor du umdrehst. Erst dann merkst du, ob Reihenfolge und Schlüsselwörter sitzen.
 
-Verteilung der Befehlskarten: Architektur 24, Virtualisierung 35, Infrastruktur 175, Network Assurance 48, Security 52, Automation 11. Infrastruktur hat die meisten, weil Layer 2, OSPF, BGP, NAT, FHRP und Multicast die meiste CLI haben. Die Befehle aus den Befehlstabellen der Kapitel zur Paketweiterleitung (MAC-Tabelle, SDM, `show interfaces …`) stehen unter `Ziel::3.1.a`.
+Verteilung der Befehlskarten: Architektur 24, Virtualisierung 35, Infrastruktur 178, Network Assurance 48, Security 52, Automation 11. Infrastruktur hat die meisten, weil Layer 2, OSPF, BGP, NAT, FHRP und Multicast die meiste CLI haben. Die Befehle aus den Befehlstabellen der Kapitel zur Paketweiterleitung (MAC-Tabelle, SDM, `show interfaces …`) stehen unter `Ziel::3.1.a`.
 
 Die Befehlskarten stehen nach Domänen getrennt in [`Quelle/`](Quelle/). Nach einer Änderung neu einspielen:
 
@@ -87,7 +87,7 @@ Im Anki-Browser suchen oder als gefiltertes Deck anlegen:
 | `tag:Domaene::3` usw. | – | Eine Domäne |
 | `tag:Ziel::3.2.b` usw. | – | Ein einzelnes Prüfungsziel, passend zu den Labs |
 | `tag:Stufe::Schwer` | 115 | Die anspruchsvollsten Karten (ohne Befehlskarten) |
-| `tag:Fokus::Befehle` | 345 | Befehle abfragen: Aufgabe vorne, Syntax hinten |
+| `tag:Fokus::Befehle` | 348 | Befehle abfragen: Aufgabe vorne, Syntax hinten |
 
 Welche Filter in welche Woche gehören, steht im [Lernplan](../LERNPLAN.md).
 
@@ -95,7 +95,7 @@ Welche Filter in welche Woche gehören, steht im [Lernplan](../LERNPLAN.md).
 
 | Version | Änderung |
 |---|---|
-| 5.3 | Drei Befehlskarten korrigiert: IPsec-VTI trägt auch Multicast (die Karte sagte das Gegenteil), EEM-Applet mit `sync yes skip yes` statt `sync no skip yes`, EPC-Hinweis zu `brief` und `detail`. Sonst unverändert, Lernstand bleibt. |
+| 5.3 | Drei neue Befehlskarten zu Trunk-Kapselung, DTP-Reihenfolge und `interface range`. Drei Befehlskarten korrigiert: IPsec-VTI trägt auch Multicast (die Karte sagte das Gegenteil), EEM-Applet mit `sync yes skip yes` statt `sync no skip yes`, EPC-Hinweis zu `brief` und `detail`. Sonst unverändert, Lernstand bleibt. |
 | 5.2 | 345 Befehlskarten zu allen Zielen mit CLI-Bezug, Tag `Fokus::Befehle` und `Befehlsart::…`. Notiztyp und GUIDs wie 5.1: Update-Import behält den Lernstand. |
 | 5.1 | Karten im iOS-Dunkelmodus lesbar (Textfarbe der Karte explizit gesetzt, vorher stand heller Text auf weißem Grund). Neuer Notiztyp und neue GUIDs, daher das alte Deck vor dem Import löschen. |
 | 5.0 | Neuer Notiztyp: „Frage“ ist jetzt das erste Feld, im Anki-Browser stehen Fragen statt IDs. Neue GUIDs, der Lernstand von 4.x wird **nicht** übernommen. Inhalt sonst wie 4.5. |
