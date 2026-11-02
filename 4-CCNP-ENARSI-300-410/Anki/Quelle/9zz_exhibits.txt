@@ -1,0 +1,179 @@
+# 1.2 | Route-Maps: Abgleich, Attribute, Tags
+S: https://www.cisco.com/c/en/us/support/docs/ip/enhanced-interior-gateway-routing-protocol-eigrp/8606-redist.html | Cisco: Redistributing Routing Protocols
+
+Q: Auf dem Router wird OSPF in EIGRP redistribuiert. Im EIGRP-Netz kommen nur die LAN-Präfixe an, alle anderen OSPF-Routen fehlen.
+```
+route-map OSPF-TO-EIGRP permit 10
+ match ip address prefix-list PL-LAN
+ set metric 10000 100 255 1 1500
+router eigrp 100
+ redistribute ospf 1 route-map OSPF-TO-EIGRP
+```
+Was ist die Ursache?
+A: **Am Ende jeder Route-Map steht ein implizites `deny any`.** Routen, die keine Sequenz trifft, werden nicht redistribuiert. Soll der Rest ebenfalls durch, brauchst du eine weitere Sequenz ohne `match`, zum Beispiel `route-map OSPF-TO-EIGRP permit 20` mit den nötigen `set`-Befehlen.
+T: Exhibit Mittel
+
+# 1.3 | Loop-Prevention: Filter, Tags, Split Horizon, Poisoning
+S: https://www.rfc-editor.org/rfc/rfc7868 | RFC 7868: Cisco's Enhanced Interior Gateway Routing Protocol
+
+Q: Zwei Router redistribuieren gegenseitig zwischen OSPF und EIGRP. Auf beiden steht diese Konfiguration.
+```
+route-map OSPF-TO-EIGRP deny 10
+ match tag 100
+route-map OSPF-TO-EIGRP permit 20
+ set tag 110
+route-map EIGRP-TO-OSPF deny 10
+ match tag 110
+route-map EIGRP-TO-OSPF permit 20
+ set tag 100
+```
+Was verhindern die beiden Route-Maps?
+A: **Routen, die schon einmal redistribuiert wurden, werden am zweiten Grenzrouter nicht zurück in ihr Ursprungsprotokoll gespielt.** Aus EIGRP nach OSPF gelangte Routen tragen Tag 100 und werden nicht wieder nach EIGRP redistribuiert. Aus OSPF nach EIGRP gelangte Routen tragen Tag 110 und werden nicht zurück nach OSPF gegeben. So entstehen bei Redistribution an mehreren Stellen keine Schleifen und keine schlechteren Pfade.
+T: Exhibit Schwer
+
+# 1.4 | Redistribution
+S: https://www.cisco.com/c/en/us/support/docs/ip/enhanced-interior-gateway-routing-protocol-eigrp/8606-redist.html | Cisco: Redistributing Routing Protocols
+
+Q: Auf R1 sollen die OSPF-Routen in EIGRP erscheinen. Im EIGRP-Netz kommt nichts an.
+```
+router eigrp 100
+ network 10.0.0.0 0.255.255.255
+ redistribute ospf 1
+```
+Was fehlt?
+A: **Eine Seed-Metrik für die redistribuierten Routen.** EIGRP kann aus OSPF ohne Metrik nichts bewerten und nimmt die Routen nicht in die Topologietabelle auf. Setze sie mit `redistribute ospf 1 metric <bw> <delay> <rel> <load> <mtu>` oder global mit `default-metric`. Nur statische, direkt angeschlossene und aus anderen EIGRP-Prozessen redistribuierte Routen bekommen automatisch eine Metrik.
+T: Exhibit Mittel
+
+Q: Auf R1 werden EIGRP-Routen in OSPF redistribuiert, in OSPF erscheint aber nur 10.0.0.0/8, nicht die vielen Subnetze.
+```
+router ospf 1
+ redistribute eigrp 100 metric 20
+```
+Warum fehlen die Subnetze?
+A: **Es fehlt das Schlüsselwort `subnets`.** Ohne `subnets` redistribuiert OSPF nur klassische Netze (hier 10.0.0.0/8), keine Subnetze. Richtig ist `redistribute eigrp 100 metric 20 subnets`.
+T: Exhibit Leicht
+
+# 1.5 | Summarization (manuell und automatisch)
+S: https://www.rfc-editor.org/rfc/rfc7868 | RFC 7868: Cisco's Enhanced Interior Gateway Routing Protocol
+
+Q: Auf R1 wurde eine EIGRP-Zusammenfassung konfiguriert. In der Routingtabelle steht eine neue Route.
+```
+R1# show ip route 10.1.0.0 255.255.0.0
+Routing entry for 10.1.0.0/16
+  Known via "eigrp 100", distance 5, metric 128256, type internal
+  Routing Descriptor Blocks:
+  * directly connected, via Null0
+```
+Was ist das für eine Route, und warum steht dort Distanz 5?
+A: **Eine automatisch erzeugte Summary-Route nach Null0, die Schleifen für nicht vorhandene Ziele im zusammengefassten Bereich verhindert.** Sie bekommt AD 5, damit sie gegen jede echte Route desselben Präfixes gewinnt. Pakete an Adressen im Summary-Bereich, für die es keine genauere Route gibt, werden hier verworfen statt im Kreis geschickt.
+T: Exhibit Mittel
+
+# 1.9.a | EIGRP: Address Families IPv4 und IPv6
+S: https://www.rfc-editor.org/rfc/rfc7868 | RFC 7868: Cisco's Enhanced Interior Gateway Routing Protocol
+
+Q: Im Named Mode bildet R1 keine Nachbarschaft über Gi0/1, obwohl das Netz in `network` enthalten ist.
+```
+router eigrp ENARSI
+ address-family ipv4 unicast autonomous-system 100
+  network 10.0.0.0 0.255.255.255
+  af-interface default
+   passive-interface
+  exit-af-interface
+  af-interface GigabitEthernet0/0
+   no passive-interface
+  exit-af-interface
+```
+Was ist die Ursache?
+A: **`af-interface default` macht alle Interfaces passiv, und nur Gi0/0 ist wieder aktiv.** Gi0/1 sendet deshalb keine Hellos. Füge unter `address-family` einen Block `af-interface GigabitEthernet0/1` mit `no passive-interface` hinzu.
+T: Exhibit Mittel
+
+# 1.9.f | EIGRP: Metrik
+S: https://www.rfc-editor.org/rfc/rfc7868 | RFC 7868: Cisco's Enhanced Interior Gateway Routing Protocol
+
+Q: R1 lernt über R2 und R3 das Netz hinter R3. Auf dem Pfad liegen diese Interfaces, und die K-Werte sind Standard.
+```
+R1  Gi0/0: BW 1000000 Kbit/sec, DLY 10 usec
+R2  Fa0/1: BW 100000 Kbit/sec,  DLY 100 usec
+R3  Gi0/0: BW 1000000 Kbit/sec, DLY 10 usec  (Zielnetz)
+```
+Welche Feasible Distance meldet R1 für das Zielnetz?
+A: **28 672.** Die Bandbreite ist die kleinste auf dem Pfad: 10⁷ / 100 000 = 100. Die Verzögerung ist die Summe in Zehnern von Mikrosekunden: (10 + 100 + 10) / 10 = 12. Damit gilt 256 × (100 + 12) = 28 672.
+T: Exhibit Schwer
+
+# 1.10.d | OSPF: Pfadwahl
+S: https://www.rfc-editor.org/rfc/rfc2328 | RFC 2328: OSPF Version 2
+
+Q: Ein Router hat Links mit 10 Gbit/s, 1 Gbit/s und 100 Mbit/s zu verschiedenen Nachbarn und nutzt alle drei gleichberechtigt für ein Ziel.
+```
+R1# show ip ospf interface brief
+Interface    PID   Area   IP Address/Mask    Cost  State Nbrs F/C
+Te0/0        1     0      10.0.12.1/24       1     P2P   1/1
+Gi0/1        1     0      10.0.13.1/24       1     P2P   1/1
+Fa0/2        1     0      10.0.14.1/24       1     P2P   1/1
+```
+Warum haben alle Interfaces Kosten 1, und was änderst du?
+A: **Die Referenzbandbreite steht auf dem Standard von 100 Mbit/s, damit bekommt jede Schnittstelle ab 100 Mbit/s die Kosten 1.** Setze auf allen Routern denselben Wert, zum Beispiel `auto-cost reference-bandwidth 100000` (in Mbit/s). Dann kosten 10 Gbit/s 10, 1 Gbit/s 100 und 100 Mbit/s 1000.
+T: Exhibit Mittel
+
+# 1.11.a | BGP: Address Families IPv4 und IPv6
+S: https://www.rfc-editor.org/rfc/rfc4760 | RFC 4760: Multiprotocol Extensions for BGP-4
+
+Q: Die BGP-Sitzung zu 2001:db8::2 steht, aber es werden keine IPv6-Präfixe ausgetauscht.
+```
+router bgp 65001
+ neighbor 2001:db8::2 remote-as 65002
+ address-family ipv4 unicast
+  network 10.1.0.0 mask 255.255.0.0
+ address-family ipv6 unicast
+  network 2001:DB8:1::/48
+```
+Was fehlt?
+A: **Der Nachbar ist in der Address Family IPv6 nicht aktiviert.** Der Nachbar wird standardmäßig nur in IPv4 unicast aktiviert. Unter `address-family ipv6 unicast` fehlt `neighbor 2001:db8::2 activate`.
+T: Exhibit Mittel
+
+# 2.3.a | DMVPN: GRE und mGRE
+S: https://www.rfc-editor.org/rfc/rfc2332 | RFC 2332: NBMA Next Hop Resolution Protocol
+
+Q: Ein Spoke registriert sich nicht beim Hub, und `show dmvpn` zeigt keinen Eintrag für ihn.
+```
+interface Tunnel0
+ ip address 172.16.0.2 255.255.255.0
+ tunnel source GigabitEthernet0/0
+ tunnel mode gre multipoint
+ ip nhrp network-id 1
+ ip nhrp nhs 172.16.0.1
+```
+Was fehlt?
+A: **Die NBMA-Adresse des Hubs.** Der Spoke kennt die Tunneladresse des NHS, aber nicht die öffentliche Adresse, an die er die Registrierung senden soll. Ergänze `ip nhrp nhs 172.16.0.1 nbma <öffentliche-ip> multicast` (oder `ip nhrp map` und `ip nhrp map multicast`), damit auch Routing-Hellos zum Hub gehen.
+T: Exhibit Mittel
+
+# 2.3.d | DMVPN: Dynamische Nachbarn
+S: https://www.rfc-editor.org/rfc/rfc7868 | RFC 7868: Cisco's Enhanced Interior Gateway Routing Protocol
+
+Q: In DMVPN Phase 2 mit EIGRP erreichen die Spokes das LAN der anderen Spokes nicht. Der Hub kennt alle Routen.
+```
+interface Tunnel0
+ ip address 172.16.0.1 255.255.255.0
+ tunnel mode gre multipoint
+ ip nhrp network-id 1
+ ip nhrp map multicast dynamic
+router eigrp 100
+ network 172.16.0.0 0.0.0.255
+ network 10.0.0.0 0.255.255.255
+```
+Was fehlt auf dem Hub?
+A: **Auf dem Tunnel-Interface bleibt Split Horizon aktiv, und der Hub setzt sich als Next Hop ein.** Er gibt die Routen eines Spokes deshalb nicht an die anderen weiter. Für Phase 2 brauchst du `no ip split-horizon eigrp 100` und `no ip next-hop-self eigrp 100` am Tunnel. Alternativ sendet der Hub in Phase 3 eine Zusammenfassung oder Default-Route.
+T: Exhibit Schwer
+
+# 4.4 | DHCP: Fehlersuche
+S: https://www.rfc-editor.org/rfc/rfc2131 | RFC 2131: Dynamic Host Configuration Protocol
+
+Q: Der Pool 10.20.0.0/24 hat freie Adressen, aber 10.20.0.15 wird nie an einen Client vergeben.
+```
+R1# show ip dhcp conflict
+IP address        Detection method   Detection time          VRF
+10.20.0.15        Ping               Nov 02 2026 09:12 AM
+```
+Warum?
+A: **Der Server hat die Adresse vor dem Angebot angepingt und eine Antwort bekommen, also nutzt sie schon jemand, und er hat sie als Konflikt aus dem Pool genommen.** Der Eintrag bleibt, bis du ihn mit `clear ip dhcp conflict` löschst. Finde zuerst das Gerät mit der statischen Adresse, sonst kommt der Konflikt wieder.
+T: Exhibit Mittel

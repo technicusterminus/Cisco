@@ -26,9 +26,9 @@ import glob, hashlib, html, os, re, sys
 
 import genanki
 
-VERSION = "1.2"
+VERSION = "1.3"
 BEFEHLE_VERSION = "1.1"  # Version, in der die Befehlskarten dazukamen (Tag Befehle::1_1)
-EXHIBITS_DATEI = "9z_exhibits.txt"  # ab 1.2 (Tag Neu::1_2)
+NEU_DATEIEN = {"9z_exhibits.txt": "1.2", "9zz_exhibits.txt": "1.3"}  # Datei -> Version, in der die Karten dazukamen (Tag Neu::1_2 usw.)
 # Vorlage und Kompendium-Tag bleiben auf dem Stand von 1.0: Ändert sich die Vorlage,
 # kann Anki beim Update-Import einen zweiten Notiztyp anlegen und den Lernstand trennen.
 VORLAGE_VERSION = "1.0"
@@ -207,8 +207,9 @@ def main():
             tags += ["Fokus::Befehle", f"Befehlsart::{befehlsart(c)}", f"Befehle::{BEFEHLE_VERSION.replace('.', '_')}"]
         if typ == "Exhibit":
             tags.append("Fokus::Exhibit")
-        if c["loc"].startswith(EXHIBITS_DATEI):
-            tags.append(f"Neu::{VERSION.replace('.', '_')}")
+        neu = NEU_DATEIEN.get(c["loc"].split(":")[0])
+        if neu:
+            tags.append(f"Neu::{neu.replace('.', '_')}")
         note = genanki.Note(
             model=MODEL,
             fields=[frage, antwort, md(c["H"]), sources_html(c["sec"] + c["S"]), cid, c["ziel"], c["thema"],
