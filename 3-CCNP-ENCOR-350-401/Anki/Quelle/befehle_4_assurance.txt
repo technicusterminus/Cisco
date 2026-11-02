@@ -65,7 +65,7 @@ monitor capture <name> start
 monitor capture <name> stop
 show monitor capture <name> buffer brief
 ```
-**Modus:** privilegiert. Ohne `brief` siehst du die Pakete dekodiert.
+**Modus:** privilegiert. `brief` zeigt eine Zeile pro Paket, mit `detail` siehst du die Pakete dekodiert.
 T: Befehl Schwer
 
 Q: Wie speicherst du einen Embedded Packet Capture als PCAP-Datei für Wireshark?
