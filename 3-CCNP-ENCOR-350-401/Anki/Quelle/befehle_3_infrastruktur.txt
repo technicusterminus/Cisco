@@ -226,34 +226,6 @@ switchport nonegotiate
 **Modus:** Interface. Nur zusammen mit festem `switchport mode trunk` oder `access` möglich.
 T: Befehl Mittel
 
-Q: In welcher Reihenfolge baust du einen festen Trunk ohne DTP auf einem Switch, der ISL und 802.1Q kennt?
-A:
-```
-switchport trunk encapsulation dot1q
-switchport mode trunk
-switchport nonegotiate
-```
-**Modus:** Interface. Jeder Schritt setzt den vorherigen voraus: Bei Kapselung `auto` lehnt der Switch `mode trunk` ab, und bei einem dynamischen Modus lehnt er `nonegotiate` ab.
-T: Befehl Mittel
-
-Q: Der Switch lehnt `switchport mode trunk` mit „trunk encapsulation is Auto“ ab. Welchen Befehl brauchst du zuerst?
-A:
-```
-switchport trunk encapsulation dot1q
-```
-**Modus:** Interface. Die Meldung kommt nur auf Plattformen, die ISL und 802.1Q unterstützen. Catalyst 9000 kennt nur 802.1Q und hat den Befehl nicht.
-T: Befehl Leicht
-
-Q: Wie wendest du dieselbe Konfiguration auf mehrere Ports gleichzeitig an, und was passiert bei einem Fehler?
-A:
-```
-interface range <schnittstelle> - <nummer>
-interface range <schnittstelle1>, <schnittstelle2>
-```
-**Modus:** global. Scheitert ein Befehl auf einem Port, bricht der Switch die Range ab, und die Ports dahinter bleiben unverändert.
-H: Falle: Nach einer Fehlermeldung mit „Range command terminated“ den Zustand mit `show running-config interface <port>` prüfen.
-T: Befehl Mittel
-
 Q: Wie sorgst du dafür, dass auch das native VLAN auf allen Trunks getaggt wird?
 A:
 ```
@@ -294,6 +266,34 @@ A:
 show vtp status
 ```
 **Modus:** privilegiert. Eine höhere Revisionsnummer überschreibt bei VTPv1/v2 die VLAN-Datenbank anderer Switches.
+T: Befehl Mittel
+
+Q: In welcher Reihenfolge baust du einen festen Trunk ohne DTP auf einem Switch, der ISL und 802.1Q kennt?
+A:
+```
+switchport trunk encapsulation dot1q
+switchport mode trunk
+switchport nonegotiate
+```
+**Modus:** Interface. Jeder Schritt setzt den vorherigen voraus: Bei Kapselung `auto` lehnt der Switch `mode trunk` ab, und bei einem dynamischen Modus lehnt er `nonegotiate` ab.
+T: Befehl Mittel
+
+Q: Der Switch lehnt `switchport mode trunk` mit „trunk encapsulation is Auto“ ab. Welchen Befehl brauchst du zuerst?
+A:
+```
+switchport trunk encapsulation dot1q
+```
+**Modus:** Interface. Die Meldung kommt nur auf Plattformen, die ISL und 802.1Q unterstützen. Catalyst 9000 kennt nur 802.1Q und hat den Befehl nicht.
+T: Befehl Leicht
+
+Q: Wie wendest du dieselbe Konfiguration auf mehrere Ports gleichzeitig an, und was passiert bei einem Fehler?
+A:
+```
+interface range <schnittstelle> - <nummer>
+interface range <schnittstelle1>, <schnittstelle2>
+```
+**Modus:** global. Scheitert ein Befehl auf einem Port, bricht der Switch die Range ab, und die Ports dahinter bleiben unverändert.
+H: Falle: Nach einer Fehlermeldung mit „Range command terminated“ den Zustand mit `show running-config interface <port>` prüfen.
 T: Befehl Mittel
 
 # 3.1.b | Befehle: EtherChannel
