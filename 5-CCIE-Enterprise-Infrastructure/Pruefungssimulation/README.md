@@ -4,7 +4,7 @@ Datei: [`ccie-pruefungssimulation.html`](ccie-pruefungssimulation.html). Im Brow
 
 ## Was drin ist
 
-- **202 Fragen** zu den fünf Domänen des Blueprints, im Prüfungsstil: Einfachauswahl, „Wähle zwei“, **12 Exhibit-Fragen** mit `show`-Ausgaben und Logmeldungen sowie **17 Fragen zum Ordnen und Zuordnen**.
+- **236 Fragen** zu den fünf Domänen des Blueprints, im Prüfungsstil: Einfachauswahl, „Wähle zwei“, **29 Exhibit-Fragen** mit `show`-Ausgaben und Logmeldungen sowie **17 Fragen zum Ordnen und Zuordnen**.
 - Der Schwerpunkt liegt auf Verständnis und Troubleshooting: Viele Fragen geben ein Symptom vor und fragen nach der Ursache oder der passenden Funktion.
 - **Jede Erklärung** nennt zuerst die richtige Antwort, dann den Grund.
 
@@ -12,18 +12,18 @@ Datei: [`ccie-pruefungssimulation.html`](ccie-pruefungssimulation.html). Im Brow
 |---|---:|---:|
 | 1 Network Infrastructure (Switching, EIGRP, OSPF, BGP, Multicast) | 30 % | 84 |
 | 2 Software Defined Infrastructure (SD-Access, SD-WAN) | 25 % | 43 |
-| 3 Transport Technologies (GRE, IPsec, DMVPN, MPLS, L3VPN, VXLAN/EVPN) | 15 % | 20 |
-| 4 Security und Services (AAA, 802.1X, MACsec, CoPP, QoS, FHRP, NAT, SPAN) | 15 % | 34 |
-| 5 Automation und Programmierbarkeit (YANG, NETCONF, RESTCONF, EEM, Python, Ansible) | 15 % | 21 |
+| 3 Transport Technologies (GRE, IPsec, DMVPN, MPLS, L3VPN, VXLAN/EVPN) | 15 % | 31 |
+| 4 Security und Services (AAA, 802.1X, MACsec, CoPP, QoS, FHRP, NAT, SPAN) | 15 % | 46 |
+| 5 Automation und Programmierbarkeit (YANG, NETCONF, RESTCONF, EEM, Python, Ansible, Terraform) | 15 % | 32 |
 
 ## Modi
 
-- **Prüfung:** 60 Fragen in 90 Minuten, zufällig aus dem ganzen Pool. Die Auswertung kommt erst am Ende.
+- **Prüfung:** 60 Fragen in 90 Minuten, zufällig gezogen nach dem Gewicht der Domänen. Die Auswertung kommt erst am Ende.
 - **Alle Fragen:** der komplette Pool unter Zeitdruck.
 - **Üben** mit Erklärung direkt nach jeder Frage: pro Domäne, nur Exhibits oder nur Ordnen und Zuordnen.
 - **Falsch beantwortete wiederholen:** Jede falsche Antwort landet auf einer Liste und verschwindet davon, sobald du sie richtig beantwortest.
 
-Die Labprüfung gewichtet die Domänen mit 30, 25, 15, 15 und 15 %. Der Prüfungsmodus zieht trotzdem ungewichtet aus dem ganzen Pool: Domäne 2 (SD-Access, SD-WAN) hat 43 von 202 Fragen und damit rund 21 % statt 25 %. Die Domänen 1 und 3 sind dafür etwas stärker vertreten.
+Der Prüfungsmodus zieht nach dem Gewicht der Labprüfung (30, 25, 15, 15 und 15 %): bei 60 Fragen 18, 15, 9, 9 und 9 aus den Domänen 1 bis 5. Die Domänen-Übungen und „Alle Fragen“ nutzen den ganzen Pool.
 
 ## Wichtig zur Einordnung
 
