@@ -9,7 +9,7 @@ Kostenloses Lernmaterial auf Deutsch für den Weg zum CCIE Enterprise Infrastruc
 | [Anki-Deck](Anki/) mit 604 Karten zu allen fünf Domänen, davon 184 Befehlskarten | fertig (Version 1.2) |
 | [Prüfungssimulation](Pruefungssimulation/) mit 202 Fragen, 12 Exhibits und Ordnen/Zuordnen | fertig (Version 1.1) |
 | [CML-Labs](CML-Labs/) und [EVE-NG-Labs](EVE-NG-Labs/): 6 Labs mit 30 eingebauten Fehlern, dazu die passenden Labs aus ENCOR und ENARSI | fertig (Version 1.0) |
-| Trainer | in Planung |
+| [Trainer](Trainer/) mit Rechentrainer (MTU, OSPF-Kosten, EIGRP-Metrik, Summarization, Multicast-MAC) und Ticket-Trainer mit 30 Lab-Tickets | fertig (Version 1.0) |
 
 ## Die Prüfung
 
@@ -20,9 +20,9 @@ Kostenloses Lernmaterial auf Deutsch für den Weg zum CCIE Enterprise Infrastruc
 ## Empfohlene Reihenfolge
 
 1. Anki-Deck durcharbeiten und Lücken markieren.
-2. Mit der Prüfungssimulation Wissenslücken aufdecken.
+2. Mit der Prüfungssimulation Wissenslücken aufdecken, zwischendurch den [Rechentrainer](Trainer/) nutzen.
 3. Die Grundlagen in den passenden Labs aus ENCOR und ENARSI sichern (Tabelle unten).
-4. Die CCIE-Labs C1 bis C6. Teil B (Reparieren) jeweils mit Zeitlimit: höchstens 10 Minuten pro Ticket.
+4. Die CCIE-Labs C1 bis C6. Teil B (Reparieren) jeweils mit Zeitlimit: höchstens 10 Minuten pro Ticket. Danach die Tickets des Labs im [Ticket-Trainer](Trainer/) wiederholen.
 
 ## Eigene CCIE-Labs
 
