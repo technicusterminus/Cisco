@@ -1,7 +1,7 @@
 # Anki-Deck: CCNP ENARSI 300-410
 
-**Aktuelle Version:** 1.1 (Stand 23.10.2026) · **709 Karten** (478 Wissens- und Übungskarten, 231 Befehlskarten)
-**Datei:** [`ENARSI_300-410_Kompendium_1.1_DE.apkg`](ENARSI_300-410_Kompendium_1.1_DE.apkg)
+**Aktuelle Version:** 1.2 (Stand 02.11.2026) · **734 Karten** (503 Wissens- und Übungskarten, 231 Befehlskarten)
+**Datei:** [`ENARSI_300-410_Kompendium_1.2_DE.apkg`](ENARSI_300-410_Kompendium_1.2_DE.apkg)
 
 Grundlage sind die öffentlichen Prüfungsthemen von Cisco für 300-410 ENARSI (aktueller Stand mit Catalyst Center Assurance und IPFIX).
 
@@ -11,10 +11,10 @@ Ohne die Befehlskarten, deren Verteilung im Abschnitt „Befehlsreferenz“ steh
 
 | Domäne | Gewicht im Blueprint | Karten |
 |---|---:|---:|
-| 1 Layer-3-Technologien (AD, Route-Maps, Redistribution, Summarization, PBR, VRF-Lite, BFD, EIGRP, OSPF, BGP) | 35 % | 199 |
-| 2 VPN-Technologien (MPLS, L3VPN, DMVPN) | 20 % | 90 |
-| 3 Infrastruktur-Security (AAA, ACLs, uRPF, CoPP, IPv6 First Hop Security) | 20 % | 79 |
-| 4 Infrastruktur-Services (Gerätezugang, SNMP, Logging, DHCP, IP SLA, NetFlow, Catalyst Center Assurance) | 25 % | 110 |
+| 1 Layer-3-Technologien (AD, Route-Maps, Redistribution, Summarization, PBR, VRF-Lite, BFD, EIGRP, OSPF, BGP) | 35 % | 215 |
+| 2 VPN-Technologien (MPLS, L3VPN, DMVPN) | 20 % | 92 |
+| 3 Infrastruktur-Security (AAA, ACLs, uRPF, CoPP, IPv6 First Hop Security) | 20 % | 84 |
+| 4 Infrastruktur-Services (Gerätezugang, SNMP, Logging, DHCP, IP SLA, NetFlow, Catalyst Center Assurance) | 25 % | 112 |
 
 Domäne 1 hat etwas mehr Karten als ihr Gewicht, weil EIGRP, OSPF und BGP die meisten Details haben und in der Prüfung oft in Troubleshooting-Fragen anderer Themen mitlaufen.
 
@@ -58,11 +58,12 @@ Die Befehlskarten stehen in [`Quelle/9_befehle.txt`](Quelle/9_befehle.txt) und w
 |---|---|
 | `tag:Modus::Zug` | kurze Karten ohne Code, gut für unterwegs (321 Karten) |
 | `tag:Fokus::Falle` | typische Prüfungsfallen (66 Karten) |
-| `tag:Fokus::Exhibit` | Ausgaben von `show`-Befehlen deuten |
+| `tag:Fokus::Exhibit` | Ausgaben und Konfigurationsausschnitte deuten (47 Karten) |
 | `tag:Typ::CLI` | Konfiguration und Befehle |
 | `tag:Ziel::1.11*` | alles zu einem Prüfungsziel, hier BGP |
 | `tag:Stufe::Schwer` | die anspruchsvollen Karten |
 | `tag:Fokus::Befehle` | Befehle abfragen: Aufgabe vorne, Syntax hinten |
+| `tag:Neu::1_2` | die 25 Exhibit-Karten aus Version 1.2 |
 
 Tipp: Sag die Antwort laut oder schreib sie auf, bevor du umdrehst. Bei CLI-Karten lohnt es sich, die Konfiguration einmal im Lab selbst einzugeben.
 
@@ -81,6 +82,7 @@ Das Skript prüft beim Bauen, ob jede Frage mit „?“ endet, jede Antwort fett
 
 | Version | Änderung |
 |---|---|
+| 1.2 | 25 neue Exhibit-Karten mit mehrzeiligen Ausgaben und Konfigurationsausschnitten (EIGRP, OSPF, BGP, PBR, VRF, BFD, MPLS, AAA, ACL, uRPF, FHS, IP SLA, NetFlow), Quelle `Quelle/9z_exhibits.txt`, Tag `Neu::1_2`. Bestehende Karten unverändert, Update-Import behält den Lernstand |
 | 1.1 | 231 Befehlskarten zu allen Zielen mit CLI-Bezug, Tag `Fokus::Befehle`. Bestehende Karten unverändert, Update-Import behält den Lernstand |
 | 1.0 | Erste Version: 478 Karten zu allen Zielen des Blueprints, fachlich gegengelesen |
 

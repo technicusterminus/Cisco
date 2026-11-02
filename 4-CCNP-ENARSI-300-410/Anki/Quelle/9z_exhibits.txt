@@ -1,0 +1,361 @@
+# 1.6 | Policy-Based Routing
+S: https://www.cisco.com/c/en/us/support/docs/ip/ip-routed-protocols/48003-pbrtracking.html | Cisco: PBR with Next-Hop Tracking
+
+Q: Verkehr aus 10.1.1.0/24 kommt auf Gi0/0 herein und soll über den Next Hop 10.0.23.3 gehen. Die Route-Map zählt aber nichts.
+```
+R1# show route-map PBR
+route-map PBR, permit, sequence 10
+  Match clauses:
+    ip address (access-lists): 101
+  Set clauses:
+    ip next-hop 10.0.23.3
+  Policy routing matches: 0 packets, 0 bytes
+R1# show ip policy
+Interface      Route map
+Gi0/2          PBR
+```
+Was ist die wahrscheinlichste Ursache?
+A: **Die Route-Map hängt am falschen Interface.** PBR wirkt nur auf Verkehr, der am Interface mit `ip policy route-map PBR` hereinkommt. Hier ist sie an Gi0/2, der Verkehr kommt aber auf Gi0/0. Prüfe danach, ob ACL 101 die Quelle wirklich erfasst.
+T: Exhibit Mittel
+
+# 1.7 | VRF-Lite
+S: https://www.rfc-editor.org/rfc/rfc4364 | RFC 4364: BGP/MPLS IP VPNs (VRF-Konzept)
+
+Q: In `show vrf` steht beim Default RD „<not set>“.
+```
+R1# show vrf
+  Name        Default RD    Protocols   Interfaces
+  CUSTA       <not set>     ipv4        Gi0/1
+```
+Ist das ein Fehler, wenn du VRF-Lite ohne MPLS einsetzt?
+A: **Nein, für reines VRF-Lite brauchst du keinen Route Distinguisher.** Der RD wird erst gebraucht, wenn die VRF-Routen in MP-BGP als VPNv4-Präfixe transportiert werden (MPLS L3VPN). Der Befehl `rd` und die Route-Targets gehören nur in diesen Fall.
+T: Exhibit Leicht
+
+# 1.8 | Bidirectional Forwarding Detection
+S: https://www.rfc-editor.org/rfc/rfc5880 | RFC 5880: Bidirectional Forwarding Detection
+S: https://www.rfc-editor.org/rfc/rfc5881 | RFC 5881: BFD for IPv4 and IPv6 (Single Hop)
+
+Q: OSPF und BFD sind auf R1 am Interface Gi0/0 konfiguriert, die BFD-Sitzung kommt aber nicht hoch.
+```
+R1# show bfd neighbors
+IPv4 Sessions
+NeighAddr          LD/RD     RH/RS     State     Int
+10.0.12.2          1/0       Down      Down      Gi0/0
+```
+Was verrät die Spalte LD/RD?
+A: **Die Gegenstelle antwortet nicht: Der Remote Discriminator (RD) ist 0.** R1 sendet BFD-Pakete (LD = 1), hat von R2 aber noch nie ein Paket mit Discriminator bekommen. Prüfe, ob BFD am Interface von R2 aktiv ist (`bfd interval` am Interface) und ob UDP 3784 auf dem Weg gefiltert wird.
+T: Exhibit Mittel
+
+# 1.9.b | EIGRP: Nachbarschaft und Authentisierung
+S: https://www.rfc-editor.org/rfc/rfc7868 | RFC 7868: Cisco's Enhanced Interior Gateway Routing Protocol
+
+Q: R1 und R2 sind direkt verbunden und beide laufen im AS 100, die Nachbarschaft kommt aber nie zustande. Im Log steht diese Meldung.
+```
+%DUAL-5-NBRCHANGE: EIGRP-IPv4 100: Neighbor 10.0.12.2 (GigabitEthernet0/0) is down: K-value mismatch
+```
+Was ist die Ursache?
+A: **Die K-Werte (metric weights) unterscheiden sich auf beiden Seiten.** EIGRP-Nachbarn müssen dieselben K-Werte verwenden, sonst bauen sie keine Nachbarschaft auf. `show ip protocols` zeigt die K-Werte. Standard ist K1=K3=1 und K2=K4=K5=0, nach einem `metric weights` stehen sie anders.
+T: Exhibit Mittel
+
+# 1.9.c | EIGRP: Loop-freie Pfadwahl
+S: https://www.rfc-editor.org/rfc/rfc7868 | RFC 7868: Cisco's Enhanced Interior Gateway Routing Protocol
+
+Q: In `show ip eigrp topology` steht vor der Route 10.9.0.0/16 der Code „A“ statt „P“, und das bleibt über Minuten so. Was bedeutet das?
+A: **Die Route ist Active: Der Router hat keinen Feasible Successor mehr und wartet auf Replies seiner Nachbarn.** Kommt eine Antwort nicht rechtzeitig (Active Timer, standardmäßig 3 Minuten), wird die Route „stuck in active“ und die Nachbarschaft zurückgesetzt. Abhilfe: Queries mit Stub-Routern und Summarization eingrenzen.
+T: Exhibit Mittel
+
+# 1.9.d | EIGRP: Stub
+S: https://www.rfc-editor.org/rfc/rfc7868 | RFC 7868: Cisco's Enhanced Interior Gateway Routing Protocol
+
+Q: Auf dem Hub zeigt `show ip eigrp neighbors detail` diese Zeilen für den Spoke 10.0.12.2.
+```
+Hub# show ip eigrp neighbors detail
+H   Address         Interface    Hold Uptime   SRTT   RTO  Q  Seq
+0   10.0.12.2       Gi0/0          13 00:10:02    1   100  0  5
+   Version 20.0/2.0, Retrans: 0, Retries: 0, Prefixes: 1
+   Stub Peer Advertising (CONNECTED SUMMARY) Routes
+   Suppressing queries
+```
+Was heißt das für Queries und Routen?
+A: **Der Spoke ist ein Stub-Router mit den Standardoptionen: Er meldet nur direkt angeschlossene und zusammengefasste Routen, und der Hub schickt ihm keine Queries.** Das begrenzt den Query-Bereich und schützt vor Stuck-in-Active. Transitrouten lernt der Hub über diesen Spoke nicht.
+T: Exhibit Mittel
+
+# 1.9.e | EIGRP: Load Balancing
+S: https://www.rfc-editor.org/rfc/rfc7868 | RFC 7868: Cisco's Enhanced Interior Gateway Routing Protocol
+
+Q: Beide Pfade sollen Verkehr tragen, es wird aber nur über 10.0.12.2 gesendet.
+```
+R1# show ip eigrp topology 10.9.0.0/16
+P 10.9.0.0/16, 1 successors, FD is 2172416
+        via 10.0.12.2 (2172416/28160), GigabitEthernet0/0
+        via 10.0.13.3 (2684416/2170112), GigabitEthernet0/1
+```
+Welchen Variance-Wert brauchst du mindestens?
+A: **Variance 2.** Der zweite Pfad ist ein Feasible Successor, weil seine Reported Distance (2 170 112) kleiner ist als die Feasible Distance des Successors (2 172 416). Seine Metrik 2 684 416 liegt beim 1,24-Fachen der besten Metrik, und Variance ist eine ganze Zahl, also reicht erst 2.
+T: Exhibit Schwer
+
+# 1.10.b | OSPF: Nachbarschaft und Authentisierung
+S: https://www.rfc-editor.org/rfc/rfc2328 | RFC 2328: OSPF Version 2
+
+Q: Zwei OSPF-Router hängen dauerhaft im Zustand EXSTART und wechseln immer wieder.
+```
+R1# show ip ospf neighbor
+Neighbor ID     Pri   State           Dead Time   Address         Interface
+2.2.2.2           1   EXSTART/DR      00:00:36    10.0.12.2       GigabitEthernet0/0
+```
+Was prüfst du zuerst?
+A: **Die MTU der beiden Interfaces.** In EXSTART/EXCHANGE tauschen die Router Datenbankbeschreibungen aus. Stimmt die Interface-MTU nicht überein, werden diese Pakete verworfen und der Zustand wechselt. Die saubere Lösung ist dieselbe MTU auf beiden Seiten, notfalls hilft `ip ospf mtu-ignore`.
+T: Exhibit Mittel
+
+Q: In `debug ip ospf hello` erscheint diese Meldung.
+```
+OSPF-1 HELLO Gi0/0: Rcv hello from 2.2.2.2 area 0 10.0.12.2
+OSPF-1 HELLO Gi0/0: Mismatched hello parameters from 10.0.12.2
+OSPF-1 HELLO Gi0/0: Dead R 40 C 120, Hello R 10 C 30
+```
+Was ist unterschiedlich, und welche Seite hat welchen Wert?
+A: **Hello- und Dead-Intervall unterscheiden sich: R steht für „received“, also vom Nachbarn (Hello 10, Dead 40), C für „configured“, also lokal (Hello 30, Dead 120).** Hello- und Dead-Intervall müssen auf beiden Seiten gleich sein, sonst gibt es keine Nachbarschaft.
+T: Exhibit Mittel
+
+Q: Auf einem Broadcast-Segment zeigt R1 zu R3 den Zustand 2WAY/DROTHER.
+```
+R1# show ip ospf neighbor
+Neighbor ID     Pri   State           Dead Time   Address         Interface
+3.3.3.3           1   2WAY/DROTHER    00:00:33    10.0.0.3        GigabitEthernet0/0
+4.4.4.4           1   FULL/DR         00:00:31    10.0.0.4        GigabitEthernet0/0
+5.5.5.5           1   FULL/BDR        00:00:38    10.0.0.5        GigabitEthernet0/0
+```
+Ist das ein Fehler?
+A: **Nein, das ist normal.** Auf Broadcast-Segmenten gehen nur DR und BDR eine volle Adjazenz mit allen anderen ein. Zwei DROther-Router bleiben in 2WAY und tauschen ihre Datenbanken über den DR aus.
+T: Exhibit Leicht
+
+# 1.10.c | OSPF: Virtual Links
+S: https://www.rfc-editor.org/rfc/rfc2328 | RFC 2328: OSPF Version 2
+
+Q: Der Virtual Link zwischen zwei ABRs kommt nicht hoch.
+```
+R1# show ip ospf virtual-links
+Virtual Link OSPF_VL0 to router 3.3.3.3 is down
+  Transit area 1, via interface GigabitEthernet0/1
+```
+Welche Ursachen kommen nach dieser Ausgabe in Frage?
+A: **Area 1 darf keine Stub-Area sein, und beide ABRs müssen die Router-ID des anderen über Area 1 erreichen.** Ein Virtual Link läuft durch eine normale Transit-Area. Stub-Areas sind dafür nicht erlaubt. Außerdem muss im Befehl `area 1 virtual-link <router-id>` die Router-ID des anderen ABR stehen, nicht eine Interface-Adresse.
+T: Exhibit Schwer
+
+# 1.11.b | BGP: Nachbarschaft und Sitzung
+S: https://www.rfc-editor.org/rfc/rfc4271 | RFC 4271: A Border Gateway Protocol 4 (BGP-4)
+
+Q: Die BGP-Sitzung zu 192.0.2.2 bleibt im Zustand „Active“, und es sind keine Nachrichten gezählt.
+```
+R1# show ip bgp summary
+Neighbor      V    AS  MsgRcvd  MsgSent  TblVer  InQ OutQ Up/Down  State/PfxRcd
+192.0.2.2     4 65002        0        0       1    0    0 never    Active
+```
+Was heißt das?
+A: **Die TCP-Verbindung auf Port 179 kommt nicht zustande.** „Active“ heißt, der Router versucht aktiv, die Verbindung aufzubauen, und scheitert. Prüfe Erreichbarkeit (Ping mit passender Quelle), ACLs auf TCP 179, die richtige Nachbaradresse und bei Loopback-Peering `update-source` auf beiden Seiten und `ebgp-multihop` bei eBGP.
+T: Exhibit Mittel
+
+Q: Die BGP-Sitzung baut auf und fällt sofort wieder zurück. Das Log zeigt diese Meldung.
+```
+%BGP-3-NOTIFICATION: received from neighbor 192.0.2.2 2/2 (peer in wrong AS) 2 bytes FDE9
+```
+Was ist die Ursache?
+A: **Die Gegenstelle lehnt unsere OPEN-Nachricht mit dem Fehler 2/2 („Bad Peer AS“) ab.** Die AS, die dieser Router beim Öffnen meldet, passt nicht zu dem, was die Gegenstelle bei `neighbor … remote-as` für uns eingetragen hat. Prüfe auf beiden Seiten `router bgp <AS>` und `remote-as`.
+T: Exhibit Mittel
+
+# 1.11.c | BGP: Pfadwahl
+S: https://www.cisco.com/c/en/us/support/docs/ip/border-gateway-protocol-bgp/13753-25.html | Cisco: BGP Best Path Selection Algorithm
+
+Q: Du siehst diesen Ausschnitt.
+```
+R1# show ip bgp 10.9.0.0
+BGP routing table entry for 10.9.0.0/16, version 12
+Paths: (2 available, best #1, table default)
+  Refresh Epoch 1
+  65002 65010 65020
+    10.0.12.2 from 10.0.12.2 (2.2.2.2)
+      Origin IGP, metric 0, localpref 200, valid, external, best
+  Refresh Epoch 1
+  65003
+    10.0.13.3 from 10.0.13.3 (3.3.3.3)
+      Origin IGP, metric 0, localpref 100, valid, external
+```
+Warum wird in dieser Ausgabe der Pfad mit dem längeren AS-Pfad als bester gewählt?
+A: **Die Local Preference wird vor der AS-Pfadlänge verglichen, und 200 schlägt 100.** Die Reihenfolge ist Weight, Local Preference, lokal erzeugte Route, AS-Pfadlänge, Origin, MED. Der erste Unterschied entscheidet, spätere Kriterien spielen dann keine Rolle mehr.
+T: Exhibit Mittel
+
+# 1.11.d | BGP: Route Reflectors
+S: https://www.rfc-editor.org/rfc/rfc4456 | RFC 4456: BGP Route Reflection
+
+Q: Ein Client sieht bei einer Route diese Attribute.
+```
+R4# show ip bgp 10.9.0.0
+  Local
+    10.0.0.1 (metric 20) from 10.0.0.3 (3.3.3.3)
+      Origin IGP, metric 0, localpref 100, valid, internal, best
+      Originator: 1.1.1.1, Cluster list: 3.3.3.3
+```
+Was bedeuten Originator und Cluster list?
+A: **Die Route stammt von Router 1.1.1.1 und lief über den Route Reflector mit der Cluster-ID 3.3.3.3.** Der Originator ist die Router-ID des Routers, der die Route ins AS eingespeist hat. Die Cluster list sammelt die Cluster-IDs aller durchlaufenen Route Reflectors. Beide Attribute dienen der Schleifenerkennung: Ein Router verwirft Routen mit seiner eigenen Router-ID als Originator oder seiner Cluster-ID in der Liste.
+T: Exhibit Mittel
+
+# 1.11.e | BGP: Policy, Filter und Pfadmanipulation
+S: https://www.rfc-editor.org/rfc/rfc1997 | RFC 1997: BGP Communities Attribute
+
+Q: R1 gibt diese Route nicht an den eBGP-Nachbarn 192.0.2.9 weiter.
+```
+R1# show ip bgp 10.9.0.0
+BGP routing table entry for 10.9.0.0/16, version 5
+Paths: (1 available, best #1, table default, not advertised to EBGP peer)
+  65002
+    10.0.12.2 from 10.0.12.2 (2.2.2.2)
+      Origin IGP, metric 0, localpref 100, valid, external, best
+      Community: no-export
+```
+Woran siehst du den Grund?
+A: **Die Route trägt die Community no-export.** Mit dieser Community darf ein Router die Route nicht an eBGP-Nachbarn weitergeben (außerhalb einer Confederation). „not advertised to EBGP peer“ in der Kopfzeile zeigt dasselbe. An iBGP-Nachbarn geht sie weiter.
+T: Exhibit Leicht
+
+# 2.1 | MPLS: LSR, LDP, Label Switching, LSP
+S: https://www.rfc-editor.org/rfc/rfc5036 | RFC 5036: LDP Specification
+
+Q: Zwischen R1 und R2 kommt keine LDP-Nachbarschaft zustande.
+```
+R1# show mpls ldp discovery
+ Local LDP Identifier:
+    1.1.1.1:0
+    Discovery Sources:
+    Interfaces:
+        GigabitEthernet0/0 (ldp): xmit
+```
+Was sagt dir diese Ausgabe?
+A: **R1 sendet LDP-Hellos, empfängt aber keine.** Bei einer funktionierenden Discovery steht dort „xmit/recv“. Prüfe auf R2, ob `mpls ip` am Interface aktiv ist und ob UDP 646 an 224.0.0.2 gefiltert wird. Erst danach spielt die TCP-Verbindung zwischen den Router-IDs eine Rolle.
+T: Exhibit Mittel
+
+# 2.2 | MPLS Layer-3-VPN
+S: https://www.rfc-editor.org/rfc/rfc4364 | RFC 4364: BGP/MPLS IP Virtual Private Networks (VPNs)
+
+Q: Das Präfix 10.2.2.0/24 ist im VPNv4-Table von PE1 vorhanden, fehlt aber in der Routingtabelle der VRF CUSTA.
+```
+PE1# show bgp vpnv4 unicast all
+     Network          Next Hop        Metric LocPrf Weight Path
+Route Distinguisher: 65000:1 (default for vrf CUSTA)
+ *>  10.1.1.0/24      0.0.0.0              0         32768 ?
+Route Distinguisher: 65000:2
+ *>i 10.2.2.0/24      4.4.4.4              0    100      0 ?
+```
+Was prüfst du?
+A: **Die Import-Route-Targets der VRF CUSTA.** Ob eine VPNv4-Route in eine VRF kommt, entscheidet allein die Route-Target-Community, nicht der RD. Der RD 65000:2 darf sich vom lokalen unterscheiden. `show ip vrf detail CUSTA` zeigt die Import- und Export-RTs, die RT der Route muss unter „import“ stehen.
+T: Exhibit Mittel
+
+# 3.1 | AAA mit TACACS+, RADIUS und lokaler Datenbank
+S: https://www.rfc-editor.org/rfc/rfc8907 | RFC 8907: The TACACS+ Protocol
+S: https://www.rfc-editor.org/rfc/rfc2865 | RFC 2865: Remote Authentication Dial In User Service (RADIUS)
+
+Q: Der TACACS+-Server fällt aus, und niemand kommt mehr auf den Router, auch nicht über die Konsole.
+```
+aaa new-model
+aaa authentication login default group tacacs+
+aaa authorization exec default group tacacs+
+tacacs server ISE
+ address ipv4 10.0.0.50
+ key <geheim>
+line vty 0 4
+ transport input ssh
+```
+Was fehlt in dieser Konfiguration?
+A: **Ein Fallback auf die lokale Datenbank, also `local` am Ende der Methodenliste.** Die Liste „default“ gilt für alle Leitungen, auch die Konsole. Ist der Server nicht erreichbar, gibt es ohne `local` keine zweite Methode. Dasselbe gilt für `authorization exec`. Lege vorher einen lokalen Benutzer an.
+T: Exhibit Schwer
+
+# 3.2.a | IPv4-ACLs: Fehlersuche
+S: https://www.cisco.com/c/en/us/support/docs/security/ios-firewall/23602-confaccesslists.html | Cisco: Configure and Filter IP Access Lists
+
+Q: Du siehst diesen Ausschnitt.
+```
+R1# show ip access-lists OUT-FILTER
+Extended IP access list OUT-FILTER
+    10 permit tcp 10.1.1.0 0.0.0.255 any eq www (1234 matches)
+    20 deny ip any any (88 matches)
+    30 permit tcp any any eq 443
+```
+Warum scheitern HTTPS-Verbindungen aus 10.1.1.0/24, obwohl in der ACL eine Zeile für Port 443 steht?
+A: **Zeile 20 (`deny ip any any`) steht vor Zeile 30, und Zeile 30 hat keinen einzigen Treffer.** Die ACL wird von oben nach unten geprüft, der erste passende Eintrag gilt. Entferne Zeile 20 (am Ende gilt ohnehin das implizite Deny) oder setze sie ans Ende.
+T: Exhibit Leicht
+
+# 3.2.b | IPv6 Traffic Filter
+S: https://www.rfc-editor.org/rfc/rfc4861 | RFC 4861: Neighbor Discovery for IPv6
+
+Q: Nach dem Anlegen dieser ACL am Interface fällt IPv6 komplett aus, auch die Adressauflösung.
+```
+ipv6 access-list BLOCK-ALL
+ permit tcp any any eq 22
+ deny ipv6 any any log
+interface GigabitEthernet0/0
+ ipv6 traffic-filter BLOCK-ALL in
+```
+Warum?
+A: **Das explizite `deny ipv6 any any` überschreibt die impliziten Regeln für Neighbor Discovery.** Eine IPv6-ACL enthält am Ende unsichtbar `permit icmp any any nd-na`, `permit icmp any any nd-ns` und danach `deny ipv6 any any`. Steht ein eigenes Deny davor, greifen die ND-Permits nie. Füge `permit icmp any any nd-ns` und `nd-na` vor dem Deny ein.
+T: Exhibit Schwer
+
+# 3.2.c | uRPF: Fehlersuche
+S: https://www.rfc-editor.org/rfc/rfc3704 | RFC 3704: Ingress Filtering for Multihomed Networks
+
+Q: Auf einem Router mit zwei Providern fallen legitime Pakete weg, und der Zähler steigt.
+```
+R1# show ip interface GigabitEthernet0/0
+  IP verify source reachable-via RX
+   1250 verification drops
+   0 suppressed verification drops
+```
+Was ist die Ursache?
+A: **uRPF läuft im strikten Modus (`rx`), und der Rückweg zur Quelle führt bei asymmetrischem Routing über ein anderes Interface.** Im strikten Modus muss die Route zur Quelladresse über das Interface zeigen, auf dem das Paket ankommt. Bei Multihoming nimmst du den lockeren Modus `ip verify unicast source reachable-via any`.
+T: Exhibit Mittel
+
+# 3.4 | IPv6 First Hop Security: Feinheiten
+S: https://www.rfc-editor.org/rfc/rfc6105 | RFC 6105: IPv6 Router Advertisement Guard
+
+Q: Nach dem Einschalten von RA Guard auf allen Ports eines Switches haben die Clients keinen IPv6-Default-Gateway mehr. Der Router hängt am Uplink Gi1/0/48.
+```
+ipv6 nd raguard policy HOSTS
+ device-role host
+interface range GigabitEthernet1/0/1 - 48
+ ipv6 nd raguard attach-policy HOSTS
+```
+Was ist falsch?
+A: **Die Policy mit `device-role host` steht auch auf dem Uplink und verwirft dort die Router Advertisements des echten Routers.** Ports zum Router brauchen eine Policy mit `device-role router` oder gar keine. Auf Hostports sind RAs unerwünscht und werden verworfen.
+T: Exhibit Mittel
+
+# 4.5 | IP SLA und Object Tracking
+S: https://www.cisco.com/en/US/docs/ios-xml/ios/ipsla/configuration/15-2s/sla_udp_jitter.html | Cisco: Configuring IP SLAs UDP Jitter Operations
+
+Q: Das Ziel 8.8.8.8 ist erreichbar, aber Track 1 bleibt Down, und die Default-Route über den zweiten Provider ist aktiv.
+```
+ip sla 1
+ icmp-echo 8.8.8.8 source-interface GigabitEthernet0/1
+ frequency 5
+track 1 ip sla 1 reachability
+ip route 0.0.0.0 0.0.0.0 203.0.113.1 track 1
+ip route 0.0.0.0 0.0.0.0 198.51.100.1 10
+```
+Was fehlt?
+A: **Der Befehl `ip sla schedule 1 life forever start-time now`.** Eine IP-SLA-Operation läuft erst, wenn sie geplant ist. Ohne Schedule sendet sie nichts, und der Track meldet keine Erreichbarkeit, also bleibt die Route über 203.0.113.1 draußen.
+T: Exhibit Mittel
+
+# 4.6 | NetFlow v9, Flexible NetFlow, IPFIX
+S: https://www.rfc-editor.org/rfc/rfc3954 | RFC 3954: Cisco Systems NetFlow Services Export Version 9
+S: https://www.rfc-editor.org/rfc/rfc7011 | RFC 7011: IP Flow Information Export (IPFIX) Protocol
+
+Q: Der Collector erhält Flows, aber nur für eingehenden Verkehr von Gi0/0.
+```
+flow exporter EXP
+ destination 10.0.0.9
+ transport udp 2055
+flow monitor MON
+ exporter EXP
+ record netflow ipv4 original-input
+interface GigabitEthernet0/0
+ ip flow monitor MON input
+```
+Was fehlt in dieser Konfiguration?
+A: **Der Monitor ist nur für die Eingangsrichtung angewendet.** Füge `ip flow monitor MON output` am Interface hinzu. Flexible NetFlow erfasst jede Richtung nur, wenn der Monitor in dieser Richtung am Interface hängt.
+T: Exhibit Mittel
