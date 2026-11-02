@@ -1,7 +1,7 @@
 # Anki-Deck: CCNP ENCOR 350-401 v1.2
 
-**Aktuelle Version:** 5.2 (Stand 23.10.2026) · **1.776 Karten** (1.431 Wissens- und Übungskarten, 345 Befehlskarten)
-**Datei:** [`ENCOR_v1.2_Kompendium_5.2_DE.apkg`](ENCOR_v1.2_Kompendium_5.2_DE.apkg)
+**Aktuelle Version:** 5.3 (Stand 02.11.2026) · **1.776 Karten** (1.431 Wissens- und Übungskarten, 345 Befehlskarten)
+**Datei:** [`ENCOR_v1.2_Kompendium_5.3_DE.apkg`](ENCOR_v1.2_Kompendium_5.3_DE.apkg)
 
 > **Neu:** Es gibt eine [englische Version](EN/) mit 1.981 Karten: Fragen und Begriffe auf Englisch wie in der Prüfung, Erklärungen auf Deutsch, dazu 429 MC-Karten im Prüfungsstil und 136 Show-Karten mit echten Ausgaben.
 
@@ -11,7 +11,7 @@ Das Deck deckt alle 47 Ziele des Blueprints ab. Die Karten fragen nicht nur Fakt
 
 1. `.apkg` herunterladen und in Anki öffnen (Datei → Importieren).
 2. Das Deck heißt „ENCOR v1.2 · Kompendium“ und hat sechs Unterdecks, eines pro Domäne.
-3. **Von 5.1 auf 5.2:** einfach importieren. Notiztyp und Kennungen sind gleich, der Lernstand bleibt, die Befehlskarten kommen neu dazu.
+3. **Von 5.1 oder 5.2 auf 5.3:** einfach importieren. Notiztyp und Kennungen sind gleich, der Lernstand bleibt, korrigierte Befehlskarten werden aktualisiert.
 4. **Umstieg von 4.x oder 5.0:** Lösche vorher das alte ENCOR-Deck. Version 5.1 bringt einen neuen Notiztyp mit, damit der Text auch im iOS-Dunkelmodus lesbar ist. Ohne Löschen stehen alle Karten doppelt in der Sammlung, und der alte Lernstand geht ohnehin nicht über.
 
 Künftige Updates behalten den Lernstand, solange Notiztyp und interne Kennungen gleich bleiben. Ändert sich das, steht es in der Versionstabelle unten.
@@ -69,7 +69,7 @@ Verteilung der Befehlskarten: Architektur 24, Virtualisierung 35, Infrastruktur 
 Die Befehlskarten stehen nach Domänen getrennt in [`Quelle/`](Quelle/). Nach einer Änderung neu einspielen:
 
 ```
-python3 Quelle/befehle_einspielen.py ENCOR_v1.2_Kompendium_5.2_DE.apkg ENCOR_v1.2_Kompendium_5.3_DE.apkg 5.3
+python3 Quelle/befehle_einspielen.py ENCOR_v1.2_Kompendium_5.3_DE.apkg ENCOR_v1.2_Kompendium_5.4_DE.apkg 5.4
 ```
 
 Das Skript ersetzt nur die Karten mit `Fokus::Befehle` und lässt alle anderen unverändert.
@@ -95,6 +95,7 @@ Welche Filter in welche Woche gehören, steht im [Lernplan](../LERNPLAN.md).
 
 | Version | Änderung |
 |---|---|
+| 5.3 | Drei Befehlskarten korrigiert: IPsec-VTI trägt auch Multicast (die Karte sagte das Gegenteil), EEM-Applet mit `sync yes skip yes` statt `sync no skip yes`, EPC-Hinweis zu `brief` und `detail`. Sonst unverändert, Lernstand bleibt. |
 | 5.2 | 345 Befehlskarten zu allen Zielen mit CLI-Bezug, Tag `Fokus::Befehle` und `Befehlsart::…`. Notiztyp und GUIDs wie 5.1: Update-Import behält den Lernstand. |
 | 5.1 | Karten im iOS-Dunkelmodus lesbar (Textfarbe der Karte explizit gesetzt, vorher stand heller Text auf weißem Grund). Neuer Notiztyp und neue GUIDs, daher das alte Deck vor dem Import löschen. |
 | 5.0 | Neuer Notiztyp: „Frage“ ist jetzt das erste Feld, im Anki-Browser stehen Fragen statt IDs. Neue GUIDs, der Lernstand von 4.x wird **nicht** übernommen. Inhalt sonst wie 4.5. |

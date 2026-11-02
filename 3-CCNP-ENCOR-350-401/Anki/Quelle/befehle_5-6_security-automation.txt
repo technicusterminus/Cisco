@@ -552,9 +552,9 @@ T: Befehl Mittel
 Q: Wie reagiert ein EEM-Applet auf einen CLI-Befehl und verhindert, dass er ausgeführt wird?
 A:
 ```
-event cli pattern "<regex>" sync no skip yes
+event cli pattern "<regex>" sync yes skip yes
 ```
-**Modus:** Applet. `skip yes` unterdrückt den eingegebenen Befehl, `sync no` lässt das Applet parallel laufen.
+**Modus:** Applet. `skip yes` unterdrückt den eingegebenen Befehl, geht aber nur mit `sync yes`: Der Befehl wartet, bis das Applet fertig ist.
 T: Befehl Schwer
 
 Q: Wie startet ein EEM-Applet, wenn ein Tracking-Objekt down geht?

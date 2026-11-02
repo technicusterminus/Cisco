@@ -403,7 +403,7 @@ A:
 tunnel mode ipsec ipv4
 tunnel protection ipsec profile <profil>
 ```
-**Modus:** Tunnel-Interface. Spart den GRE-Header, trägt aber nur IPv4-Unicast und keinen Multicast.
+**Modus:** Tunnel-Interface. Spart den GRE-Header und trägt IP-Unicast und -Multicast, also auch dynamisches Routing. Ein IPv4-VTI transportiert aber keine IPv6-Pakete.
 T: Befehl Schwer
 
 Q: Welcher Befehl zeigt, ob die IKEv1-Phase-1 steht?
