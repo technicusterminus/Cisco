@@ -7,7 +7,7 @@ H: Merke: Hybrid = privat + öffentlich. Multi = mehrere Anbieter.
 T: Vergleich Leicht
 
 Q: Zwei virtuelle Server sollen in der Public Cloud redundant laufen. Warum verteilst du sie auf zwei Availability Zones derselben Region?
-A: **Weil eine Availability Zone ein eigenes, physisch getrenntes Rechenzentrum mit eigener Strom- und Kühlungsversorgung ist.** Fällt eine Zone aus, läuft die zweite weiter. Die Region ist das geografische Gebiet, in dem mehrere solcher Zonen nah genug für geringe Latenz liegen.
+A: **Weil jede Availability Zone aus einem oder mehreren Rechenzentren mit eigener Stromversorgung, Kühlung und Netzanbindung besteht, getrennt von den anderen Zonen.** Fällt eine Zone aus, läuft die zweite weiter. Die Region ist das geografische Gebiet, in dem mehrere solcher Zonen nah genug für geringe Latenz liegen.
 H: Falle: Zwei Server in derselben Zone sind nur gegen Hardwaredefekte geschützt, nicht gegen den Ausfall des Rechenzentrums.
 T: Szenario Mittel
 
@@ -136,10 +136,6 @@ T: Szenario Mittel
 Q: Ein Router wird mit ICMP an seine Interface-Adressen geflutet. Interface-ACL oder CoPP: Was ist der Unterschied in der Wirkung?
 A: **Die Interface-ACL wirkt nur auf dem Interface, an dem sie steht, CoPP schützt die CPU zentral für alle Pakete an den Router.** Eine Infrastruktur-ACL am Netzrand verwirft unerwünschten Verkehr schon früh. CoPP fängt alles ab, was trotzdem zur CPU will, egal über welches Interface es kommt. Beides ergänzt sich.
 T: Vergleich Mittel
-
-Q: Was unterscheidet Control Plane Protection (CPPr) von einfachem CoPP?
-A: **CPPr teilt die Control Plane in drei Unterschnittstellen auf: host, transit und cef-exception.** Für jede gibt es eine eigene Policy. Host betrifft Pakete an die Router-Adressen, transit Pakete, die per Software weitergeleitet werden, cef-exception z. B. Pakete mit Optionen oder abgelaufener TTL. CoPP behandelt alles gemeinsam.
-T: Vergleich Schwer
 
 # 5.3 | REST-API-Sicherheit
 S: https://developer.cisco.com/docs/dna-center/2-3-7-9/authentication-and-authorization/ | Authentication and Authorization - Cisco Catalyst Center API 2.3.7.9 - Cisco DevNet
@@ -306,7 +302,7 @@ HTTP/1.1 409 Conflict
   "error-tag": "data-exists",
   "error-message": "object already exists"}]}}
 ```
-A: **Loopback10 gibt es schon, POST legt nur neu an.** RESTCONF beantwortet einen POST auf eine vorhandene Ressource mit 409 und dem error-tag `data-exists`. Um eine vorhandene Ressource zu ändern, nimmst du PATCH (zusammenführen) oder PUT (ersetzen).
+A: **Loopback10 gibt es schon, POST legt nur neu an.** Ein POST auf eine vorhandene Ressource endet mit 409 Conflict. IOS XE meldet dazu das error-tag `data-exists`, RFC 8040 nennt für diesen Fall `resource-denied`. Um eine vorhandene Ressource zu ändern, nimmst du PATCH (zusammenführen) oder PUT (ersetzen).
 T: Exhibit Mittel
 
 Q: Ein Skript an der Catalyst-Center-API läuft problemlos, nach etwa einer Stunde bekommen alle Aufrufe plötzlich HTTP 401. Was ist passiert?
@@ -333,19 +329,20 @@ action 1.0 regexp "Interface ([^,]+)," "$_syslog_msg" match intf
 Der erste Wert ist das Muster, der zweite der durchsuchte Text. In `match` steht der ganze Treffer, in `intf` der Inhalt der Klammer, also z. B. GigabitEthernet0/1. Danach nutzt du `$intf` in weiteren Actions.
 T: CLI Schwer
 
-Q: Ein Applet soll auslösen, wenn die Eingangsfehler auf Gi0/1 einen Schwellwert überschreiten. Welchen Event Detector nutzt du?
-A: **Den Interface-Detector mit `event interface`.**
+Q: Ein Applet soll auslösen, wenn auf Gi0/1 innerhalb einer Minute 100 oder mehr neue Eingangsfehler auftreten. Welchen Event Detector nutzt du, und welcher entry-type passt?
+A: **Den Interface-Detector `event interface` mit `entry-type increment`.**
 ```
-event interface name GigabitEthernet0/1 parameter input_errors entry-op ge entry-val 100 entry-type value poll-interval 60
+event interface name GigabitEthernet0/1 parameter input_errors entry-op ge entry-val 100 entry-type increment poll-interval 60
 ```
-Das Gerät prüft den Zähler alle 60 Sekunden und löst aus, sobald er 100 erreicht oder überschreitet.
+`increment` vergleicht den Zuwachs seit der letzten Abfrage mit dem Schwellwert. Mit `entry-type value` würde der absolute Zählerstand verglichen, das Applet löste dann auch wegen alter Fehler aus, die seit dem letzten `clear counters` aufgelaufen sind.
 T: CLI Schwer
 
 # 6.7 | Agentenbasierte und agentenlose Automation
 S: https://docs.ansible.com/projects/ansible/latest/network/getting_started/network_differences.html | How Network Automation is Different — Ansible Community Documentation
 
-Q: Ansible, Puppet, Chef und Salt: Wer baut bei jedem Tool die Verbindung auf, und über welchen Standardport?
-A: **Ansible verbindet sich per SSH (TCP 22) zum Gerät. Bei Puppet, Chef und Salt meldet sich der Agent beim Server.** Puppet-Agent → Server auf TCP 8140, Chef-Client → Server per HTTPS (TCP 443), Salt-Minion → Master auf TCP 4505 und 4506. Daran siehst du Push (Ansible) und Pull (Agenten).
+Q: Ansible, Puppet, Chef und SaltStack: Welches Tool arbeitet mit Push, welches mit Pull, und über welchen Standardport?
+A: **Push: Ansible (SSH, TCP 22) und SaltStack (TCP 4505 und 4506). Pull: Puppet (TCP 8140) und Chef (HTTPS).** Bei Ansible verbindet sich die Zentrale zum Gerät und schickt die Änderung. Beim Salt-Master geht der Auftrag ebenfalls von der Zentrale aus. Puppet-Agent und Chef-Client holen sich ihren Sollzustand dagegen regelmäßig selbst vom Server.
+H: Falle: Bei Salt baut der Minion die TCP-Verbindung zum Master auf, trotzdem gilt Salt als Push, weil der Master die Befehle über diese Verbindung schickt.
 T: Vergleich Mittel
 
 Q: Puppet, Chef, Ansible und Terraform: Welche beschreiben eher den Zielzustand (deklarativ), welche eher die Schritte dorthin (prozedural)?

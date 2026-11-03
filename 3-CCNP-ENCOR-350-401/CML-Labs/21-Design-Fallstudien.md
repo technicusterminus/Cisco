@@ -12,12 +12,12 @@ Zehn Fälle zu Architektur, Virtualisierung und Controller-Betrieb. Beantworte j
 
 | Deck-Tag | Thema | Karten im Kompendium |
 |---|---|---|
-| `Ziel::1.1.a` | Campus-, Fabric- und Cloud-Design | 26 |
-| `Ziel::1.1.b` | Redundanz, FHRP und SSO | 22 |
-| `Ziel::1.2.a` | SD-WAN: Ebenen und Komponenten | 33 |
-| `Ziel::1.2.b` | SD-WAN: Nutzen und Grenzen | 14 |
-| `Ziel::1.3.a` | SD-Access: Ebenen und Komponenten | 29 |
-| `Ziel::1.3.b` | Fabric und klassischer Campus | 13 |
+| `Ziel::1.1.a` | Campus-, Fabric- und Cloud-Design | 30 |
+| `Ziel::1.1.b` | Redundanz, FHRP und SSO | 26 |
+| `Ziel::1.2.a` | SD-WAN: Ebenen und Komponenten | 35 |
+| `Ziel::1.2.b` | SD-WAN: Nutzen und Grenzen | 22 |
+| `Ziel::1.3.a` | SD-Access: Ebenen und Komponenten | 31 |
+| `Ziel::1.3.b` | Fabric und klassischer Campus | 19 |
 | `Ziel::2.1.a` | Hypervisor-Typen | 10 |
 | `Ziel::2.1.b` | Virtuelle Maschinen | 10 |
 | `Ziel::2.1.c` | Virtuelles Switching | 16 |

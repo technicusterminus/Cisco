@@ -59,12 +59,12 @@ Pro Ziel mit Links zu Aufgaben und Lösungen: **[ZIELE.md](ZIELE.md)**. In Packe
 
 | Ziel | Thema | Karten | Labs (Eignung) |
 |---|---|---|---|
-| `1.1.a` | Campus-, Fabric- und Cloud-Design | 26 | 21 (CML-Paket) |
-| `1.1.b` | Redundanz, FHRP und SSO | 22 | 07 (teilweise), 21 (CML-Paket) |
-| `1.2.a` | SD-WAN: Ebenen und Komponenten | 33 | 21 (CML-Paket) |
-| `1.2.b` | SD-WAN: Nutzen und Grenzen | 14 | 21 (CML-Paket) |
-| `1.3.a` | SD-Access: Ebenen und Komponenten | 29 | 21 (CML-Paket) |
-| `1.3.b` | Fabric und klassischer Campus | 13 | 21 (CML-Paket) |
+| `1.1.a` | Campus-, Fabric- und Cloud-Design | 30 | 21 (CML-Paket) |
+| `1.1.b` | Redundanz, FHRP und SSO | 26 | 07 (teilweise), 21 (CML-Paket) |
+| `1.2.a` | SD-WAN: Ebenen und Komponenten | 35 | 21 (CML-Paket) |
+| `1.2.b` | SD-WAN: Nutzen und Grenzen | 22 | 21 (CML-Paket) |
+| `1.3.a` | SD-Access: Ebenen und Komponenten | 31 | 21 (CML-Paket) |
+| `1.3.b` | Fabric und klassischer Campus | 19 | 21 (CML-Paket) |
 | `1.4` | QoS-Konfigurationen | 48 | 17 (teilweise) |
 | `2.1.a` | Hypervisor-Typen | 10 | 21 (CML-Paket) |
 | `2.1.b` | Virtuelle Maschinen | 10 | 21 (CML-Paket) |
@@ -93,19 +93,19 @@ Pro Ziel mit Links zu Aufgaben und Lösungen: **[ZIELE.md](ZIELE.md)**. In Packe
 | `5.1.a` | Lines und lokale Anmeldung | 27 | 11 (geeignet), 23 (geeignet) |
 | `5.1.b` | AAA | 42 | 11 (geeignet) |
 | `5.2.a` | ACLs | 52 | 10 (teilweise), 23 (geeignet) |
-| `5.2.b` | CoPP | 21 | 10 (teilweise) |
-| `5.3` | REST-API-Sicherheit | 22 | 22 (CML-Paket) |
+| `5.2.b` | CoPP | 23 | 10 (teilweise) |
+| `5.3` | REST-API-Sicherheit | 27 | 22 (CML-Paket) |
 | `5.4.a` | Threat Defense | 29 | 22 (CML-Paket) |
 | `5.4.b` | Endpoint Security | 29 | 22 (CML-Paket) |
-| `5.4.c` | Next-Generation Firewall | 22 | 22 (CML-Paket) |
+| `5.4.c` | Next-Generation Firewall | 25 | 22 (CML-Paket) |
 | `5.4.d` | TrustSec und MACsec | 28 | 22 (CML-Paket) |
 | `6.1` | Python lesen | 49 | 20 (CML-Paket) |
-| `6.2` | JSON erstellen | 19 | 20 (CML-Paket) |
-| `6.3` | YANG | 21 | 20 (CML-Paket) |
-| `6.4` | Controller-APIs | 20 | 20 (CML-Paket) |
-| `6.5` | HTTP-Codes und API-Payloads | 25 | 20 (CML-Paket) |
-| `6.6` | EEM-Applets | 27 | – |
-| `6.7` | Agentenbasierte und agentenlose Automation | 21 | 20 (CML-Paket) |
+| `6.2` | JSON erstellen | 26 | 20 (CML-Paket) |
+| `6.3` | YANG | 27 | 20 (CML-Paket) |
+| `6.4` | Controller-APIs | 27 | 20 (CML-Paket) |
+| `6.5` | HTTP-Codes und API-Payloads | 29 | 20 (CML-Paket) |
+| `6.6` | EEM-Applets | 29 | – |
+| `6.7` | Agentenbasierte und agentenlose Automation | 25 | 20 (CML-Paket) |
 
 ## Stand und Grenzen
 

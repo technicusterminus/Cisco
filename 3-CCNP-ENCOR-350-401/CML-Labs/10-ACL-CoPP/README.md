@@ -13,7 +13,7 @@ Layer-3/4-Filter mit Standard-, Extended- und benannten ACLs, `established`, Log
 | Deck-Tag | Thema | Karten im Kompendium |
 |---|---|---|
 | `Ziel::5.2.a` | ACLs | 52 |
-| `Ziel::5.2.b` | CoPP | 21 |
+| `Ziel::5.2.b` | CoPP | 23 |
 
 **So arbeitest du:** Teil A = Bauen (importiere `topology.yaml`), Teil B = Reparieren (importiere `topology-repair.yaml`, dort ist alles gebaut, aber mit Fehlern), Teil C = Üben (Transferfragen zum Selbsttest). Lösungen und Fehlerursachen liegen in `solutions/`, erst nach eigenem Versuch öffnen.
 

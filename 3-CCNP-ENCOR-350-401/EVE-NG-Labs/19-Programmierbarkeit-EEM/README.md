@@ -13,9 +13,9 @@ Ein IOS-XE-Router wird programmierbar: RESTCONF und NETCONF aktivieren, YANG-Dat
 | Deck-Tag | Thema | Karten im Kompendium |
 |---|---|---|
 | `Ziel::4.6` | NETCONF und RESTCONF | 40 |
-| `Ziel::6.3` | YANG | 21 |
-| `Ziel::6.5` | HTTP-Codes und API-Payloads | 25 |
-| `Ziel::6.6` | EEM-Applets | 27 |
+| `Ziel::6.3` | YANG | 27 |
+| `Ziel::6.5` | HTTP-Codes und API-Payloads | 29 |
+| `Ziel::6.6` | EEM-Applets | 29 |
 
 **So arbeitest du:** Importiere [`EVE-Import.zip`](EVE-Import.zip) in EVE-NG (siehe [Import in EVE-NG](../README.md#import-in-eve-ng)). Das Lab *Bauen* ist Teil A, das Lab *Reparieren* ist Teil B, Teil C = Üben. Ohne Import liegen die Konfigurationen als Textdateien vor (`build/`, `repair/`, `solutions/`), die du per Konsole einfügst (siehe [Manuell aufbauen](../README.md#manuell-aufbauen-ohne-import)). Die Interface-Namen sind **identisch zu CML**; die Aufgabentexte und Konfigurationen gelten unverändert.
 

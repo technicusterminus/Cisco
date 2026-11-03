@@ -1,6 +1,6 @@
 # CCNP ENCOR 350-401 v1.2 – Labs zum Kompendium
 
-Diese Labs ergänzen das Anki-Kompendium (1.779 Karten). Die Karten bauen Wissen auf, in den Labs wendest du es an: **bauen, reparieren, üben**. Jedes der 47 Prüfungsziele des Kompendiums (`Ziel::…`) ist mindestens einem Lab zugeordnet.
+Diese Labs ergänzen das Anki-Kompendium (1.845 Karten). Die Karten bauen Wissen auf, in den Labs wendest du es an: **bauen, reparieren, üben**. Jedes der 47 Prüfungsziele des Kompendiums (`Ziel::…`) ist mindestens einem Lab zugeordnet.
 
 **Inhalt:** 28 CML-Labs (25 Themen-Labs und 3 Capstones, zusammen 138 eingebaute Fehler zum Reparieren), ein Python-/API-Drill-Paket mit automatischen Tests, zwei Fallstudien-Pakete für Themen, die sich nicht sinnvoll simulieren lassen.
 
@@ -66,12 +66,12 @@ Pro Ziel mit direkten Links zu Aufgaben und Lösungen: **[ZIELE.md](ZIELE.md)**.
 
 | Ziel | Thema | Karten | Lab(s) |
 |---|---|---|---|
-| `1.1.a` | Campus-, Fabric- und Cloud-Design | 26 | 21 |
-| `1.1.b` | Redundanz, FHRP und SSO | 22 | 07, 21 |
-| `1.2.a` | SD-WAN: Ebenen und Komponenten | 33 | 21 |
-| `1.2.b` | SD-WAN: Nutzen und Grenzen | 14 | 21 |
-| `1.3.a` | SD-Access: Ebenen und Komponenten | 29 | 21 |
-| `1.3.b` | Fabric und klassischer Campus | 13 | 21 |
+| `1.1.a` | Campus-, Fabric- und Cloud-Design | 30 | 21 |
+| `1.1.b` | Redundanz, FHRP und SSO | 26 | 07, 21 |
+| `1.2.a` | SD-WAN: Ebenen und Komponenten | 35 | 21 |
+| `1.2.b` | SD-WAN: Nutzen und Grenzen | 22 | 21 |
+| `1.3.a` | SD-Access: Ebenen und Komponenten | 31 | 21 |
+| `1.3.b` | Fabric und klassischer Campus | 19 | 21 |
 | `1.4` | QoS-Konfigurationen | 48 | 17 |
 | `2.1.a` | Hypervisor-Typen | 10 | 21 |
 | `2.1.b` | Virtuelle Maschinen | 10 | 21 |
@@ -100,19 +100,19 @@ Pro Ziel mit direkten Links zu Aufgaben und Lösungen: **[ZIELE.md](ZIELE.md)**.
 | `5.1.a` | Lines und lokale Anmeldung | 27 | 11, 23 |
 | `5.1.b` | AAA | 42 | 11 |
 | `5.2.a` | ACLs | 52 | 10, 23 |
-| `5.2.b` | CoPP | 21 | 10 |
-| `5.3` | REST-API-Sicherheit | 22 | 22 |
+| `5.2.b` | CoPP | 23 | 10 |
+| `5.3` | REST-API-Sicherheit | 27 | 22 |
 | `5.4.a` | Threat Defense | 29 | 22 |
 | `5.4.b` | Endpoint Security | 29 | 22 |
-| `5.4.c` | Next-Generation Firewall | 22 | 22 |
+| `5.4.c` | Next-Generation Firewall | 25 | 22 |
 | `5.4.d` | TrustSec und MACsec | 28 | 22 |
 | `6.1` | Python lesen | 49 | 20 |
-| `6.2` | JSON erstellen | 19 | 20 |
-| `6.3` | YANG | 21 | 19, 20 |
-| `6.4` | Controller-APIs | 20 | 20 |
-| `6.5` | HTTP-Codes und API-Payloads | 25 | 19, 20 |
-| `6.6` | EEM-Applets | 27 | 19 |
-| `6.7` | Agentenbasierte und agentenlose Automation | 21 | 20 |
+| `6.2` | JSON erstellen | 26 | 20 |
+| `6.3` | YANG | 27 | 19, 20 |
+| `6.4` | Controller-APIs | 27 | 20 |
+| `6.5` | HTTP-Codes und API-Payloads | 29 | 19, 20 |
+| `6.6` | EEM-Applets | 29 | 19 |
+| `6.7` | Agentenbasierte und agentenlose Automation | 25 | 20 |
 
 ## Empfohlene Reihenfolge
 
