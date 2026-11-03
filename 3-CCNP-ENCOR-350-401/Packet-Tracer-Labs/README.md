@@ -17,6 +17,8 @@ Fertige `.pkt`-Dateien liegen nicht bei. Stattdessen beschreibt jedes Lab Gerät
 
 **Gerätemodelle und Portnamen.** Router sind 2911 (drei Ports `Gi0/0` bis `Gi0/2`, alle Labs kommen damit aus), Layer-2/3-Switches sind 3560-24PS (`Fa0/1` bis `Fa0/24`, `Gi0/1`/`Gi0/2`), Hosts sind PC-PT. Die CML-Switches haben Gigabit-Ports (`Gi0/0` bis `Gi3/3`). Umrechnung: **`GiX/Y` → `Fa0/(X·4+Y+1)`**, z. B. `Gi0/0` → `Fa0/1`, `Gi1/0` → `Fa0/5`. In den Aufgabentexten und Konfigurationen ist das schon umgesetzt.
 
+**Trunks auf dem 3560:** Der 3560 kann ISL und Dot1Q. Vor `switchport mode trunk` muss deshalb `switchport trunk encapsulation dot1q` stehen, sonst lehnt er den Trunk-Modus ab. Konfigurationen und Lösungen enthalten die Zeile.
+
 Voraussetzung: Cisco Packet Tracer 8.2 oder neuer (kostenlos über Cisco Networking Academy).
 
 ## Übersicht

@@ -38,10 +38,12 @@
 
 ```diff
 - interface FastEthernet0/1
+-  switchport trunk encapsulation dot1q
 -  switchport mode trunk
 -  switchport nonegotiate
 -  switchport trunk allowed vlan 10,999
 + interface FastEthernet0/1
++  switchport trunk encapsulation dot1q
 +  switchport mode trunk
 +  switchport nonegotiate
 +  switchport trunk allowed vlan 10

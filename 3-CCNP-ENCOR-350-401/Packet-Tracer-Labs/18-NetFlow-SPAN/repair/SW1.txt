@@ -14,6 +14,7 @@ interface FastEthernet0/1
  switchport mode access
  switchport access vlan 10
 interface FastEthernet0/2
+ switchport trunk encapsulation dot1q
  switchport mode trunk
  switchport nonegotiate
  switchport trunk allowed vlan 10,999

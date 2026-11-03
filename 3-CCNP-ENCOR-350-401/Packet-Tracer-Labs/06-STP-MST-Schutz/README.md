@@ -125,7 +125,7 @@ Aufgaben, Verkabelung, Konfigurationen und Fehlerlisten verwenden die Packet-Tra
 ## Teil A – Bauen
 Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
 
-1. **Trunks.** Lege VLAN 99 an. Mache alle sechs Links zwischen den Switches zu festen Trunks (`mode trunk`, `nonegotiate`) mit den erlaubten VLANs 10 und 20 und Native VLAN 99.
+1. **Trunks.** Lege VLAN 99 an. Mache alle sechs Links zwischen den Switches zu festen Trunks (`switchport trunk encapsulation dot1q`, dann `mode trunk` und `nonegotiate`) mit den erlaubten VLANs 10 und 20 und Native VLAN 99.
    - **Prüfen:** H1 pingt H2.
 2. **Rapid-PVST lesen.** Führe auf SW3 `show spanning-tree vlan 10` aus.
    - **Prüfen:** Finde die Root (niedrigste Bridge-ID) und die Rolle jedes Ports: Root, Designated oder Alternate.
