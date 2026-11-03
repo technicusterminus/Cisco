@@ -156,9 +156,9 @@ Unter *Simulation > Labs & Stände* laden. Jedes Lab setzt die Konfiguration auf
 | 18 | eBGP über Loopbacks: Multihop, MD5, Timer und Summarization | 40 min |
 | 19 | EIGRP und Static Route mit IP SLA Track | 40 min |
 | 20 | Floating SVI für einen virtuellen Router | 30 min |
-| 21 | AAA: TACACS+, Login-Domain und RBAC | 35 min |
+| 21 | AAA: TACACS+, Login-Domain und RBAC (neues Format) | 35 min |
 | 22 | In-Band-Management | 35 min |
-| 23 | Endpoint Security Groups und uSeg EPGs | 35 min |
+| 23 | Endpoint Security Groups und uSeg EPGs (neues Format) | 35 min |
 | 24 | Firmware-Upgrade mit Upgrade Groups | 35 min |
 | 25 | Config Export und Import | 30 min |
 | 26 | Monitoring: SNMP, Syslog und Callhome | 40 min |
@@ -182,7 +182,7 @@ Unter *Simulation > Labs & Stände* laden. Jedes Lab setzt die Konfiguration auf
 | 44 | Access-Diagnose: drei Server, drei Ursachen (Domain, VLAN Pool, Static Port; neues Format) | 30 min |
 | 45 | Zwei Bridge Domains, eine VRF: Routing ohne L3Out (neues Format) | 20 min |
 
-**Neues Lab-Format** (Labs 01 bis 14 außer 08 und 32 bis 45): Statt einer Klickanleitung gibt es Anforderungen. Der Rest im Überblick:
+**Neues Lab-Format** (Labs 01 bis 14 außer 08, 21, 23 und 32 bis 45): Statt einer Klickanleitung gibt es Anforderungen. Der Rest im Überblick:
 
 - **Hinweise** in vier Stufen: Konzept, Objekte, Prüfschritt, Lösung. Die Oberfläche zählt, wie viele genutzt wurden.
 - **Bewertung** getrennt nach *Funktion* und *Sicherheit / Least Privilege*. Eine Permit-any-Abkürzung funktioniert zwar, besteht aber nicht.

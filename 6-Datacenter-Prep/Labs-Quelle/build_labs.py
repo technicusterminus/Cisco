@@ -1382,36 +1382,57 @@ SOL21 = [['uni/userext', mo('aaaUserEp', {},
             mo('aaaUser', {'name': 'shopro', 'pwd': 'Read#2026'}, mo('aaaUserDomain', {'name': 'Shop-Dom'}, mo('aaaUserRole', {'name': 'tenant-admin', 'privType': 'readPriv'}))))],
          ['uni/tn-Shop', mo('fvTenant', {}, mo('aaaDomainRef', {'name': 'Shop-Dom'}))]]
 lab(id='21-aaa-tacacs-rbac', title='21 AAA: TACACS+, Login-Domain und RBAC', topic='Security', level='Fortgeschritten', duration='35 min',
-    fabric='discovered',
-    goals=['Einen TACACS+-Provider mit Provider Group und Login-Domain einrichten', 'Rechte über das Cisco AV-Pair vergeben',
-           'Security Domains für mandantengetrennte Rechte nutzen'],
+    fabric='discovered', kind='requirements', modes=['guided', 'exam'],
+    prerequisites=['Lab 10'], tools=['Admin > AAA', 'Simulation > AAA-Server', 'Login-Protokoll', 'REST: POST /api/aaaLogin.json'],
+    goals=['Externe Anmeldung über TACACS+ einrichten', 'Rechte über das Cisco AV-Pair und Security Domains vergeben',
+           'Rechte so knapp wie möglich halten (Least Privilege)'],
     intro='Die Admins melden sich künftig über **ISE** (TACACS+) an: Server **192.168.10.40**, Shared Key **Tac#Key2026**, erreichbar über '
           'das Out-of-Band-Netz. Auf dem ISE sind die Benutzer schon angelegt:\n'
           '- **netadmin** / Net#2026 – AV-Pair `shell:domains=all/admin/`\n'
           '- **shopops** / Shop#2026 – AV-Pair `shell:domains=Shop-Dom/tenant-admin/`\n'
           '- **guest** / Guest#2026 – ohne AV-Pair\n\n'
-          'Dazu soll es einen lokalen Benutzer **shopro** (Passwort Read#2026) geben, der den Tenant Shop nur **lesen** darf. '
+          'Die Anmeldung über ISE läuft über die Anmelde-Domain **ISE** (auf der Login-Seite wählbar, per REST `apic#ISE\\\\<Benutzer>`). '
           'Die lokale Anmeldung (admin) bleibt Standard.',
-    config=[SERVER_ACCESS, shop_tenant(with_contracts=True)], hosts=[WEB1, APP1], aaa=[ISE21],
-    tasks=[
-        task('TACACS+ Provider', '**Admin > AAA > TACACS+ Management > TACACS+ Providers**: 192.168.10.40, Key Tac#Key2026, Management EPG '
-             '**default (Out-of-Band)**.'),
-        task('Provider Group', 'TACACS+ Provider Group **ISE-TACACS** mit dem Provider (Priorität 1).'),
-        task('Login Domain', '**Authentication > Login Domains**: **ISE**, Realm TACACS+, Provider Group ISE-TACACS.',
-             'Anmelden dann mit Domain ISE auf der Login-Seite oder per REST als `apic#ISE\\\\netadmin`.'),
-        task('Security Domain', '**Security > Security Domains**: **Shop-Dom**. Am Tenant Shop (Rechtsklick > Add Security Domain) Shop-Dom zuordnen.',
-             'Der Name muss zum AV-Pair passen: shopops bekommt tenant-admin nur in Shop-Dom.'),
-        task('Lokaler Benutzer', '**Local Users > Create Local User**: **shopro**, Passwort Read#2026, Security Domain Shop-Dom, Rolle '
-             '**tenant-admin** mit **Read**.'),
-        task('Ausprobieren', 'Ab- und als shopops (Domain ISE) wieder anmelden: Den Tenant Shop darfst du ändern, Access Policies nicht. '
-             'Was passiert bei guest? Unter *Login-Protokoll* siehst du, wie jede Anmeldung lief.'),
-    ],
+    requirements=['netadmin meldet sich über ISE an und hat volle Admin-Rechte.',
+                  'shopops darf den Tenant Shop ändern – und sonst nichts: keine Access Policies, keine anderen Tenants.',
+                  'Ein Benutzer ohne AV-Pair kommt nicht hinein.',
+                  'Zusätzlich gibt es einen lokalen Benutzer **shopro** (Passwort Read#2026), der den Tenant Shop nur lesen darf.'],
+    limits=['TACACS+ wird simuliert: Erreichbarkeit, Shared Key, Benutzer und AV-Pair. Accounting und Command Authorization fehlen.',
+            'Die Rechteprüfung kennt Rollen (admin, tenant-admin …) mit Lese-/Schreibrecht und Security Domains; feinere RBAC-Regeln fehlen.'],
+    hints=['**Konzept:** Externe Anmeldung braucht drei Teile: den Server (Provider), eine Gruppe, die ihn nutzt, und eine Anmelde-Domain, '
+           'die auf diese Gruppe zeigt. Welche Rechte jemand bekommt, sagt das AV-Pair: Security Domain / Rolle.',
+           '**Objekte:** *Admin > AAA*: TACACS+ Provider (mit Management EPG Out-of-Band), Provider Group, Login Domain. '
+           '*Security*: Security Domains und deren Zuordnung zum Tenant. *Local Users* mit Domain und Rolle.',
+           '**Prüfschritte:** Als netadmin, shopops und guest anmelden und das *Login-Protokoll* lesen: Lag es an Server, Key, Benutzer oder AV-Pair? '
+           'Darf shopops nichts im Tenant Shop, fehlt die Verbindung zwischen der Security Domain aus dem AV-Pair und dem Tenant.',
+           '**Lösung:** Provider 192.168.10.40 mit Key und OOB, Provider Group (z. B. ISE-TACACS), Login Domain ISE mit Realm TACACS+. '
+           'Security Domain Shop-Dom anlegen und dem Tenant Shop zuordnen. Lokaler Benutzer shopro mit Domain Shop-Dom, Rolle tenant-admin, '
+           'nur **Read**.'],
+    cause='Es gibt weder TACACS+-Provider noch Login-Domain noch Security Domain; shopro existiert nicht.',
+    config=[SERVER_ACCESS, shop_tenant(with_contracts=True)], hosts=[WEB1, APP1], aaa=[ISE21], tasks=[],
     checks=[check('netadmin meldet sich über ISE als admin an', 'login', user='apic#ISE\\netadmin', pwd='Net#2026', role='admin'),
             check('shopops darf den Tenant Shop ändern', 'rbac', user='apic#ISE\\shopops', pwd='Shop#2026', dn='uni/tn-Shop/BD-BD-Web'),
-            check('shopops darf keine Access Policies ändern', 'rbac', user='apic#ISE\\shopops', pwd='Shop#2026', dn='uni/infra/attentp-AAEP-Server', expect=False),
-            check('guest ohne AV-Pair wird abgewiesen', 'login', user='apic#ISE\\guest', pwd='Guest#2026', expect=False),
-            check('shopro darf Shop nur lesen', 'rbac', user='shopro', pwd='Read#2026', dn='uni/tn-Shop/BD-BD-Web', expect=False),
-            check('shopro kann sich anmelden', 'login', user='shopro', pwd='Read#2026')],
+            check('shopro kann sich anmelden', 'login', user='shopro', pwd='Read#2026'),
+            check('guest ohne AV-Pair wird abgewiesen', 'login', user='apic#ISE\\guest', pwd='Guest#2026', expect=False, category='security'),
+            check('shopops darf keine Access Policies ändern', 'rbac', user='apic#ISE\\shopops', pwd='Shop#2026',
+                  dn='uni/infra/attentp-AAEP-Server', expect=False, category='security'),
+            check('shopops darf den Tenant common nicht ändern', 'rbac', user='apic#ISE\\shopops', pwd='Shop#2026',
+                  dn='uni/tn-common/BD-default', expect=False, category='security'),
+            check('shopro darf Shop nur lesen', 'rbac', user='shopro', pwd='Read#2026', dn='uni/tn-Shop/BD-BD-Web', expect=False, category='security'),
+            check('shopro darf außerhalb von Shop nichts ändern', 'rbac', user='shopro', pwd='Read#2026', dn='uni/infra/attentp-AAEP-Server',
+                  expect=False, category='security')],
+    questions=[{'id': 'q1', 'q': 'shopops meldet sich an, sieht aber im Tenant Shop nichts. Was fehlt am wahrscheinlichsten?',
+                'options': ['Die Security Domain Shop-Dom ist dem Tenant Shop nicht zugeordnet', 'Der Shared Key', 'Die Login Domain',
+                            'Ein Contract'],
+                'answer': 0, 'explain': 'Anmeldung klappt, also stimmen Server und Key. Die Rechte gelten nur für Objekte in derselben Security Domain.'},
+               {'id': 'q2', 'q': 'Warum bekommt guest ohne AV-Pair keinen Zugang statt Leserechten?',
+                'options': ['Ohne AV-Pair gibt es keine Rolle; der APIC weist die Anmeldung ab (es sei denn, man erlaubt Fallback-Rechte)',
+                            'Weil guest ein reservierter Name ist', 'Weil der Key falsch ist', 'Er bekommt Leserechte'],
+                'answer': 0, 'explain': 'Least Privilege: Wer keine Rolle zugewiesen bekommt, kommt nicht hinein.'},
+               {'id': 'q3', 'q': 'ISE ist nicht erreichbar. Wie meldet sich der Admin noch an?',
+                'options': ['Lokal (Default-Domain bleibt lokal) bzw. über die Fallback-Domain', 'Gar nicht', 'Mit dem Shared Key',
+                            'Über SNMP'],
+                'answer': 0, 'explain': 'Deshalb bleibt die lokale Anmeldung Standard – sonst sperrt man sich bei einem AAA-Ausfall aus.'}],
     solution='Provider `aaaTacacsPlusProvider name=192.168.10.40` mit `key` und `aaaRsSecProvToEpg` auf oob-default, Provider Group '
              '`aaaTacacsPlusProviderGroup ISE-TACACS` mit `aaaProviderRef`, Login Domain `aaaLoginDomain ISE` mit `aaaDomainAuth realm=tacacs '
              'providerGroup=ISE-TACACS`. Security Domain `aaaDomain Shop-Dom`, am Tenant `aaaDomainRef name=Shop-Dom`. Lokaler Benutzer mit '
@@ -1480,29 +1501,50 @@ SOL23 = mo('fvTenant', {'name': 'Shop'},
               mo('fvESg', {'name': 'Backend'}, mo('fvRsScope', {'tnFvCtxName': 'Prod'}),
                  mo('fvEPgSelector', {'matchEpgDn': 'uni/tn-Shop/ap-Webshop/epg-App'}), mo('fvRsProv', {'tnVzBrCPName': 'frontend-to-backend'}))))
 lab(id='23-esg-useg', title='23 Endpoint Security Groups und uSeg EPGs', topic='Policy / Segmentierung', level='Fortgeschritten',
-    duration='35 min', fabric='discovered',
-    goals=['Policy mit Endpoint Security Groups statt EPG-Contracts aufbauen', 'Einen einzelnen Host per uSeg EPG nach IP isolieren',
+    duration='35 min', fabric='discovered', kind='requirements', modes=['guided', 'exam'],
+    prerequisites=['Labs 32 und 38'], tools=['Tenant Shop > Application Profiles', 'Traffic Inspector', 'Operations > Policy-Matrix',
+                                            'CLI: show zoning-rule, show endpoint'],
+    goals=['Policy mit Endpoint Security Groups statt EPG-Contracts aufbauen', 'Einen einzelnen Host isolieren, ohne ihn umzukonfigurieren',
            'Verstehen, welche Contracts nach der ESG-Zuordnung noch gelten'],
-    intro='Das Security-Team stellt auf **Endpoint Security Groups** um: Die Policy hängt nicht mehr an den EPGs, sondern an ESGs im VRF Prod. '
-          'Gleichzeitig ist der Webserver **web-inf** (10.10.10.66 an leaf101 eth1/3, vlan-110) kompromittiert und muss sofort isoliert werden, '
-          'ohne ihn umzukonfigurieren.\n\nZwischen Web und App gibt es noch **keinen** Contract.',
-    config=[SERVER_ACCESS, shop_tenant()], hosts=[WEB1, APP1, INF23],
-    tasks=[
-        task('Static Port für web-inf', 'An der EPG **Web** einen Static Port leaf101 eth1/3, vlan-110 ergänzen. web-inf ist dann in Web gelernt.'),
-        task('uSeg EPG', 'Im AP Webshop unter **uSeg EPGs** die EPG **Quarantine** (BD-Web, Domain PhysDom-Server) mit dem IP-Attribut '
-             '**10.10.10.66** anlegen.', 'Die ACI klassifiziert den Host jetzt nach seiner IP in Quarantine – Port und VLAN bleiben gleich.'),
-        task('Filter und Contract', 'Filter **tcp-8080** und Contract **frontend-to-backend**.'),
-        task('ESGs', '**Endpoint Security Groups**: **Frontend** (VRF Prod, EPG Selector Web) konsumiert, **Backend** (VRF Prod, EPG Selector App) '
-             'stellt den Contract bereit.', 'Ein Contract zwischen einer ESG und einer EPG ist nicht möglich.'),
-        task('Prüfen', 'web1 → app1 tcp/8080 klappt, web-inf → app1 nicht. Im Traffic-Test siehst du die Klassifizierung (EPG → ESG). '
-             'Auf leaf101: `show zoning-rule` – welche pcTags stehen in den Regeln?'),
-    ],
-    checks=[check('web-inf liegt in der uSeg EPG Quarantine', 'endpoint', host='web-inf', epg='uni/tn-Shop/ap-Webshop/epg-Quarantine'),
-            check('web1 → app1 tcp/8080 über die ESGs', 'traffic', src='web1', dst='app1', proto='tcp', port=8080, expect=True, via='ESG'),
-            check('web-inf → app1 blockiert', 'traffic', src='web-inf', dst='app1', proto='tcp', port=8080, expect=False),
-            check('web1 → app1 tcp/22 blockiert', 'traffic', src='web1', dst='app1', proto='tcp', port=22, expect=False)],
+    intro='Das Security-Team stellt auf **Endpoint Security Groups** um: Die Policy zwischen Web und App soll nicht mehr an den EPGs hängen, '
+          'sondern an ESGs im VRF Prod.\n\nGleichzeitig ist der Webserver **web-inf** (10.10.10.66, leaf101 eth1/3, VLAN 110) kompromittiert. '
+          'Er soll für die Forensik am Netz bleiben, aber sofort isoliert werden – ohne ihn oder seine Verkabelung zu ändern. web-inf ist '
+          'noch nicht an die ACI angebunden.\n\nZwischen Web und App gibt es noch keinen Contract.',
+    requirements=['web1 erreicht app1 auf TCP 8080 – über ESGs, nicht über EPG-Contracts.',
+                  'Von Web zu App ist sonst nichts erlaubt, App baut keine Verbindungen zu Web auf.',
+                  'web-inf ist in der ACI gelernt, und zwar in einer eigenen uSeg EPG **Quarantine**.',
+                  'web-inf erreicht weder App noch die anderen Webserver.'],
+    limits=['uSeg-Attribute: IP und MAC. VM-Attribute (Name, Tag) gibt es nur mit VMM, hier nicht.',
+            'ESG-Selektoren: EPG Selector und IP Subnet Selector; Tag Selector fehlt.'],
+    hints=['**Konzept:** Eine ESG gruppiert Endpoints quer über EPGs; die Policy hängt dann an der ESG. Ein einzelner Host lässt sich mit einer '
+           'uSeg EPG anhand seiner IP oder MAC aus seiner EPG herausnehmen, ohne Port oder VLAN zu ändern.',
+           '**Objekte:** Static Port für web-inf an der EPG Web, uSeg EPG im selben BD mit Attribut, Filter und Contract, zwei ESGs im VRF Prod '
+           'mit Selektoren. Contracts zwischen ESG und EPG gibt es nicht.',
+           '**Prüfschritte:** Traffic Inspector web1 → app1: Der Schritt *Klassifizierung* zeigt EPG → ESG. web-inf → web1: In welcher EPG '
+           'steht web-inf? Policy-Matrix für VRF Prod: Welche Paare dürfen was?',
+           '**Lösung:** Static Port leaf101 eth1/3 vlan-110 an Web. uSeg EPG Quarantine (BD-Web, PhysDom-Server, IP-Attribut 10.10.10.66). '
+           'Filter tcp/8080, Contract (z. B. frontend-to-backend): ESG Frontend (EPG Selector Web) konsumiert, ESG Backend (EPG Selector App) '
+           'stellt bereit. Quarantine bekommt keinen Contract.'],
+    cause='Es gibt keine ESGs und keinen Contract; web-inf ist an keine EPG gebunden.',
+    config=[SERVER_ACCESS, shop_tenant()], hosts=[WEB1, APP1, INF23], tasks=[],
+    checks=[check('web1 → app1 TCP 8080 über ESGs', 'traffic', src='web1', dst='app1', proto='tcp', port=8080, expect=True, via='ESG'),
+            check('web-inf ist in der uSeg EPG Quarantine gelernt', 'endpoint', host='web-inf', epg='uni/tn-Shop/ap-Webshop/epg-Quarantine'),
+            check('Least Privilege Web → App: nur TCP 8080', 'exposure', src='web1', dst='app1', allow=['tcp/8080'], category='security'),
+            check('App baut keine Verbindungen zu Web auf', 'exposure', src='app1', dst='web1', allow=[], category='security'),
+            check('web-inf erreicht app1 nicht', 'traffic', src='web-inf', dst='app1', proto='tcp', port=8080, expect=False,
+                  reason='POLICY_', category='security'),
+            check('web-inf erreicht web1 nicht', 'traffic', src='web-inf', dst='web1', proto='icmp', expect=False,
+                  reason='POLICY_', category='security'),
+            check('web-inf hat keinen offenen Dienst zu app1', 'exposure', src='web-inf', dst='app1', allow=[], category='security')],
+    questions=[{'id': 'q1', 'q': 'Warum reicht es nicht, den Port von web-inf einfach abzuschalten?',
+                'options': ['Dann ist der Host für die Forensik weg; die uSeg EPG isoliert ihn, ohne ihn vom Netz zu nehmen',
+                            'Abschalten geht in der ACI nicht', 'Weil dann auch web1 ausfällt', 'Das reicht'],
+                'answer': 0, 'explain': 'Die Anforderung verlangt, dass web-inf gelernt bleibt – also isolieren statt trennen.'},
+               {'id': 'q2', 'q': 'Ein Contract zwischen der EPG Web und der ESG Backend – geht das?',
+                'options': ['Nein, Contracts gibt es nur zwischen ESGs oder nur zwischen EPGs', 'Ja, wenn der Scope global ist',
+                            'Ja, immer', 'Nur mit vzAny'],
+                'answer': 0, 'explain': 'Der Traffic Inspector meldet dann POLICY_ESG_EPG_MIX.'}],
     solution='`' + json.dumps(SOL23) + '`')
-
 
 # ----------------------------------------------------------------------------
 # Lab 24 - Firmware-Upgrade mit Upgrade Groups

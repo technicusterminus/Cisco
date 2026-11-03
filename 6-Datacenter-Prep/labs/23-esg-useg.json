@@ -5,12 +5,43 @@
  "level": "Fortgeschritten",
  "duration": "35 min",
  "fabric": "discovered",
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Labs 32 und 38"
+ ],
+ "tools": [
+  "Tenant Shop > Application Profiles",
+  "Traffic Inspector",
+  "Operations > Policy-Matrix",
+  "CLI: show zoning-rule, show endpoint"
+ ],
  "goals": [
   "Policy mit Endpoint Security Groups statt EPG-Contracts aufbauen",
-  "Einen einzelnen Host per uSeg EPG nach IP isolieren",
+  "Einen einzelnen Host isolieren, ohne ihn umzukonfigurieren",
   "Verstehen, welche Contracts nach der ESG-Zuordnung noch gelten"
  ],
- "intro": "Das Security-Team stellt auf **Endpoint Security Groups** um: Die Policy hängt nicht mehr an den EPGs, sondern an ESGs im VRF Prod. Gleichzeitig ist der Webserver **web-inf** (10.10.10.66 an leaf101 eth1/3, vlan-110) kompromittiert und muss sofort isoliert werden, ohne ihn umzukonfigurieren.\n\nZwischen Web und App gibt es noch **keinen** Contract.",
+ "intro": "Das Security-Team stellt auf **Endpoint Security Groups** um: Die Policy zwischen Web und App soll nicht mehr an den EPGs hängen, sondern an ESGs im VRF Prod.\n\nGleichzeitig ist der Webserver **web-inf** (10.10.10.66, leaf101 eth1/3, VLAN 110) kompromittiert. Er soll für die Forensik am Netz bleiben, aber sofort isoliert werden – ohne ihn oder seine Verkabelung zu ändern. web-inf ist noch nicht an die ACI angebunden.\n\nZwischen Web und App gibt es noch keinen Contract.",
+ "requirements": [
+  "web1 erreicht app1 auf TCP 8080 – über ESGs, nicht über EPG-Contracts.",
+  "Von Web zu App ist sonst nichts erlaubt, App baut keine Verbindungen zu Web auf.",
+  "web-inf ist in der ACI gelernt, und zwar in einer eigenen uSeg EPG **Quarantine**.",
+  "web-inf erreicht weder App noch die anderen Webserver."
+ ],
+ "limits": [
+  "uSeg-Attribute: IP und MAC. VM-Attribute (Name, Tag) gibt es nur mit VMM, hier nicht.",
+  "ESG-Selektoren: EPG Selector und IP Subnet Selector; Tag Selector fehlt."
+ ],
+ "hints": [
+  "**Konzept:** Eine ESG gruppiert Endpoints quer über EPGs; die Policy hängt dann an der ESG. Ein einzelner Host lässt sich mit einer uSeg EPG anhand seiner IP oder MAC aus seiner EPG herausnehmen, ohne Port oder VLAN zu ändern.",
+  "**Objekte:** Static Port für web-inf an der EPG Web, uSeg EPG im selben BD mit Attribut, Filter und Contract, zwei ESGs im VRF Prod mit Selektoren. Contracts zwischen ESG und EPG gibt es nicht.",
+  "**Prüfschritte:** Traffic Inspector web1 → app1: Der Schritt *Klassifizierung* zeigt EPG → ESG. web-inf → web1: In welcher EPG steht web-inf? Policy-Matrix für VRF Prod: Welche Paare dürfen was?",
+  "**Lösung:** Static Port leaf101 eth1/3 vlan-110 an Web. uSeg EPG Quarantine (BD-Web, PhysDom-Server, IP-Attribut 10.10.10.66). Filter tcp/8080, Contract (z. B. frontend-to-backend): ESG Frontend (EPG Selector Web) konsumiert, ESG Backend (EPG Selector App) stellt bereit. Quarantine bekommt keinen Contract."
+ ],
+ "cause": "Es gibt keine ESGs und keinen Contract; web-inf ist an keine EPG gebunden.",
  "config": [
   {
    "polUni": {
@@ -354,39 +385,10 @@
    "descr": "kompromittierter Webserver"
   }
  ],
- "tasks": [
-  {
-   "title": "Static Port für web-inf",
-   "text": "An der EPG **Web** einen Static Port leaf101 eth1/3, vlan-110 ergänzen. web-inf ist dann in Web gelernt."
-  },
-  {
-   "title": "uSeg EPG",
-   "text": "Im AP Webshop unter **uSeg EPGs** die EPG **Quarantine** (BD-Web, Domain PhysDom-Server) mit dem IP-Attribut **10.10.10.66** anlegen.",
-   "hint": "Die ACI klassifiziert den Host jetzt nach seiner IP in Quarantine – Port und VLAN bleiben gleich."
-  },
-  {
-   "title": "Filter und Contract",
-   "text": "Filter **tcp-8080** und Contract **frontend-to-backend**."
-  },
-  {
-   "title": "ESGs",
-   "text": "**Endpoint Security Groups**: **Frontend** (VRF Prod, EPG Selector Web) konsumiert, **Backend** (VRF Prod, EPG Selector App) stellt den Contract bereit.",
-   "hint": "Ein Contract zwischen einer ESG und einer EPG ist nicht möglich."
-  },
-  {
-   "title": "Prüfen",
-   "text": "web1 → app1 tcp/8080 klappt, web-inf → app1 nicht. Im Traffic-Test siehst du die Klassifizierung (EPG → ESG). Auf leaf101: `show zoning-rule` – welche pcTags stehen in den Regeln?"
-  }
- ],
+ "tasks": [],
  "checks": [
   {
-   "desc": "web-inf liegt in der uSeg EPG Quarantine",
-   "type": "endpoint",
-   "host": "web-inf",
-   "epg": "uni/tn-Shop/ap-Webshop/epg-Quarantine"
-  },
-  {
-   "desc": "web1 → app1 tcp/8080 über die ESGs",
+   "desc": "web1 → app1 TCP 8080 über ESGs",
    "type": "traffic",
    "src": "web1",
    "dst": "app1",
@@ -396,22 +398,83 @@
    "via": "ESG"
   },
   {
-   "desc": "web-inf → app1 blockiert",
+   "desc": "web-inf ist in der uSeg EPG Quarantine gelernt",
+   "type": "endpoint",
+   "host": "web-inf",
+   "epg": "uni/tn-Shop/ap-Webshop/epg-Quarantine"
+  },
+  {
+   "desc": "Least Privilege Web → App: nur TCP 8080",
+   "type": "exposure",
+   "src": "web1",
+   "dst": "app1",
+   "allow": [
+    "tcp/8080"
+   ],
+   "category": "security"
+  },
+  {
+   "desc": "App baut keine Verbindungen zu Web auf",
+   "type": "exposure",
+   "src": "app1",
+   "dst": "web1",
+   "allow": [],
+   "category": "security"
+  },
+  {
+   "desc": "web-inf erreicht app1 nicht",
    "type": "traffic",
    "src": "web-inf",
    "dst": "app1",
    "proto": "tcp",
    "port": 8080,
-   "expect": false
+   "expect": false,
+   "reason": "POLICY_",
+   "category": "security"
   },
   {
-   "desc": "web1 → app1 tcp/22 blockiert",
+   "desc": "web-inf erreicht web1 nicht",
    "type": "traffic",
-   "src": "web1",
+   "src": "web-inf",
+   "dst": "web1",
+   "proto": "icmp",
+   "expect": false,
+   "reason": "POLICY_",
+   "category": "security"
+  },
+  {
+   "desc": "web-inf hat keinen offenen Dienst zu app1",
+   "type": "exposure",
+   "src": "web-inf",
    "dst": "app1",
-   "proto": "tcp",
-   "port": 22,
-   "expect": false
+   "allow": [],
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Warum reicht es nicht, den Port von web-inf einfach abzuschalten?",
+   "options": [
+    "Dann ist der Host für die Forensik weg; die uSeg EPG isoliert ihn, ohne ihn vom Netz zu nehmen",
+    "Abschalten geht in der ACI nicht",
+    "Weil dann auch web1 ausfällt",
+    "Das reicht"
+   ],
+   "answer": 0,
+   "explain": "Die Anforderung verlangt, dass web-inf gelernt bleibt – also isolieren statt trennen."
+  },
+  {
+   "id": "q2",
+   "q": "Ein Contract zwischen der EPG Web und der ESG Backend – geht das?",
+   "options": [
+    "Nein, Contracts gibt es nur zwischen ESGs oder nur zwischen EPGs",
+    "Ja, wenn der Scope global ist",
+    "Ja, immer",
+    "Nur mit vzAny"
+   ],
+   "answer": 0,
+   "explain": "Der Traffic Inspector meldet dann POLICY_ESG_EPG_MIX."
   }
  ],
  "solution": "`{\"fvTenant\": {\"attributes\": {\"name\": \"Shop\"}, \"children\": [{\"vzFilter\": {\"attributes\": {\"name\": \"tcp-8080\"}, \"children\": [{\"vzEntry\": {\"attributes\": {\"name\": \"tcp-8080\", \"etherT\": \"ip\", \"prot\": \"tcp\", \"dFromPort\": \"8080\", \"dToPort\": \"8080\"}}}]}}, {\"vzBrCP\": {\"attributes\": {\"name\": \"frontend-to-backend\", \"scope\": \"context\"}, \"children\": [{\"vzSubj\": {\"attributes\": {\"name\": \"subj\", \"revFltPorts\": \"yes\"}, \"children\": [{\"vzRsSubjFiltAtt\": {\"attributes\": {\"tnVzFilterName\": \"tcp-8080\"}}}]}}]}}, {\"fvAp\": {\"attributes\": {\"name\": \"Webshop\"}, \"children\": [{\"fvAEPg\": {\"attributes\": {\"name\": \"Web\"}, \"children\": [{\"fvRsPathAtt\": {\"attributes\": {\"tDn\": \"topology/pod-1/paths-101/pathep-[eth1/3]\", \"encap\": \"vlan-110\"}}}]}}, {\"fvAEPg\": {\"attributes\": {\"name\": \"Quarantine\", \"isAttrBasedEPg\": \"yes\"}, \"children\": [{\"fvRsBd\": {\"attributes\": {\"tnFvBDName\": \"BD-Web\"}}}, {\"fvRsDomAtt\": {\"attributes\": {\"tDn\": \"uni/phys-PhysDom-Server\"}}}, {\"fvCrtrn\": {\"attributes\": {}, \"children\": [{\"fvIpAttr\": {\"attributes\": {\"name\": \"infected\", \"ip\": \"10.10.10.66\"}}}]}}]}}, {\"fvESg\": {\"attributes\": {\"name\": \"Frontend\"}, \"children\": [{\"fvRsScope\": {\"attributes\": {\"tnFvCtxName\": \"Prod\"}}}, {\"fvEPgSelector\": {\"attributes\": {\"matchEpgDn\": \"uni/tn-Shop/ap-Webshop/epg-Web\"}}}, {\"fvRsCons\": {\"attributes\": {\"tnVzBrCPName\": \"frontend-to-backend\"}}}]}}, {\"fvESg\": {\"attributes\": {\"name\": \"Backend\"}, \"children\": [{\"fvRsScope\": {\"attributes\": {\"tnFvCtxName\": \"Prod\"}}}, {\"fvEPgSelector\": {\"attributes\": {\"matchEpgDn\": \"uni/tn-Shop/ap-Webshop/epg-App\"}}}, {\"fvRsProv\": {\"attributes\": {\"tnVzBrCPName\": \"frontend-to-backend\"}}}]}}]}}]}}`",

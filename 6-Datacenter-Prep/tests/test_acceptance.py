@@ -428,6 +428,8 @@ class TestRequirementLabs(unittest.TestCase):
         '11-static-leaf-taboo': ['Static Leaf', 'Taboo', 'fvRsNodeAtt', 'vzTaboo', 'no-ping'],
         '13-shared-services': ['Global', 'Export', 'vzCPIf', 'Shared between', 'Imported', 'fvRsConsIf', 'Consumer', 'Provider'],
         '07-troubleshooting': ['8080', 'Unicast Routing', 'BD-Bakup', 'Reverse', '149', 'Port Block'],
+        '21-aaa-tacacs-rbac': ['Provider Group', 'aaaLoginDomain', 'aaaDomainRef', 'readPriv', 'ISE-TACACS', 'Security Domain'],
+        '23-esg-useg': ['fvIpAttr', 'IP-Attribut', 'isAttrBasedEPg', 'EPG Selector', 'frontend-to-backend', 'Consumer', 'Provider'],
         '32-https-least-privilege': ['Consumer', 'Provider', 'web-to-app-https', 'Reverse'],
         '33-same-epg': ['Static Port', 'fvRsPathAtt'],
         '34-two-epgs-same-bd': ['Consumer', 'Provider', 'admin-to-web'],
@@ -944,6 +946,34 @@ class TestConvertedLabs(unittest.TestCase):
         by = self.by()
         self.assertFalse(by['Kein Gateway für 10.10.50.0/24 in der ACI'])
         self.assertFalse(by['Unicast Routing im BD-Migration bleibt aus'])
+
+
+    def test_lab21_write_role_for_reader_fails_security(self):
+        lab = self.S.load_lab('21-aaa-tacacs-rbac')
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+        self.apply(('uni/userext/user-shopro/userdomain-Shop-Dom/role-tenant-admin', mo('aaaUserRole', {'privType': 'writePriv'})))
+        by = self.by()
+        self.assertTrue(by['shopro kann sich anmelden'])
+        self.assertFalse(by['shopro darf Shop nur lesen'])
+
+    def test_lab23_epg_contract_instead_of_esg_and_permit_any(self):
+        lab = self.S.load_lab('23-esg-useg')
+        # Abkuerzung 1: klassischer EPG-Contract statt ESGs
+        self.apply(('uni', mo('fvTenant', {'name': 'Shop'},
+                              mo('vzFilter', {'name': 'tcp-8080'}, mo('vzEntry', {'name': 'e', 'etherT': 'ip', 'prot': 'tcp', 'dFromPort': '8080', 'dToPort': '8080'})),
+                              mo('vzBrCP', {'name': 'w2a'}, mo('vzSubj', {'name': 's', 'revFltPorts': 'yes'}, mo('vzRsSubjFiltAtt', {'tnVzFilterName': 'tcp-8080'}))),
+                              mo('fvAp', {'name': 'Webshop'}, mo('fvAEPg', {'name': 'Web'}, mo('fvRsCons', {'tnVzBrCPName': 'w2a'})),
+                                 mo('fvAEPg', {'name': 'App'}, mo('fvRsProv', {'tnVzBrCPName': 'w2a'}))))))
+        by = self.by()
+        self.assertEqual(trace.run(self.S.engine, self.S.sim, 'web1', 'app1', 'tcp', 8080)['verdict'], 'ALLOW')
+        self.assertFalse(by['web1 → app1 TCP 8080 über ESGs'], 'funktioniert, aber nicht ueber ESGs')
+        # Musterloesung, dann permit any zwischen den ESGs
+        self.S.load_lab('23-esg-useg')
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+        self.apply(('uni/tn-Shop/brc-frontend-to-backend/subj-subj', mo('vzSubj', {}, mo('vzRsSubjFiltAtt', {'tnVzFilterName': 'default'}))))
+        self.assertFalse(self.by()['Least Privilege Web → App: nur TCP 8080'])
 
 
 class TestOperationsLabs(unittest.TestCase):

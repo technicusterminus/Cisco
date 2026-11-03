@@ -5,12 +5,43 @@
  "level": "Fortgeschritten",
  "duration": "35 min",
  "fabric": "discovered",
- "goals": [
-  "Einen TACACS+-Provider mit Provider Group und Login-Domain einrichten",
-  "Rechte über das Cisco AV-Pair vergeben",
-  "Security Domains für mandantengetrennte Rechte nutzen"
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
  ],
- "intro": "Die Admins melden sich künftig über **ISE** (TACACS+) an: Server **192.168.10.40**, Shared Key **Tac#Key2026**, erreichbar über das Out-of-Band-Netz. Auf dem ISE sind die Benutzer schon angelegt:\n- **netadmin** / Net#2026 – AV-Pair `shell:domains=all/admin/`\n- **shopops** / Shop#2026 – AV-Pair `shell:domains=Shop-Dom/tenant-admin/`\n- **guest** / Guest#2026 – ohne AV-Pair\n\nDazu soll es einen lokalen Benutzer **shopro** (Passwort Read#2026) geben, der den Tenant Shop nur **lesen** darf. Die lokale Anmeldung (admin) bleibt Standard.",
+ "prerequisites": [
+  "Lab 10"
+ ],
+ "tools": [
+  "Admin > AAA",
+  "Simulation > AAA-Server",
+  "Login-Protokoll",
+  "REST: POST /api/aaaLogin.json"
+ ],
+ "goals": [
+  "Externe Anmeldung über TACACS+ einrichten",
+  "Rechte über das Cisco AV-Pair und Security Domains vergeben",
+  "Rechte so knapp wie möglich halten (Least Privilege)"
+ ],
+ "intro": "Die Admins melden sich künftig über **ISE** (TACACS+) an: Server **192.168.10.40**, Shared Key **Tac#Key2026**, erreichbar über das Out-of-Band-Netz. Auf dem ISE sind die Benutzer schon angelegt:\n- **netadmin** / Net#2026 – AV-Pair `shell:domains=all/admin/`\n- **shopops** / Shop#2026 – AV-Pair `shell:domains=Shop-Dom/tenant-admin/`\n- **guest** / Guest#2026 – ohne AV-Pair\n\nDie Anmeldung über ISE läuft über die Anmelde-Domain **ISE** (auf der Login-Seite wählbar, per REST `apic#ISE\\\\<Benutzer>`). Die lokale Anmeldung (admin) bleibt Standard.",
+ "requirements": [
+  "netadmin meldet sich über ISE an und hat volle Admin-Rechte.",
+  "shopops darf den Tenant Shop ändern – und sonst nichts: keine Access Policies, keine anderen Tenants.",
+  "Ein Benutzer ohne AV-Pair kommt nicht hinein.",
+  "Zusätzlich gibt es einen lokalen Benutzer **shopro** (Passwort Read#2026), der den Tenant Shop nur lesen darf."
+ ],
+ "limits": [
+  "TACACS+ wird simuliert: Erreichbarkeit, Shared Key, Benutzer und AV-Pair. Accounting und Command Authorization fehlen.",
+  "Die Rechteprüfung kennt Rollen (admin, tenant-admin …) mit Lese-/Schreibrecht und Security Domains; feinere RBAC-Regeln fehlen."
+ ],
+ "hints": [
+  "**Konzept:** Externe Anmeldung braucht drei Teile: den Server (Provider), eine Gruppe, die ihn nutzt, und eine Anmelde-Domain, die auf diese Gruppe zeigt. Welche Rechte jemand bekommt, sagt das AV-Pair: Security Domain / Rolle.",
+  "**Objekte:** *Admin > AAA*: TACACS+ Provider (mit Management EPG Out-of-Band), Provider Group, Login Domain. *Security*: Security Domains und deren Zuordnung zum Tenant. *Local Users* mit Domain und Rolle.",
+  "**Prüfschritte:** Als netadmin, shopops und guest anmelden und das *Login-Protokoll* lesen: Lag es an Server, Key, Benutzer oder AV-Pair? Darf shopops nichts im Tenant Shop, fehlt die Verbindung zwischen der Security Domain aus dem AV-Pair und dem Tenant.",
+  "**Lösung:** Provider 192.168.10.40 mit Key und OOB, Provider Group (z. B. ISE-TACACS), Login Domain ISE mit Realm TACACS+. Security Domain Shop-Dom anlegen und dem Tenant Shop zuordnen. Lokaler Benutzer shopro mit Domain Shop-Dom, Rolle tenant-admin, nur **Read**."
+ ],
+ "cause": "Es gibt weder TACACS+-Provider noch Login-Domain noch Security Domain; shopro existiert nicht.",
  "config": [
   {
    "polUni": {
@@ -433,34 +464,7 @@
    ]
   }
  ],
- "tasks": [
-  {
-   "title": "TACACS+ Provider",
-   "text": "**Admin > AAA > TACACS+ Management > TACACS+ Providers**: 192.168.10.40, Key Tac#Key2026, Management EPG **default (Out-of-Band)**."
-  },
-  {
-   "title": "Provider Group",
-   "text": "TACACS+ Provider Group **ISE-TACACS** mit dem Provider (Priorität 1)."
-  },
-  {
-   "title": "Login Domain",
-   "text": "**Authentication > Login Domains**: **ISE**, Realm TACACS+, Provider Group ISE-TACACS.",
-   "hint": "Anmelden dann mit Domain ISE auf der Login-Seite oder per REST als `apic#ISE\\\\netadmin`."
-  },
-  {
-   "title": "Security Domain",
-   "text": "**Security > Security Domains**: **Shop-Dom**. Am Tenant Shop (Rechtsklick > Add Security Domain) Shop-Dom zuordnen.",
-   "hint": "Der Name muss zum AV-Pair passen: shopops bekommt tenant-admin nur in Shop-Dom."
-  },
-  {
-   "title": "Lokaler Benutzer",
-   "text": "**Local Users > Create Local User**: **shopro**, Passwort Read#2026, Security Domain Shop-Dom, Rolle **tenant-admin** mit **Read**."
-  },
-  {
-   "title": "Ausprobieren",
-   "text": "Ab- und als shopops (Domain ISE) wieder anmelden: Den Tenant Shop darfst du ändern, Access Policies nicht. Was passiert bei guest? Unter *Login-Protokoll* siehst du, wie jede Anmeldung lief."
-  }
- ],
+ "tasks": [],
  "checks": [
   {
    "desc": "netadmin meldet sich über ISE als admin an",
@@ -477,19 +481,36 @@
    "dn": "uni/tn-Shop/BD-BD-Web"
   },
   {
-   "desc": "shopops darf keine Access Policies ändern",
-   "type": "rbac",
-   "user": "apic#ISE\\shopops",
-   "pwd": "Shop#2026",
-   "dn": "uni/infra/attentp-AAEP-Server",
-   "expect": false
+   "desc": "shopro kann sich anmelden",
+   "type": "login",
+   "user": "shopro",
+   "pwd": "Read#2026"
   },
   {
    "desc": "guest ohne AV-Pair wird abgewiesen",
    "type": "login",
    "user": "apic#ISE\\guest",
    "pwd": "Guest#2026",
-   "expect": false
+   "expect": false,
+   "category": "security"
+  },
+  {
+   "desc": "shopops darf keine Access Policies ändern",
+   "type": "rbac",
+   "user": "apic#ISE\\shopops",
+   "pwd": "Shop#2026",
+   "dn": "uni/infra/attentp-AAEP-Server",
+   "expect": false,
+   "category": "security"
+  },
+  {
+   "desc": "shopops darf den Tenant common nicht ändern",
+   "type": "rbac",
+   "user": "apic#ISE\\shopops",
+   "pwd": "Shop#2026",
+   "dn": "uni/tn-common/BD-default",
+   "expect": false,
+   "category": "security"
   },
   {
    "desc": "shopro darf Shop nur lesen",
@@ -497,13 +518,55 @@
    "user": "shopro",
    "pwd": "Read#2026",
    "dn": "uni/tn-Shop/BD-BD-Web",
-   "expect": false
+   "expect": false,
+   "category": "security"
   },
   {
-   "desc": "shopro kann sich anmelden",
-   "type": "login",
+   "desc": "shopro darf außerhalb von Shop nichts ändern",
+   "type": "rbac",
    "user": "shopro",
-   "pwd": "Read#2026"
+   "pwd": "Read#2026",
+   "dn": "uni/infra/attentp-AAEP-Server",
+   "expect": false,
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "shopops meldet sich an, sieht aber im Tenant Shop nichts. Was fehlt am wahrscheinlichsten?",
+   "options": [
+    "Die Security Domain Shop-Dom ist dem Tenant Shop nicht zugeordnet",
+    "Der Shared Key",
+    "Die Login Domain",
+    "Ein Contract"
+   ],
+   "answer": 0,
+   "explain": "Anmeldung klappt, also stimmen Server und Key. Die Rechte gelten nur für Objekte in derselben Security Domain."
+  },
+  {
+   "id": "q2",
+   "q": "Warum bekommt guest ohne AV-Pair keinen Zugang statt Leserechten?",
+   "options": [
+    "Ohne AV-Pair gibt es keine Rolle; der APIC weist die Anmeldung ab (es sei denn, man erlaubt Fallback-Rechte)",
+    "Weil guest ein reservierter Name ist",
+    "Weil der Key falsch ist",
+    "Er bekommt Leserechte"
+   ],
+   "answer": 0,
+   "explain": "Least Privilege: Wer keine Rolle zugewiesen bekommt, kommt nicht hinein."
+  },
+  {
+   "id": "q3",
+   "q": "ISE ist nicht erreichbar. Wie meldet sich der Admin noch an?",
+   "options": [
+    "Lokal (Default-Domain bleibt lokal) bzw. über die Fallback-Domain",
+    "Gar nicht",
+    "Mit dem Shared Key",
+    "Über SNMP"
+   ],
+   "answer": 0,
+   "explain": "Deshalb bleibt die lokale Anmeldung Standard – sonst sperrt man sich bei einem AAA-Ausfall aus."
   }
  ],
  "solution": "Provider `aaaTacacsPlusProvider name=192.168.10.40` mit `key` und `aaaRsSecProvToEpg` auf oob-default, Provider Group `aaaTacacsPlusProviderGroup ISE-TACACS` mit `aaaProviderRef`, Login Domain `aaaLoginDomain ISE` mit `aaaDomainAuth realm=tacacs providerGroup=ISE-TACACS`. Security Domain `aaaDomain Shop-Dom`, am Tenant `aaaDomainRef name=Shop-Dom`. Lokaler Benutzer mit `aaaUserDomain Shop-Dom` und `aaaUserRole tenant-admin privType=readPriv`.",
