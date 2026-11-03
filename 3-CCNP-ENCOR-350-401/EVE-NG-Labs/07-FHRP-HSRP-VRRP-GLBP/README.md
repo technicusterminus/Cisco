@@ -13,7 +13,7 @@ Zwei Distribution-Router, ein Access-Switch, drei VLANs mit je einem anderen FHR
 | Deck-Tag | Thema | Karten im Kompendium |
 |---|---|---|
 | `Ziel::3.3.c` | HSRP und VRRP | 30 |
-| `Ziel::1.1.b` | Redundanz, FHRP und SSO | 22 |
+| `Ziel::1.1.b` | Redundanz, FHRP und SSO | 26 |
 
 **So arbeitest du:** Importiere [`EVE-Import.zip`](EVE-Import.zip) in EVE-NG (siehe [Import in EVE-NG](../README.md#import-in-eve-ng)). Das Lab *Bauen* ist Teil A, das Lab *Reparieren* ist Teil B, Teil C = Üben. Ohne Import liegen die Konfigurationen als Textdateien vor (`build/`, `repair/`, `solutions/`), die du per Konsole einfügst (siehe [Manuell aufbauen](../README.md#manuell-aufbauen-ohne-import)). Die Interface-Namen sind **identisch zu CML**; die Aufgabentexte und Konfigurationen gelten unverändert.
 

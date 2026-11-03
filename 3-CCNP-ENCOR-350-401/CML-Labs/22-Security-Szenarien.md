@@ -12,10 +12,10 @@ Szenarien zu den Security-Themen, die sich nicht sinnvoll im CML nachstellen las
 
 | Deck-Tag | Thema | Karten im Kompendium |
 |---|---|---|
-| `Ziel::5.3` | REST-API-Sicherheit | 22 |
+| `Ziel::5.3` | REST-API-Sicherheit | 27 |
 | `Ziel::5.4.a` | Threat Defense | 29 |
 | `Ziel::5.4.b` | Endpoint Security | 29 |
-| `Ziel::5.4.c` | Next-Generation Firewall | 22 |
+| `Ziel::5.4.c` | Next-Generation Firewall | 25 |
 | `Ziel::5.4.d` | TrustSec und MACsec | 28 |
 
 Warum ohne CML? Threat Defense, Endpoint-Schutz, Next-Generation-Firewalls und TrustSec brauchen ISE, Firewalls, Lizenzen oder Hardware, die sich in einer kostenfreien Lab-Umgebung nicht sinnvoll nachbauen lassen. Du übst hier stattdessen das, was die Prüfung fragt: Komponenten zuordnen, Entwürfe begründen, Konfigurationen lesen und Schwachstellen finden.

@@ -13,9 +13,9 @@ Ein IOS-XE-Router wird programmierbar: RESTCONF und NETCONF aktivieren, YANG-Dat
 | Deck-Tag | Thema | Karten im Kompendium |
 |---|---|---|
 | `Ziel::4.6` | NETCONF und RESTCONF | 40 |
-| `Ziel::6.3` | YANG | 21 |
-| `Ziel::6.5` | HTTP-Codes und API-Payloads | 25 |
-| `Ziel::6.6` | EEM-Applets | 27 |
+| `Ziel::6.3` | YANG | 27 |
+| `Ziel::6.5` | HTTP-Codes und API-Payloads | 29 |
+| `Ziel::6.6` | EEM-Applets | 29 |
 
 **So arbeitest du:** Teil A = Bauen (importiere `topology.yaml`), Teil B = Reparieren (importiere `topology-repair.yaml`, dort ist alles gebaut, aber mit Fehlern), Teil C = Üben (Transferfragen zum Selbsttest). Lösungen und Fehlerursachen liegen in `solutions/`, erst nach eigenem Versuch öffnen.
 

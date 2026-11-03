@@ -13,7 +13,7 @@ Layer-3/4-Filter mit Standard-, Extended- und benannten ACLs, `established`, Log
 | Deck-Tag | Thema | Karten im Kompendium |
 |---|---|---|
 | `Ziel::5.2.a` | ACLs | 52 |
-| `Ziel::5.2.b` | CoPP | 21 |
+| `Ziel::5.2.b` | CoPP | 23 |
 
 **So arbeitest du:** Importiere [`EVE-Import.zip`](EVE-Import.zip) in EVE-NG (siehe [Import in EVE-NG](../README.md#import-in-eve-ng)). Das Lab *Bauen* ist Teil A, das Lab *Reparieren* ist Teil B, Teil C = Üben. Ohne Import liegen die Konfigurationen als Textdateien vor (`build/`, `repair/`, `solutions/`), die du per Konsole einfügst (siehe [Manuell aufbauen](../README.md#manuell-aufbauen-ohne-import)). Die Interface-Namen sind **identisch zu CML**; die Aufgabentexte und Konfigurationen gelten unverändert.
 

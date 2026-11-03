@@ -1,7 +1,7 @@
 # Anki-Deck: CCNP ENCOR 350-401 v1.2
 
-**Aktuelle Version:** 5.3 (Stand 02.11.2026) · **1.779 Karten** (1.431 Wissens- und Übungskarten, 348 Befehlskarten)
-**Datei:** [`ENCOR_v1.2_Kompendium_5.3_DE.apkg`](ENCOR_v1.2_Kompendium_5.3_DE.apkg)
+**Aktuelle Version:** 5.4 (Stand 03.11.2026) · **1.845 Karten** (1.497 Wissens- und Übungskarten, 348 Befehlskarten)
+**Datei:** [`ENCOR_v1.2_Kompendium_5.4_DE.apkg`](ENCOR_v1.2_Kompendium_5.4_DE.apkg)
 
 > **Neu:** Es gibt eine [englische Version](EN/) mit 1.981 Karten: Fragen und Begriffe auf Englisch wie in der Prüfung, Erklärungen auf Deutsch, dazu 429 MC-Karten im Prüfungsstil und 136 Show-Karten mit echten Ausgaben.
 
@@ -11,7 +11,7 @@ Das Deck deckt alle 47 Ziele des Blueprints ab. Die Karten fragen nicht nur Fakt
 
 1. `.apkg` herunterladen und in Anki öffnen (Datei → Importieren).
 2. Das Deck heißt „ENCOR v1.2 · Kompendium“ und hat sechs Unterdecks, eines pro Domäne.
-3. **Von 5.1 oder 5.2 auf 5.3:** einfach importieren. Notiztyp und Kennungen sind gleich, der Lernstand bleibt, korrigierte Befehlskarten werden aktualisiert.
+3. **Von 5.1, 5.2 oder 5.3 auf 5.4:** einfach importieren. Notiztyp und Kennungen sind gleich, der Lernstand bleibt, neue Karten kommen als neue Karten dazu.
 4. **Umstieg von 4.x oder 5.0:** Lösche vorher das alte ENCOR-Deck. Version 5.1 bringt einen neuen Notiztyp mit, damit der Text auch im iOS-Dunkelmodus lesbar ist. Ohne Löschen stehen alle Karten doppelt in der Sammlung, und der alte Lernstand geht ohnehin nicht über.
 
 Künftige Updates behalten den Lernstand, solange Notiztyp und interne Kennungen gleich bleiben. Ändert sich das, steht es in der Versionstabelle unten.
@@ -22,12 +22,12 @@ Ohne die Befehlskarten, deren Verteilung im Abschnitt „Befehlsreferenz“ steh
 
 | Domäne | Karten | Anteil | Blueprint |
 |---|---:|---:|---:|
-| 1 Architektur (QoS, SD-WAN, SD-Access, Redundanz) | 185 | 12,9 % | 15 % |
-| 2 Virtualisierung (Hypervisor, VRF, GRE/IPsec, LISP, VXLAN) | 147 | 10,3 % | 10 % |
-| 3 Infrastruktur (Layer 2, OSPF, EIGRP, BGP, NAT, HSRP, Multicast) | 475 | 33,2 % | 30 % |
-| 4 Network Assurance (Syslog, SNMP, NetFlow, SPAN, IP SLA, Catalyst Center) | 170 | 11,9 % | 10 % |
-| 5 Security (AAA, ACL, CoPP, 802.1X, TrustSec, MACsec, Firewall) | 272 | 19,0 % | 20 % |
-| 6 Automation und KI (Python, JSON, YANG, NETCONF/RESTCONF, EEM, Ansible/Terraform) | 182 | 12,7 % | 15 % |
+| 1 Architektur (QoS, SD-WAN, SD-Access, Redundanz) | 211 | 14,1 % | 15 % |
+| 2 Virtualisierung (Hypervisor, VRF, GRE/IPsec, LISP, VXLAN) | 147 | 9,8 % | 10 % |
+| 3 Infrastruktur (Layer 2, OSPF, EIGRP, BGP, NAT, HSRP, Multicast) | 475 | 31,7 % | 30 % |
+| 4 Network Assurance (Syslog, SNMP, NetFlow, SPAN, IP SLA, Catalyst Center) | 170 | 11,4 % | 10 % |
+| 5 Security (AAA, ACL, CoPP, 802.1X, TrustSec, MACsec, Firewall) | 282 | 18,8 % | 20 % |
+| 6 Automation und KI (Python, JSON, YANG, NETCONF/RESTCONF, EEM, Ansible/Terraform) | 212 | 14,2 % | 15 % |
 
 ## So ist eine Karte aufgebaut
 
@@ -40,15 +40,15 @@ Jede Karte hat eine feste ID (`E12-<Blueprint-Punkt>-<Nr>`) sowie Ziel, Thema, T
 
 | Typ | Karten | Zweck |
 |---|---:|---|
-| Wissen | 445 | Definitionen und Fakten, meist mit kleiner Situation |
-| Szenario | 233 | Fehlersuche und Designentscheidungen |
-| CLI | 213 | Konfiguration und Befehle |
-| Interpretation | 169 | Ausgaben und Code lesen |
-| Vergleich | 168 | Protokolle und Verfahren gegenüberstellen |
-| Exhibit | 81 | `show`-Ausgaben und Konfigurationen wie in der Prüfung |
-| Vertiefung | 54 | Warum funktioniert etwas so? |
-| Prüfungsfalle | 43 | Typische Stolpersteine |
-| Rechnen | 25 | Subnetze, Wildcards, Overhead, Metriken |
+| Wissen | 459 | Definitionen und Fakten, meist mit kleiner Situation |
+| Szenario | 251 | Fehlersuche und Designentscheidungen |
+| CLI | 218 | Konfiguration und Befehle |
+| Interpretation | 173 | Ausgaben und Code lesen |
+| Vergleich | 183 | Protokolle und Verfahren gegenüberstellen |
+| Exhibit | 83 | `show`-Ausgaben und Konfigurationen wie in der Prüfung |
+| Vertiefung | 57 | Warum funktioniert etwas so? |
+| Prüfungsfalle | 46 | Typische Stolpersteine |
+| Rechnen | 27 | Subnetze, Wildcards, Overhead, Metriken |
 | Befehl | 348 | Aufgabe vorne, Syntax mit Modus hinten |
 
 ## Befehlsreferenz
@@ -69,10 +69,20 @@ Verteilung der Befehlskarten: Architektur 24, Virtualisierung 35, Infrastruktur 
 Die Befehlskarten stehen nach Domänen getrennt in [`Quelle/`](Quelle/). Nach einer Änderung neu einspielen:
 
 ```
-python3 Quelle/befehle_einspielen.py ENCOR_v1.2_Kompendium_5.3_DE.apkg ENCOR_v1.2_Kompendium_5.4_DE.apkg 5.4
+python3 Quelle/befehle_einspielen.py ENCOR_v1.2_Kompendium_5.4_DE.apkg ENCOR_v1.2_Kompendium_5.5_DE.apkg 5.5
 ```
 
 Das Skript ersetzt nur die Karten mit `Fokus::Befehle` und lässt alle anderen unverändert.
+
+## Ergänzte Karten
+
+Neue Wissens- und Übungskarten stehen in [`Quelle/ergaenzung_5.4.txt`](Quelle/ergaenzung_5.4.txt), im selben Format wie die Befehlskarten, nur mit `T: <Typ> <Stufe>`. Einspielen:
+
+```
+python3 Quelle/karten_ergaenzen.py ENCOR_v1.2_Kompendium_5.4_DE.apkg ENCOR_v1.2_Kompendium_5.5_DE.apkg 5.5
+```
+
+Version 5.4 ist so aus 5.3 entstanden. Das Skript legt nur Karten an, die noch nicht im Deck stehen, und lässt alle anderen unverändert. Ein zweiter Lauf auf dasselbe Deck ändert nichts.
 
 ## Gezielt lernen
 
@@ -80,13 +90,13 @@ Im Anki-Browser suchen oder als gefiltertes Deck anlegen:
 
 | Suche | Karten | Wofür |
 |---|---:|---|
-| `tag:Modus::Zug` | 1.022 | Kurze Karten ohne Codeblöcke, gut für unterwegs |
-| `tag:Fokus::Exhibit` | 127 | Ausgaben und Konfigurationen interpretieren |
-| `tag:Fokus::Falle` | 68 | Prüfungsfallen |
+| `tag:Modus::Zug` | 1.079 | Kurze Karten ohne Codeblöcke, gut für unterwegs |
+| `tag:Fokus::Exhibit` | 132 | Ausgaben und Konfigurationen interpretieren |
+| `tag:Fokus::Falle` | 71 | Prüfungsfallen |
 | `tag:Fokus::HighYield` | 203 | Klassische Prüfungsfakten |
 | `tag:Domaene::3` usw. | – | Eine Domäne |
 | `tag:Ziel::3.2.b` usw. | – | Ein einzelnes Prüfungsziel, passend zu den Labs |
-| `tag:Stufe::Schwer` | 115 | Die anspruchsvollsten Karten (ohne Befehlskarten) |
+| `tag:Stufe::Schwer` | 123 | Die anspruchsvollsten Karten (ohne Befehlskarten) |
 | `tag:Fokus::Befehle` | 348 | Befehle abfragen: Aufgabe vorne, Syntax hinten |
 
 Welche Filter in welche Woche gehören, steht im [Lernplan](../LERNPLAN.md).
@@ -95,6 +105,7 @@ Welche Filter in welche Woche gehören, steht im [Lernplan](../LERNPLAN.md).
 
 | Version | Änderung |
 |---|---|
+| 5.4 | 66 neue Karten für die Domänen, die unter dem Blueprint-Gewicht lagen: Architektur 26 (u. a. SD-WAN Nutzen und Grenzen, Fabric und klassischer Campus, Verfügbarkeit und Cloud-Modelle), Security 10 (CoPP, REST-API-Sicherheit, NGFW), Automation und KI 30 (JSON, YANG, Controller-APIs, HTTP-Codes, EEM, Push und Pull). Vorher unabhängig fachlich geprüft. Tag `Ergaenzung::5_4`, Quelle in `Quelle/ergaenzung_5.4.txt`. Bestehende Karten unverändert, Lernstand bleibt. |
 | 5.3 | Drei neue Befehlskarten zu Trunk-Kapselung, DTP-Reihenfolge und `interface range`. Drei Befehlskarten korrigiert: IPsec-VTI trägt auch Multicast (die Karte sagte das Gegenteil), EEM-Applet mit `sync yes skip yes` statt `sync no skip yes`, EPC-Hinweis zu `brief` und `detail`. Sonst unverändert, Lernstand bleibt. |
 | 5.2 | 345 Befehlskarten zu allen Zielen mit CLI-Bezug, Tag `Fokus::Befehle` und `Befehlsart::…`. Notiztyp und GUIDs wie 5.1: Update-Import behält den Lernstand. |
 | 5.1 | Karten im iOS-Dunkelmodus lesbar (Textfarbe der Karte explizit gesetzt, vorher stand heller Text auf weißem Grund). Neuer Notiztyp und neue GUIDs, daher das alte Deck vor dem Import löschen. |

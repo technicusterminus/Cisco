@@ -9,14 +9,14 @@ Pro Ziel (`Ziel::…` im Anki-Deck) steht hier, **wo die Aufgabenstellung liegt*
 
 ## 1.1.a – Campus-, Fabric- und Cloud-Design
 
-Karten im Deck: 26 (`tag:Ziel::1.1.a`)
+Karten im Deck: 30 (`tag:Ziel::1.1.a`)
 
 - **Lab 21 – Design-Fallstudien**
   - Aufgaben und Lösungen (zum Aufklappen) in [`21-Design-Fallstudien.md`](21-Design-Fallstudien.md)
 
 ## 1.1.b – Redundanz, FHRP und SSO
 
-Karten im Deck: 22 (`tag:Ziel::1.1.b`)
+Karten im Deck: 26 (`tag:Ziel::1.1.b`)
 
 - **Lab 07 – First-Hop-Redundanz: HSRP, VRRP und GLBP** (4 Fehler zum Reparieren, 90 min)
   - Aufgaben: [Teil A Bauen](07-FHRP-HSRP-VRRP-GLBP/README.md#teil-a--bauen) · [Teil B Reparieren](07-FHRP-HSRP-VRRP-GLBP/README.md#teil-b--reparieren) · [Teil C Üben](07-FHRP-HSRP-VRRP-GLBP/README.md#teil-c--üben)
@@ -27,28 +27,28 @@ Karten im Deck: 22 (`tag:Ziel::1.1.b`)
 
 ## 1.2.a – SD-WAN: Ebenen und Komponenten
 
-Karten im Deck: 33 (`tag:Ziel::1.2.a`)
+Karten im Deck: 35 (`tag:Ziel::1.2.a`)
 
 - **Lab 21 – Design-Fallstudien**
   - Aufgaben und Lösungen (zum Aufklappen) in [`21-Design-Fallstudien.md`](21-Design-Fallstudien.md)
 
 ## 1.2.b – SD-WAN: Nutzen und Grenzen
 
-Karten im Deck: 14 (`tag:Ziel::1.2.b`)
+Karten im Deck: 22 (`tag:Ziel::1.2.b`)
 
 - **Lab 21 – Design-Fallstudien**
   - Aufgaben und Lösungen (zum Aufklappen) in [`21-Design-Fallstudien.md`](21-Design-Fallstudien.md)
 
 ## 1.3.a – SD-Access: Ebenen und Komponenten
 
-Karten im Deck: 29 (`tag:Ziel::1.3.a`)
+Karten im Deck: 31 (`tag:Ziel::1.3.a`)
 
 - **Lab 21 – Design-Fallstudien**
   - Aufgaben und Lösungen (zum Aufklappen) in [`21-Design-Fallstudien.md`](21-Design-Fallstudien.md)
 
 ## 1.3.b – Fabric und klassischer Campus
 
-Karten im Deck: 13 (`tag:Ziel::1.3.b`)
+Karten im Deck: 19 (`tag:Ziel::1.3.b`)
 
 - **Lab 21 – Design-Fallstudien**
   - Aufgaben und Lösungen (zum Aufklappen) in [`21-Design-Fallstudien.md`](21-Design-Fallstudien.md)
@@ -399,7 +399,7 @@ Karten im Deck: 52 (`tag:Ziel::5.2.a`)
 
 ## 5.2.b – CoPP
 
-Karten im Deck: 21 (`tag:Ziel::5.2.b`)
+Karten im Deck: 23 (`tag:Ziel::5.2.b`)
 
 - **Lab 10 – ACLs und Control-Plane Policing** (4 Fehler zum Reparieren, 90 min)
   - Aufgaben: [Teil A Bauen](10-ACL-CoPP/README.md#teil-a--bauen) · [Teil B Reparieren](10-ACL-CoPP/README.md#teil-b--reparieren) · [Teil C Üben](10-ACL-CoPP/README.md#teil-c--üben)
@@ -408,7 +408,7 @@ Karten im Deck: 21 (`tag:Ziel::5.2.b`)
 
 ## 5.3 – REST-API-Sicherheit
 
-Karten im Deck: 22 (`tag:Ziel::5.3`)
+Karten im Deck: 27 (`tag:Ziel::5.3`)
 
 - **Lab 22 – Security-Szenarien**
   - Aufgaben und Lösungen (zum Aufklappen) in [`22-Security-Szenarien.md`](22-Security-Szenarien.md)
@@ -429,7 +429,7 @@ Karten im Deck: 29 (`tag:Ziel::5.4.b`)
 
 ## 5.4.c – Next-Generation Firewall
 
-Karten im Deck: 22 (`tag:Ziel::5.4.c`)
+Karten im Deck: 25 (`tag:Ziel::5.4.c`)
 
 - **Lab 22 – Security-Szenarien**
   - Aufgaben und Lösungen (zum Aufklappen) in [`22-Security-Szenarien.md`](22-Security-Szenarien.md)
@@ -454,7 +454,7 @@ Karten im Deck: 49 (`tag:Ziel::6.1`)
 
 ## 6.2 – JSON erstellen
 
-Karten im Deck: 19 (`tag:Ziel::6.2`)
+Karten im Deck: 26 (`tag:Ziel::6.2`)
 
 - **Lab 20 – Python-Drills, ex02_json**: JSON/XML-Bodies bauen, CLI-Ausgabe parsen
   - Aufgabe: [`20-Python-REST-Drills/ex02_json/`](20-Python-REST-Drills/ex02_json/) (Anleitung: [README](20-Python-REST-Drills/README.md))
@@ -462,7 +462,7 @@ Karten im Deck: 19 (`tag:Ziel::6.2`)
 
 ## 6.3 – YANG
 
-Karten im Deck: 21 (`tag:Ziel::6.3`)
+Karten im Deck: 27 (`tag:Ziel::6.3`)
 
 - **Lab 19 – RESTCONF, NETCONF, YANG und EEM** (5 Fehler zum Reparieren, 90 min)
   - Aufgaben: [Teil A Bauen](19-Programmierbarkeit-EEM/README.md#teil-a--bauen) · [Teil B Reparieren](19-Programmierbarkeit-EEM/README.md#teil-b--reparieren) · [Teil C Üben](19-Programmierbarkeit-EEM/README.md#teil-c--üben)
@@ -474,7 +474,7 @@ Karten im Deck: 21 (`tag:Ziel::6.3`)
 
 ## 6.4 – Controller-APIs
 
-Karten im Deck: 20 (`tag:Ziel::6.4`)
+Karten im Deck: 27 (`tag:Ziel::6.4`)
 
 - **Lab 20 – Python-Drills, ex03_rest**: REST-Client gegen Mock-Controller
   - Aufgabe: [`20-Python-REST-Drills/ex03_rest/`](20-Python-REST-Drills/ex03_rest/) (Anleitung: [README](20-Python-REST-Drills/README.md))
@@ -482,7 +482,7 @@ Karten im Deck: 20 (`tag:Ziel::6.4`)
 
 ## 6.5 – HTTP-Codes und API-Payloads
 
-Karten im Deck: 25 (`tag:Ziel::6.5`)
+Karten im Deck: 29 (`tag:Ziel::6.5`)
 
 - **Lab 19 – RESTCONF, NETCONF, YANG und EEM** (5 Fehler zum Reparieren, 90 min)
   - Aufgaben: [Teil A Bauen](19-Programmierbarkeit-EEM/README.md#teil-a--bauen) · [Teil B Reparieren](19-Programmierbarkeit-EEM/README.md#teil-b--reparieren) · [Teil C Üben](19-Programmierbarkeit-EEM/README.md#teil-c--üben)
@@ -494,7 +494,7 @@ Karten im Deck: 25 (`tag:Ziel::6.5`)
 
 ## 6.6 – EEM-Applets
 
-Karten im Deck: 27 (`tag:Ziel::6.6`)
+Karten im Deck: 29 (`tag:Ziel::6.6`)
 
 - **Lab 19 – RESTCONF, NETCONF, YANG und EEM** (5 Fehler zum Reparieren, 90 min)
   - Aufgaben: [Teil A Bauen](19-Programmierbarkeit-EEM/README.md#teil-a--bauen) · [Teil B Reparieren](19-Programmierbarkeit-EEM/README.md#teil-b--reparieren) · [Teil C Üben](19-Programmierbarkeit-EEM/README.md#teil-c--üben)
@@ -503,7 +503,7 @@ Karten im Deck: 27 (`tag:Ziel::6.6`)
 
 ## 6.7 – Agentenbasierte und agentenlose Automation
 
-Karten im Deck: 21 (`tag:Ziel::6.7`)
+Karten im Deck: 25 (`tag:Ziel::6.7`)
 
 - **Lab 20 – Python-Drills, ex06_templates**: Jinja2-Template und Ansible-Playbook reparieren
   - Aufgabe: [`20-Python-REST-Drills/ex06_templates/`](20-Python-REST-Drills/ex06_templates/) (Anleitung: [README](20-Python-REST-Drills/README.md))

@@ -13,7 +13,7 @@ Zwei Distribution-Router, ein Access-Switch, drei VLANs mit je einem anderen FHR
 | Deck-Tag | Thema | Karten im Kompendium |
 |---|---|---|
 | `Ziel::3.3.c` | HSRP und VRRP | 30 |
-| `Ziel::1.1.b` | Redundanz, FHRP und SSO | 22 |
+| `Ziel::1.1.b` | Redundanz, FHRP und SSO | 26 |
 
 **So arbeitest du:** Teil A = Bauen (importiere `topology.yaml`), Teil B = Reparieren (importiere `topology-repair.yaml`, dort ist alles gebaut, aber mit Fehlern), Teil C = Üben (Transferfragen zum Selbsttest). Lösungen und Fehlerursachen liegen in `solutions/`, erst nach eigenem Versuch öffnen.
 
