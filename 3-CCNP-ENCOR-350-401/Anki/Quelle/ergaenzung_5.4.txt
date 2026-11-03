@@ -1,0 +1,361 @@
+# 1.1.a | Campus-, Fabric- und Cloud-Design
+S: https://www.cisco.com/c/en/us/td/docs/solutions/CVD/Campus/cisco-campus-lan-wlan-design-guide.html | Cisco Campus LAN Design Guide
+
+Q: Eine Firma betreibt Workloads gleichzeitig in AWS und in Azure, ein eigenes Rechenzentrum hat sie nicht. Ist das Hybrid Cloud oder Multi-Cloud?
+A: **Multi-Cloud.** Multi-Cloud heißt: mehrere Public-Cloud-Anbieter nebeneinander. Hybrid Cloud heißt: eigene private Infrastruktur plus Public Cloud. Beides kann zusammen vorkommen, wenn ein eigenes Rechenzentrum dazukommt.
+H: Merke: Hybrid = privat + öffentlich. Multi = mehrere Anbieter.
+T: Vergleich Leicht
+
+Q: Zwei virtuelle Server sollen in der Public Cloud redundant laufen. Warum verteilst du sie auf zwei Availability Zones derselben Region?
+A: **Weil eine Availability Zone ein eigenes, physisch getrenntes Rechenzentrum mit eigener Strom- und Kühlungsversorgung ist.** Fällt eine Zone aus, läuft die zweite weiter. Die Region ist das geografische Gebiet, in dem mehrere solcher Zonen nah genug für geringe Latenz liegen.
+H: Falle: Zwei Server in derselben Zone sind nur gegen Hardwaredefekte geschützt, nicht gegen den Ausfall des Rechenzentrums.
+T: Szenario Mittel
+
+Q: Ein Personalsystem soll in die Public Cloud, die Daten dürfen das Land nicht verlassen. Was musst du bei der Wahl des Angebots als Erstes prüfen?
+A: **In welcher Region die Daten gespeichert und verarbeitet werden (Datenstandort).** Der Kunde wählt die Region, in der seine Ressourcen laufen. Backups, Replikation und Support-Zugriffe müssen ebenfalls im erlaubten Gebiet bleiben.
+T: Szenario Leicht
+
+Q: Ein SaaS-Anbieter garantiert 99,9 % Verfügbarkeit pro Jahr. Wie lange darf der Dienst im Jahr ausfallen?
+A: **Etwa 8 Stunden 46 Minuten.** 0,1 % von 8.760 Stunden sind 8,76 Stunden. Bei 99,99 % sind es nur noch rund 53 Minuten.
+H: Merke: Jede zusätzliche Neun teilt die erlaubte Ausfallzeit durch zehn.
+T: Rechnen Leicht
+
+# 1.1.b | Redundanz, FHRP und SSO
+S: https://www.cisco.com/c/en/us/td/docs/solutions/Enterprise/Campus/HA_campus_DG/hacampusdg.html | Cisco Campus Network for High Availability
+
+Q: Zwei getrennte WAN-Leitungen haben je 99 % Verfügbarkeit, eine allein reicht für den Betrieb. Wie verfügbar ist die Anbindung insgesamt?
+A: **99,99 %.** Die Anbindung fällt nur aus, wenn beide gleichzeitig ausfallen: 0,01 × 0,01 = 0,0001. Daraus folgt 1 − 0,0001 = 99,99 %.
+H: Falle: Das gilt nur bei wirklich unabhängigen Leitungen. Liegen beide in derselben Trasse, fallen sie oft zusammen aus. Zum Vergleich in Reihe: zwei Geräte mit je 99,9 %, die beide nötig sind, ergeben nur rund 99,8 %.
+T: Rechnen Mittel
+
+Q: Ein Chassis-Switch mit zwei Supervisors soll eine neue Software bekommen, ohne dass der Verkehr unterbrochen wird. Welches Verfahren nutzt die Redundanz dafür, und was setzt es voraus?
+A: **In-Service Software Upgrade (ISSU), das SSO voraussetzt.** Zuerst wird der Standby-Supervisor aktualisiert, dann übernimmt er per Switchover, danach folgt der zweite Supervisor. Weil SSO den Zustand synchron hält und NSF die Weiterleitung überbrückt, läuft der Datenverkehr weiter.
+T: Wissen Mittel
+
+Q: Redundanz im Gerät (zwei Supervisors, zwei Netzteile) oder Redundanz im Netz (zwei Geräte, zwei Pfade): Wogegen schützt jede, und was braucht jede für eine schnelle Umschaltung?
+A: **Im Gerät schützt sie vor dem Ausfall einer Komponente, im Netz auch vor dem Ausfall des ganzen Geräts oder Standorts.** Geräte-Redundanz braucht SSO und NSF, damit die Umschaltung nicht auffällt. Netz-Redundanz braucht schnelle Konvergenz: FHRP für das Gateway, Routing mit ECMP und BFD für die Erkennung.
+H: Merke: Ein Gerät mit zwei Supervisors bleibt ein Single Point of Failure für Strom am Rack, Fehlkonfiguration und Softwarefehler, die beide Supervisors treffen.
+T: Vergleich Mittel
+
+Q: BFD, SSO mit NSF, ECMP und FHRP: Welcher Mechanismus erkennt einen Ausfall schnell, und welcher hält die Weiterleitung während einer Supervisor-Umschaltung am Laufen?
+A: **BFD erkennt schnell, SSO mit NSF hält die Weiterleitung am Laufen.** BFD meldet einen toten Pfad in Millisekunden an das Routing. SSO mit NSF lässt die Hardware weiterleiten, während die Control Plane neu startet. ECMP und FHRP liefern den Ersatzpfad bzw. das Ersatz-Gateway.
+T: Vergleich Mittel
+
+# 1.2.a | SD-WAN: Ebenen und Komponenten
+S: https://www.cisco.com/c/en/us/td/docs/solutions/CVD/SDWAN/cisco-sdwan-design-guide.html | Cisco Catalyst SD-WAN Design Guide
+
+Q: Ein Edge hat ein gültiges Zertifikat und erreicht den Validator, wird aber abgelehnt. Im Edge ist die Organisation als „Firma-Lab“ eingetragen, in den Controllern als „Firma Lab“. Was ist das Problem?
+A: **Der Organization Name muss auf allen SD-WAN-Komponenten exakt gleich sein.** Er wird bei der Authentisierung gegen die Angaben im Zertifikat geprüft. Schon ein anderes Zeichen wie Bindestrich statt Leerzeichen lässt die Prüfung scheitern.
+T: Szenario Mittel
+
+Q: Zu wie vielen SD-WAN Controllern baut ein Edge standardmäßig pro Transport eine Control-Verbindung auf, und wie viele Verbindungen hat er zum SD-WAN Manager?
+A: **Zu zwei Controllern pro Transport und zu genau einem SD-WAN Manager über einen der Transporte.** Zwei Controller-Verbindungen sorgen für Redundanz, die Anzahl lässt sich mit `max-control-connections` ändern. Für die Verwaltung reicht eine einzige Verbindung zum Manager.
+T: Wissen Mittel
+
+# 1.2.b | SD-WAN: Nutzen und Grenzen
+S: https://www.cisco.com/c/en/us/td/docs/solutions/CVD/SDWAN/cisco-sdwan-design-guide.html | Cisco Catalyst SD-WAN Design Guide
+
+Q: Eine Filiale hat nur einen Internetanschluss, und die Leitung fällt komplett aus. Was kann SD-WAN dagegen tun?
+A: **Nichts, ohne einen zweiten Transport gibt es keinen Ausweichpfad.** SD-WAN wählt nur zwischen vorhandenen Pfaden. Für echte Redundanz braucht der Standort einen zweiten, unabhängigen Transport, etwa einen anderen Provider oder Mobilfunk.
+T: Szenario Leicht
+
+Q: MPLS-VPN vom Provider oder SD-WAN über Internet: Wer sorgt jeweils für die Qualität des Pfads?
+A: **Bei MPLS garantiert der Provider eine SLA, bei SD-WAN über Internet misst der Edge die Qualität selbst und weicht aus.** Internet ist günstiger, garantiert aber nichts. SD-WAN gleicht das aus, indem es per BFD laufend misst und mehrere Transporte nutzt. Garantieren kann es die Qualität eines einzelnen Internetpfads nicht.
+T: Vergleich Mittel
+
+Q: Ein Kunde hat zwei WAN-Leitungen und erwartet, dass eine einzelne große Dateiübertragung mit SD-WAN doppelt so schnell läuft. Stimmt das?
+A: **Nein, ein einzelner Flow läuft über einen Tunnel.** SD-WAN verteilt Flows auf gleichwertige Pfade, es teilt aber keinen einzelnen Flow auf mehrere Leitungen auf. Viele parallele Flows nutzen beide Leitungen, eine einzelne Übertragung nicht.
+H: Falle: Lastverteilung pro Flow heißt nicht Bündelung pro Flow.
+T: Pruefungsfalle Mittel
+
+Q: Warum kostet das SD-WAN-Overlay bei Sprache (viele kleine Pakete) anteilig mehr Bandbreite als bei Dateiübertragungen?
+A: **Weil jedes Paket denselben festen Overhead für IPsec und den äußeren Header bekommt.** Bei einem kleinen Sprachpaket macht dieser feste Aufschlag einen großen Teil aus, bei einem 1.400-Byte-Paket nur einen kleinen. Bei der Planung von Sprachbandbreite muss man diesen Aufschlag pro Paket mitrechnen.
+T: Vertiefung Mittel
+
+Q: Mitarbeiter- und Gästenetz sollen über 80 Standorte getrennt bleiben. Was spart Segmentierung mit Service-VPNs im SD-WAN gegenüber VRF-lite im klassischen WAN?
+A: **Die Konfiguration auf jedem Hop dazwischen.** Bei VRF-lite muss jeder Router auf dem Weg jedes VRF mit eigenem Subinterface und eigener Routing-Instanz kennen. Im SD-WAN trägt OMP die VPN-Kennung mit jeder Route, und die Tunnel transportieren die Segmente getrennt Ende zu Ende, egal über welchen Transport.
+T: Vergleich Mittel
+
+Q: Eine Änderung an der DNS-Konfiguration soll auf 100 Filialrouter. Was macht SD-WAN dabei einfacher als der klassische Weg?
+A: **Die Änderung wird einmal im Template im SD-WAN Manager gemacht und auf alle zugeordneten Edges verteilt.** Statt 100 Geräte einzeln per CLI zu ändern, rollst du sie zentral aus und siehst im Manager, auf welchen Geräten sie angekommen ist und wo es Fehler gab.
+T: Szenario Leicht
+
+Q: Was unterscheidet Cloud OnRamp for SaaS von Cloud OnRamp for Multicloud?
+A: **SaaS wählt den besten Weg zu SaaS-Diensten, Multicloud automatisiert die Anbindung an IaaS-Plattformen.** Cloud OnRamp for SaaS misst die Qualität zu Diensten wie Microsoft 365 über die verfügbaren Ausgänge und wählt den besten. Cloud OnRamp for Multicloud baut die Verbindung des SD-WAN zu AWS, Azure oder Google Cloud auf, etwa über deren Transit-Dienste.
+T: Vergleich Mittel
+
+Q: Ein Kunde mit fünf Standorten, einem einzigen MPLS-Transport und kaum Änderungen fragt, ob sich SD-WAN lohnt. Was spricht dagegen?
+A: **Der Nutzen ist klein, die Grundkosten bleiben.** Ohne zweiten Transport gibt es keine Pfadwahl, und bei wenigen Änderungen bringt die zentrale Verwaltung wenig. Controller, Lizenzen, Zertifikate und Know-how kosten trotzdem. Interessant wird es, wenn Internet dazukommt, Standorte wachsen oder Segmentierung nötig wird.
+T: Szenario Mittel
+
+# 1.3.a | SD-Access: Ebenen und Komponenten
+S: https://www.cisco.com/c/en/us/td/docs/solutions/CVD/Campus/cisco-sda-design-guide.html | Cisco Software-Defined Access Design Guide
+
+Q: Ein kleiner Standort soll SD-Access bekommen, es gibt nur einen einzigen Switch (oder einen Stack). Welches Modell nutzt du?
+A: **Fabric in a Box: Ein Gerät übernimmt Border, Control Plane und Edge zugleich.** So bekommt auch ein kleiner Standort VNs, SGTs und Catalyst-Center-Automatisierung, ohne getrennte Geräte für jede Rolle.
+T: Wissen Leicht
+
+Q: Ein Client fragt per ARP nach einem Host, der an einem anderen Fabric Edge hängt. Warum wird diese Anfrage nicht in der ganzen Fabric geflutet?
+A: **Der Edge fragt den Control Plane Node nach der zugehörigen MAC-Adresse und dem RLOC und schickt die ARP-Anfrage gezielt per Unicast an den Ziel-Edge.** Layer-2-Flooding ist in SD-Access standardmäßig aus. So bleiben Broadcasts klein, auch wenn ein Subnetz über viele Edges verteilt ist.
+T: Vertiefung Schwer
+
+# 1.3.b | Fabric und klassischer Campus
+S: https://www.cisco.com/c/en/us/td/docs/solutions/CVD/Campus/cisco-sda-macro-segmentation-deploy-guide.html | Cisco SD-Access Macro Segmentation Deployment Guide
+
+Q: Hinter einem Border liegen nur bekannte Netze des Rechenzentrums, hinter einem zweiten Border der Internetausgang. Welche Border-Rolle bekommt jeder?
+A: **Rechenzentrum: Internal Border. Internet: External Border.** Der Internal Border meldet die bekannten externen Präfixe im Control Plane Node an. Der External Border ist der Ausgang für alle Ziele, die die Fabric nicht kennt. Ein Anywhere Border kann beides.
+T: Szenario Mittel
+
+Q: Wie lernt das klassische Rechenzentrum die Fabric-Subnetze, ohne dass jeder Host einzeln geroutet wird?
+A: **Der Border kündigt die IP-Pools der Fabric als Subnetze per BGP an.** Die einzelnen Host-Einträge (/32) bleiben im Control Plane Node innerhalb der Fabric. Das externe Netz sieht nur die Subnetze und schickt den Verkehr dafür an den Border.
+T: Wissen Mittel
+
+Q: Clients in der Fabric bekommen keine DHCP-Adresse, der DHCP-Server steht im klassischen Rechenzentrum. Wie findet die Antwort des Servers den richtigen Fabric Edge, obwohl alle Edges dieselbe Gateway-Adresse haben?
+A: **Über DHCP Option 82: Der Fabric Edge trägt als Relay seine RLOC-Information ein, und der Border leitet die Antwort anhand dieser Information an den richtigen Edge.** Weil das Anycast Gateway auf allen Edges gleich ist, reicht die Gateway-Adresse allein nicht. Der Server muss Option 82 in der Antwort zurückgeben und eine Route zum Client-Pool über den Border haben.
+T: Vertiefung Schwer
+
+Q: Während der Migration hängen alte und neue Clients im selben Subnetz, verbunden über einen Layer-2-Border-Handoff. Wo darf das Default Gateway dieses Subnetzes noch liegen?
+A: **Nur noch in der Fabric als Anycast Gateway.** Die alte SVI im klassischen Netz muss für dieses VLAN abgeschaltet werden. Gibt es zwei aktive Gateways mit derselben Adresse, entstehen Adresskonflikte, und der Verkehr läuft unvorhersehbar.
+T: Szenario Mittel
+
+Q: In einer Werkhalle stehen Industrie-Switches als Extended Nodes. Maschinen am selben Switch sollen sich trotz gleichem VN nur nach Gruppenregeln erreichen. Was brauchst du?
+A: **Einen Policy Extended Node.** Ein normaler Extended Node setzt keine SGACLs durch, Verkehr zwischen zwei Ports am selben Switch bleibt dort ungefiltert. Ein Policy Extended Node kann SGTs zuordnen und SGACLs selbst durchsetzen, auch zwischen Geräten am selben Switch.
+T: Vergleich Mittel
+
+Q: Der Border übergibt die VNs per VRF-lite an eine Firewall statt an einen Fusion Router. Was gewinnst du dadurch?
+A: **Die Firewall leitet nicht nur Routen zwischen den VNs weiter, sondern prüft auch den Verkehr dazwischen.** Ein Fusion Router macht Route Leaking ohne Prüfung. Eine Firewall setzt Regeln zwischen VNs und Shared Services stateful durch und protokolliert sie.
+T: Vergleich Mittel
+
+# 5.2.b | CoPP
+S: https://www.cisco.com/c/en/us/about/security-center/copp-best-practices.html | Control Plane Policing Implementation Best Practices - Cisco
+
+Q: Du führst CoPP neu ein und kennst die normalen Raten im Netz nicht. Wie gehst du vor, ohne Routing oder Management zu gefährden?
+A: **Zuerst mit `exceed-action transmit` messen, dann die Raten festlegen.** So zählen die Policer Überschreitungen, ohne etwas zu verwerfen. Mit `show policy-map control-plane` siehst du über einige Zeit, wie viel Verkehr jede Klasse wirklich braucht. Erst danach stellst du auf `drop` um.
+T: Szenario Mittel
+
+Q: Ein Router wird mit ICMP an seine Interface-Adressen geflutet. Interface-ACL oder CoPP: Was ist der Unterschied in der Wirkung?
+A: **Die Interface-ACL wirkt nur auf dem Interface, an dem sie steht, CoPP schützt die CPU zentral für alle Pakete an den Router.** Eine Infrastruktur-ACL am Netzrand verwirft unerwünschten Verkehr schon früh. CoPP fängt alles ab, was trotzdem zur CPU will, egal über welches Interface es kommt. Beides ergänzt sich.
+T: Vergleich Mittel
+
+Q: Was unterscheidet Control Plane Protection (CPPr) von einfachem CoPP?
+A: **CPPr teilt die Control Plane in drei Unterschnittstellen auf: host, transit und cef-exception.** Für jede gibt es eine eigene Policy. Host betrifft Pakete an die Router-Adressen, transit Pakete, die per Software weitergeleitet werden, cef-exception z. B. Pakete mit Optionen oder abgelaufener TTL. CoPP behandelt alles gemeinsam.
+T: Vergleich Schwer
+
+# 5.3 | REST-API-Sicherheit
+S: https://developer.cisco.com/docs/dna-center/2-3-7-9/authentication-and-authorization/ | Authentication and Authorization - Cisco Catalyst Center API 2.3.7.9 - Cisco DevNet
+
+Q: Ein gültiges API-Token ist versehentlich in einem öffentlichen Git-Repository gelandet. Was tust du zuerst?
+A: **Das Token sofort widerrufen bzw. das zugehörige Passwort oder den Schlüssel ändern.** Das Löschen aus dem Repository reicht nicht, die Datei bleibt in der Historie und kann längst kopiert sein. Danach prüfst du in den Logs, ob das Token in der Zwischenzeit benutzt wurde.
+T: Szenario Mittel
+
+Q: Warum gehören Tokens und Passwörter nicht in die URL einer API-Anfrage, auch wenn die Verbindung per TLS verschlüsselt ist?
+A: **Weil URLs in Server-Logs, Proxy-Logs und der Browser-Historie gespeichert werden.** TLS schützt nur den Transport. Am Ziel und in Zwischensystemen stehen URLs oft im Klartext in Protokollen. Zugangsdaten gehören in einen Header wie `Authorization` oder `X-Auth-Token`.
+T: Wissen Mittel
+
+Q: Eine API soll nur Clients akzeptieren, die sich selbst mit einem Zertifikat ausweisen. Wie heißt das Verfahren?
+A: **Mutual TLS (mTLS).** Bei normalem TLS weist sich nur der Server aus. Bei mTLS legt auch der Client ein Zertifikat vor, und der Server prüft es. Ein gestohlenes Passwort allein reicht dann nicht für den Zugriff.
+T: Wissen Mittel
+
+Q: Die Anmeldung an einer API meldet einmal „Benutzer unbekannt“ und einmal „Passwort falsch“. Warum ist das ein Sicherheitsproblem?
+A: **Ein Angreifer kann so herausfinden, welche Benutzernamen es gibt.** Mit einer Liste gültiger Namen werden Passwort-Angriffe viel gezielter. Besser ist eine einheitliche Meldung wie „Anmeldung fehlgeschlagen“ für beide Fälle.
+T: Szenario Mittel
+
+Q: Eine Controller-API ist per Token geschützt. Welche Maßnahme im Netz ergänzt das, damit nur die Automationsplattform die API überhaupt erreicht?
+A: **Den Zugriff auf die API-Adresse per ACL oder Firewall auf die Netze der Automationsplattform beschränken.** Dann scheitert ein Angreifer schon am Netz, auch wenn er ein Token hat. Oft liegt die API zusätzlich in einem eigenen Management-Netz oder Management-VRF.
+H: Merke: Netzfilter und Authentisierung schützen unabhängig voneinander. Fällt eine Schicht, hält die andere.
+T: Szenario Leicht
+
+# 5.4.c | Next-Generation Firewall
+S: https://www.cisco.com/c/en/us/products/collateral/security/firesight-management-center/secure-firewall-aag.html | Cisco Secure Firewall At-a-Glance - Cisco
+
+Q: Zwei Firewalls sollen sich gegenseitig ersetzen, und bestehende Verbindungen sollen eine Umschaltung überstehen. Was brauchst du?
+A: **Ein Active/Standby-Paar mit Stateful Failover.** Die aktive Firewall gleicht ihre Verbindungstabelle laufend über einen eigenen Failover- bzw. State-Link mit der Standby-Firewall ab. Fällt sie aus, kennt die Standby-Firewall die offenen Verbindungen und lässt sie weiterlaufen.
+T: Szenario Mittel
+
+Q: Eine NGFW-Regel soll für die Gruppe „Buchhaltung“ gelten, egal an welchem Platz sich jemand anmeldet. Woher kennt die Firewall den Benutzer zu einer IP-Adresse?
+A: **Aus einer Identity-Quelle, bei Cisco typischerweise ISE über pxGrid.** ISE kennt aus der Anmeldung per 802.1X oder VPN, welcher Benutzer gerade welche IP-Adresse hat, und gibt das an die Firewall weiter. Die Regel bleibt richtig, auch wenn sich die Adresse ändert.
+T: Wissen Mittel
+
+Q: Ein Backup-Verkehr zwischen zwei Rechenzentren ist vertrauenswürdig und sehr groß. Wie verhinderst du auf Secure Firewall, dass er die tiefe Prüfung belastet?
+A: **Mit einer Prefilter-Regel, die ihn per Fastpath an der tiefen Prüfung vorbeischleust.** Der Prefilter greift ganz am Anfang, noch vor Access Control und IPS. Fastpath-Verkehr wird nur noch einfach weitergeleitet. Das spart Leistung, der Verkehr ist dann aber auch nicht mehr auf Angriffe geprüft.
+T: Szenario Schwer
+
+# 6.2 | JSON erstellen
+S: https://www.rfc-editor.org/rfc/rfc8259 | RFC 8259: JSON
+
+Q: Wie viele Elemente hat dieses JSON-Objekt auf oberster Ebene, und welchen Typ hat jeder Wert?
+```
+{"name": "R1", "vlans": [10, 20], "mgmt": {"ip": "10.0.0.1"}, "active": false}
+```
+A: **Vier: String, Array, Objekt und Boolean.** name ist ein String, vlans ein Array mit zwei Zahlen, mgmt ein verschachteltes Objekt und active ein Boolean. Das Objekt mgmt zählt als ein Wert, sein Inhalt liegt eine Ebene tiefer.
+T: Interpretation Leicht
+
+Q: Zwei JSON-Objekte enthalten dieselben Schlüssel und Werte in anderer Reihenfolge. Sind sie gleich, und wie ist das bei Arrays?
+A: **Die Objekte sind gleich, bei Arrays zählt die Reihenfolge.** Die Schlüssel eines Objekts haben keine feste Reihenfolge. Ein Array ist dagegen eine geordnete Liste: `[10, 20]` und `[20, 10]` sind verschiedene Werte.
+T: Vergleich Mittel
+
+Q: Ist ein JSON-Dokument gültig, das nur aus "up" oder nur aus true besteht?
+A: **Ja.** Nach RFC 8259 darf ein JSON-Text jeder einzelne Wert sein, nicht nur ein Objekt oder ein Array. In der Praxis liefern APIs trotzdem fast immer ein Objekt, weil es sich erweitern lässt.
+T: Pruefungsfalle Schwer
+
+Q: Welche zwei Fehler hat dieses JSON?
+```
+{"hostname": "R1" "enabled": true, vlan: 10}
+```
+A: **Es fehlt ein Komma nach "R1", und der Schlüssel vlan steht ohne Anführungszeichen.** Mitglieder eines Objekts werden durch Kommas getrennt. Schlüssel sind in JSON immer Strings in doppelten Anführungszeichen. Richtig: `{"hostname": "R1", "enabled": true, "vlan": 10}`.
+T: Exhibit Mittel
+
+Q: Ein RESTCONF-Aufruf liefert dieses JSON. Warum steht vor dem Schlüssel ein Modulname, und wie liest du den Hostnamen in Python aus?
+```
+{"Cisco-IOS-XE-native:native": {"hostname": "R1"}}
+```
+A: **Der Modulname ist der Namensraum des YANG-Modells, auf oberster Ebene wird er vor den Namen gesetzt.** Der Zugriff lautet `data["Cisco-IOS-XE-native:native"]["hostname"]`. Darunter wird der Modulname weggelassen, solange die Elemente aus demselben Modul stammen.
+T: Interpretation Mittel
+
+Q: Derselbe Inhalt soll einmal als JSON für eine API und einmal als YAML für Ansible geschrieben werden. Was unterscheidet die Schreibweise, und ist gültiges JSON auch gültiges YAML?
+A: **JSON nutzt Klammern und Anführungszeichen, YAML Einrückung. Gültiges JSON ist in der Regel auch gültiges YAML, umgekehrt nicht.** YAML 1.2 ist so gebaut, dass es JSON als Teilmenge einschließt. YAML kennt dafür zusätzlich Kommentare mit # und Listen mit Bindestrich.
+T: Vergleich Mittel
+
+Q: Wie sieht der JSON-Body aus, mit dem du per RESTCONF nur den Hostnamen auf R1-NEU setzt (Ressource .../Cisco-IOS-XE-native:native/hostname)?
+A:
+```
+{"Cisco-IOS-XE-native:hostname": "R1-NEU"}
+```
+**Ein Objekt mit genau einem Schlüssel, dem Namen des Leafs mit Modulpräfix.** Weil die URL schon auf das Leaf zeigt, enthält der Body nur dieses eine Element.
+T: CLI Mittel
+
+# 6.3 | YANG
+S: https://www.rfc-editor.org/rfc/rfc7950 | RFC 7950: YANG 1.1
+
+Q: Das Modell ietf-interfaces kennt keine IP-Adressen. Wie kommt trotzdem ipv4 unter jedes Interface?
+A: **Das Modul ietf-ip erweitert ietf-interfaces per `augment`.** augment hängt neue Knoten an einer bestimmten Stelle eines fremden Modells ein, ohne dieses Modell zu ändern. Deshalb steht ipv4 im JSON mit eigenem Präfix: `"ietf-ip:ipv4"`.
+T: Wissen Mittel
+
+Q: Mehrere YANG-Module brauchen dieselbe Gruppe von Feldern für eine Adresse. Wie definierst du sie einmal und nutzt sie mehrfach?
+A: **Mit `grouping`, eingebunden über `uses`.** Ein grouping ist ein benannter Block von Knoten, der an jeder Stelle mit uses eingesetzt wird. Ändert sich der Block, ändert er sich überall.
+T: Wissen Mittel
+
+Q: Du willst in YANG einen Typ vlan-id festlegen, der nur 1 bis 4094 erlaubt, und ihn in mehreren Leafs nutzen. Womit?
+A: **Mit `typedef`.**
+```
+typedef vlan-id { type uint16 { range "1..4094"; } }
+```
+Danach schreibst du in jedem Leaf `type vlan-id`, statt den Bereich jedes Mal neu anzugeben.
+T: CLI Mittel
+
+Q: Was bedeuten `mandatory true` und `default` an einem YANG-Leaf?
+A: **`mandatory true`: Der Wert muss angegeben werden. `default`: Dieser Wert gilt, wenn keiner angegeben wird.** Fehlt ein Pflichtwert, lehnt das Gerät die Konfiguration ab. Beides zusammen an einem Leaf ist nicht erlaubt, weil ein Pflichtwert nie auf den Default zurückfällt.
+T: Wissen Mittel
+
+Q: Ein Gerät meldet ein Standardmodell als unterstützt, ein Leaf darin akzeptiert es aber nicht. Wie teilt der Hersteller solche Abweichungen mit?
+A: **Über eine Deviation.** Mit `deviation` erklärt ein Hersteller in einem eigenen Modul, dass ein Knoten nicht unterstützt wird oder anders funktioniert, z. B. mit kleinerem Wertebereich. Ein Client sollte die Deviations eines Geräts prüfen, bevor er sich auf jedes Feld verlässt.
+T: Wissen Mittel
+
+Q: Konfiguration und Zustand beschreibt YANG mit container, list und leaf. Womit beschreibt es Operationen wie einen Neustart und Ereignisse, die das Gerät von sich aus meldet?
+A: **Operationen mit `rpc` (oder `action` an einem Datenknoten), Ereignisse mit `notification`.** Ein rpc wird über NETCONF oder RESTCONF aufgerufen und kann Ein- und Ausgabewerte haben. Eine notification schickt das Gerät an abonnierte Clients, z. B. wenn ein Interface ausfällt.
+T: Vergleich Schwer
+
+# 6.4 | Controller-APIs
+S: https://developer.cisco.com/docs/dna-center/2-3-7-9/authentication-and-authorization/ | Authentication and Authorization - Cisco Catalyst Center API 2.3.7.9 - Cisco DevNet
+S: https://developer.cisco.com/docs/sdwan/authentication/ | Authentication - Cisco Catalyst SD-WAN Manager API, Release 26.2 - Cisco DevNet
+
+Q: Mit welchem Aufruf liest du die Liste aller Geräte aus dem SD-WAN Manager?
+A: **GET /dataservice/device**
+Die Antwort enthält im Feld data eine Liste mit einem Objekt pro Gerät, etwa mit Hostname, System-IP und Erreichbarkeit.
+T: CLI Leicht
+
+Q: Ein Skript liest per GET problemlos aus der SD-WAN-Manager-API, ein POST mit derselben Session wird aber abgelehnt. Was fehlt?
+A: **Das XSRF-Token im Header `X-XSRF-TOKEN`.** Lesende Anfragen kommen mit dem Session-Cookie `JSESSIONID` aus. Für schreibende Anfragen verlangt der Manager zusätzlich das Token, das du über `GET /dataservice/client/token` holst.
+T: Szenario Mittel
+
+Q: Du willst die Gesundheitswerte von Netz, Clients und Standorten aus Catalyst Center Assurance per Skript abrufen. Welche Endpunkte nutzt du?
+A: **`GET /dna/intent/api/v1/network-health`, `/client-health` und `/site-health`.** Sie liefern die Health Scores, die Assurance auch in der GUI zeigt, und lassen sich so in eigene Berichte oder Dashboards übernehmen.
+T: Wissen Mittel
+
+Q: Du willst ein Interface auf einem einzelnen Switch per API ändern. Wann nimmst du RESTCONF direkt am Gerät, wann die Intent API von Catalyst Center?
+A: **RESTCONF für ein einzelnes Gerät und YANG-Modelle, die Intent API für viele Geräte und Konzepte wie Standorte, Templates und Assurance.** RESTCONF spricht das Gerät direkt an. Die Intent API spricht den Controller an, der die Änderung auf die Geräte verteilt und den Zustand zentral führt. Wird ein Gerät über Catalyst Center verwaltet, sollten Änderungen über Catalyst Center laufen, damit der Controller den Sollzustand kennt.
+T: Vergleich Mittel
+
+Q: Ein Konfigurations-Template soll per Catalyst-Center-API auf 50 Switches ausgerollt werden. Welche Schritte macht dein Skript?
+A: **Template deployen, Task-ID entgegennehmen, Task abfragen bis sie fertig ist, dann das Ergebnis pro Gerät prüfen.** Der Deploy-Aufruf antwortet sofort, die eigentliche Arbeit läuft im Hintergrund. Erst die abgeschlossene Task zeigt, auf welchen Switches das Template erfolgreich war und wo nicht.
+T: Szenario Mittel
+
+Q: Du willst die APIs von Catalyst Center ausprobieren, ohne ein produktives System zu benutzen. Wo findest du Dokumentation und eine Testumgebung?
+A: **Bei Cisco DevNet: API-Dokumentation und Sandboxes mit Catalyst Center und SD-WAN.** Zusätzlich zeigt Catalyst Center selbst unter Platform → Developer Toolkit die verfügbaren APIs mit Beispielen.
+T: Wissen Leicht
+
+Q: Welcher Edge ist nicht erreichbar, und wie liest du diesen Wert in Python aus?
+```
+{"data": [
+  {"host-name": "edge1", "system-ip": "10.255.0.1", "reachability": "reachable"},
+  {"host-name": "edge2", "system-ip": "10.255.0.2", "reachability": "unreachable"}
+]}
+```
+A: **edge2, ausgelesen mit `data["data"][1]["reachability"]`.** Die Geräte stehen als Liste im Feld data, edge2 ist das zweite Element mit Index 1.
+T: Interpretation Mittel
+
+# 6.5 | HTTP-Codes und API-Payloads
+S: https://www.rfc-editor.org/rfc/rfc8040.html | RFC 8040: RESTCONF Protocol
+S: https://www.rfc-editor.org/rfc/rfc9110.html | RFC 9110: HTTP Semantics
+
+Q: Ein RESTCONF-POST zum Anlegen von Loopback10 liefert diese Antwort. Was ist passiert, und was nimmst du stattdessen?
+```
+HTTP/1.1 409 Conflict
+{"ietf-restconf:errors": {"error": [{
+  "error-type": "application",
+  "error-tag": "data-exists",
+  "error-message": "object already exists"}]}}
+```
+A: **Loopback10 gibt es schon, POST legt nur neu an.** RESTCONF beantwortet einen POST auf eine vorhandene Ressource mit 409 und dem error-tag `data-exists`. Um eine vorhandene Ressource zu ändern, nimmst du PATCH (zusammenführen) oder PUT (ersetzen).
+T: Exhibit Mittel
+
+Q: Ein Skript an der Catalyst-Center-API läuft problemlos, nach etwa einer Stunde bekommen alle Aufrufe plötzlich HTTP 401. Was ist passiert?
+A: **Das Token ist abgelaufen.** Das Token von `/dna/system/api/v1/auth/token` gilt standardmäßig etwa 60 Minuten. Das Skript muss bei 401 ein neues Token holen und den Aufruf wiederholen, statt mit dem alten weiterzumachen.
+T: Szenario Leicht
+
+Q: Ein GET sendet `Accept: text/html` an eine RESTCONF-Ressource und bekommt HTTP 406. Was heißt das?
+A: **Not Acceptable: Der Server kann die Antwort nicht im verlangten Format liefern.** RESTCONF liefert `application/yang-data+json` oder `application/yang-data+xml`. Mit einem dieser Werte im Accept-Header klappt die Anfrage.
+T: Interpretation Mittel
+
+Q: Ein Skript prüft nach einem Aufruf nur `response.ok`. Bei welchen Statuscodes ist das True, und warum reicht das bei Controller-APIs nicht?
+A: **`response.ok` ist bei allen Codes unter 400 True.** Ein 202 heißt aber nur „angenommen“, und ein 200 kann im Payload `"isError": true` enthalten. Bei Controller-APIs musst du daher zusätzlich Task-Status und Payload prüfen.
+T: Pruefungsfalle Mittel
+
+# 6.6 | EEM-Applets
+S: https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/eem/command/eem-cr-book/eem-cr-e1.html | Cisco IOS Embedded Event Manager Command Reference - E through event manager Commands [Support] - Cisco
+S: https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/eem/command/eem-cr-book/eem-cr-a1.html | Cisco IOS Embedded Event Manager Command Reference - A through action snmp Commands [Support] - Cisco
+
+Q: Ein EEM-Applet soll den Namen des Interfaces aus einer Syslog-Meldung in eine Variable übernehmen. Mit welcher Action?
+A: **Mit `action … regexp`.**
+```
+action 1.0 regexp "Interface ([^,]+)," "$_syslog_msg" match intf
+```
+Der erste Wert ist das Muster, der zweite der durchsuchte Text. In `match` steht der ganze Treffer, in `intf` der Inhalt der Klammer, also z. B. GigabitEthernet0/1. Danach nutzt du `$intf` in weiteren Actions.
+T: CLI Schwer
+
+Q: Ein Applet soll auslösen, wenn die Eingangsfehler auf Gi0/1 einen Schwellwert überschreiten. Welchen Event Detector nutzt du?
+A: **Den Interface-Detector mit `event interface`.**
+```
+event interface name GigabitEthernet0/1 parameter input_errors entry-op ge entry-val 100 entry-type value poll-interval 60
+```
+Das Gerät prüft den Zähler alle 60 Sekunden und löst aus, sobald er 100 erreicht oder überschreitet.
+T: CLI Schwer
+
+# 6.7 | Agentenbasierte und agentenlose Automation
+S: https://docs.ansible.com/projects/ansible/latest/network/getting_started/network_differences.html | How Network Automation is Different — Ansible Community Documentation
+
+Q: Ansible, Puppet, Chef und Salt: Wer baut bei jedem Tool die Verbindung auf, und über welchen Standardport?
+A: **Ansible verbindet sich per SSH (TCP 22) zum Gerät. Bei Puppet, Chef und Salt meldet sich der Agent beim Server.** Puppet-Agent → Server auf TCP 8140, Chef-Client → Server per HTTPS (TCP 443), Salt-Minion → Master auf TCP 4505 und 4506. Daran siehst du Push (Ansible) und Pull (Agenten).
+T: Vergleich Mittel
+
+Q: Puppet, Chef, Ansible und Terraform: Welche beschreiben eher den Zielzustand (deklarativ), welche eher die Schritte dorthin (prozedural)?
+A: **Deklarativ: Puppet und Terraform. Prozedural: Chef. Ansible liegt dazwischen.** Puppet-Manifeste und Terraform-Dateien beschreiben, wie es am Ende aussehen soll. Chef-Recipes sind Ruby-Code mit Schritten. Ansible arbeitet Tasks der Reihe nach ab, die einzelnen Module sind aber meist deklarativ und idempotent.
+T: Vergleich Mittel
+
+Q: Ein Ansible-Playbook soll eine Änderung auf 200 Switches rollen. Wie verhinderst du, dass ein Fehler in der Änderung gleich alle Geräte trifft?
+A: **Mit `serial` in kleinen Gruppen und `max_fail_percentage` als Abbruchgrenze.** `serial: 10` ändert immer nur zehn Geräte, dann die nächsten. Scheitern in einer Gruppe zu viele, bricht `max_fail_percentage` den Lauf ab. Vorher zeigt ein Lauf mit `--check --diff`, was sich ändern würde.
+T: Szenario Mittel
+
+Q: Puppet arbeitet mit Agenten, viele Netzgeräte erlauben aber keinen Agenten. Wie verwaltet Puppet sie trotzdem?
+A: **Über einen Proxy: `puppet device` läuft auf einem Server und spricht die Geräte über SSH oder ihre API an.** Der Proxy holt sich den Sollzustand vom Puppet-Server und setzt ihn auf dem Gerät um. Auf dem Gerät selbst läuft dann kein Puppet-Agent.
+T: Wissen Schwer
