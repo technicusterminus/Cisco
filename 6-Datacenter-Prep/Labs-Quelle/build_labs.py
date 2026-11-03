@@ -1028,40 +1028,52 @@ SOL15 = mo('fvTenant', {'name': 'Shop'},
               mo('l3extSubnet', {'ip': '192.168.50.0/24', 'scope': 'import-security,import-rtctrl'}),
               mo('l3extSubnet', {'ip': '8.8.8.0/24', 'scope': 'export-rtctrl'}), mo('fvRsCons', {'tnVzBrCPName': 'transit'}))))
 lab(id='15-transit-route-control', title='15 Transit Routing und Route Control', topic='L3Out / Routing', level='Fortgeschritten',
-    duration='40 min', fabric='discovered',
-    goals=['Routen von einem L3Out zum anderen weitergeben (Transit Routing)', 'Export und Import Route Control Subnets einsetzen',
+    duration='40 min', fabric='discovered', kind='requirements', modes=['guided', 'exam'],
+    prerequisites=['Labs 06 und 09'], tools=['Tenant > Networking > L3Outs', 'Simulation > Externe Router', 'Traffic Inspector',
+                                            'CLI: show ip route vrf, show bgp ipv4 unicast vrf'],
+    goals=['Routen von einem L3Out zum anderen weitergeben (Transit Routing)', 'Steuern, welche Routen die ACI annimmt und weitergibt',
            'Den Unterschied zwischen exaktem Match und Aggregate verstehen'],
     intro='Der Webshop hat zwei L3Outs im VRF Prod: **WAN** (OSPF zu **wan1** auf leaf103, Netze 8.8.8.0/24 und 1.1.1.0/24) '
-          'und **Partner** (eBGP zu **partner1** auf leaf104, Netze 192.168.50.0/24 und 10.66.0.0/16). Beide Nachbarschaften laufen.\n\n'
-          '**Anforderung:** Das Partnernetz **192.168.50.0/24** soll über die ACI nur **8.8.8.0/24** erreichen. Das interne Partnernetz '
-          '**10.66.0.0/16** darf nicht in die ACI gelangen, und der Partner darf **1.1.1.0/24** nicht sehen.\n\n'
-          'Standardmäßig gibt die ACI gelernte Routen nicht an andere L3Outs weiter – das muss man explizit mit Export Route Control erlauben.',
-    config=[SERVER_ACCESS] + ACC15 + [shop_tenant(), TEN15], hosts=[WEB1], routers=[WAN15, PARTNER15],
-    tasks=[
-        task('Ausgangslage prüfen', 'Auf leaf104: `show ip route vrf Shop:Prod` – 8.8.8.0/24 kommt per MP-BGP von leaf103. '
-             'Wird es an partner1 weitergegeben? `show bgp ipv4 unicast vrf Shop:Prod`. Traffic-Test von **192.168.50.10** zu **8.8.8.8**.'),
-        task('Export Richtung WAN', 'Am External EPG **Internet** (L3Out WAN) das Subnetz **192.168.50.0/24** nur mit '
-             '**Export Route Control Subnet** anlegen.', 'Ohne "External Subnets for the External EPG" – sonst würde das Partnernetz '
-             'auf der WAN-Seite klassifiziert.'),
-        task('Export Richtung Partner', 'Am External EPG **PartnerNet** (L3Out Partner) **8.8.8.0/24** mit Export Route Control Subnet.',
-             'Exakter Match: Nur genau dieses Präfix wird exportiert. Mit 0.0.0.0/0 und *Aggregate Export* ginge alles raus – auch 1.1.1.0/24.'),
-        task('Contract', 'Contract **transit** mit dem Filter **default** (common): **Internet** provided, **PartnerNet** consumed.'),
-        task('Import Route Control', 'Am L3Out **Partner** unter *Route Control Enforcement* zusätzlich **Import** aktivieren und am '
-             'Subnetz 192.168.50.0/24 von PartnerNet **Import Route Control Subnet** setzen.',
-             'Mit Import-Enforcement übernimmt die ACI nur noch Präfixe, die ein Import Route Control Subnet erlaubt.'),
-        task('Verifizieren', 'leaf104: `show ip route vrf Shop:Prod` (10.66.0.0/16 ist weg), `show bgp ipv4 unicast vrf Shop:Prod`. '
-             'Traffic-Test 192.168.50.10 → 8.8.8.8 und 192.168.50.10 → 1.1.1.1.'),
-    ],
+          'und **Partner** (eBGP zu **partner1** auf leaf104, Netze 192.168.50.0/24 und 10.66.0.0/16). Beide Nachbarschaften laufen, '
+          'web1 erreicht das Internet über WAN.',
+    requirements=['Das Partnernetz 192.168.50.0/24 erreicht über die ACI das Netz 8.8.8.0/24.',
+                  'Der Partner sieht 1.1.1.0/24 nicht und erreicht es nicht.',
+                  'Das interne Partnernetz 10.66.0.0/16 gelangt nicht in die ACI.',
+                  'Der Partner erreicht die Server des Webshops nicht.',
+                  'web1 erreicht das Internet weiterhin.'],
+    limits=['Route Control wird über Subnetze am External EPG modelliert (exakter Match, Aggregate). Route Maps mit Match/Set-Regeln fehlen.'],
+    hints=['**Konzept:** Die ACI gibt Routen, die sie über ein L3Out lernt, nicht automatisch an ein anderes L3Out weiter. Was ein L3Out '
+           'nach außen ankündigt und was es von außen annimmt, steuern Subnetze am External EPG mit eigenen Scopes – getrennt von der '
+           'Klassifizierung für die Policy.',
+           '**Objekte:** External EPGs Internet (WAN) und PartnerNet (Partner), dort Subnetze mit *Export Route Control*, *Import Route '
+           'Control* und *External Subnets for the External EPG*; am L3Out *Route Control Enforcement*. Ein Contract zwischen den External EPGs.',
+           '**Prüfschritte:** leaf104 `show ip route vrf Shop:Prod`: Ist 10.66.0.0/16 da? *Simulation > Externe Router*: Was lernen wan1 und '
+           'partner1? Traffic Inspector 192.168.50.10 → 8.8.8.8: Routing oder Policy?',
+           '**Lösung:** Internet: 192.168.50.0/24 nur mit Export Route Control. PartnerNet: 8.8.8.0/24 mit Export Route Control (exakter '
+           'Match, kein 0.0.0.0/0 Aggregate), 192.168.50.0/24 mit Import Route Control und External Subnets. L3Out Partner: Enforcement '
+           'Import und Export. Contract (z. B. transit): Internet stellt bereit, PartnerNet konsumiert.'],
+    cause='Es gibt keine Route Control zwischen den L3Outs, keinen Contract zwischen den External EPGs, und die ACI übernimmt alle Partner-Routen.',
+    config=[SERVER_ACCESS] + ACC15 + [shop_tenant(), TEN15], hosts=[WEB1], routers=[WAN15, PARTNER15], tasks=[],
     checks=[check('Transit: 192.168.50.10 → 8.8.8.8', 'traffic', src='192.168.50.10', dst='8.8.8.8', proto='icmp', expect=True),
             check('wan1 lernt 192.168.50.0/24', 'learned', router='wan1', prefix='192.168.50.0/24'),
             check('partner1 lernt 8.8.8.0/24', 'learned', router='partner1', prefix='8.8.8.0/24'),
-            check('partner1 lernt 1.1.1.0/24 nicht', 'learned', router='partner1', prefix='1.1.1.0/24', expect=False),
-            check('10.66.0.0/16 nicht in der ACI (leaf104)', 'route', node=104, vrf='Shop:Prod', prefix='10.66.0.0/16', expect=False),
-            check('web1 → 8.8.8.8 funktioniert weiter', 'traffic', src='web1', dst='8.8.8.8', proto='icmp', expect=True)],
+            check('web1 → 8.8.8.8 funktioniert weiter', 'traffic', src='web1', dst='8.8.8.8', proto='icmp', expect=True),
+            check('partner1 lernt 1.1.1.0/24 nicht', 'learned', router='partner1', prefix='1.1.1.0/24', expect=False, category='security'),
+            check('192.168.50.10 → 1.1.1.1 blockiert', 'traffic', src='192.168.50.10', dst='1.1.1.1', proto='icmp', expect=False, category='security'),
+            check('10.66.0.0/16 nicht in der ACI (leaf104)', 'route', node=104, vrf='Shop:Prod', prefix='10.66.0.0/16', expect=False,
+                  category='security'),
+            check('192.168.50.10 → web1 blockiert', 'traffic', src='192.168.50.10', dst='web1', proto='icmp', expect=False, category='security')],
+    questions=[{'id': 'q1', 'q': 'Warum reicht am External EPG PartnerNet nicht einfach 0.0.0.0/0 mit Aggregate Export?',
+                'options': ['Dann bekommt der Partner alle Routen, auch 1.1.1.0/24', 'Weil Aggregate in BGP nicht geht', 'Das reicht',
+                            'Weil dann 10.66.0.0/16 importiert wird'],
+                'answer': 0, 'explain': 'Aggregate Export gibt alles weiter, was im Präfix liegt. Exakter Match gibt nur das eine Präfix weiter.'},
+               {'id': 'q2', 'q': 'Was ist der Unterschied zwischen „External Subnets for the External EPG“ und „Export Route Control Subnet“?',
+                'options': ['Das eine klassifiziert Quell-/Zieladressen für die Policy, das andere steuert Routen-Ankündigungen',
+                            'Kein Unterschied', 'Beides steuert nur Routing', 'Beides steuert nur die Policy'],
+                'answer': 0, 'explain': 'Routing und Policy sind getrennt: Eine Route kann exportiert werden, ohne dass dort klassifiziert wird.'}],
     solution='`' + json.dumps(SOL15) + '`\\n\\nExport Route Control Subnets steuern, welche Routen ein L3Out an seinen Nachbarn '
              'gibt; Import Route Control Subnets (nur mit Enforcement *Import*) steuern, was die ACI übernimmt. '
              'Klassifiziert wird weiterhin nur über *External Subnets for the External EPG*.')
-
 
 # ----------------------------------------------------------------------------
 # Lab 16 - Service Graph mit Policy-Based Redirect (Firewall)
@@ -1099,41 +1111,54 @@ SOL16 = [
                      mo('vnsRsLIfCtxToSvcRedirectPol', {'tDn': 'uni/tn-Shop/svcCont/svcRedirectPol-PBR-Int'}))),
                mo('vzBrCP', {'name': 'web-to-app'}, mo('vzSubj', {'name': 'subj'}, mo('vzRsSubjGraphAtt', {'tnVnsAbsGraphName': 'FW-Graph'}))))]]
 lab(id='16-service-graph-pbr', title='16 Service Graph mit Policy-Based Redirect', topic='L4-L7 Services', level='Fortgeschritten',
-    duration='45 min', fabric='discovered',
-    goals=['Ein L4-L7 Device (Firewall, Go-To, physisch) anlegen', 'Einen Service Graph mit PBR auf einen Contract anwenden',
+    duration='45 min', fabric='discovered', kind='requirements', modes=['guided', 'exam'],
+    prerequisites=['Labs 32 und 35'], tools=['Services > L4-L7', 'Simulation > L4-L7 Geräte', 'Traffic Inspector',
+                                            'CLI: show zoning-rule, show service redir info'],
+    goals=['Eine Firewall per Service Graph in einen bestehenden Contract einhängen', 'Verkehr umleiten, ohne die Server umzukonfigurieren',
            'Shadow-EPGs, Redirect-Regeln und Faults verstehen'],
-    intro='Der Verkehr von **Web** zu **App** (Contract **web-to-app**: tcp/8080 und ICMP) soll künftig durch die Firewall **fw1** '
-          '– ohne dass die Server ihr Gateway ändern. Dafür nutzt die ACI **Policy-Based Redirect (PBR)**.\n\n'
+    intro='Der Verkehr von **Web** zu **App** (Contract **web-to-app**: tcp/8080 und ICMP) soll künftig durch die Firewall **fw1** – ohne '
+          'dass die Server ihr Gateway ändern.\n\n'
           'fw1 hängt an **leaf102 eth1/20** (Port-Policy vorhanden) mit zwei 802.1Q-Interfaces:\n'
           '- **outside** vlan-401, 192.168.100.10/24, MAC 00:50:56:FA:01:01\n- **inside** vlan-402, 192.168.101.10/24, MAC 00:50:56:FA:01:02\n\n'
-          'Das Regelwerk der Firewall erlaubt nur **tcp/8080** (siehe Simulation > L4-L7 Geräte).',
-    config=[SERVER_ACCESS, FWPORT16, shop_tenant(with_contracts=True)], hosts=[WEB1, APP1], devices=[FW16],
-    tasks=[
-        task('VLANs für die Firewall', 'Der VLAN Pool **VLAN-Pool-Server** braucht einen Encap Block **vlan-400 bis vlan-410**.',
-             'Die Encaps der Cluster Interfaces müssen im VLAN Pool der Domain des L4-L7 Devices liegen.'),
-        task('Service-BDs', 'Zwei BDs im VRF Prod: **BD-FW-Ext** (192.168.100.1/24) und **BD-FW-Int** (192.168.101.1/24).'),
-        task('L4-L7 Device', '**Services > L4-L7 > Devices > Create L4-L7 Devices**: Name **FW1**, Firewall, Physical, Domain '
-             'PhysDom-Server, Function Type **GoTo**. Concrete Device **fw1** mit den Interfaces outside und inside auf leaf102 eth1/20, '
-             'Cluster Interfaces **consumer** (vlan-401, outside) und **provider** (vlan-402, inside).'),
-        task('PBR Policies', '**Policies > Protocol > L4-L7 Policy-Based Redirect**: **PBR-Ext** mit Ziel 192.168.100.10 / 00:50:56:FA:01:01 '
-             'und **PBR-Int** mit Ziel 192.168.101.10 / 00:50:56:FA:01:02.'),
-        task('Service Graph Template', '**Service Graph Templates > Create**: **FW-Graph** mit FW1, Node **N1**, Route Redirect aktiv.'),
-        task('Graph anwenden', 'Rechtsklick auf FW-Graph > **Apply L4-L7 Service Graph Template**: Consumer Web, Provider App, '
-             'bestehender Contract web-to-app. Consumer-Connector BD-FW-Ext + PBR-Ext + Cluster Interface consumer, '
-             'Provider-Connector BD-FW-Int + PBR-Int + provider.'),
-        task('Verifizieren', '**Deployed Graph Instances** zeigt *applied*. Traffic-Test web1 → app1 tcp/8080 läuft über fw1. '
-             'Warum ist Ping jetzt blockiert, obwohl der Contract ICMP erlaubt? Auf leaf101: `show zoning-rule` (Action redir) und '
-             '`show service redir info`.'),
-    ],
+          'Das Regelwerk der Firewall gehört dem Security-Team und wird nicht geändert (siehe *Simulation > L4-L7 Geräte*).',
+    requirements=['Jeder Verkehr von Web zu App, den der Contract web-to-app erlaubt, läuft durch fw1.',
+                  'web1 erreicht app1 auf TCP 8080.',
+                  'Die Server behalten Adresse und Gateway; die Firewall bekommt eigene Transfernetze 192.168.100.0/24 und 192.168.101.0/24.',
+                  'Was die Firewall verbietet, kommt nicht durch – auch nicht, wenn der Contract es erlaubt.'],
+    limits=['Die Firewall wird als Regelwerk (erlaubte Dienste) simuliert. Unmanaged Mode, Go-To, ein Node, PBR mit statischen Zielen; '
+            'Health Groups, Tracking und Managed Mode fehlen.'],
+    hints=['**Konzept:** Policy-Based Redirect leitet Verkehr, den ein Contract erlaubt, an ein L4-L7-Gerät um. Dafür braucht es drei '
+           'Bausteine: das Gerät (wo es hängt, welche VLANs), die Vorlage (welcher Graph) und die Zuordnung zum Contract (welche BDs, '
+           'welche Redirect-Ziele).',
+           '**Objekte:** Encap-Block für die Firewall-VLANs im VLAN Pool, zwei Service-BDs, L4-L7 Device (Concrete Device, Cluster Interfaces), '
+           'zwei PBR Policies mit IP und MAC der Firewall, Service Graph Template mit Redirect, Device Selection Policy, am Subject der Graph.',
+           '**Prüfschritte:** *Deployed Graph Instances*: applied oder Fault? Traffic Inspector web1 → app1 TCP 8080: Steht fw1 im Pfad? '
+           'Warum scheitert Ping danach? Auf leaf101 `show zoning-rule` (Action redir) und `show service redir info`.',
+           '**Lösung:** vlan-400 bis 410 im VLAN-Pool-Server. BD-FW-Ext 192.168.100.1/24 und BD-FW-Int 192.168.101.1/24. Device FW1 '
+           '(Firewall, physisch, GoTo) mit Cluster Interfaces consumer (vlan-401, outside) und provider (vlan-402, inside). PBR-Ext/PBR-Int '
+           'mit IP und MAC der Firewall-Interfaces. Graph FW-Graph mit Redirect, auf web-to-app anwenden.'],
+    cause='Es gibt kein L4-L7 Device, keinen Service Graph und keine PBR Policy; die Firewall-VLANs fehlen im Pool.',
+    config=[SERVER_ACCESS, FWPORT16, shop_tenant(with_contracts=True)], hosts=[WEB1, APP1], devices=[FW16], tasks=[],
     checks=[check('Graph-Instanz applied', 'graph', contract='uni/tn-Shop/brc-web-to-app'),
             check('fw1 outside im Service-BD gelernt', 'endpoint', host='fw1:outside'),
-            check('web1 → app1 tcp/8080 über die Firewall', 'traffic', src='web1', dst='app1', proto='tcp', port=8080, expect=True, via='fw1'),
-            check('web1 → app1 Ping von der Firewall blockiert', 'traffic', src='web1', dst='app1', proto='icmp', expect=False)],
+            check('web1 → app1 TCP 8080 über die Firewall', 'traffic', src='web1', dst='app1', proto='tcp', port=8080, expect=True, via='fw1'),
+            check('Ping wird von der Firewall verworfen', 'traffic', src='web1', dst='app1', proto='icmp', expect=False, reason='FIREWALL_',
+                  category='security'),
+            check('web1 → app1 SSH bleibt blockiert', 'traffic', src='web1', dst='app1', proto='tcp', port=22, expect=False, category='security'),
+            check('App baut keine Verbindung zu Web auf (TCP 8080)', 'traffic', src='app1', dst='web1', proto='tcp', port=8080, expect=False,
+                  category='security')],
+    questions=[{'id': 'q1', 'q': 'Warum ist Ping nach dem Service Graph blockiert, obwohl der Contract ICMP erlaubt?',
+                'options': ['Der Contract leitet ICMP an die Firewall um, und deren Regelwerk erlaubt nur TCP 8080',
+                            'Weil PBR kein ICMP kann', 'Weil der Contract geändert wurde', 'Weil die Shadow-EPG ICMP blockt'],
+                'answer': 0, 'explain': 'Der Contract entscheidet, was umgeleitet wird; die Firewall entscheidet, was durchkommt.'},
+               {'id': 'q2', 'q': 'Die PBR Policy hat die falsche MAC der Firewall. Was passiert?',
+                'options': ['Die Leafs schicken den Verkehr an eine MAC, die niemand hat – er geht verloren', 'Nichts, die IP reicht',
+                            'Die ACI lernt die MAC selbst', 'Die Firewall antwortet trotzdem'],
+                'answer': 0, 'explain': 'Bei PBR schreibt der Leaf die Ziel-MAC um; deshalb muss sie stimmen (oder per IP SLA/Location ermittelt werden).'}],
     solution='Wichtig sind die drei Teile: **L4-L7 Device** (Concrete Device mit Paths, Cluster Interfaces mit Encap), **Service Graph '
              'Template** (Node N1, Redirect) und die **Device Selection Policy** (Contract/Graph/Node, je Connector BD, Cluster Interface '
              'und PBR Policy). Am Subject des Contracts hängt `vzRsSubjGraphAtt tnVnsAbsGraphName=FW-Graph`. Die PBR-Ziele brauchen die '
              'richtige MAC der Firewall-Interfaces.')
-
 
 # ----------------------------------------------------------------------------
 # Lab 17 - SVI auf vPC mit Secondary IP und BFD
@@ -1164,36 +1189,51 @@ SOL17 = mo('fvTenant', {'name': 'Shop'},
                        mo('l3extMember', {'side': 'B', 'addr': '172.16.50.2/29'}, mo('l3extIp', {'addr': '172.16.50.3/29'}))))),
               mo('l3extInstP', {'name': 'Campus'}, mo('l3extSubnet', {'ip': '10.200.0.0/16'}), mo('fvRsProv', {'tnVzBrCPName': 'web-to-campus'}))))
 lab(id='17-l3out-vpc-svi-bfd', title='17 L3Out: SVI auf vPC mit Secondary IP und BFD', topic='L3Out / Routing', level='Fortgeschritten',
-    duration='40 min', fabric='discovered',
-    goals=['Ein L3Out-SVI auf einem vPC mit Side A, Side B und Secondary IP bauen', 'OSPF zu beiden Border Leafs aufbauen',
+    duration='40 min', fabric='discovered', kind='requirements', modes=['guided', 'exam'],
+    prerequisites=['Labs 05 und 06'], tools=['Tenant > Networking > L3Outs', 'Simulation > Externe Router', 'Traffic Inspector',
+                                            'CLI: show ip ospf neighbors vrf, show bfd neighbors vrf, show ip interface brief vrf'],
+    goals=['Ein L3Out auf einem vPC zu einem Router mit Port-Channel bauen', 'OSPF zu beiden Border Leafs aufbauen',
            'BFD für schnelle Ausfallerkennung aktivieren und verifizieren'],
     intro='Der Campus-Core **core1** hängt mit einem **LACP-Port-Channel** an **leaf103 eth1/30** und **leaf104 eth1/30** '
           '(vPC-Domäne 34, Policy Group **IPG-vPC-core** und L3 Domain **L3Dom-Core** mit vlan-350 bis 359 sind schon da). '
           'core1 spricht **OSPF Area 0.0.0.1** mit **BFD** in **vlan-350**, hat die Adresse **172.16.50.6/29** und MTU 1500. '
           'Hinter ihm liegt das Campusnetz **10.200.0.0/16**.\n\n'
-          'Adressplan: leaf103 = Side A **172.16.50.1**, leaf104 = Side B **172.16.50.2**, gemeinsame Secondary IP **172.16.50.3** '
-          '(Next Hop für Static Routes des Cores).',
-    config=[SERVER_ACCESS, VPC34, ACC17, BGP_TREE, shop_tenant(with_contracts=True)], hosts=[WEB1, APP1], routers=[CORE17],
-    tasks=[
-        task('OSPF Interface Policy', 'Im Tenant Shop: OSPF Interface Policy **OSPF-BFD**, Network Type Broadcast, Interface Control **BFD**.'),
-        task('L3Out Core', 'L3Out **Core**, VRF Prod, Domain L3Dom-Core, OSPF Area **0.0.0.1**. Node Profile mit **103** (1.1.1.103) und '
-             '**104** (1.1.1.104).'),
-        task('vPC-SVI', 'Logical Interface Profile mit OSPF Interface Profile (Policy OSPF-BFD) und BFD Interface Profile. Interface: '
-             '**SVI**, Pfadtyp **Virtual Port Channel** IPG-vPC-core, **vlan-350**, MTU **1500**, Side A 172.16.50.1/29, Side B 172.16.50.2/29, '
-             'Secondary 172.16.50.3/29.', 'MTU inherit wäre 9000 – core1 bliebe dann in EXSTART hängen.'),
-        task('External EPG und Contract', 'External EPG **Campus** mit 10.200.0.0/16, Contract **web-to-campus** (icmp): Campus provided, '
-             'Web consumed. BD-Web *Advertised Externally* und mit L3Out Core verknüpft.'),
-        task('Verifizieren', 'Auf leaf103 und leaf104: `show ip ospf neighbors vrf Shop:Prod`, `show bfd neighbors vrf Shop:Prod`, '
-             '`show ip interface brief vrf Shop:Prod` (Primary und Secondary auf vlan…). Ping von web1 zu 10.200.1.10.'),
-    ],
+          'Adressplan: leaf103 **172.16.50.1**, leaf104 **172.16.50.2**, gemeinsame Adresse beider Leafs **172.16.50.3** '
+          '(Next Hop für die Static Routes des Cores).',
+    requirements=['Ein L3Out **Core** verbindet core1 mit leaf103 und leaf104; OSPF ist zu beiden Leafs FULL.',
+                  'BFD überwacht beide Nachbarschaften.',
+                  'Beide Leafs tragen zusätzlich die gemeinsame Adresse 172.16.50.3.',
+                  'web1 erreicht das Campusnetz per Ping, sonst nichts; der Campus sieht nur das Web-Netz, nicht das App-Netz.'],
+    limits=['BFD wird als Zustand (Up/Down) simuliert, ohne Timer. OSPF vereinfacht wie in Lab 06.'],
+    hints=['**Konzept:** Hängt ein Router per Port-Channel an zwei Leafs, ist das L3Out-Interface ein SVI auf dem vPC-Pfad. Jeder Leaf hat '
+           'eine eigene Adresse (Side A/B); eine gemeinsame Secondary IP dient als Next Hop. BFD muss im Routing-Protokoll eingeschaltet sein.',
+           '**Objekte:** OSPF Interface Policy (Interface Control BFD), L3Out mit zwei Nodes, Logical Interface Profile mit OSPF- und '
+           'BFD-Interface-Profil, Pfad *Virtual Port Channel* mit Side A/B und Secondary IP, External EPG, Contract, BD-Web-Einstellungen.',
+           '**Prüfschritte:** `show ip ospf neighbors vrf Shop:Prod` auf beiden Leafs: EXSTART? Dann MTU vergleichen. `show bfd neighbors vrf '
+           'Shop:Prod`: leer? Dann BFD in der OSPF Interface Policy prüfen. `show ip interface brief vrf Shop:Prod`: Primary und Secondary.',
+           '**Lösung:** OSPF Interface Policy OSPF-BFD (Broadcast, BFD). L3Out Core (Prod, L3Dom-Core, Area 0.0.0.1), Nodes 103/104 mit '
+           'Router IDs. SVI auf protpaths-103-104/IPG-vPC-core, vlan-350, MTU 1500, Side A .1, Side B .2, Secondary .3 (jeweils /29). '
+           'External EPG Campus 10.200.0.0/16, Contract nur icmp, BD-Web Advertised Externally und mit Core verknüpft.'],
+    cause='Es gibt kein L3Out zum Core.',
+    config=[SERVER_ACCESS, VPC34, ACC17, BGP_TREE, shop_tenant(with_contracts=True)], hosts=[WEB1, APP1], routers=[CORE17], tasks=[],
     checks=[check('OSPF FULL auf leaf103 und leaf104', 'router', name='core1', adj='FULL', nodes=[103, 104]),
             check('BFD Up zu beiden Border Leafs', 'bfd', router='core1', nodes=[103, 104]),
-            check('Secondary IP 172.16.50.3 auf Side A', 'exists', dn='uni/tn-Shop/out-Core/lnodep-border/lifp-vpc-svi/rspathL3OutAtt-[%s]/mem-A/addr-[172.16.50.3/29]' % VPCPATH),
+            check('Gemeinsame Adresse 172.16.50.3 auf beiden Seiten', 'class', cls='l3extIp', under='uni/tn-Shop/out-Core/',
+                  attrs={'addr': '172.16.50.3/29'}, min=2),
             check('core1 lernt 10.10.10.0/24', 'learned', router='core1', prefix='10.10.10.0/24'),
-            check('web1 → 10.200.1.10 Ping', 'traffic', src='web1', dst='10.200.1.10', proto='icmp', expect=True)],
+            check('web1 → 10.200.1.10 Ping', 'traffic', src='web1', dst='10.200.1.10', proto='icmp', expect=True),
+            check('Least Privilege Web → Campus: nur Ping', 'exposure', src='web1', dst='10.200.1.10', allow=['icmp'], category='security'),
+            check('core1 lernt 10.10.20.0/24 nicht', 'learned', router='core1', prefix='10.10.20.0/24', expect=False, category='security'),
+            check('app1 → 10.200.1.10 blockiert', 'traffic', src='app1', dst='10.200.1.10', proto='icmp', expect=False, category='security')],
+    questions=[{'id': 'q1', 'q': 'Warum braucht man die Secondary IP 172.16.50.3?',
+                'options': ['Als Next Hop, der erreichbar bleibt, wenn einer der beiden Leafs ausfällt', 'Für BFD', 'Für OSPF', 'Für LACP'],
+                'answer': 0, 'explain': 'Static Routes des Cores zeigen auf .3; beide Leafs antworten darauf.'},
+               {'id': 'q2', 'q': 'OSPF ist FULL, aber `show bfd neighbors` ist leer. Was fehlt?',
+                'options': ['BFD ist in der OSPF Interface Policy (Interface Control) nicht aktiviert', 'Die Secondary IP', 'Der Contract',
+                            'Das MTU'],
+                'answer': 0, 'explain': 'BFD läuft nur, wenn ein Protokoll es anfordert – hier OSPF über die Interface Policy.'}],
     solution='`' + json.dumps(SOL17) + '`\\n\\nBei einem SVI auf einem vPC bekommt jeder Leaf seine Primary IP (Side A/B), die Secondary IP '
              'ist auf beiden aktiv. BFD läuft nur, wenn es im Protokoll (OSPF Interface Policy *BFD*) und auf dem Router aktiviert ist.')
-
 
 # ----------------------------------------------------------------------------
 # Lab 18 - eBGP ueber Loopbacks: Multihop, MD5, Timer und Summarization
@@ -1228,34 +1268,49 @@ SOL18 = mo('fvTenant', {'name': 'Shop'},
                  mo('l3extSubnet', {'ip': '10.10.0.0/16', 'scope': 'export-rtctrl'},
                     mo('l3extRsSubnetToRtSumm', {'tDn': 'uni/tn-Shop/bgprtsum-Summary-Only'})))))
 lab(id='18-ebgp-loopback-md5-summary', title='18 eBGP über Loopbacks: Multihop, MD5, Timer und Summarization', topic='L3Out / BGP',
-    level='Fortgeschritten', duration='40 min', fabric='discovered',
-    goals=['eBGP zwischen Loopbacks mit Multihop und Static Routes aufbauen', 'BGP-Session mit MD5-Passwort und eigenen Timern',
+    level='Fortgeschritten', duration='40 min', fabric='discovered', kind='requirements', modes=['guided', 'exam'],
+    prerequisites=['Lab 09'], tools=['Tenant > Networking > L3Outs', 'Simulation > Externe Router',
+                                    'CLI: show bgp ipv4 unicast neighbors vrf, show bgp ipv4 unicast summary vrf'],
+    goals=['eBGP zwischen Loopbacks aufbauen', 'Eine BGP-Session mit Passwort und eigenen Timern absichern',
            'Mehrere BD-Subnetze als eine Summary ankündigen'],
     intro='Der Partner-Router **partner1** (AS 65100) hängt an **leaf104 eth1/47** (Sub-Interface vlan-301, 172.16.1.1/30 ↔ 172.16.1.2/30). '
           'Laut Partner-Vertrag läuft BGP **zwischen den Loopbacks**: partner1 nutzt **192.168.255.1** und spricht die ACI an '
           '**1.1.1.104** (Router ID von leaf104) an. Weitere Vorgaben: MD5-Passwort **Partner#2026**, Keepalive **10 s**, Hold **30 s**.\n\n'
-          'Der Partner möchte für den Webshop nur **eine Route 10.10.0.0/16** sehen statt der einzelnen BD-Subnetze. '
-          'L3Out **Partner**, External EPG und Contract sind vorbereitet.',
-    config=[SERVER_ACCESS, ACC18, BGP_TREE, shop_tenant(), TEN18], hosts=[WEB1, APP1], routers=[PARTNER18],
-    tasks=[
-        task('Erreichbarkeit der Loopback', 'Am Node 104 im Node Profile eine Static Route **192.168.255.1/32** mit Next Hop **172.16.1.2**.',
-             'Ohne diese Route kann leaf104 die Loopback des Partners nicht erreichen – BGP bleibt in Active.'),
-        task('BGP Peer am Node Profile', 'BGP Peer Connectivity Profile **am Node Profile** (nicht am Interface): Peer **192.168.255.1**, '
-             'Remote AS **65100**, **EBGP Multihop TTL 2**, Password **Partner#2026**.', 'Ein Peer am Node Profile nutzt die Loopback (Router ID) als Quelle.'),
-        task('BGP Timers', 'BGP Timers Policy **Partner-Timers** (Keepalive 10, Hold 30) anlegen und am VRF **Prod** auswählen.'),
-        task('Summarization', 'BGP Route Summarization Policy **Summary-Only** mit *Do not advertise more specifics*. Am External EPG '
-             '**PartnerNet** das Subnetz **10.10.0.0/16** mit **Export Route Control Subnet** und dieser Policy anlegen.'),
-        task('Verifizieren', 'leaf104: `show bgp ipv4 unicast neighbors vrf Shop:Prod` (Update Source, Multihop, Password, Hold Time), '
-             '`show bgp ipv4 unicast summary vrf Shop:Prod`. Unter Simulation > Externe Router: Was lernt partner1?'),
-    ],
+          'L3Out **Partner**, External EPG und Contract (Partner ↔ Web/App, nur Ping) sind vorbereitet. partner1 wird nicht verändert.',
+    requirements=['Die BGP-Session zu partner1 ist aufgebaut, zwischen den Loopbacks und mit dem vereinbarten Passwort.',
+                  'Die Session nutzt Keepalive 10 s und Hold 30 s.',
+                  'Der Partner sieht für den Webshop genau eine Route 10.10.0.0/16, keine einzelnen BD-Subnetze.',
+                  'Das Partnernetz 192.168.50.0/24 erreicht web1 per Ping, sonst nichts.'],
+    limits=['BGP vereinfacht wie in Lab 09; Passwort, TTL/Multihop, Update Source und Timer werden geprüft.'],
+    hints=['**Konzept:** Läuft eBGP zwischen Loopbacks, muss jede Seite die Loopback der anderen erreichen (Route), die Session muss mehr als '
+           'einen Hop erlauben (Multihop/TTL), und die ACI muss ihre Loopback als Quelle nutzen. Timer und Summary sind eigene Policies.',
+           '**Objekte:** Static Route im Node Profile, BGP Peer Connectivity Profile am Node Profile (nicht am Interface) mit Remote AS, '
+           'TTL und Passwort, BGP Timers Policy am VRF, BGP Route Summarization Policy an einem Export-Subnetz des External EPG.',
+           '**Prüfschritte:** `show bgp ipv4 unicast neighbors vrf Shop:Prod` auf leaf104: Idle (TTL), Active (Route oder Passwort)? '
+           'Hold Time ausgehandelt? *Simulation > Externe Router*: Welche Präfixe lernt partner1?',
+           '**Lösung:** Static Route 192.168.255.1/32 über 172.16.1.2 am Node 104. BGP Peer 192.168.255.1 am Node Profile, Remote AS 65100, '
+           'TTL 2, Passwort. BGP Timers Policy (10/30) am VRF Prod. Summarization Policy *Do not advertise more specifics* an '
+           '10.10.0.0/16 (Export Route Control) am External EPG PartnerNet.'],
+    cause='Die Session ist auf der ACI-Seite nicht konfiguriert, die Loopback des Partners ist nicht erreichbar, es gibt keine Timer- und keine Summary-Policy.',
+    config=[SERVER_ACCESS, ACC18, BGP_TREE, shop_tenant(), TEN18], hosts=[WEB1, APP1], routers=[PARTNER18], tasks=[],
     checks=[check('BGP partner1 Established', 'router', name='partner1', adj='Established'),
             check('Ausgehandelte Hold Time 30 s', 'bgptimer', router='partner1', hold=30),
             check('partner1 lernt die Summary 10.10.0.0/16', 'learned', router='partner1', prefix='10.10.0.0/16'),
-            check('partner1 lernt 10.10.10.0/24 nicht mehr einzeln', 'learned', router='partner1', prefix='10.10.10.0/24', expect=False),
-            check('192.168.50.10 → web1 Ping', 'traffic', src='192.168.50.10', dst='web1', proto='icmp', expect=True)],
+            check('192.168.50.10 → web1 Ping', 'traffic', src='192.168.50.10', dst='web1', proto='icmp', expect=True),
+            check('partner1 lernt 10.10.10.0/24 nicht einzeln', 'learned', router='partner1', prefix='10.10.10.0/24', expect=False,
+                  category='security'),
+            check('partner1 lernt 10.10.20.0/24 nicht einzeln', 'learned', router='partner1', prefix='10.10.20.0/24', expect=False,
+                  category='security'),
+            check('Least Privilege Partner → Web: nur Ping', 'exposure', src='192.168.50.10', dst='web1', allow=['icmp'], category='security')],
+    questions=[{'id': 'q1', 'q': 'Die Session bleibt in Idle, obwohl Peer-Adresse und AS stimmen. Was ist die wahrscheinlichste Ursache?',
+                'options': ['TTL 1: Die Loopback ist zwei Hops entfernt (Multihop fehlt)', 'Falsches Passwort', 'Falsche Timer', 'Fehlende Summary'],
+                'answer': 0, 'explain': 'Ein falsches Passwort oder eine fehlende Route zeigt sich eher als Active (TCP kommt nicht zustande).'},
+               {'id': 'q2', 'q': 'Warum gehört der BGP Peer hier ans Node Profile und nicht ans Interface?',
+                'options': ['Am Node Profile nutzt die ACI die Loopback (Router ID) als Quelle, am Interface die Interface-Adresse',
+                            'Am Interface geht kein MD5', 'Kein Unterschied', 'Wegen der Summary'],
+                'answer': 0, 'explain': 'Der Partner erwartet 1.1.1.104 als Quelle der Session.'}],
     solution='`' + json.dumps(SOL18) + '`\\n\\nTypische Fehler: TTL 1 (Session bleibt Idle), fehlende Static Route zur Partner-Loopback '
              '(Active), falsches Passwort (Active, TCP-MD5 schlägt fehl).')
-
 
 # ----------------------------------------------------------------------------
 # Lab 19 - EIGRP und Static Route mit IP SLA Track

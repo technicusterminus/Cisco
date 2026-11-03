@@ -5,12 +5,43 @@
  "level": "Fortgeschritten",
  "duration": "40 min",
  "fabric": "discovered",
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Labs 06 und 09"
+ ],
+ "tools": [
+  "Tenant > Networking > L3Outs",
+  "Simulation > Externe Router",
+  "Traffic Inspector",
+  "CLI: show ip route vrf, show bgp ipv4 unicast vrf"
+ ],
  "goals": [
   "Routen von einem L3Out zum anderen weitergeben (Transit Routing)",
-  "Export und Import Route Control Subnets einsetzen",
+  "Steuern, welche Routen die ACI annimmt und weitergibt",
   "Den Unterschied zwischen exaktem Match und Aggregate verstehen"
  ],
- "intro": "Der Webshop hat zwei L3Outs im VRF Prod: **WAN** (OSPF zu **wan1** auf leaf103, Netze 8.8.8.0/24 und 1.1.1.0/24) und **Partner** (eBGP zu **partner1** auf leaf104, Netze 192.168.50.0/24 und 10.66.0.0/16). Beide Nachbarschaften laufen.\n\n**Anforderung:** Das Partnernetz **192.168.50.0/24** soll über die ACI nur **8.8.8.0/24** erreichen. Das interne Partnernetz **10.66.0.0/16** darf nicht in die ACI gelangen, und der Partner darf **1.1.1.0/24** nicht sehen.\n\nStandardmäßig gibt die ACI gelernte Routen nicht an andere L3Outs weiter – das muss man explizit mit Export Route Control erlauben.",
+ "intro": "Der Webshop hat zwei L3Outs im VRF Prod: **WAN** (OSPF zu **wan1** auf leaf103, Netze 8.8.8.0/24 und 1.1.1.0/24) und **Partner** (eBGP zu **partner1** auf leaf104, Netze 192.168.50.0/24 und 10.66.0.0/16). Beide Nachbarschaften laufen, web1 erreicht das Internet über WAN.",
+ "requirements": [
+  "Das Partnernetz 192.168.50.0/24 erreicht über die ACI das Netz 8.8.8.0/24.",
+  "Der Partner sieht 1.1.1.0/24 nicht und erreicht es nicht.",
+  "Das interne Partnernetz 10.66.0.0/16 gelangt nicht in die ACI.",
+  "Der Partner erreicht die Server des Webshops nicht.",
+  "web1 erreicht das Internet weiterhin."
+ ],
+ "limits": [
+  "Route Control wird über Subnetze am External EPG modelliert (exakter Match, Aggregate). Route Maps mit Match/Set-Regeln fehlen."
+ ],
+ "hints": [
+  "**Konzept:** Die ACI gibt Routen, die sie über ein L3Out lernt, nicht automatisch an ein anderes L3Out weiter. Was ein L3Out nach außen ankündigt und was es von außen annimmt, steuern Subnetze am External EPG mit eigenen Scopes – getrennt von der Klassifizierung für die Policy.",
+  "**Objekte:** External EPGs Internet (WAN) und PartnerNet (Partner), dort Subnetze mit *Export Route Control*, *Import Route Control* und *External Subnets for the External EPG*; am L3Out *Route Control Enforcement*. Ein Contract zwischen den External EPGs.",
+  "**Prüfschritte:** leaf104 `show ip route vrf Shop:Prod`: Ist 10.66.0.0/16 da? *Simulation > Externe Router*: Was lernen wan1 und partner1? Traffic Inspector 192.168.50.10 → 8.8.8.8: Routing oder Policy?",
+  "**Lösung:** Internet: 192.168.50.0/24 nur mit Export Route Control. PartnerNet: 8.8.8.0/24 mit Export Route Control (exakter Match, kein 0.0.0.0/0 Aggregate), 192.168.50.0/24 mit Import Route Control und External Subnets. L3Out Partner: Enforcement Import und Export. Contract (z. B. transit): Internet stellt bereit, PartnerNet konsumiert."
+ ],
+ "cause": "Es gibt keine Route Control zwischen den L3Outs, keinen Contract zwischen den External EPGs, und die ACI übernimmt alle Partner-Routen.",
  "config": [
   {
    "polUni": {
@@ -1064,35 +1095,7 @@
    "staticBack": []
   }
  ],
- "tasks": [
-  {
-   "title": "Ausgangslage prüfen",
-   "text": "Auf leaf104: `show ip route vrf Shop:Prod` – 8.8.8.0/24 kommt per MP-BGP von leaf103. Wird es an partner1 weitergegeben? `show bgp ipv4 unicast vrf Shop:Prod`. Traffic-Test von **192.168.50.10** zu **8.8.8.8**."
-  },
-  {
-   "title": "Export Richtung WAN",
-   "text": "Am External EPG **Internet** (L3Out WAN) das Subnetz **192.168.50.0/24** nur mit **Export Route Control Subnet** anlegen.",
-   "hint": "Ohne \"External Subnets for the External EPG\" – sonst würde das Partnernetz auf der WAN-Seite klassifiziert."
-  },
-  {
-   "title": "Export Richtung Partner",
-   "text": "Am External EPG **PartnerNet** (L3Out Partner) **8.8.8.0/24** mit Export Route Control Subnet.",
-   "hint": "Exakter Match: Nur genau dieses Präfix wird exportiert. Mit 0.0.0.0/0 und *Aggregate Export* ginge alles raus – auch 1.1.1.0/24."
-  },
-  {
-   "title": "Contract",
-   "text": "Contract **transit** mit dem Filter **default** (common): **Internet** provided, **PartnerNet** consumed."
-  },
-  {
-   "title": "Import Route Control",
-   "text": "Am L3Out **Partner** unter *Route Control Enforcement* zusätzlich **Import** aktivieren und am Subnetz 192.168.50.0/24 von PartnerNet **Import Route Control Subnet** setzen.",
-   "hint": "Mit Import-Enforcement übernimmt die ACI nur noch Präfixe, die ein Import Route Control Subnet erlaubt."
-  },
-  {
-   "title": "Verifizieren",
-   "text": "leaf104: `show ip route vrf Shop:Prod` (10.66.0.0/16 ist weg), `show bgp ipv4 unicast vrf Shop:Prod`. Traffic-Test 192.168.50.10 → 8.8.8.8 und 192.168.50.10 → 1.1.1.1."
-  }
- ],
+ "tasks": [],
  "checks": [
   {
    "desc": "Transit: 192.168.50.10 → 8.8.8.8",
@@ -1115,11 +1118,29 @@
    "prefix": "8.8.8.0/24"
   },
   {
+   "desc": "web1 → 8.8.8.8 funktioniert weiter",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "8.8.8.8",
+   "proto": "icmp",
+   "expect": true
+  },
+  {
    "desc": "partner1 lernt 1.1.1.0/24 nicht",
    "type": "learned",
    "router": "partner1",
    "prefix": "1.1.1.0/24",
-   "expect": false
+   "expect": false,
+   "category": "security"
+  },
+  {
+   "desc": "192.168.50.10 → 1.1.1.1 blockiert",
+   "type": "traffic",
+   "src": "192.168.50.10",
+   "dst": "1.1.1.1",
+   "proto": "icmp",
+   "expect": false,
+   "category": "security"
   },
   {
    "desc": "10.66.0.0/16 nicht in der ACI (leaf104)",
@@ -1127,15 +1148,43 @@
    "node": 104,
    "vrf": "Shop:Prod",
    "prefix": "10.66.0.0/16",
-   "expect": false
+   "expect": false,
+   "category": "security"
   },
   {
-   "desc": "web1 → 8.8.8.8 funktioniert weiter",
+   "desc": "192.168.50.10 → web1 blockiert",
    "type": "traffic",
-   "src": "web1",
-   "dst": "8.8.8.8",
+   "src": "192.168.50.10",
+   "dst": "web1",
    "proto": "icmp",
-   "expect": true
+   "expect": false,
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Warum reicht am External EPG PartnerNet nicht einfach 0.0.0.0/0 mit Aggregate Export?",
+   "options": [
+    "Dann bekommt der Partner alle Routen, auch 1.1.1.0/24",
+    "Weil Aggregate in BGP nicht geht",
+    "Das reicht",
+    "Weil dann 10.66.0.0/16 importiert wird"
+   ],
+   "answer": 0,
+   "explain": "Aggregate Export gibt alles weiter, was im Präfix liegt. Exakter Match gibt nur das eine Präfix weiter."
+  },
+  {
+   "id": "q2",
+   "q": "Was ist der Unterschied zwischen „External Subnets for the External EPG“ und „Export Route Control Subnet“?",
+   "options": [
+    "Das eine klassifiziert Quell-/Zieladressen für die Policy, das andere steuert Routen-Ankündigungen",
+    "Kein Unterschied",
+    "Beides steuert nur Routing",
+    "Beides steuert nur die Policy"
+   ],
+   "answer": 0,
+   "explain": "Routing und Policy sind getrennt: Eine Route kann exportiert werden, ohne dass dort klassifiziert wird."
   }
  ],
  "solution": "`{\"fvTenant\": {\"attributes\": {\"name\": \"Shop\"}, \"children\": [{\"vzBrCP\": {\"attributes\": {\"name\": \"transit\", \"scope\": \"context\"}, \"children\": [{\"vzSubj\": {\"attributes\": {\"name\": \"subj\", \"revFltPorts\": \"yes\"}, \"children\": [{\"vzRsSubjFiltAtt\": {\"attributes\": {\"tnVzFilterName\": \"default\"}}}]}}]}}, {\"l3extOut\": {\"attributes\": {\"name\": \"WAN\"}, \"children\": [{\"l3extInstP\": {\"attributes\": {\"name\": \"Internet\"}, \"children\": [{\"l3extSubnet\": {\"attributes\": {\"ip\": \"192.168.50.0/24\", \"scope\": \"export-rtctrl\"}}}, {\"fvRsProv\": {\"attributes\": {\"tnVzBrCPName\": \"transit\"}}}]}}]}}, {\"l3extOut\": {\"attributes\": {\"name\": \"Partner\", \"enforceRtctrl\": \"export,import\"}, \"children\": [{\"l3extInstP\": {\"attributes\": {\"name\": \"PartnerNet\"}, \"children\": [{\"l3extSubnet\": {\"attributes\": {\"ip\": \"192.168.50.0/24\", \"scope\": \"import-security,import-rtctrl\"}}}, {\"l3extSubnet\": {\"attributes\": {\"ip\": \"8.8.8.0/24\", \"scope\": \"export-rtctrl\"}}}, {\"fvRsCons\": {\"attributes\": {\"tnVzBrCPName\": \"transit\"}}}]}}]}}]}}`\\n\\nExport Route Control Subnets steuern, welche Routen ein L3Out an seinen Nachbarn gibt; Import Route Control Subnets (nur mit Enforcement *Import*) steuern, was die ACI übernimmt. Klassifiziert wird weiterhin nur über *External Subnets for the External EPG*.",

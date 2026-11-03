@@ -5,12 +5,41 @@
  "level": "Fortgeschritten",
  "duration": "40 min",
  "fabric": "discovered",
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 09"
+ ],
+ "tools": [
+  "Tenant > Networking > L3Outs",
+  "Simulation > Externe Router",
+  "CLI: show bgp ipv4 unicast neighbors vrf, show bgp ipv4 unicast summary vrf"
+ ],
  "goals": [
-  "eBGP zwischen Loopbacks mit Multihop und Static Routes aufbauen",
-  "BGP-Session mit MD5-Passwort und eigenen Timern",
+  "eBGP zwischen Loopbacks aufbauen",
+  "Eine BGP-Session mit Passwort und eigenen Timern absichern",
   "Mehrere BD-Subnetze als eine Summary ankündigen"
  ],
- "intro": "Der Partner-Router **partner1** (AS 65100) hängt an **leaf104 eth1/47** (Sub-Interface vlan-301, 172.16.1.1/30 ↔ 172.16.1.2/30). Laut Partner-Vertrag läuft BGP **zwischen den Loopbacks**: partner1 nutzt **192.168.255.1** und spricht die ACI an **1.1.1.104** (Router ID von leaf104) an. Weitere Vorgaben: MD5-Passwort **Partner#2026**, Keepalive **10 s**, Hold **30 s**.\n\nDer Partner möchte für den Webshop nur **eine Route 10.10.0.0/16** sehen statt der einzelnen BD-Subnetze. L3Out **Partner**, External EPG und Contract sind vorbereitet.",
+ "intro": "Der Partner-Router **partner1** (AS 65100) hängt an **leaf104 eth1/47** (Sub-Interface vlan-301, 172.16.1.1/30 ↔ 172.16.1.2/30). Laut Partner-Vertrag läuft BGP **zwischen den Loopbacks**: partner1 nutzt **192.168.255.1** und spricht die ACI an **1.1.1.104** (Router ID von leaf104) an. Weitere Vorgaben: MD5-Passwort **Partner#2026**, Keepalive **10 s**, Hold **30 s**.\n\nL3Out **Partner**, External EPG und Contract (Partner ↔ Web/App, nur Ping) sind vorbereitet. partner1 wird nicht verändert.",
+ "requirements": [
+  "Die BGP-Session zu partner1 ist aufgebaut, zwischen den Loopbacks und mit dem vereinbarten Passwort.",
+  "Die Session nutzt Keepalive 10 s und Hold 30 s.",
+  "Der Partner sieht für den Webshop genau eine Route 10.10.0.0/16, keine einzelnen BD-Subnetze.",
+  "Das Partnernetz 192.168.50.0/24 erreicht web1 per Ping, sonst nichts."
+ ],
+ "limits": [
+  "BGP vereinfacht wie in Lab 09; Passwort, TTL/Multihop, Update Source und Timer werden geprüft."
+ ],
+ "hints": [
+  "**Konzept:** Läuft eBGP zwischen Loopbacks, muss jede Seite die Loopback der anderen erreichen (Route), die Session muss mehr als einen Hop erlauben (Multihop/TTL), und die ACI muss ihre Loopback als Quelle nutzen. Timer und Summary sind eigene Policies.",
+  "**Objekte:** Static Route im Node Profile, BGP Peer Connectivity Profile am Node Profile (nicht am Interface) mit Remote AS, TTL und Passwort, BGP Timers Policy am VRF, BGP Route Summarization Policy an einem Export-Subnetz des External EPG.",
+  "**Prüfschritte:** `show bgp ipv4 unicast neighbors vrf Shop:Prod` auf leaf104: Idle (TTL), Active (Route oder Passwort)? Hold Time ausgehandelt? *Simulation > Externe Router*: Welche Präfixe lernt partner1?",
+  "**Lösung:** Static Route 192.168.255.1/32 über 172.16.1.2 am Node 104. BGP Peer 192.168.255.1 am Node Profile, Remote AS 65100, TTL 2, Passwort. BGP Timers Policy (10/30) am VRF Prod. Summarization Policy *Do not advertise more specifics* an 10.10.0.0/16 (Export Route Control) am External EPG PartnerNet."
+ ],
+ "cause": "Die Session ist auf der ACI-Seite nicht konfiguriert, die Loopback des Partners ist nicht erreichbar, es gibt keine Timer- und keine Summary-Policy.",
  "config": [
   {
    "polUni": {
@@ -811,30 +840,7 @@
    ]
   }
  ],
- "tasks": [
-  {
-   "title": "Erreichbarkeit der Loopback",
-   "text": "Am Node 104 im Node Profile eine Static Route **192.168.255.1/32** mit Next Hop **172.16.1.2**.",
-   "hint": "Ohne diese Route kann leaf104 die Loopback des Partners nicht erreichen – BGP bleibt in Active."
-  },
-  {
-   "title": "BGP Peer am Node Profile",
-   "text": "BGP Peer Connectivity Profile **am Node Profile** (nicht am Interface): Peer **192.168.255.1**, Remote AS **65100**, **EBGP Multihop TTL 2**, Password **Partner#2026**.",
-   "hint": "Ein Peer am Node Profile nutzt die Loopback (Router ID) als Quelle."
-  },
-  {
-   "title": "BGP Timers",
-   "text": "BGP Timers Policy **Partner-Timers** (Keepalive 10, Hold 30) anlegen und am VRF **Prod** auswählen."
-  },
-  {
-   "title": "Summarization",
-   "text": "BGP Route Summarization Policy **Summary-Only** mit *Do not advertise more specifics*. Am External EPG **PartnerNet** das Subnetz **10.10.0.0/16** mit **Export Route Control Subnet** und dieser Policy anlegen."
-  },
-  {
-   "title": "Verifizieren",
-   "text": "leaf104: `show bgp ipv4 unicast neighbors vrf Shop:Prod` (Update Source, Multihop, Password, Hold Time), `show bgp ipv4 unicast summary vrf Shop:Prod`. Unter Simulation > Externe Router: Was lernt partner1?"
-  }
- ],
+ "tasks": [],
  "checks": [
   {
    "desc": "BGP partner1 Established",
@@ -855,19 +861,64 @@
    "prefix": "10.10.0.0/16"
   },
   {
-   "desc": "partner1 lernt 10.10.10.0/24 nicht mehr einzeln",
-   "type": "learned",
-   "router": "partner1",
-   "prefix": "10.10.10.0/24",
-   "expect": false
-  },
-  {
    "desc": "192.168.50.10 → web1 Ping",
    "type": "traffic",
    "src": "192.168.50.10",
    "dst": "web1",
    "proto": "icmp",
    "expect": true
+  },
+  {
+   "desc": "partner1 lernt 10.10.10.0/24 nicht einzeln",
+   "type": "learned",
+   "router": "partner1",
+   "prefix": "10.10.10.0/24",
+   "expect": false,
+   "category": "security"
+  },
+  {
+   "desc": "partner1 lernt 10.10.20.0/24 nicht einzeln",
+   "type": "learned",
+   "router": "partner1",
+   "prefix": "10.10.20.0/24",
+   "expect": false,
+   "category": "security"
+  },
+  {
+   "desc": "Least Privilege Partner → Web: nur Ping",
+   "type": "exposure",
+   "src": "192.168.50.10",
+   "dst": "web1",
+   "allow": [
+    "icmp"
+   ],
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Die Session bleibt in Idle, obwohl Peer-Adresse und AS stimmen. Was ist die wahrscheinlichste Ursache?",
+   "options": [
+    "TTL 1: Die Loopback ist zwei Hops entfernt (Multihop fehlt)",
+    "Falsches Passwort",
+    "Falsche Timer",
+    "Fehlende Summary"
+   ],
+   "answer": 0,
+   "explain": "Ein falsches Passwort oder eine fehlende Route zeigt sich eher als Active (TCP kommt nicht zustande)."
+  },
+  {
+   "id": "q2",
+   "q": "Warum gehört der BGP Peer hier ans Node Profile und nicht ans Interface?",
+   "options": [
+    "Am Node Profile nutzt die ACI die Loopback (Router ID) als Quelle, am Interface die Interface-Adresse",
+    "Am Interface geht kein MD5",
+    "Kein Unterschied",
+    "Wegen der Summary"
+   ],
+   "answer": 0,
+   "explain": "Der Partner erwartet 1.1.1.104 als Quelle der Session."
   }
  ],
  "solution": "`{\"fvTenant\": {\"attributes\": {\"name\": \"Shop\"}, \"children\": [{\"bgpCtxPol\": {\"attributes\": {\"name\": \"Partner-Timers\", \"kaIntvl\": \"10\", \"holdIntvl\": \"30\"}}}, {\"fvCtx\": {\"attributes\": {\"name\": \"Prod\"}, \"children\": [{\"fvRsBgpCtxPol\": {\"attributes\": {\"tnBgpCtxPolName\": \"Partner-Timers\"}}}]}}, {\"bgpRtSummPol\": {\"attributes\": {\"name\": \"Summary-Only\", \"ctrl\": \"summary-only\"}}}, {\"l3extOut\": {\"attributes\": {\"name\": \"Partner\"}, \"children\": [{\"l3extLNodeP\": {\"attributes\": {\"name\": \"border\"}, \"children\": [{\"l3extRsNodeL3OutAtt\": {\"attributes\": {\"tDn\": \"topology/pod-1/node-104\", \"rtrId\": \"1.1.1.104\"}, \"children\": [{\"ipRouteP\": {\"attributes\": {\"ip\": \"192.168.255.1/32\"}, \"children\": [{\"ipNexthopP\": {\"attributes\": {\"nhAddr\": \"172.16.1.2\"}}}]}}]}}, {\"bgpPeerP\": {\"attributes\": {\"addr\": \"192.168.255.1\", \"ttl\": \"2\", \"password\": \"Partner#2026\"}, \"children\": [{\"bgpAsP\": {\"attributes\": {\"asn\": \"65100\"}}}]}}]}}, {\"l3extInstP\": {\"attributes\": {\"name\": \"PartnerNet\"}, \"children\": [{\"l3extSubnet\": {\"attributes\": {\"ip\": \"10.10.0.0/16\", \"scope\": \"export-rtctrl\"}, \"children\": [{\"l3extRsSubnetToRtSumm\": {\"attributes\": {\"tDn\": \"uni/tn-Shop/bgprtsum-Summary-Only\"}}}]}}]}}]}}]}}`\\n\\nTypische Fehler: TTL 1 (Session bleibt Idle), fehlende Static Route zur Partner-Loopback (Active), falsches Passwort (Active, TCP-MD5 schlägt fehl).",

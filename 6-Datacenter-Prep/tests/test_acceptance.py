@@ -428,6 +428,10 @@ class TestRequirementLabs(unittest.TestCase):
         '11-static-leaf-taboo': ['Static Leaf', 'Taboo', 'fvRsNodeAtt', 'vzTaboo', 'no-ping'],
         '13-shared-services': ['Global', 'Export', 'vzCPIf', 'Shared between', 'Imported', 'fvRsConsIf', 'Consumer', 'Provider'],
         '07-troubleshooting': ['8080', 'Unicast Routing', 'BD-Bakup', 'Reverse', '149', 'Port Block'],
+        '15-transit-route-control': ['Export Route Control', 'Import Route Control', 'export-rtctrl', 'Aggregate', 'enforceRtctrl'],
+        '16-service-graph-pbr': ['vlan-400', 'Encap Block', 'Redirect', 'vnsLDevVip', 'Device Selection', 'PBR'],
+        '17-l3out-vpc-svi-bfd': ['OSPF-BFD', 'Interface Control', 'Side A', 'Secondary IP', 'ext-svi'],
+        '18-ebgp-loopback-md5-summary': ['Multihop', 'TTL', 'Static Route', 'Node Profile', 'Summarization Policy', 'bgpRtSummPol'],
         '21-aaa-tacacs-rbac': ['Provider Group', 'aaaLoginDomain', 'aaaDomainRef', 'readPriv', 'ISE-TACACS', 'Security Domain'],
         '23-esg-useg': ['fvIpAttr', 'IP-Attribut', 'isAttrBasedEPg', 'EPG Selector', 'frontend-to-backend', 'Consumer', 'Provider'],
         '32-https-least-privilege': ['Consumer', 'Provider', 'web-to-app-https', 'Reverse'],
@@ -974,6 +978,36 @@ class TestConvertedLabs(unittest.TestCase):
         self.assertTrue(all(self.by().values()))
         self.apply(('uni/tn-Shop/brc-frontend-to-backend/subj-subj', mo('vzSubj', {}, mo('vzRsSubjFiltAtt', {'tnVzFilterName': 'default'}))))
         self.assertFalse(self.by()['Least Privilege Web → App: nur TCP 8080'])
+
+
+    def test_lab15_aggregate_export_leaks_routes(self):
+        lab = self.S.load_lab('15-transit-route-control')
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+        self.apply(('uni/tn-Shop/out-Partner/instP-PartnerNet', mo('l3extInstP', {}, mo('l3extSubnet', {
+            'ip': '0.0.0.0/0', 'scope': 'export-rtctrl', 'aggregate': 'export-rtctrl'}))))
+        self.assertFalse(self.by()['partner1 lernt 1.1.1.0/24 nicht'])
+
+    def test_lab16_firewall_decides_not_the_contract(self):
+        lab = self.S.load_lab('16-service-graph-pbr')
+        self.apply(*lab['solutionConfig'])
+        self.assertEqual(trace.run(self.S.engine, self.S.sim, 'web1', 'app1', 'icmp')['reason'], 'FIREWALL_DENY')
+        self.assertTrue(all(self.by().values()))
+
+    def test_lab17_permit_any_to_campus_fails(self):
+        lab = self.S.load_lab('17-l3out-vpc-svi-bfd')
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+        self.apply(('uni/tn-Shop/brc-web-to-campus/subj-subj', mo('vzSubj', {}, mo('vzRsSubjFiltAtt', {'tnVzFilterName': 'default'}))))
+        self.assertFalse(self.by()['Least Privilege Web → Campus: nur Ping'])
+
+    def test_lab18_without_summary_partner_sees_more_specifics(self):
+        lab = self.S.load_lab('18-ebgp-loopback-md5-summary')
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+        self.apply(('uni/tn-Shop/out-Partner/instP-PartnerNet/extsubnet-[10.10.0.0/16]/rsSubnetToRtSumm', mo('l3extRsSubnetToRtSumm', {'status': 'deleted'})))
+        by = self.by()
+        self.assertFalse(by['partner1 lernt 10.10.10.0/24 nicht einzeln'] and by['partner1 lernt 10.10.20.0/24 nicht einzeln'])
 
 
 class TestOperationsLabs(unittest.TestCase):

@@ -150,10 +150,10 @@ Unter *Simulation > Labs & Stände* laden. Jedes Lab setzt die Konfiguration auf
 | 12 | VMM-Integration mit VMware vCenter (neues Format) | 40 min |
 | 13 | Shared Services: Route Leaking zwischen Tenants (neues Format) | 35 min |
 | 14 | L2Out und Migration: stille Hosts und ARP Flooding (neues Format) | 40 min |
-| 15 | Transit Routing und Route Control | 40 min |
-| 16 | Service Graph mit Policy-Based Redirect (Firewall) | 45 min |
-| 17 | L3Out: SVI auf vPC mit Secondary IP und BFD | 40 min |
-| 18 | eBGP über Loopbacks: Multihop, MD5, Timer und Summarization | 40 min |
+| 15 | Transit Routing und Route Control (neues Format) | 40 min |
+| 16 | Service Graph mit Policy-Based Redirect (Firewall) (neues Format) | 45 min |
+| 17 | L3Out: SVI auf vPC mit Secondary IP und BFD (neues Format) | 40 min |
+| 18 | eBGP über Loopbacks: Multihop, MD5, Timer und Summarization (neues Format) | 40 min |
 | 19 | EIGRP und Static Route mit IP SLA Track | 40 min |
 | 20 | Floating SVI für einen virtuellen Router | 30 min |
 | 21 | AAA: TACACS+, Login-Domain und RBAC (neues Format) | 35 min |
@@ -182,7 +182,7 @@ Unter *Simulation > Labs & Stände* laden. Jedes Lab setzt die Konfiguration auf
 | 44 | Access-Diagnose: drei Server, drei Ursachen (Domain, VLAN Pool, Static Port; neues Format) | 30 min |
 | 45 | Zwei Bridge Domains, eine VRF: Routing ohne L3Out (neues Format) | 20 min |
 
-**Neues Lab-Format** (Labs 01 bis 14 außer 08, 21, 23 und 32 bis 45): Statt einer Klickanleitung gibt es Anforderungen. Der Rest im Überblick:
+**Neues Lab-Format** (Labs 01 bis 18 außer 08, dazu 21, 23 und 32 bis 45): Statt einer Klickanleitung gibt es Anforderungen. Der Rest im Überblick:
 
 - **Hinweise** in vier Stufen: Konzept, Objekte, Prüfschritt, Lösung. Die Oberfläche zählt, wie viele genutzt wurden.
 - **Bewertung** getrennt nach *Funktion* und *Sicherheit / Least Privilege*. Eine Permit-any-Abkürzung funktioniert zwar, besteht aber nicht.
