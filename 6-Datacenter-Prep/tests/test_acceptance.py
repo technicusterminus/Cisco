@@ -428,6 +428,15 @@ class TestRequirementLabs(unittest.TestCase):
         '11-static-leaf-taboo': ['Static Leaf', 'Taboo', 'fvRsNodeAtt', 'vzTaboo', 'no-ping'],
         '13-shared-services': ['Global', 'Export', 'vzCPIf', 'Shared between', 'Imported', 'fvRsConsIf', 'Consumer', 'Provider'],
         '07-troubleshooting': ['8080', 'Unicast Routing', 'BD-Bakup', 'Reverse', '149', 'Port Block'],
+        '15-transit-route-control': ['Export Route Control', 'Import Route Control', 'export-rtctrl', 'Aggregate', 'enforceRtctrl'],
+        '16-service-graph-pbr': ['vlan-400', 'Encap Block', 'Redirect', 'vnsLDevVip', 'Device Selection', 'PBR'],
+        '17-l3out-vpc-svi-bfd': ['OSPF-BFD', 'Interface Control', 'Side A', 'Secondary IP', 'ext-svi'],
+        '18-ebgp-loopback-md5-summary': ['Multihop', 'TTL', 'Static Route', 'Node Profile', 'Summarization Policy', 'bgpRtSummPol'],
+        '19-eigrp-static-track': ['IP SLA', 'Track List', 'ipRsRouteTrack', 'EIGRP-Branch', 'icmp-5s'],
+        '20-floating-svi': ['Floating SVI', 'Floating IP', 'Anchor', 'l3extVirtualLIfP', 'Path Attribute'],
+        '22-inband-management': ['S0211', 'VLAN Pool', 'AAEP', 'In-Band EPG', 'Provider Group', 'IPG-APIC'],
+        '21-aaa-tacacs-rbac': ['Provider Group', 'aaaLoginDomain', 'aaaDomainRef', 'readPriv', 'ISE-TACACS', 'Security Domain'],
+        '23-esg-useg': ['fvIpAttr', 'IP-Attribut', 'isAttrBasedEPg', 'EPG Selector', 'frontend-to-backend', 'Consumer', 'Provider'],
         '32-https-least-privilege': ['Consumer', 'Provider', 'web-to-app-https', 'Reverse'],
         '33-same-epg': ['Static Port', 'fvRsPathAtt'],
         '34-two-epgs-same-bd': ['Consumer', 'Provider', 'admin-to-web'],
@@ -944,6 +953,88 @@ class TestConvertedLabs(unittest.TestCase):
         by = self.by()
         self.assertFalse(by['Kein Gateway für 10.10.50.0/24 in der ACI'])
         self.assertFalse(by['Unicast Routing im BD-Migration bleibt aus'])
+
+
+    def test_lab21_write_role_for_reader_fails_security(self):
+        lab = self.S.load_lab('21-aaa-tacacs-rbac')
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+        self.apply(('uni/userext/user-shopro/userdomain-Shop-Dom/role-tenant-admin', mo('aaaUserRole', {'privType': 'writePriv'})))
+        by = self.by()
+        self.assertTrue(by['shopro kann sich anmelden'])
+        self.assertFalse(by['shopro darf Shop nur lesen'])
+
+    def test_lab23_epg_contract_instead_of_esg_and_permit_any(self):
+        lab = self.S.load_lab('23-esg-useg')
+        # Abkuerzung 1: klassischer EPG-Contract statt ESGs
+        self.apply(('uni', mo('fvTenant', {'name': 'Shop'},
+                              mo('vzFilter', {'name': 'tcp-8080'}, mo('vzEntry', {'name': 'e', 'etherT': 'ip', 'prot': 'tcp', 'dFromPort': '8080', 'dToPort': '8080'})),
+                              mo('vzBrCP', {'name': 'w2a'}, mo('vzSubj', {'name': 's', 'revFltPorts': 'yes'}, mo('vzRsSubjFiltAtt', {'tnVzFilterName': 'tcp-8080'}))),
+                              mo('fvAp', {'name': 'Webshop'}, mo('fvAEPg', {'name': 'Web'}, mo('fvRsCons', {'tnVzBrCPName': 'w2a'})),
+                                 mo('fvAEPg', {'name': 'App'}, mo('fvRsProv', {'tnVzBrCPName': 'w2a'}))))))
+        by = self.by()
+        self.assertEqual(trace.run(self.S.engine, self.S.sim, 'web1', 'app1', 'tcp', 8080)['verdict'], 'ALLOW')
+        self.assertFalse(by['web1 → app1 TCP 8080 über ESGs'], 'funktioniert, aber nicht ueber ESGs')
+        # Musterloesung, dann permit any zwischen den ESGs
+        self.S.load_lab('23-esg-useg')
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+        self.apply(('uni/tn-Shop/brc-frontend-to-backend/subj-subj', mo('vzSubj', {}, mo('vzRsSubjFiltAtt', {'tnVzFilterName': 'default'}))))
+        self.assertFalse(self.by()['Least Privilege Web → App: nur TCP 8080'])
+
+
+    def test_lab15_aggregate_export_leaks_routes(self):
+        lab = self.S.load_lab('15-transit-route-control')
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+        self.apply(('uni/tn-Shop/out-Partner/instP-PartnerNet', mo('l3extInstP', {}, mo('l3extSubnet', {
+            'ip': '0.0.0.0/0', 'scope': 'export-rtctrl', 'aggregate': 'export-rtctrl'}))))
+        self.assertFalse(self.by()['partner1 lernt 1.1.1.0/24 nicht'])
+
+    def test_lab16_firewall_decides_not_the_contract(self):
+        lab = self.S.load_lab('16-service-graph-pbr')
+        self.apply(*lab['solutionConfig'])
+        self.assertEqual(trace.run(self.S.engine, self.S.sim, 'web1', 'app1', 'icmp')['reason'], 'FIREWALL_DENY')
+        self.assertTrue(all(self.by().values()))
+
+    def test_lab17_permit_any_to_campus_fails(self):
+        lab = self.S.load_lab('17-l3out-vpc-svi-bfd')
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+        self.apply(('uni/tn-Shop/brc-web-to-campus/subj-subj', mo('vzSubj', {}, mo('vzRsSubjFiltAtt', {'tnVzFilterName': 'default'}))))
+        self.assertFalse(self.by()['Least Privilege Web → Campus: nur Ping'])
+
+    def test_lab18_without_summary_partner_sees_more_specifics(self):
+        lab = self.S.load_lab('18-ebgp-loopback-md5-summary')
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+        self.apply(('uni/tn-Shop/out-Partner/instP-PartnerNet/extsubnet-[10.10.0.0/16]/rsSubnetToRtSumm', mo('l3extRsSubnetToRtSumm', {'status': 'deleted'})))
+        by = self.by()
+        self.assertFalse(by['partner1 lernt 10.10.10.0/24 nicht einzeln'] and by['partner1 lernt 10.10.20.0/24 nicht einzeln'])
+
+
+    def test_lab19_track_removes_default_route_on_failure(self):
+        lab = self.S.load_lab('19-eigrp-static-track')
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+        next(r for r in self.S.sim['routers'] if r['name'] == 'inet1')['down'] = True
+        self.S.changed()
+        self.assertFalse(self.by()['Default Route auf leaf104 aktiv'], 'Mit Track verschwindet die Route bei Ausfall')
+
+    def test_lab20_floating_svi_without_floating_ip_fails(self):
+        lab = self.S.load_lab('20-floating-svi')
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+        dn = next(d for d in self.S.store.by_class('l3extRsDynPathAtt'))
+        self.apply((dn, mo('l3extRsDynPathAtt', {'floatingAddr': '0.0.0.0'})))
+        self.assertFalse(self.by()['Andere Leafs antworten unter 172.16.10.100/24'])
+
+    def test_lab22_inb_domain_on_server_aaep_fails_security(self):
+        lab = self.S.load_lab('22-inband-management')
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+        self.apply(('uni/infra/attentp-AAEP-Server', mo('infraAttEntityP', {}, mo('infraRsDomP', {'tDn': 'uni/phys-PhysDom-INB'}))))
+        self.assertFalse(self.by()['vlan-90 kommt nicht auf die Server-Ports'])
 
 
 class TestOperationsLabs(unittest.TestCase):

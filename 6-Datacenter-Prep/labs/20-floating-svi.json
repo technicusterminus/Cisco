@@ -5,11 +5,40 @@
  "level": "Fortgeschritten",
  "duration": "30 min",
  "fabric": "discovered",
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 17"
+ ],
+ "tools": [
+  "Tenant > Networking > L3Outs",
+  "Simulation > Externe Router",
+  "CLI: show ip ospf neighbors vrf"
+ ],
  "goals": [
   "Verstehen, wofür Floating SVI gedacht ist (virtuelle Router/Firewalls, die zwischen Leafs wandern)",
   "Anchor Node, Primary IP und Floating IP richtig vergeben"
  ],
- "intro": "Der virtuelle Router **vrtr1** (eine VM) läuft gerade auf einem Host an **leaf101 eth1/9** und kann jederzeit auf einen anderen Server wandern. Er spricht **OSPF Area 0.0.0.2** in **vlan-150** (172.16.10.30/24, MTU 1500) und hat das Netz **10.77.0.0/16**.\n\nStatt auf jedem möglichen Leaf ein SVI zu bauen, nutzt du eine **Floating SVI**: Anchor Node ist **leaf103** (172.16.10.11/24, hier läuft das Routing), auf allen anderen Leafs mit der Domain **PhysDom-Server** nimmt die ACI die Floating IP **172.16.10.100/24**.",
+ "intro": "Der virtuelle Router **vrtr1** (eine VM) läuft gerade auf einem Host an **leaf101 eth1/9** und kann jederzeit auf einen anderen Server wandern. Er spricht **OSPF Area 0.0.0.2** in **vlan-150** (172.16.10.30/24, MTU 1500) und hat das Netz **10.77.0.0/16**.\n\nAdressplan: leaf103 ist der Leaf, auf dem das Routing läuft (172.16.10.11/24). Auf jedem anderen Leaf mit der Domain **PhysDom-Server** soll die ACI unter **172.16.10.100/24** erreichbar sein. Der Contract web-to-vnf (Ping) ist vorbereitet.",
+ "requirements": [
+  "Ein L3Out **VNF** baut OSPF zu vrtr1 auf, gleich an welchem Leaf mit PhysDom-Server die VM gerade läuft.",
+  "Es wird nicht auf jedem Leaf ein eigenes Interface gebaut.",
+  "web1 erreicht 10.77.0.0/16 per Ping, sonst nichts.",
+  "vrtr1 lernt nur das Web-Netz, nicht das App-Netz."
+ ],
+ "limits": [
+  "Die Wanderung der VM wird über den Anschluss des simulierten Routers abgebildet; vMotion selbst wird nicht simuliert."
+ ],
+ "hints": [
+  "**Konzept:** Für Router, die wandern, gibt es ein Interface, das an einem Leaf verankert ist und auf den anderen Leafs automatisch mit einer gemeinsamen Adresse auftaucht – sobald dort ein Port der passenden Domain das VLAN braucht.",
+  "**Objekte:** L3Out mit OSPF-Area, Node Profile mit dem Anker-Leaf, Logical Interface Profile mit OSPF Interface Profile, darin das Floating-Interface mit Anchor, Encap, Adresse und einem Path Attribute (Domain, zweite Adresse). External EPG mit Contract.",
+  "**Prüfschritte:** leaf103 `show ip ospf neighbors vrf Shop:Prod`. Hängt vrtr1 an leaf101, braucht leaf101 eine Adresse im Transfernetz – woher kommt sie? *Simulation > Externe Router*: Was lernt vrtr1?",
+  "**Lösung:** L3Out VNF (Prod, L3Dom-WAN, OSPF Area 0.0.0.2), Node 103 (Router ID), Floating SVI: Anchor 103, vlan-150, 172.16.10.11/24, MTU 1500, Path Attribute PhysDom-Server mit Floating IP 172.16.10.100/24. External EPG 10.77.0.0/16 mit web-to-vnf (bereitstellen). BD-Web ist schon public und mit VNF verknüpft."
+ ],
+ "cause": "Es gibt kein L3Out zum virtuellen Router.",
  "config": [
   {
    "polUni": {
@@ -621,6 +650,21 @@
    ],
    "bond": "none",
    "descr": "Webserver"
+  },
+  {
+   "name": "app1",
+   "mac": "00:50:56:10:20:11",
+   "ip": "10.10.20.11/24",
+   "gw": "10.10.20.1",
+   "vlan": 120,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/2"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Applikationsserver"
   }
  ],
  "routers": [
@@ -654,34 +698,25 @@
    "staticBack": []
   }
  ],
- "tasks": [
-  {
-   "title": "L3Out VNF",
-   "text": "L3Out **VNF**, VRF Prod, Domain L3Dom-WAN, OSPF Area **0.0.0.2**. Node Profile mit Node 103 (1.1.1.103), Logical Interface Profile mit OSPF Interface Profile."
-  },
-  {
-   "title": "Floating SVI",
-   "text": "Im Interface Profile **Create Floating SVI**: Anchor Node 103, vlan-150, 172.16.10.11/24, MTU 1500. Path Attribute: Domain **PhysDom-Server** mit Floating IP **172.16.10.100/24**.",
-   "hint": "Ohne Floating IP erreicht ein Router an einem Nicht-Anchor-Leaf die ACI nicht."
-  },
-  {
-   "title": "External EPG",
-   "text": "External EPG **VNF-Net** 10.77.0.0/16, Contract **web-to-vnf** provided."
-  },
-  {
-   "title": "Verifizieren",
-   "text": "leaf103: `show ip ospf neighbors vrf Shop:Prod`. Ping von web1 zu 10.77.1.1. Wandert die VM (Router-Anschluss auf einen anderen Leaf-Port mit derselben Domain), bleibt die Nachbarschaft bestehen."
-  }
- ],
+ "tasks": [],
  "checks": [
   {
-   "desc": "OSPF FULL zwischen vrtr1 und dem Anchor leaf103",
+   "desc": "OSPF FULL zwischen vrtr1 und leaf103",
    "type": "router",
    "name": "vrtr1",
    "adj": "FULL",
    "nodes": [
     103
    ]
+  },
+  {
+   "desc": "Andere Leafs antworten unter 172.16.10.100/24",
+   "type": "class",
+   "cls": "l3extRsDynPathAtt",
+   "under": "uni/tn-Shop/out-VNF/",
+   "attrs": {
+    "floatingAddr": "172.16.10.100/24"
+   }
   },
   {
    "desc": "vrtr1 lernt 10.10.10.0/24",
@@ -696,6 +731,59 @@
    "dst": "10.77.1.1",
    "proto": "icmp",
    "expect": true
+  },
+  {
+   "desc": "Least Privilege Web → VNF-Netz: nur Ping",
+   "type": "exposure",
+   "src": "web1",
+   "dst": "10.77.1.1",
+   "allow": [
+    "icmp"
+   ],
+   "category": "security"
+  },
+  {
+   "desc": "vrtr1 lernt 10.10.20.0/24 nicht",
+   "type": "learned",
+   "router": "vrtr1",
+   "prefix": "10.10.20.0/24",
+   "expect": false,
+   "category": "security"
+  },
+  {
+   "desc": "app1 → 10.77.1.1 blockiert",
+   "type": "traffic",
+   "src": "app1",
+   "dst": "10.77.1.1",
+   "proto": "icmp",
+   "expect": false,
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Warum braucht man neben der Anchor-Adresse eine Floating IP?",
+   "options": [
+    "Damit der Router an einem Nicht-Anchor-Leaf eine Adresse der ACI im Transfernetz erreicht",
+    "Für BFD",
+    "Als Router ID",
+    "Für den Contract"
+   ],
+   "answer": 0,
+   "explain": "Die Floating IP wird nur auf den Leafs aktiv, an denen der Router gerade hängt."
+  },
+  {
+   "id": "q2",
+   "q": "Wo läuft bei Floating SVI das Routing-Protokoll?",
+   "options": [
+    "Auf dem Anchor Node",
+    "Auf jedem Leaf mit der Domain",
+    "Auf den Spines",
+    "Auf dem APIC"
+   ],
+   "answer": 0,
+   "explain": "Die anderen Leafs leiten nur weiter; die Nachbarschaft hat der Router zum Anchor."
   }
  ],
  "solution": "`{\"fvTenant\": {\"attributes\": {\"name\": \"Shop\"}, \"children\": [{\"l3extOut\": {\"attributes\": {\"name\": \"VNF\"}, \"children\": [{\"l3extRsEctx\": {\"attributes\": {\"tnFvCtxName\": \"Prod\"}}}, {\"l3extRsL3DomAtt\": {\"attributes\": {\"tDn\": \"uni/l3dom-L3Dom-WAN\"}}}, {\"ospfExtP\": {\"attributes\": {\"areaId\": \"0.0.0.2\"}}}, {\"l3extLNodeP\": {\"attributes\": {\"name\": \"anchor\"}, \"children\": [{\"l3extRsNodeL3OutAtt\": {\"attributes\": {\"tDn\": \"topology/pod-1/node-103\", \"rtrId\": \"1.1.1.103\"}}}, {\"l3extLIfP\": {\"attributes\": {\"name\": \"floating\"}, \"children\": [{\"ospfIfP\": {\"attributes\": {}}}, {\"l3extVirtualLIfP\": {\"attributes\": {\"nodeDn\": \"topology/pod-1/node-103\", \"encap\": \"vlan-150\", \"addr\": \"172.16.10.11/24\", \"mtu\": \"1500\"}, \"children\": [{\"l3extRsDynPathAtt\": {\"attributes\": {\"tDn\": \"uni/phys-PhysDom-Server\", \"floatingAddr\": \"172.16.10.100/24\"}}}]}}]}}]}}, {\"l3extInstP\": {\"attributes\": {\"name\": \"VNF-Net\"}, \"children\": [{\"l3extSubnet\": {\"attributes\": {\"ip\": \"10.77.0.0/16\"}}}, {\"fvRsProv\": {\"attributes\": {\"tnVzBrCPName\": \"web-to-vnf\"}}}]}}]}}]}}`",

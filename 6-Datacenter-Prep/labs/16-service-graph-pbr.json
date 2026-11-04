@@ -5,12 +5,42 @@
  "level": "Fortgeschritten",
  "duration": "45 min",
  "fabric": "discovered",
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Labs 32 und 35"
+ ],
+ "tools": [
+  "Services > L4-L7",
+  "Simulation > L4-L7 Geräte",
+  "Traffic Inspector",
+  "CLI: show zoning-rule, show service redir info"
+ ],
  "goals": [
-  "Ein L4-L7 Device (Firewall, Go-To, physisch) anlegen",
-  "Einen Service Graph mit PBR auf einen Contract anwenden",
+  "Eine Firewall per Service Graph in einen bestehenden Contract einhängen",
+  "Verkehr umleiten, ohne die Server umzukonfigurieren",
   "Shadow-EPGs, Redirect-Regeln und Faults verstehen"
  ],
- "intro": "Der Verkehr von **Web** zu **App** (Contract **web-to-app**: tcp/8080 und ICMP) soll künftig durch die Firewall **fw1** – ohne dass die Server ihr Gateway ändern. Dafür nutzt die ACI **Policy-Based Redirect (PBR)**.\n\nfw1 hängt an **leaf102 eth1/20** (Port-Policy vorhanden) mit zwei 802.1Q-Interfaces:\n- **outside** vlan-401, 192.168.100.10/24, MAC 00:50:56:FA:01:01\n- **inside** vlan-402, 192.168.101.10/24, MAC 00:50:56:FA:01:02\n\nDas Regelwerk der Firewall erlaubt nur **tcp/8080** (siehe Simulation > L4-L7 Geräte).",
+ "intro": "Der Verkehr von **Web** zu **App** (Contract **web-to-app**: tcp/8080 und ICMP) soll künftig durch die Firewall **fw1** – ohne dass die Server ihr Gateway ändern.\n\nfw1 hängt an **leaf102 eth1/20** (Port-Policy vorhanden) mit zwei 802.1Q-Interfaces:\n- **outside** vlan-401, 192.168.100.10/24, MAC 00:50:56:FA:01:01\n- **inside** vlan-402, 192.168.101.10/24, MAC 00:50:56:FA:01:02\n\nDas Regelwerk der Firewall gehört dem Security-Team und wird nicht geändert (siehe *Simulation > L4-L7 Geräte*).",
+ "requirements": [
+  "Jeder Verkehr von Web zu App, den der Contract web-to-app erlaubt, läuft durch fw1.",
+  "web1 erreicht app1 auf TCP 8080.",
+  "Die Server behalten Adresse und Gateway; die Firewall bekommt eigene Transfernetze 192.168.100.0/24 und 192.168.101.0/24.",
+  "Was die Firewall verbietet, kommt nicht durch – auch nicht, wenn der Contract es erlaubt."
+ ],
+ "limits": [
+  "Die Firewall wird als Regelwerk (erlaubte Dienste) simuliert. Unmanaged Mode, Go-To, ein Node, PBR mit statischen Zielen; Health Groups, Tracking und Managed Mode fehlen."
+ ],
+ "hints": [
+  "**Konzept:** Policy-Based Redirect leitet Verkehr, den ein Contract erlaubt, an ein L4-L7-Gerät um. Dafür braucht es drei Bausteine: das Gerät (wo es hängt, welche VLANs), die Vorlage (welcher Graph) und die Zuordnung zum Contract (welche BDs, welche Redirect-Ziele).",
+  "**Objekte:** Encap-Block für die Firewall-VLANs im VLAN Pool, zwei Service-BDs, L4-L7 Device (Concrete Device, Cluster Interfaces), zwei PBR Policies mit IP und MAC der Firewall, Service Graph Template mit Redirect, Device Selection Policy, am Subject der Graph.",
+  "**Prüfschritte:** *Deployed Graph Instances*: applied oder Fault? Traffic Inspector web1 → app1 TCP 8080: Steht fw1 im Pfad? Warum scheitert Ping danach? Auf leaf101 `show zoning-rule` (Action redir) und `show service redir info`.",
+  "**Lösung:** vlan-400 bis 410 im VLAN-Pool-Server. BD-FW-Ext 192.168.100.1/24 und BD-FW-Int 192.168.101.1/24. Device FW1 (Firewall, physisch, GoTo) mit Cluster Interfaces consumer (vlan-401, outside) und provider (vlan-402, inside). PBR-Ext/PBR-Int mit IP und MAC der Firewall-Interfaces. Graph FW-Graph mit Redirect, auf web-to-app anwenden."
+ ],
+ "cause": "Es gibt kein L4-L7 Device, keinen Service Graph und keine PBR Policy; die Firewall-VLANs fehlen im Pool.",
  "config": [
   {
    "polUni": {
@@ -484,37 +514,7 @@
    ]
   }
  ],
- "tasks": [
-  {
-   "title": "VLANs für die Firewall",
-   "text": "Der VLAN Pool **VLAN-Pool-Server** braucht einen Encap Block **vlan-400 bis vlan-410**.",
-   "hint": "Die Encaps der Cluster Interfaces müssen im VLAN Pool der Domain des L4-L7 Devices liegen."
-  },
-  {
-   "title": "Service-BDs",
-   "text": "Zwei BDs im VRF Prod: **BD-FW-Ext** (192.168.100.1/24) und **BD-FW-Int** (192.168.101.1/24)."
-  },
-  {
-   "title": "L4-L7 Device",
-   "text": "**Services > L4-L7 > Devices > Create L4-L7 Devices**: Name **FW1**, Firewall, Physical, Domain PhysDom-Server, Function Type **GoTo**. Concrete Device **fw1** mit den Interfaces outside und inside auf leaf102 eth1/20, Cluster Interfaces **consumer** (vlan-401, outside) und **provider** (vlan-402, inside)."
-  },
-  {
-   "title": "PBR Policies",
-   "text": "**Policies > Protocol > L4-L7 Policy-Based Redirect**: **PBR-Ext** mit Ziel 192.168.100.10 / 00:50:56:FA:01:01 und **PBR-Int** mit Ziel 192.168.101.10 / 00:50:56:FA:01:02."
-  },
-  {
-   "title": "Service Graph Template",
-   "text": "**Service Graph Templates > Create**: **FW-Graph** mit FW1, Node **N1**, Route Redirect aktiv."
-  },
-  {
-   "title": "Graph anwenden",
-   "text": "Rechtsklick auf FW-Graph > **Apply L4-L7 Service Graph Template**: Consumer Web, Provider App, bestehender Contract web-to-app. Consumer-Connector BD-FW-Ext + PBR-Ext + Cluster Interface consumer, Provider-Connector BD-FW-Int + PBR-Int + provider."
-  },
-  {
-   "title": "Verifizieren",
-   "text": "**Deployed Graph Instances** zeigt *applied*. Traffic-Test web1 → app1 tcp/8080 läuft über fw1. Warum ist Ping jetzt blockiert, obwohl der Contract ICMP erlaubt? Auf leaf101: `show zoning-rule` (Action redir) und `show service redir info`."
-  }
- ],
+ "tasks": [],
  "checks": [
   {
    "desc": "Graph-Instanz applied",
@@ -527,7 +527,7 @@
    "host": "fw1:outside"
   },
   {
-   "desc": "web1 → app1 tcp/8080 über die Firewall",
+   "desc": "web1 → app1 TCP 8080 über die Firewall",
    "type": "traffic",
    "src": "web1",
    "dst": "app1",
@@ -537,12 +537,60 @@
    "via": "fw1"
   },
   {
-   "desc": "web1 → app1 Ping von der Firewall blockiert",
+   "desc": "Ping wird von der Firewall verworfen",
    "type": "traffic",
    "src": "web1",
    "dst": "app1",
    "proto": "icmp",
-   "expect": false
+   "expect": false,
+   "reason": "FIREWALL_",
+   "category": "security"
+  },
+  {
+   "desc": "web1 → app1 SSH bleibt blockiert",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "app1",
+   "proto": "tcp",
+   "port": 22,
+   "expect": false,
+   "category": "security"
+  },
+  {
+   "desc": "App baut keine Verbindung zu Web auf (TCP 8080)",
+   "type": "traffic",
+   "src": "app1",
+   "dst": "web1",
+   "proto": "tcp",
+   "port": 8080,
+   "expect": false,
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Warum ist Ping nach dem Service Graph blockiert, obwohl der Contract ICMP erlaubt?",
+   "options": [
+    "Der Contract leitet ICMP an die Firewall um, und deren Regelwerk erlaubt nur TCP 8080",
+    "Weil PBR kein ICMP kann",
+    "Weil der Contract geändert wurde",
+    "Weil die Shadow-EPG ICMP blockt"
+   ],
+   "answer": 0,
+   "explain": "Der Contract entscheidet, was umgeleitet wird; die Firewall entscheidet, was durchkommt."
+  },
+  {
+   "id": "q2",
+   "q": "Die PBR Policy hat die falsche MAC der Firewall. Was passiert?",
+   "options": [
+    "Die Leafs schicken den Verkehr an eine MAC, die niemand hat – er geht verloren",
+    "Nichts, die IP reicht",
+    "Die ACI lernt die MAC selbst",
+    "Die Firewall antwortet trotzdem"
+   ],
+   "answer": 0,
+   "explain": "Bei PBR schreibt der Leaf die Ziel-MAC um; deshalb muss sie stimmen (oder per IP SLA/Location ermittelt werden)."
   }
  ],
  "solution": "Wichtig sind die drei Teile: **L4-L7 Device** (Concrete Device mit Paths, Cluster Interfaces mit Encap), **Service Graph Template** (Node N1, Redirect) und die **Device Selection Policy** (Contract/Graph/Node, je Connector BD, Cluster Interface und PBR Policy). Am Subject des Contracts hängt `vzRsSubjGraphAtt tnVnsAbsGraphName=FW-Graph`. Die PBR-Ziele brauchen die richtige MAC der Firewall-Interfaces.",

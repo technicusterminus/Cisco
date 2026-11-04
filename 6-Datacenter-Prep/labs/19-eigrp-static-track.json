@@ -5,12 +5,42 @@
  "level": "Fortgeschritten",
  "duration": "40 min",
  "fabric": "discovered",
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 06"
+ ],
+ "tools": [
+  "Tenant > Networking > L3Outs",
+  "Tenant > Policies > Protocol > IP SLA",
+  "Simulation > Externe Router",
+  "CLI: show ip eigrp neighbors vrf, show track, show ip route vrf"
+ ],
  "goals": [
   "Ein L3Out mit EIGRP aufbauen",
-  "Eine Static Route über IP SLA und Track List an die Erreichbarkeit des Next Hops koppeln",
+  "Eine Static Route an die Erreichbarkeit ihres Next Hops koppeln",
   "Mit show track und show ip route verifizieren"
  ],
- "intro": "Zwei externe Anbindungen im VRF Prod:\n- Die Filiale **branch1** spricht **EIGRP AS 100** über **leaf103 eth1/48** (Routed, 172.16.0.1/30 ↔ 172.16.0.2/30, MTU 1500) und hat das Netz **10.50.0.0/16**.\n- Der Internet-Router **inet1** an **leaf104 eth1/47** ist per **Static Route** angebunden (L3Out **Internet**, Default Route über 172.16.1.2 ist schon konfiguriert).\n\nFällt inet1 aus, soll die Default Route verschwinden, damit die Fabric nicht in ein schwarzes Loch routet. Access Policies und Contracts sind vorbereitet.",
+ "intro": "Zwei externe Anbindungen im VRF Prod:\n- Die Filiale **branch1** spricht **EIGRP AS 100** (Hello 5 s, Hold 15 s) über **leaf103 eth1/48** (Routed, 172.16.0.1/30 ↔ 172.16.0.2/30, MTU 1500) und hat das Netz **10.50.0.0/16**.\n- Der Internet-Router **inet1** an **leaf104 eth1/47** ist per **Static Route** angebunden (L3Out **Internet**, Default Route über 172.16.1.2 ist schon konfiguriert).\n\nAccess Policies und die Contracts web-to-branch und web-to-internet (jeweils Ping) sind vorbereitet; BD-Web ist schon mit dem L3Out Branch verknüpft.",
+ "requirements": [
+  "Ein L3Out **Branch** bringt EIGRP zu branch1 hoch; web1 erreicht die Filiale per Ping, sonst nichts.",
+  "Fällt inet1 aus, verschwindet die Default Route, damit die Fabric nicht in ein schwarzes Loch routet. Läuft inet1, ist sie da.",
+  "web1 erreicht das Internet weiterhin per Ping.",
+  "Die Filiale sieht das App-Netz nicht, und app1 erreicht die Filiale nicht."
+ ],
+ "limits": [
+  "EIGRP vereinfacht: AS, Hello/Hold, MTU; keine Metrik-Berechnung. IP SLA: ICMP-Probe als erreichbar/nicht erreichbar."
+ ],
+ "hints": [
+  "**Konzept:** Eine Static Route weiß nicht, ob ihr Next Hop lebt. Mit IP SLA prüft der Leaf das Ziel regelmäßig; eine Track List fasst Prüfungen zusammen; hängt sie an der Route, verschwindet die Route, wenn das Ziel nicht antwortet.",
+  "**Objekte:** EIGRP Interface Policy (Timer), L3Out mit EIGRP-AS, Node, Routed Interface, External EPG mit Contract. IP SLA Monitoring Policy, Track Member (Ziel, Scope), Track List und an der Static Route die Track Policy.",
+  "**Prüfschritte:** leaf103 `show ip eigrp neighbors vrf Shop:Prod`: keine Nachbarschaft? AS, Timer und MTU vergleichen. leaf104 `show track`, `show ip route vrf Shop:Prod`. Unter *Simulation > Externe Router* inet1 ausschalten und erneut schauen.",
+  "**Lösung:** EIGRP Interface Policy (Hello 5, Hold 15). L3Out Branch (Prod, L3Dom-WAN, EIGRP AS 100), Node 103, eth1/48 172.16.0.1/30 MTU 1500, External EPG 10.50.0.0/16 mit web-to-branch (bereitstellen). IP SLA icmp alle 5 s, Track Member auf 172.16.1.2 (Scope L3Out Internet), Track List, an der Route 0.0.0.0/0 die Track Policy."
+ ],
+ "cause": "Es gibt kein L3Out zur Filiale; die Default Route bleibt auch bei einem Ausfall von inet1 stehen.",
  "config": [
   {
    "polUni": {
@@ -995,29 +1025,7 @@
    ]
   }
  ],
- "tasks": [
-  {
-   "title": "EIGRP Interface Policy",
-   "text": "Im Tenant Shop: EIGRP Interface Policy **EIGRP-Branch** (Hello 5, Hold 15)."
-  },
-  {
-   "title": "L3Out Branch",
-   "text": "L3Out **Branch**, VRF Prod, Domain **L3Dom-WAN**, Protokoll **EIGRP** mit AS **100**. Node 103 (1.1.1.103), Routed Interface eth1/48 mit 172.16.0.1/30 und MTU 1500, EIGRP Interface Profile mit EIGRP-Branch. External EPG **BranchNet** 10.50.0.0/16, Contract **web-to-branch** provided.",
-   "hint": "BD-Web ist schon mit dem L3Out Branch verknüpft."
-  },
-  {
-   "title": "IP SLA und Track",
-   "text": "Unter **Policies > Protocol > IP SLA**: Monitoring Policy **icmp-5s** (ICMP, 5 s), Track Member **inet1-gw** (Ziel 172.16.1.2, Scope L3Out Internet, Policy icmp-5s), Track List **inet-track** mit diesem Member."
-  },
-  {
-   "title": "Track an die Route",
-   "text": "An der Static Route 0.0.0.0/0 (L3Out Internet, Node 104) die **Track Policy** inet-track eintragen."
-  },
-  {
-   "title": "Verifizieren und Ausfall testen",
-   "text": "leaf103: `show ip eigrp neighbors vrf Shop:Prod`. leaf104: `show track`, `show ip route vrf Shop:Prod`. Dann unter Simulation > Externe Router inet1 auf **ausgeschaltet** stellen: Track geht DOWN, die Default Route verschwindet."
-  }
- ],
+ "tasks": [],
  "checks": [
   {
    "desc": "EIGRP-Nachbarschaft zu branch1",
@@ -1034,9 +1042,10 @@
    "expect": true
   },
   {
-   "desc": "Static Route mit Track Policy",
-   "type": "exists",
-   "dn": "uni/tn-Shop/out-Internet/lnodep-border/rsnodeL3OutAtt-[topology/pod-1/node-104]/rt-[0.0.0.0/0]/rsRouteTrack"
+   "desc": "Default Route hängt an einer Erreichbarkeitsprüfung des Next Hops",
+   "type": "class",
+   "cls": "ipRsRouteTrack",
+   "under": "uni/tn-Shop/out-Internet/"
   },
   {
    "desc": "Default Route auf leaf104 aktiv",
@@ -1053,6 +1062,59 @@
    "dst": "8.8.8.8",
    "proto": "icmp",
    "expect": true
+  },
+  {
+   "desc": "Least Privilege Web → Filiale: nur Ping",
+   "type": "exposure",
+   "src": "web1",
+   "dst": "10.50.1.10",
+   "allow": [
+    "icmp"
+   ],
+   "category": "security"
+  },
+  {
+   "desc": "branch1 lernt 10.10.20.0/24 nicht",
+   "type": "learned",
+   "router": "branch1",
+   "prefix": "10.10.20.0/24",
+   "expect": false,
+   "category": "security"
+  },
+  {
+   "desc": "app1 → 10.50.1.10 blockiert",
+   "type": "traffic",
+   "src": "app1",
+   "dst": "10.50.1.10",
+   "proto": "icmp",
+   "expect": false,
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Was passiert ohne Track, wenn inet1 ausfällt, der Link zum Leaf aber oben bleibt?",
+   "options": [
+    "Die Default Route bleibt, der Verkehr läuft ins Leere (Blackhole)",
+    "Die Route verschwindet automatisch",
+    "Die ACI nimmt den Weg über die Filiale",
+    "Nichts, Static Routes prüfen den Next Hop selbst"
+   ],
+   "answer": 0,
+   "explain": "Eine Static Route ist aktiv, solange das Interface oben ist – genau das behebt IP SLA Tracking."
+  },
+  {
+   "id": "q2",
+   "q": "Die EIGRP-Nachbarschaft kommt nicht hoch, die AS stimmt. Was prüfst du als Nächstes?",
+   "options": [
+    "Hello/Hold-Timer und MTU",
+    "Den Contract",
+    "Die Track List",
+    "Die Router ID"
+   ],
+   "answer": 0,
+   "explain": "Abweichende Timer oder MTU verhindern die Nachbarschaft; der Contract betrifft nur den Datenverkehr."
   }
  ],
  "solution": "`{\"fvTenant\": {\"attributes\": {\"name\": \"Shop\"}, \"children\": [{\"eigrpIfPol\": {\"attributes\": {\"name\": \"EIGRP-Branch\", \"helloIntvl\": \"5\", \"holdIntvl\": \"15\"}}}, {\"l3extOut\": {\"attributes\": {\"name\": \"Branch\"}, \"children\": [{\"l3extRsEctx\": {\"attributes\": {\"tnFvCtxName\": \"Prod\"}}}, {\"l3extRsL3DomAtt\": {\"attributes\": {\"tDn\": \"uni/l3dom-L3Dom-WAN\"}}}, {\"eigrpExtP\": {\"attributes\": {\"asn\": \"100\"}}}, {\"l3extLNodeP\": {\"attributes\": {\"name\": \"border\"}, \"children\": [{\"l3extRsNodeL3OutAtt\": {\"attributes\": {\"tDn\": \"topology/pod-1/node-103\", \"rtrId\": \"1.1.1.103\"}}}, {\"l3extLIfP\": {\"attributes\": {\"name\": \"eth48\"}, \"children\": [{\"eigrpIfP\": {\"attributes\": {}, \"children\": [{\"eigrpRsIfPol\": {\"attributes\": {\"tnEigrpIfPolName\": \"EIGRP-Branch\"}}}]}}, {\"l3extRsPathL3OutAtt\": {\"attributes\": {\"tDn\": \"topology/pod-1/paths-103/pathep-[eth1/48]\", \"ifInstT\": \"l3-port\", \"addr\": \"172.16.0.1/30\", \"mtu\": \"1500\"}}}]}}]}}, {\"l3extInstP\": {\"attributes\": {\"name\": \"BranchNet\"}, \"children\": [{\"l3extSubnet\": {\"attributes\": {\"ip\": \"10.50.0.0/16\"}}}, {\"fvRsProv\": {\"attributes\": {\"tnVzBrCPName\": \"web-to-branch\"}}}]}}]}}, {\"fvIPSLAMonitoringPol\": {\"attributes\": {\"name\": \"icmp-5s\", \"slaType\": \"icmp\", \"slaFrequency\": \"5\"}}}, {\"fvTrackMember\": {\"attributes\": {\"name\": \"inet1-gw\", \"dstIpAddr\": \"172.16.1.2\", \"scopeDn\": \"uni/tn-Shop/out-Internet\"}, \"children\": [{\"fvRsIpslaMonPol\": {\"attributes\": {\"tDn\": \"uni/tn-Shop/ipslaMonitoringPol-icmp-5s\"}}}]}}, {\"fvTrackList\": {\"attributes\": {\"name\": \"inet-track\", \"percentageUp\": \"1\"}, \"children\": [{\"fvRsOtmListMember\": {\"attributes\": {\"tDn\": \"uni/tn-Shop/trackmember-inet1-gw\"}}}]}}, {\"l3extOut\": {\"attributes\": {\"name\": \"Internet\"}, \"children\": [{\"l3extLNodeP\": {\"attributes\": {\"name\": \"border\"}, \"children\": [{\"l3extRsNodeL3OutAtt\": {\"attributes\": {\"tDn\": \"topology/pod-1/node-104\", \"rtrId\": \"1.1.1.104\"}, \"children\": [{\"ipRouteP\": {\"attributes\": {\"ip\": \"0.0.0.0/0\"}, \"children\": [{\"ipRsRouteTrack\": {\"attributes\": {\"tDn\": \"uni/tn-Shop/tracklist-inet-track\"}}}]}}]}}]}}]}}]}}`\\n\\nIP SLA (fvIPSLAMonitoringPol) → Track Member (Ziel-IP, Scope) → Track List (Schwellwert) → `ipRsRouteTrack` an der Static Route. Ohne Antwort vom Ziel nimmt die ACI die Route aus der Routing-Tabelle.",
