@@ -549,17 +549,19 @@ const Views = {
       }
       if (tr.failAt >= 0 && pts[tr.failAt]) pts[tr.failAt].forEach(p => s.push('<text x="' + (p.x + 60) + '" y="' + (p.y + 7) + '" class="xmark">✖</text>'));
     }
+    const ov = opts && opts.overlay;
+    const ovc = (kind, name) => !ov ? '' : (kind === 'node' ? ov.leafs : ov.hosts).includes(name) ? ' ov' : ' dim';
     const box = (x, y, w2, hh, cls, l1, l2, data) => s.push('<g class="nd ' + cls + '" data-k="' + data + '"><rect x="' + (x - w2 / 2) + '" y="' + (y - hh / 2) + '" width="' + w2 + '" height="' + hh + '" rx="6"/><text x="' + x + '" y="' + (y - 2) + '" class="t1">' + l1 + '</text><text x="' + x + '" y="' + (y + 12) + '" class="t2">' + l2 + '</text></g>');
     nodes.forEach(n => {
       const p = pos[n.serial];
       if (!p) return;
       const role = (n.remote ? 'remote leaf' : n.role) + (st.multipod ? ' · Pod ' + n.pod : '');
-      box(p[0], p[1], 130, 38, 'sw ' + n.state, n.name || n.serial, n.name ? role + ' ' + n.id + ' · ' + n.state : role + ' · ' + n.state, 'node:' + n.serial);
+      box(p[0], p[1], 130, 38, 'sw ' + n.state + (n.role === 'leaf' ? ovc('node', n.name) : ''), n.name || n.serial, n.name ? role + ' ' + n.id + ' · ' + n.state : role + ' · ' + n.state, 'node:' + n.serial);
     });
     box(pos[st.apic.serial][0], pos[st.apic.serial][1], 120, 38, 'apic active', st.apic.name, 'APIC', 'apic');
     Object.keys(pos).filter(k => k.startsWith('ipn:')).forEach(k => box(pos[k][0], pos[k][1], 110, 34, 'router up', k.slice(4), k === 'ipn:wan-rl' ? 'WAN' : 'IPN', 'ipn:' + k.slice(4)));
     bottom.forEach(b => {
-      if (b.kind === 'host') box(b.x, b.y, 100, 34, 'host ' + (b.o.status.learned ? 'up' : 'warn'), b.o.name, b.o.ip.split('/')[0], 'host:' + b.o.name);
+      if (b.kind === 'host') box(b.x, b.y, 100, 34, 'host ' + (b.o.status.learned ? 'up' : 'warn') + ovc('host', b.o.name), b.o.name, b.o.ip.split('/')[0], 'host:' + b.o.name);
       else if (b.kind === 'esxi') box(b.x, b.y, 100, 34, 'host esxi ' + (b.up ? 'up' : 'warn'), b.o.name, 'ESXi · ' + b.o.vms.length + ' VM', 'esxi:' + b.vc.name + '|' + b.o.name);
       else box(b.x, b.y, 100, 34, 'router ' + (b.o.status.link ? 'up' : 'warn'), b.o.name, (b.o.protocol || '') + ' ' + (b.o.status.adj || ''), 'router:' + b.o.name);
     });
@@ -575,13 +577,24 @@ const Views = {
   },
 
   async topologyPage(w, withHosts) {
+    // Overlay (B-08): EPG/BD/VRF aus der Engine, hervorgehoben werden Leafs mit Deployment und gelernte Hosts
+    let ovList = [];
+    try { ovList = await API.sim('overlay'); } catch (e) { ovList = []; }
+    let ovSel = Views._ovSel || '';
     const draw = () => {
       clear(w);
       const st = App.state;
+      const ov = ovList.find(o => o.dn === ovSel);
+      const ovPick = h('select', { class: 'ovsel', onchange: () => { ovSel = Views._ovSel = ovPick.value; draw(); } },
+        h('option', { value: '' }, 'Overlay: keins'), ovList.map(o => h('option', { value: o.dn, selected: o.dn === ovSel }, o.kind + ' ' + o.name)));
       w.appendChild(paneHead(withHosts ? 'Simulation – Topologie & Hosts' : 'Topology', 'Pod 1 · grün = aktiv, orange = Discovery, grau = nicht registriert',
         withHosts ? [h('button', { class: 'btn small', onclick: () => Views.topologyDialog(draw) }, '⚙ Topologie'), h('button', { class: 'btn small', onclick: () => Views.bulkHostsDialog(draw) }, '+ Hosts (CSV/Vorlage)'),
           h('button', { class: 'btn primary small', onclick: () => Views.hostDialog() }, '+ Host'), h('button', { class: 'btn small', onclick: () => Views.routerDialog() }, '+ Externer Router')] : null));
+      w.appendChild(h('div', { class: 'card ovbar' }, ovPick, ov ? h('span', { class: 'muted small' },
+        ov.kind + ' ' + ov.name + ': deployed auf ' + (ov.leafs.join(', ') || 'keinem Leaf') + ' · gelernte Hosts: ' + (ov.hosts.join(', ') || 'keine')) :
+        h('span', { class: 'muted small' }, 'Wähle eine VRF, BD oder EPG, um zu sehen, wo sie in der Fabric wirkt.')));
       w.appendChild(h('div', { class: 'card' }, Views.topologySvg(st, {
+        overlay: ov,
         onClick: k => {
           if (k.startsWith('host:')) Views.hostDialog(st.hosts.find(x => x.name === k.slice(5)));
           else if (k.startsWith('esxi:')) App.go('sim', 'vcenter');

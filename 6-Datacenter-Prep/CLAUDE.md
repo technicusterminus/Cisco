@@ -9,6 +9,7 @@ python3 -m unittest discover -s tests          # Unit-, Integrations- und Abnahm
 node tests/gui/smoke.js                        # GUI: Startseite, Labs & Stände, Benutzer (braucht Playwright)
 node tests/gui/acceptance.js                   # GUI: Abnahmefall Lab 32 von Start bis Reset
 node tests/gui/troubleshooting.js              # GUI: Endpoint-Verlauf, Link-Ausfall, Labs 36/37
+node tests/gui/run_all.js                      # alle GUI-Tests mit Bericht
 for f in static/js/*.js; do node --check $f; done   # Syntax des Frontends
 ruff check --select E9,F dcprep tests Labs-Quelle werkzeuge   # Lint (wenn ruff installiert ist)
 python3 Labs-Quelle/build_labs.py              # labs/*.json neu erzeugen (deterministisch)

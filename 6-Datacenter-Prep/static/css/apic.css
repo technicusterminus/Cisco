@@ -309,3 +309,6 @@ table.pmatrix td.pm-self { outline: 1px dashed #b9c2c9; outline-offset: -3px; }
 
 /* Change-History */
 .chg summary { cursor: pointer; } .chgdiff td { vertical-align: top; } .chgdiff code { white-space: pre-wrap; word-break: break-word; }
+/* Topologie-Overlay */
+.ovbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+svg.topo .nd.ov rect { stroke: #0d5f82; stroke-width: 3; } svg.topo .nd.dim { opacity: .35; }
