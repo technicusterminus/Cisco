@@ -3,7 +3,7 @@
 
 const TABS = [
   { id: 'system', l: 'System', subs: [['quickstart', 'QuickStart'], ['dash', 'Dashboard'], ['controllers', 'Controllers'], ['settings', 'System Settings'],
-    ['licensing', 'Smart Licensing'], ['faults', 'Faults'], ['zones', 'Config Zones'], ['events', 'Events'], ['audit', 'Audit Log'], ['sessions', 'Active Sessions']] },
+    ['licensing', 'Smart Licensing'], ['faults', 'Faults'], ['zones', 'Config Zones'], ['events', 'Events'], ['audit', 'Audit Log'], ['changes', 'Change-History'], ['sessions', 'Active Sessions']] },
   { id: 'tenants', l: 'Tenants' },
   { id: 'fabric', l: 'Fabric', subs: [['inventory', 'Inventory'], ['fabricpol', 'Fabric Policies'], ['access', 'Access Policies']] },
   { id: 'vnet', l: 'Virtual Networking', subs: [['vmm', 'Inventory']] },

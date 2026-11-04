@@ -131,6 +131,34 @@ Object.assign(Views, {
     w.appendChild(auditTable(rows, true));
   },
 
+  async 'system/changes'(w) {
+    // Change-History (simulator-spezifisch): Audit-Log je Transaktion, mit Herkunft und Diff
+    const all = await API.sim('changes?limit=200');
+    let src = '', q = '';
+    const list = h('div');
+    const IND = { creation: ['+', 'okc'], deletion: ['−', 'badc'], modification: ['~', ''] };
+    const draw = () => {
+      clear(list);
+      const rows = all.filter(t => (!src || t.source === src) && (!q || t.items.some(i => i.affected.includes(q))));
+      if (!rows.length) { list.appendChild(h('p', { class: 'muted' }, 'Keine Änderungen.')); return; }
+      rows.forEach(t => list.appendChild(h('details', { class: 'card chg' },
+        h('summary', null, h('b', null, fmtTs(t.created)), ' · ', t.user, ' · ', h('span', { class: 'pill acc' }, t.source), ' · ',
+          t.items.length + ' Objekt' + (t.items.length === 1 ? '' : 'e'), ' – ', t.items[0].descr + (t.items.length > 1 ? ' …' : '')),
+        h('table', { class: 'tbl chgdiff' }, h('tbody', null, t.items.map(i => h('tr', null,
+          h('td', { class: IND[i.ind][1], style: { width: '20px', fontWeight: '700' } }, IND[i.ind][0]),
+          h('td', null, h('a', { class: 'lnk', onclick: () => App.gotoDn(i.affected) }, i.affected)),
+          h('td', null, i.ind === 'deletion' ? h('span', { class: 'badc' }, 'gelöscht') : h('code', null, i.changeSet || '–')))))))));
+    };
+    const sel = h('select', { onchange: () => { src = sel.value; draw(); } }, h('option', { value: '' }, 'alle Herkünfte'),
+      ['GUI', 'REST', 'Import', 'Rollback', 'NDO'].map(x => h('option', { value: x }, x)));
+    const inp = h('input', { placeholder: 'DN enthält …', oninput: () => { q = inp.value; draw(); } });
+    w.appendChild(paneHead('Change-History', 'Jede Änderung je Transaktion, mit Herkunft und Diff (neueste zuerst)', [iconBtn('⟳', 'Refresh', () => App.renderMain())]));
+    w.appendChild(h('div', { class: 'card' }, h('p', { class: 'muted small' }, 'Quelle: Audit Log (aaaModLR). Die Herkunft (GUI, REST, Import, Rollback, NDO) ist simulator-spezifisch; ' +
+      'die APIC-GUI zeigt sie so nicht. Config Rollbacks erscheinen hier als Diff.'), h('div', { class: 'formbtns' }, sel, inp)));
+    w.appendChild(list);
+    draw();
+  },
+
   async 'system/sessions'(w) {
     const rows = await API.sim('sessions');
     w.appendChild(paneHead('Active Sessions', ''));

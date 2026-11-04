@@ -213,7 +213,10 @@ class Sim:
         box, self.outbox = self.outbox, []
         ops.deliver(self, box)
 
-    def audit(self, user, changes):
+    # Herkunft einer Aenderung fuer die Change-History (simulator-spezifisch, nicht Teil von aaaModLR)
+    SOURCES = ('GUI', 'REST', 'Import', 'Rollback', 'NDO')
+
+    def audit(self, user, changes, source='REST'):
         if changes:
             self.sim.pop('pristine', None)
         log = self.sim.setdefault('audit', [])
@@ -228,7 +231,7 @@ class Sim:
             log.append({'id': self._next_id(), 'affected': c['dn'], 'ind': c['ind'], 'user': user, 'created': now_ts(),
                         'descr': '%s %s %s' % (CLASSES[c['cls']].label, name, verb), 'changeSet': cs,
                         'code': {'creation': 'E4206326', 'modification': 'E4206327', 'deletion': 'E4206328'}[c['ind']],
-                        'cause': 'transition', 'severity': 'info', 'trig': 'config', 'txId': str(tx)})
+                        'cause': 'transition', 'severity': 'info', 'trig': 'config', 'txId': str(tx), 'source': source})
             self.outbox.append({'kind': 'audit', 'severity': 'info', 'code': log[-1]['code'], 'dn': c['dn'],
                                 'descr': '%s by %s: %s' % (log[-1]['descr'], user, cs), 'lc': c['ind'], 'cause': 'transition'})
         del log[:-3000]
@@ -668,7 +671,16 @@ class Sim:
                     pass
         return out
 
-    def snapshot(self, op, name, descr=''):
+    def changes(self, limit=100):
+        """Change-History (B-12): Audit-Eintraege je Transaktion gruppiert, neueste zuerst."""
+        tx = {}
+        for r in self.sim.get('audit', []):
+            t = tx.setdefault(r.get('txId') or r['id'], {'txId': r.get('txId'), 'created': r['created'], 'user': r['user'],
+                                                          'source': r.get('source', 'REST'), 'items': []})
+            t['items'].append({k: r[k] for k in ('affected', 'ind', 'descr', 'changeSet')})
+        return sorted(tx.values(), key=lambda t: t['created'], reverse=True)[:limit]
+
+    def snapshot(self, op, name, descr='', user='admin'):
         if not NAME_RE.match(name or ''):
             raise AciError(400, 'Ungueltiger Snapshot-Name')
         fn = os.path.join(self.data_dir, 'snapshots', name + '.json')
@@ -680,8 +692,10 @@ class Sim:
         elif op == 'rollback':
             with open(fn, encoding='utf-8') as f:
                 s = json.load(f)
+            before = self.store.dump_config()
             self.store.load_config(s['config'], s.get('counters'))
             ensure_base(self.store)
+            self.audit(user, config_diff(before, self.store.dump_config()), source='Rollback')
             self.changed()
         elif op == 'delete':
             if os.path.exists(fn):
@@ -1364,6 +1378,24 @@ class Sim:
                 'nextEvent': e.next_event}
 
 
+def config_diff(before, after):
+    """Unterschied zweier dump_config()-Staende im Format von Sim.audit (Rollback, B-12). modTs zaehlt nicht."""
+    a = {r[0]: r for r in before}
+    b = {r[0]: r for r in after}
+    out = []
+    for dn in sorted(set(a) | set(b)):
+        if dn not in b:
+            out.append({'dn': dn, 'cls': a[dn][1], 'ind': 'deletion', 'changes': {}})
+        elif dn not in a:
+            out.append({'dn': dn, 'cls': b[dn][1], 'ind': 'creation',
+                        'changes': {k: ('', v) for k, v in b[dn][2].items() if k != 'modTs'}})
+        else:
+            ch = {k: (a[dn][2].get(k, ''), v) for k, v in b[dn][2].items() if k != 'modTs' and a[dn][2].get(k, '') != v}
+            if ch:
+                out.append({'dn': dn, 'cls': b[dn][1], 'ind': 'modification', 'changes': ch})
+    return [c for c in out if c['cls'] in CLASSES]
+
+
 def meta_json():
     out = {}
     for name, m in CLASSES.items():
@@ -1391,6 +1423,10 @@ def make_handler(hub):
                 super().log_message(fmt, *args)
 
         # ---------------------------------------------------------- Ausgabe
+        def client_source(self):
+            # Die eigene Oberflaeche markiert ihre Aufrufe; alles andere ist REST (curl, Ansible, Python, Terraform)
+            return 'GUI' if self.headers.get('X-DCPrep-Client') == 'gui' else 'REST'
+
         def send(self, code, body, ctype='application/json', headers=None):
             data = body if isinstance(body, (bytes, bytearray)) else (
                 json.dumps(body).encode() if ctype == 'application/json' else str(body).encode())
@@ -1575,7 +1611,7 @@ def make_handler(hub):
                         S.store.restore(backup)
                         raise AciError(403, 'Access denied (RBAC): Benutzer %s hat kein Schreibrecht auf %s (Rollen: %s)'
                                        % (user, bad[0], aaa.describe(roles) or 'keine'), 403)
-                    S.audit(user, ch)
+                    S.audit(user, ch, source=self.client_source())
                     S.rebuild()
                     ops.run_triggers(S, user)
                     S.changed()
@@ -1583,7 +1619,7 @@ def make_handler(hub):
                 if method == 'DELETE':
                     if not aaa.can_write(S.store, roles, target):
                         raise AciError(403, 'Access denied (RBAC): Benutzer %s hat kein Schreibrecht auf %s' % (user, target), 403)
-                    S.audit(user, mit_delete(S.store, target))
+                    S.audit(user, mit_delete(S.store, target), source=self.client_source())
                     S.changed()
                     return self.send(200, {'totalCount': '0', 'imdata': []})
             raise AciError(400, 'Method not supported')
@@ -1824,6 +1860,8 @@ def make_handler(hub):
                     return self.send(200, {'ok': True, 'title': lab['title']})
                 if rest == 'labs/check':
                     return self.send(200, S.check_lab() or {'checks': []})
+                if rest == 'changes':
+                    return self.send(200, S.changes(int((q.get('limit') or ['100'])[0])))
                 if rest == 'labs/log':
                     return self.send(200, S.lab_session().get('log', []))
                 if rest == 'labs/hint':
@@ -1868,7 +1906,7 @@ def make_handler(hub):
                                      headers={'Content-Disposition': 'attachment; filename="%s"' % fname})
                 if rest == 'snapshots':
                     if method == 'POST':
-                        S.snapshot(b.get('op'), b.get('name'), b.get('descr', ''))
+                        S.snapshot(b.get('op'), b.get('name'), b.get('descr', ''), user=user)
                     return self.send(200, S.snapshots())
             raise AciError(404, 'Unknown simulator API %s' % rest, 404)
 

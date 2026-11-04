@@ -901,7 +901,7 @@ def _import(S, dn, a, user):
             else:
                 bad += 1
     S.audit(user, [{'dn': tgt or 'uni', 'cls': 'polUni' if not tgt else st.objs.get(tgt, ['fvTenant'])[0], 'ind': 'modification',
-                    'changes': {'import': ('', '%s %s aus %s' % (a['importType'], a['importMode'], fn))}}])
+                    'changes': {'import': ('', '%s %s aus %s' % (a['importType'], a['importMode'], fn))}}], source='Import')
     if bad:
         warn.append('%d Objekte uebersprungen' % bad)
     if not blob['secure']:
