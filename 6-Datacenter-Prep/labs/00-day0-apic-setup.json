@@ -5,31 +5,39 @@
  "level": "Einstieg",
  "duration": "20 min",
  "fabric": "factory",
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [],
+ "tools": [
+  "APIC-Konsole (Setup-Dialog)",
+  "Fabric > Inventory > Fabric Membership",
+  "CLI: cat /data/data_admin/sam_exported.config, acidiag avread, show controller"
+ ],
  "goals": [
   "Den Setup-Dialog des APIC an der Konsole durchlaufen",
   "Wissen, welche Werte sich später nicht mehr ändern lassen (TEP-Pool, Infra-VLAN, Fabric-Name, Pod-ID)",
   "Die Werte am APIC per CLI verifizieren"
  ],
  "intro": "Der APIC steht frisch ausgepackt im Rack, die Konsole (CIMC-KVM) ist offen. Nach dem Laden des Labs startet der **Setup-Dialog** – die GUI ist erst danach erreichbar.\n\n**Vorgaben aus dem Low-Level-Design:**\n- Fabric Name **DC-FRA**, Fabric ID 1, **ein** Controller, Pod 1, Controller-Name apic1\n- TEP-Pool **10.0.0.0/16**, Infra-VLAN **3967**, GIPo 225.0.0.0/15\n- OOB **192.168.10.1/24**, Gateway **192.168.10.254**\n- Admin-Passwort **Fabric!2026** (Strong Passwords an)",
- "tasks": [
-  {
-   "title": "Setup-Dialog",
-   "text": "Beantworte die Fragen an der Konsole mit den Werten aus dem Design. Mit Enter übernimmst du den Vorschlag in eckigen Klammern.",
-   "hint": "Achtung bei „number of active controllers“: Der Vorschlag ist 3. Mit nur einem APIC wäre der Cluster dann nie Fully Fit."
-  },
-  {
-   "title": "Prüfen und anwenden",
-   "text": "Lies die Zusammenfassung genau. Einmal angewendet, lassen sich TEP-Pool, Infra-VLAN und Fabric-Name nur durch Neuaufsetzen ändern (`acidiag touch clean` und `acidiag reboot`)."
-  },
-  {
-   "title": "Anmelden und verifizieren",
-   "text": "In der GUI mit admin und dem neuen Passwort anmelden. In der APIC-CLI: `cat /data/data_admin/sam_exported.config`, `acidiag avread` und `show controller`. Unter **System > Controllers** stehen dieselben Werte."
-  },
-  {
-   "title": "Erster Leaf",
-   "text": "Unter **Fabric > Inventory > Fabric Membership** leaf101 (SAL1931LA01, Node 101, leaf101) und leaf102 (SAL1931LA02, Node 102, leaf102) registrieren. Auf leaf101 zeigt `show vlan extended` das Infra-VLAN zum APIC auf eth1/48."
-  }
+ "requirements": [
+  "Der APIC ist nach den Vorgaben des Designs eingerichtet; der Cluster ist mit einem Controller vollständig (Fully Fit).",
+  "Der Admin-Zugang ist mit dem neuen Passwort gesichert, das Standardpasswort funktioniert nicht mehr.",
+  "leaf101 (SAL1931LA01) und leaf102 (SAL1931LA02) sind als Node 101 und 102 registriert und aktiv."
  ],
+ "limits": [
+  "Der Setup-Dialog ist nachgebaut; Hardware-Checks, CIMC und Cluster-Synchronisation mit mehreren APICs fehlen."
+ ],
+ "hints": [
+  "**Konzept:** Einige Werte aus dem Setup-Dialog sind später nicht mehr änderbar (Fabric-Name, TEP-Pool, Infra-VLAN, Pod-ID). Die Vorschläge in eckigen Klammern passen nicht immer zum Design.",
+  "**Wo:** Konsole des APIC (Setup-Dialog), danach GUI-Login und *Fabric > Inventory > Fabric Membership*.",
+  "**Prüfschritte:** Die Zusammenfassung vor dem Anwenden genau lesen. Danach `cat /data/data_admin/sam_exported.config` und `acidiag avread`.",
+  "**Lösung:** Fabric DC-FRA, ID 1, **1** aktiver Controller (Vorschlag ist 3), Pod 1, apic1, TEP 10.0.0.0/16, Infra-VLAN 3967, GIPo 225.0.0.0/15, OOB 192.168.10.1/24 GW .254, Strong Passwords Y, Passwort Fabric!2026. Danach die beiden Leafs registrieren."
+ ],
+ "cause": "Der APIC ist im Werkszustand.",
+ "tasks": [],
  "checks": [
   {
    "desc": "Fabric Name DC-FRA",
@@ -74,6 +82,56 @@
    "serial": "SAL1931LA02",
    "id": 102,
    "name": "leaf102"
+  },
+  {
+   "desc": "Strong Passwords aktiv",
+   "type": "setup",
+   "attrs": {
+    "strong": "Y"
+   },
+   "category": "security"
+  },
+  {
+   "desc": "admin meldet sich mit dem neuen Passwort an",
+   "type": "login",
+   "user": "admin",
+   "pwd": "Fabric!2026",
+   "role": "admin",
+   "category": "security"
+  },
+  {
+   "desc": "Das Standardpasswort funktioniert nicht mehr",
+   "type": "login",
+   "user": "admin",
+   "pwd": "admin",
+   "expect": false,
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Welche Werte lassen sich nach dem Setup nur durch Neuaufsetzen ändern?",
+   "options": [
+    "Fabric-Name, TEP-Pool, Infra-VLAN, Pod-ID",
+    "OOB-Adresse und Gateway",
+    "Das Admin-Passwort",
+    "Alle"
+   ],
+   "answer": 0,
+   "explain": "Deshalb kommen sie aus dem Low-Level-Design und nicht aus dem Bauch."
+  },
+  {
+   "id": "q2",
+   "q": "Was passiert, wenn man bei einem einzelnen APIC „3 active controllers“ übernimmt?",
+   "options": [
+    "Der Cluster wird nie Fully Fit, weil zwei Controller fehlen",
+    "Nichts",
+    "Der APIC startet nicht",
+    "Es entstehen drei virtuelle APICs"
+   ],
+   "answer": 0,
+   "explain": "`acidiag avread` zeigt den Zustand des Clusters."
   }
  ],
  "solution": "Setup-Antworten: Fabric name **DC-FRA**, fabric ID 1, number of active controllers **1**, POD ID 1, controller ID 1, name apic1, TEP pool 10.0.0.0/16, infra VLAN 3967, GIPo 225.0.0.0/15, OOB 192.168.10.1/24, Gateway 192.168.10.254, Strong Passwords Y, Passwort Fabric!2026. Danach im Fabric Membership die beiden Leafs registrieren.",

@@ -147,7 +147,10 @@ SETUP00 = {'fabricName': 'DC-FRA', 'fabricId': '1', 'ctrlCount': '1', 'podId': '
            'ctrlName': 'apic1', 'tepPool': '10.0.0.0/16', 'infraVlan': '3967', 'gipo': '225.0.0.0/15',
            'oobIp': '192.168.10.1/24', 'oobGw': '192.168.10.254', 'speed': 'auto', 'strong': 'Y', 'pwd': 'Fabric!2026'}
 lab(id='00-day0-apic-setup', title='00 Day 0: APIC-Ersteinrichtung', topic='Fabric-Inbetriebnahme', level='Einstieg',
-    duration='20 min', fabric='factory',
+    duration='20 min', fabric='factory', kind='requirements', modes=['guided', 'exam'],
+    prerequisites=[], tools=['APIC-Konsole (Setup-Dialog)', 'Fabric > Inventory > Fabric Membership',
+                             'CLI: cat /data/data_admin/sam_exported.config, acidiag avread, show controller'],
+   
     goals=['Den Setup-Dialog des APIC an der Konsole durchlaufen', 'Wissen, welche Werte sich später nicht mehr ändern lassen '
            '(TEP-Pool, Infra-VLAN, Fabric-Name, Pod-ID)', 'Die Werte am APIC per CLI verifizieren'],
     intro='Der APIC steht frisch ausgepackt im Rack, die Konsole (CIMC-KVM) ist offen. Nach dem Laden des Labs startet der '
@@ -156,23 +159,21 @@ lab(id='00-day0-apic-setup', title='00 Day 0: APIC-Ersteinrichtung', topic='Fabr
           '- TEP-Pool **10.0.0.0/16**, Infra-VLAN **3967**, GIPo 225.0.0.0/15\n'
           '- OOB **192.168.10.1/24**, Gateway **192.168.10.254**\n'
           '- Admin-Passwort **Fabric!2026** (Strong Passwords an)',
-    tasks=[
-        task('Setup-Dialog', 'Beantworte die Fragen an der Konsole mit den Werten aus dem Design. Mit Enter übernimmst du den '
-             'Vorschlag in eckigen Klammern.',
-             'Achtung bei „number of active controllers“: Der Vorschlag ist 3. Mit nur einem APIC wäre der Cluster dann nie Fully Fit.'),
-        task('Prüfen und anwenden', 'Lies die Zusammenfassung genau. Einmal angewendet, lassen sich TEP-Pool, Infra-VLAN und '
-             'Fabric-Name nur durch Neuaufsetzen ändern (`acidiag touch clean` und `acidiag reboot`).'),
-        task('Anmelden und verifizieren', 'In der GUI mit admin und dem neuen Passwort anmelden. In der APIC-CLI: '
-             '`cat /data/data_admin/sam_exported.config`, `acidiag avread` und `show controller`. Unter **System > Controllers** stehen dieselben Werte.'),
-        task('Erster Leaf', 'Unter **Fabric > Inventory > Fabric Membership** leaf101 (SAL1931LA01, Node 101, leaf101) und '
-             'leaf102 (SAL1931LA02, Node 102, leaf102) registrieren. Auf leaf101 zeigt `show vlan extended` das Infra-VLAN zum APIC auf eth1/48.'),
-    ],
+    requirements=['Der APIC ist nach den Vorgaben des Designs eingerichtet; der Cluster ist mit einem Controller vollständig (Fully Fit).', 'Der Admin-Zugang ist mit dem neuen Passwort gesichert, das Standardpasswort funktioniert nicht mehr.', 'leaf101 (SAL1931LA01) und leaf102 (SAL1931LA02) sind als Node 101 und 102 registriert und aktiv.'],
+    limits=['Der Setup-Dialog ist nachgebaut; Hardware-Checks, CIMC und Cluster-Synchronisation mit mehreren APICs fehlen.'],
+    hints=['**Konzept:** Einige Werte aus dem Setup-Dialog sind später nicht mehr änderbar (Fabric-Name, TEP-Pool, Infra-VLAN, Pod-ID). Die Vorschläge in eckigen Klammern passen nicht immer zum Design.', '**Wo:** Konsole des APIC (Setup-Dialog), danach GUI-Login und *Fabric > Inventory > Fabric Membership*.', '**Prüfschritte:** Die Zusammenfassung vor dem Anwenden genau lesen. Danach `cat /data/data_admin/sam_exported.config` und `acidiag avread`.', '**Lösung:** Fabric DC-FRA, ID 1, **1** aktiver Controller (Vorschlag ist 3), Pod 1, apic1, TEP 10.0.0.0/16, Infra-VLAN 3967, GIPo 225.0.0.0/15, OOB 192.168.10.1/24 GW .254, Strong Passwords Y, Passwort Fabric!2026. Danach die beiden Leafs registrieren.'],
+    cause='Der APIC ist im Werkszustand.',
+    tasks=[],
     checks=[check('Fabric Name DC-FRA', 'setup', attrs={'fabricName': 'DC-FRA'}),
             check('Ein Controller im Cluster', 'setup', attrs={'ctrlCount': '1'}),
             check('TEP-Pool 10.0.0.0/16 und Infra-VLAN 3967', 'setup', attrs={'tepPool': '10.0.0.0/16', 'infraVlan': '3967'}),
             check('OOB 192.168.10.1/24 mit Gateway 192.168.10.254', 'setup', attrs={'oobIp': '192.168.10.1/24', 'oobGw': '192.168.10.254'}),
             check('leaf101 aktiv (101)', 'node', serial=L101, id=101, name='leaf101'),
-            check('leaf102 aktiv (102)', 'node', serial=L102, id=102, name='leaf102')],
+            check('leaf102 aktiv (102)', 'node', serial=L102, id=102, name='leaf102'),
+            check('Strong Passwords aktiv', 'setup', attrs={'strong': 'Y'}, category='security'),
+            check('admin meldet sich mit dem neuen Passwort an', 'login', user='admin', pwd='Fabric!2026', role='admin', category='security'),
+            check('Das Standardpasswort funktioniert nicht mehr', 'login', user='admin', pwd='admin', expect=False, category='security')],
+    questions=[{'id': 'q1', 'q': 'Welche Werte lassen sich nach dem Setup nur durch Neuaufsetzen ändern?', 'options': ['Fabric-Name, TEP-Pool, Infra-VLAN, Pod-ID', 'OOB-Adresse und Gateway', 'Das Admin-Passwort', 'Alle'], 'answer': 0, 'explain': 'Deshalb kommen sie aus dem Low-Level-Design und nicht aus dem Bauch.'}, {'id': 'q2', 'q': 'Was passiert, wenn man bei einem einzelnen APIC „3 active controllers“ übernimmt?', 'options': ['Der Cluster wird nie Fully Fit, weil zwei Controller fehlen', 'Nichts', 'Der APIC startet nicht', 'Es entstehen drei virtuelle APICs'], 'answer': 0, 'explain': '`acidiag avread` zeigt den Zustand des Clusters.'}],
     solution='Setup-Antworten: Fabric name **DC-FRA**, fabric ID 1, number of active controllers **1**, POD ID 1, controller ID 1, '
              'name apic1, TEP pool 10.0.0.0/16, infra VLAN 3967, GIPo 225.0.0.0/15, OOB 192.168.10.1/24, Gateway 192.168.10.254, '
              'Strong Passwords Y, Passwort Fabric!2026. Danach im Fabric Membership die beiden Leafs registrieren.')
@@ -618,28 +619,27 @@ lab(id='07-troubleshooting', title='07 Troubleshooting: sechs Tickets', topic='T
 # Lab 08 - Automation
 # ----------------------------------------------------------------------------
 lab(id='08-rest-api', title='08 Automatisierung über die REST-API', topic='Automation', level='Mittel',
-    duration='30 min', fabric='discovered',
+    duration='30 min', fabric='discovered', kind='requirements', modes=['guided', 'exam'],
+    prerequisites=['Lab 03'], tools=['REST-API (curl, Python, Ansible, Terraform)', 'API Inspector', 'beispiele/'],
+   
     goals=['Mit aaaLogin ein Token holen', 'Objekte per POST anlegen und per GET mit Filtern abfragen',
            'Ansible (cisco.aci), Python oder Terraform gegen den Simulator laufen lassen'],
     intro='Der Simulator spricht die APIC-REST-API. Beispiele liegen im Ordner `beispiele/` (curl, Python, Ansible, '
           'Terraform). Schalte vorher den **API Inspector** (oben rechts) ein: Jede Aktion in der GUI zeigt dort den '
           'REST-Aufruf, den du nachbauen kannst.',
-    tasks=[
-        task('Anmelden', '`curl -c cookie.txt -X POST http://localhost:8080/api/aaaLogin.json -d \'{"aaaUser":{"attributes":{"name":"admin","pwd":"admin"}}}\'`'),
-        task('Tenant per POST', 'Lege mit einem einzigen POST an `/api/mo/uni.json` den Tenant **Automation** mit VRF **v1**, '
-             'BD **bd1** (Subnetz **192.168.1.1/24**), AP **app** und EPG **epg1** (BD bd1) an.',
-             'Ein Tenant-Objekt mit `children`. Vorlage: `beispiele/curl-tenant.sh`.'),
-        task('Abfragen', 'Frage alle Bridge Domains mit Unicast Routing ab: '
-             '`/api/class/fvBD.json?query-target-filter=eq(fvBD.unicastRoute,"yes")`. Und den ganzen Tenant: '
-             '`/api/mo/uni/tn-Automation.json?rsp-subtree=full`.'),
-        task('Fehler provozieren', 'Sende einen BD mit `"arpFlood":"vielleicht"`. Welchen Fehlercode liefert die API?'),
-        task('Ansible (optional)', 'Mit `ansible-playbook beispiele/ansible-tenant.yml` (Collection cisco.aci, '
-             '`use_ssl: false`, Port 8080) denselben Tenant erzeugen.'),
-    ],
+    requirements=['Per REST-API entsteht der Tenant **Automation** mit VRF **v1**, BD **bd1** (192.168.1.1/24, in v1), AP **app** und EPG **epg1** (BD bd1).', 'Die Automatisierung bekommt einen eigenen lokalen Benutzer **ansible** (Passwort Ansible#2026), der den Tenant Automation ändern darf – und sonst nichts.'],
+    limits=['Die REST-API ist ein Teilumfang der APIC-API (Klassen- und MO-Abfragen, Filter, rsp-subtree, POST mit children, Fehlercodes). WebSockets und Subscriptions fehlen.'],
+    hints=['**Konzept:** Ein einziger POST kann einen ganzen Objektbaum anlegen (children). Für Skripte gilt Least Privilege wie für Menschen: ein eigener Benutzer, beschränkt auf den Tenant, den er pflegt.', '**Werkzeuge:** `aaaLogin` für das Token, `POST /api/mo/uni.json`, `GET /api/class/<Klasse>.json` mit `query-target-filter`, API Inspector als Vorlage. Für den Benutzer: Security Domain, Zuordnung zum Tenant, lokaler Benutzer mit Rolle.', '**Prüfschritte:** `GET /api/mo/uni/tn-Automation.json?rsp-subtree=full`. Als ansible anmelden und versuchen, etwas außerhalb zu ändern.', '**Lösung:** Ein POST mit fvTenant Automation und children (fvCtx, fvBD mit fvRsCtx und fvSubnet, fvAp mit fvAEPg und fvRsBd). Security Domain Auto-Dom, am Tenant aaaDomainRef, Benutzer ansible mit Domain Auto-Dom und Rolle tenant-admin (Write).'],
+    cause='Es gibt den Tenant Automation und den Benutzer ansible noch nicht.',
+    tasks=[],
     checks=[check('Tenant Automation mit VRF v1', 'exists', dn='uni/tn-Automation/ctx-v1'),
             check('BD bd1 mit 192.168.1.1/24', 'exists', dn='uni/tn-Automation/BD-bd1/subnet-[192.168.1.1/24]'),
             check('bd1 im VRF v1', 'exists', dn='uni/tn-Automation/BD-bd1/rsctx', attrs={'tnFvCtxName': 'v1'}),
-            check('EPG epg1 mit BD bd1', 'exists', dn='uni/tn-Automation/ap-app/epg-epg1/rsbd', attrs={'tnFvBDName': 'bd1'})],
+            check('EPG epg1 mit BD bd1', 'exists', dn='uni/tn-Automation/ap-app/epg-epg1/rsbd', attrs={'tnFvBDName': 'bd1'}),
+            check('ansible darf den Tenant Automation ändern', 'rbac', user='ansible', pwd='Ansible#2026', dn='uni/tn-Automation/BD-bd1'),
+            check('ansible darf keine Access Policies ändern', 'rbac', user='ansible', pwd='Ansible#2026', dn='uni/infra/attentp-AAEP-Server', expect=False, category='security'),
+            check('ansible darf andere Tenants nicht ändern', 'rbac', user='ansible', pwd='Ansible#2026', dn='uni/tn-common/BD-default', expect=False, category='security')],
+    questions=[{'id': 'q1', 'q': 'Ein BD mit "arpFlood":"vielleicht" – welchen Fehlercode liefert die API?', 'options': ['801 (property failed validation)', '400 ohne Code', '122', '200'], 'answer': 0, 'explain': 'Die API prüft Enums; nichts vom POST wird übernommen (atomar).'}, {'id': 'q2', 'q': 'Warum nicht einfach mit admin automatisieren?', 'options': ['Ein gestohlenes oder fehlerhaftes Skript könnte dann die ganze Fabric ändern', 'admin darf keine REST-Aufrufe', 'Wegen der Lizenz', 'Das ist üblich und unbedenklich'], 'answer': 0, 'explain': 'Least Privilege: Das Skript darf nur, was es braucht.'}],
     solution='`' + json.dumps(mo('fvTenant', {'name': 'Automation'}, mo('fvCtx', {'name': 'v1'}),
                                  bd('bd1', 'v1', '192.168.1.1/24'), mo('fvAp', {'name': 'app'}, epg('epg1', 'bd1', dom=None)))) +
              '`\n\nDer Fehler bei arpFlood ist Code **801** (property failed validation).')
@@ -1920,7 +1920,10 @@ EXT29 = mo('fvTenant', {'name': 'infra'}, mo('fabricExtConnP', {'id': '1', 'name
                                              mo('fabricPodConnP', {'id': '2'}, mo('fabricIp', {'addr': '172.16.2.1/32'}))))
 SPINES29 = [(201, 1, '192.168.1.1/30'), (202, 1, '192.168.1.5/30'), (203, 2, '192.168.2.1/30'), (204, 2, '192.168.2.5/30')]
 lab(id='29-multipod', title='29 Multi-Pod mit Inter-Pod Network', topic='Fabric-Architektur', level='Experte', duration='50 min',
-    fabric='discovered', topology='multipod',
+    fabric='discovered', topology='multipod', kind='requirements', modes=['guided', 'exam'],
+    prerequisites=['Lab 01'], tools=['Fabric > Inventory > Pod Fabric Setup Policy', 'Tenant infra > L3Outs', 'Simulation > IPN/ISN',
+                                    'CLI: show ip ospf neighbors vrf overlay-1, acidiag fnvread'],
+   
     ipn={'routers': [ipn_router('ipn1', 1, 'ipn', IPN_IFS1), ipn_router('ipn2', 2, 'ipn', IPN_IFS2, mtu=1500),
                      ipn_router('wan-rl', 1, 'wan', WAN_IFS, pim=False)]},
     goals=['Einen zweiten Pod über ein IPN an die Fabric anbinden', 'Die Anforderungen an das IPN kennen: vlan-4, OSPF, MTU, PIM Bidir, DHCP Relay',
@@ -1930,22 +1933,18 @@ lab(id='29-multipod', title='29 Multi-Pod mit Inter-Pod Network', topic='Fabric-
           'spine201 192.168.1.1/30, spine202 192.168.1.5/30, spine203 192.168.2.1/30, spine204 192.168.2.5/30 (die IPN-Seite hat jeweils .2/.6). '
           'Data Plane TEP Pod 1 **172.16.1.1/32**, Pod 2 **172.16.2.1/32**.\n\napp1 steht jetzt in Pod 2 an leaf105 eth1/2 (EPG App, vlan-120).',
     config=[SERVER_ACCESS, POD2_ACC, SHOP29], hosts=[WEB1, APP2],
-    tasks=[
-        task('Infra-L3Out', 'Im Tenant **infra** ein L3Out **multipod** (VRF overlay-1, OSPF Area 0, BGP) mit allen vier Spines und ihren Sub-Interfaces '
-             'anlegen – am schnellsten über **Fabric > Inventory > Quick Start > Add Pod**. Unter Simulation > IPN & WAN wird ipn1 FULL.'),
-        task('Pod TEP Pool', '**Pod Fabric Setup Policy**: Pod 2 mit 10.1.0.0/16 (macht der Add-Pod-Wizard mit).'),
-        task('DHCP Relay im IPN', 'Simulation > IPN & WAN: auf **ipn1 und ipn2** das DHCP Relay auf die TEP-Adresse des APIC setzen. Danach erscheinen '
-             'spine203/204 unter *Nodes Pending Registration*.', 'Ohne Relay kommt der DHCP Discover der Pod-2-Spines nie beim APIC an.'),
-        task('Registrieren', 'spine203 (203), spine204 (204), leaf105 (105), leaf106 (106) – jeweils **Pod ID 2**.'),
-        task('IPN-Fehler finden', 'Die Pod-2-Spines kommen nicht auf FULL. `show ip ospf neighbors vrf overlay-1` auf spine203 und die Simulation zeigen '
-             'warum. Auf ipn2 die richtige MTU (9150) setzen.', 'Erst danach sind leaf105/106 vom APIC aus erreichbar.'),
-        task('Data Plane TEP', 'Fabric External Connection Policy (Tenant infra) mit Pod Connection Profiles für Pod 1 und 2 prüfen.'),
-        task('Verkehr', 'Traffic-Test web1 (Pod 1) → app1 (Pod 2) tcp/8080.'),
-    ],
+    requirements=['Pod 2 ist über das IPN angebunden; spine203/204 und leaf105/106 sind registriert und aktiv (IDs wie die Namen).', 'Alle vier Spines haben eine OSPF-Nachbarschaft zum IPN.', 'web1 (Pod 1) erreicht app1 (Pod 2) auf TCP 8080 über das IPN.', 'Zwischen Web und App gilt weiter nur, was web-to-app erlaubt.'],
+    limits=['Das IPN wird als Router mit Interfaces, OSPF, MTU, PIM und DHCP Relay simuliert; Multicast-Verteilung und BUM-Verkehr werden nicht im Detail gezeigt.'],
+    hints=['**Konzept:** Pods sind über ein Layer-3-Netz (IPN) verbunden. Die Spines sprechen OSPF über Sub-Interfaces in vlan-4 mit dem IPN; neue Switches in Pod 2 finden den APIC per DHCP Relay im IPN. Das IPN braucht eine MTU, die VXLAN trägt.', '**Objekte:** *Fabric > Inventory > Pod Fabric Setup Policy* (TEP Pool Pod 2), Tenant infra: L3Out multipod mit Spines, Sub-Interfaces, OSPF Area 0; Fabric External Connection Policy (Data Plane TEPs). Danach Registrierung der Pod-2-Switches.', '**Prüfschritte:** *Simulation > IPN/ISN*: Nachbarschaften, MTU, PIM, Relay. `show ip ospf neighbors vrf overlay-1` auf den Spines. Traffic Inspector web1 → app1: Steht „Multi-Pod“ im Pfad?', '**Lösung:** TEP Pool 10.1.0.0/16 für Pod 2, Infra-L3Out mit den vier Spine-Sub-Interfaces (vlan-4), External Connection Policy mit Data Plane TEP 172.16.1.1 und 172.16.2.1. MTU von ipn2 auf mindestens 9150. Spines 203/204 und Leafs 105/106 registrieren.'],
+    cause='Pod 2 ist nicht eingerichtet; ipn2 hat außerdem nur MTU 1500.',
+    tasks=[],
     checks=[check('spine203 aktiv', 'node', serial='FDO2219SP03', id=203), check('spine204 aktiv', 'node', serial='FDO2219SP04', id=204),
             check('leaf105 aktiv', 'node', serial='SAL1931LA05', id=105), check('leaf106 aktiv', 'node', serial='SAL1931LA06', id=106),
             check('Alle Spines mit OSPF FULL zum IPN', 'ipnadj', serials=['FDO2219SP01', 'FDO2219SP02', 'FDO2219SP03', 'FDO2219SP04']),
-            check('web1 → app1 tcp/8080 über das IPN', 'traffic', src='web1', dst='app1', proto='tcp', port=8080, expect=True, via='Multi-Pod')],
+            check('web1 → app1 tcp/8080 über das IPN', 'traffic', src='web1', dst='app1', proto='tcp', port=8080, expect=True, via='Multi-Pod'),
+            check('Least Privilege Web → App über Pods: nur TCP 8080 und Ping', 'exposure', src='web1', dst='app1', allow=['tcp/8080', 'icmp'], category='security'),
+            check('web1 → app1 SSH blockiert', 'traffic', src='web1', dst='app1', proto='tcp', port=22, expect=False, reason='POLICY_', category='security')],
+    questions=[{'id': 'q1', 'q': 'Die Spines in Pod 2 bleiben „discovering“, OSPF zum IPN läuft. Was fehlt am wahrscheinlichsten?', 'options': ['DHCP Relay im IPN zu den APICs', 'Ein Contract', 'Die Route Reflector Policy', 'vlan-4 im VLAN Pool'], 'answer': 0, 'explain': 'Neue Switches holen sich ihre TEP-Adresse per DHCP vom APIC – über Pod-Grenzen nur mit Relay.'}, {'id': 'q2', 'q': 'Warum braucht das IPN eine höhere MTU als 1500?', 'options': ['VXLAN fügt rund 50 Byte Header hinzu; Pakete mit voller MTU passen sonst nicht', 'Wegen OSPF', 'Wegen PIM', 'Braucht es nicht'], 'answer': 0, 'explain': 'Typisch 9150 im IPN, passend zur Fabric-MTU.'}],
     solution='Infra (uni): `' + json.dumps(mp_l3out(SPINES29)) + '` und `' + json.dumps(EXT29) + '`, `uni/controller/setuppol` mit '
              '`fabricSetupP podId=2 tepPool=10.1.0.0/16`. Im IPN: Relay 10.0.0.1 auf ipn1/ipn2, MTU von ipn2 auf 9150. Registrierung mit podId=2.')
 
@@ -1970,7 +1969,10 @@ RLSOL30 = [['uni/controller/setuppol/setupp-1', mo('fabricSetupP', {}, mo('fabri
            ['uni/tn-Shop/ap-Webshop/epg-Web', mo('fvAEPg', {}, mo('fvRsDomAtt', {'tDn': 'uni/phys-PhysDom-Store'}),
                                                    mo('fvRsPathAtt', {'tDn': 'topology/pod-1/paths-301/pathep-[eth1/1]', 'encap': 'vlan-110'}))]]
 lab(id='30-remote-leaf', title='30 Remote Leaf in der Filiale', topic='Fabric-Architektur', level='Experte', duration='40 min',
-    fabric='discovered', topology='multipod',
+    fabric='discovered', topology='multipod', kind='requirements', modes=['guided', 'exam'],
+    prerequisites=['Lab 29'], tools=['Fabric > Inventory > Pod Fabric Setup Policy', 'Fabric Membership', 'Simulation > IPN/ISN',
+                                    'CLI: show ip ospf neighbors vrf overlay-1'],
+   
     ipn={'routers': [ipn_router('ipn1', 1, 'ipn', IPN_IFS1, relay=['10.0.0.1']), ipn_router('ipn2', 2, 'ipn', IPN_IFS2, relay=['10.0.0.1']),
                      ipn_router('wan-rl', 1, 'wan', WAN_IFS, mtu=1500, pim=False)]},
     goals=['Ein Remote Leaf über ein WAN an Pod 1 anbinden', 'Remote Pool, External TEP Pool und Registrierung als remote-leaf-wan',
@@ -1980,21 +1982,17 @@ lab(id='30-remote-leaf', title='30 Remote Leaf in der Filiale', topic='Fabric-Ar
           'External TEP Pool **172.16.10.0/24**, Uplink leaf301 **192.168.3.1/30**, Router ID 30.30.30.30. Das Kassensystem **store1** '
           '(10.10.10.31, vlan-110 an leaf301 eth1/1) soll in der EPG **Web** landen.',
     config=[SERVER_ACCESS, shop_tenant(with_contracts=True), mp_l3out(SPINES30), EXT30], hosts=[WEB1, APP1, STORE1],
-    tasks=[
-        task('Remote Pool und External TEP', '**Fabric > Inventory > Quick Start > Add Remote Leaf** oder von Hand: Remote Pool 11 / 10.11.0.0/20 in der Pod '
-             'Fabric Setup Policy, External TEP Pool 172.16.10.0/24 im Pod Connection Profile 1 der Fabric External Connection Policy.'),
-        task('WAN-Router', 'Simulation > IPN & WAN: auf **wan-rl** das DHCP Relay zum APIC (10.0.0.1) eintragen.'),
-        task('Registrieren', 'leaf301 als **Remote Leaf** (Node Type remote-leaf-wan, Remote Pool ID 11, Node ID 301) registrieren.'),
-        task('Uplink', 'Im Infra-L3Out **multipod** ein Node Profile für Node 301 mit Sub-Interface eth1/54, vlan-4, 192.168.3.1/30 und OSPF.',
-             'Ohne OSPF zum WAN-Router bleibt der Remote Leaf in Discovery.'),
-        task('Access Policies und EPG', 'Access Policies für leaf301 Port 1/1 (vlan-110, eigene Domain PhysDom-Store) und einen Static Port in der EPG Web.'),
-        task('Verkehr', 'store1 → app1 tcp/8080. Klappt es nicht, die Meldung im Traffic-Test lesen und den WAN-Router prüfen.',
-             'VXLAN braucht mehr als 1500 Byte MTU im WAN.'),
-    ],
+    requirements=['leaf301 ist als Remote Leaf (ID 301) registriert und aktiv, mit OSPF zum WAN-Router.', 'store1 landet in der EPG Web und erreicht app1 auf TCP 8080.', 'Das Kassensystem erreicht App nur über das, was web-to-app erlaubt.'],
+    limits=['Remote Leaf ohne Direct Traffic Forwarding und ohne Remote-Leaf-vPC; das WAN wird als ein Router simuliert.'],
+    hints=['**Konzept:** Ein Remote Leaf hängt nicht an Spines, sondern über ein routbares WAN an einem Pod. Er braucht einen eigenen TEP Pool, erreichbare External TEPs im Pod, eine OSPF-Nachbarschaft zum WAN-Router und DHCP Relay im WAN zu den APICs.', '**Objekte:** Pod Fabric Setup Policy (Remote ID, Remote Pool), External TEP Pool (Routable Subnet), Infra-L3Out-Uplink für leaf301 (vlan-4, Adresse, Router ID), Registrierung als Remote Leaf. Im Tenant Shop ein Static Port für store1.', '**Prüfschritte:** *Simulation > IPN/ISN*: DHCP Relay und MTU von wan-rl. Fabric Membership: erscheint leaf301? Traffic Inspector store1 → app1.', '**Lösung:** Remote ID 11, Pool 10.11.0.0/20, External TEP 172.16.10.0/24, Uplink 192.168.3.1/30 vlan-4 Router ID 30.30.30.30, leaf301 als Remote Leaf registrieren, Access-Kette für leaf301 eth1/1 und Static Port vlan-110 an der EPG Web.'],
+    cause='Es gibt weder Remote Pool noch External TEP noch Uplink für leaf301.',
+    tasks=[],
     checks=[check('leaf301 als Remote Leaf aktiv', 'node', serial='SAL1931RL01', id=301),
             check('OSPF FULL zum WAN-Router', 'ipnadj', serials=['SAL1931RL01']),
             check('store1 in EPG Web gelernt', 'endpoint', host='store1', epg='uni/tn-Shop/ap-Webshop/epg-Web'),
-            check('store1 → app1 tcp/8080', 'traffic', src='store1', dst='app1', proto='tcp', port=8080, expect=True)],
+            check('store1 → app1 tcp/8080', 'traffic', src='store1', dst='app1', proto='tcp', port=8080, expect=True),
+            check('Least Privilege Kasse → App: nur TCP 8080 und Ping', 'exposure', src='store1', dst='app1', allow=['tcp/8080', 'icmp'], category='security')],
+    questions=[{'id': 'q1', 'q': 'Warum braucht ein Remote Leaf einen External TEP Pool im Pod?', 'options': ['Er erreicht den Pod über ein geroutetes WAN; die internen TEPs sind dort nicht routbar', 'Wegen der Lizenz', 'Für BGP', 'Braucht er nicht'], 'answer': 0, 'explain': 'Die External TEPs sind die routbaren Ziele der VXLAN-Tunnel aus der Filiale.'}],
     solution='Siehe Add-Remote-Leaf-Wizard; Objekte: fabricExtSetupP remoteId=11 tepPool=10.11.0.0/20, fabricExtRoutablePodSubnet 172.16.10.0/24, '
              'fabricNodeIdentP nodeType=remote-leaf-wan extPoolId=11, Node Profile mit `' + json.dumps(mp_lif(301, 1, 'eth1/54', '192.168.3.1/30')) +
              '`. Auf wan-rl: Relay 10.0.0.1 und MTU 9150.')
@@ -2018,7 +2016,10 @@ ISN31 = {'routers': [{'name': 'isn1', 'pod': 1, 'kind': 'isn', 'mtu': 1500, 'are
                       'ifs': [{'serial': 'FDO2219SP01', 'port': 'eth1/31', 'vlan': 4, 'ip': '10.255.1.2/30'},
                               {'serial': 'FDO2219SP02', 'port': 'eth1/31', 'vlan': 4, 'ip': '10.255.1.6/30'}]}]}
 lab(id='31-multisite-ndo', title='31 Multi-Site mit dem Nexus Dashboard Orchestrator', topic='Fabric-Architektur', level='Experte', duration='45 min',
-    fabric='discovered', topology='multisite', ipn=ISN31,
+    fabric='discovered', topology='multisite', kind='requirements', modes=['guided', 'exam'],
+    prerequisites=['Lab 29'], tools=['Simulation > Multi-Site (NDO)', 'Simulation > IPN/ISN', 'Traffic Inspector',
+                                    'CLI: show bgp l2vpn evpn summary vrf overlay-1 (simuliert eingeschränkt)'],
+    ipn=ISN31,
     goals=['Den lokalen APIC im NDO onboarden und eine Site ID vergeben', 'Die Infra zwischen den Sites einrichten: ISN, OSPF, BGP EVPN, Overlay Unicast TEP',
            'Objekte über Templates zwischen den Sites strecken und site-lokal deployen', 'Verstehen, was der NDO im APIC anlegt (annotation orchestrator:msc)'],
     intro='Die Fabric in Frankfurt (dieser APIC) wird mit der Fabric **DC-HAM** (Site ID 2, schon im NDO) zu einer Multi-Site-Umgebung. Die Spines hängen mit '
@@ -2027,22 +2028,16 @@ lab(id='31-multisite-ndo', title='31 Multi-Site mit dem Nexus Dashboard Orchestr
           '(10.255.255.202), Overlay Unicast TEP **172.16.100.1/32**.\n\nIn DC-HAM laufen **ham-web1** (10.10.10.51, EPG Web) und **ham-app1** '
           '(10.20.20.51, EPG App-HAM).',
     config=[SERVER_ACCESS, shop_tenant(with_contracts=True)], hosts=[WEB1, APP1],
-    tasks=[
-        task('Site onboarden', 'Im NDO den lokalen APIC mit admin und dem APIC-Passwort hinzufügen, Site ID **1**.'),
-        task('Infra', 'Infra Configuration: OSPF Area, Spine-Interfaces zum ISN mit IP und BGP-EVPN Router-ID, Overlay Unicast TEP. **Deploy**. '
-             'Danach im APIC: Tenant infra > L3Out **intersite** und die Site ID in der Fabric External Connection Policy.'),
-        task('ISN', 'Die Spines kommen nicht auf OSPF FULL zum ISN. Ursache unter Simulation > IPN & WAN bzw. `show ip ospf neighbors vrf overlay-1` '
-             'auf spine201 finden und am ISN beheben.', 'VXLAN zwischen den Sites braucht Jumbo Frames.'),
-        task('Template Shop-Stretched', 'Schema mit Template **Shop-Stretched** (Tenant Shop, Sites lokal und DC-HAM): VRF Prod, BD-Web 10.10.10.1/24 mit '
-             '**L2 Stretch**, AP Webshop mit EPG Web (konsumiert web-to-ham), Contract **web-to-ham** (tcp/8080, icmp). Deployen.'),
-        task('Template HAM-Local', 'Template **HAM-Local** nur für DC-HAM: BD-HAM-App 10.20.20.1/24 (VRF Prod), EPG App-HAM stellt web-to-ham bereit. Deployen.'),
-        task('Prüfen', 'Traffic-Test web1 → ham-web1 (gleiches Subnetz, L2 über das ISN) und web1 → ham-app1 tcp/8080. Im APIC sind Tenant, BD und EPG jetzt '
-             'mit annotation orchestrator:msc markiert.'),
-    ],
+    requirements=['Die Fabric ist im NDO als Site 1 eingebunden; die Infra zwischen den Sites steht (ISN, OSPF, BGP EVPN, Overlay TEP).', 'web1 erreicht ham-web1 im selben, gestreckten Netz.', 'web1 erreicht ham-app1 auf TCP 8080, sonst nichts.', 'Objekte, die beide Sites brauchen, kommen aus dem NDO, nicht von Hand in den APIC.'],
+    limits=['Der NDO und die Gegen-Site DC-HAM werden simuliert; Schema- und Template-Funktionen sind auf das Lab zugeschnitten.'],
+    hints=['**Konzept:** Bei Multi-Site ist jede Fabric eigenständig; der NDO verteilt gemeinsame Objekte per Template an die Sites. Zwischen den Sites laufen OSPF (Underlay) und BGP EVPN (Overlay) über das ISN.', '**Objekte:** NDO: Site onboarden (Site ID), Infra-Konfiguration je Spine (Interface, OSPF, BGP-EVPN-Router-ID, Overlay TEP), Schema mit Templates (gestreckt und site-lokal), Deploy.', '**Prüfschritte:** NDO-Infra-Status, *Simulation > IPN/ISN*: MTU von isn1. Traffic Inspector web1 → ham-web1: Steht „ISN“ im Pfad?', '**Lösung:** Site ID 1, Infra wie im Design, ISN-MTU auf 9150, Templates Shop-Stretched (beide Sites) und HAM-Local deployen.'],
+    cause='Die Site ist nicht im NDO, die Infra zwischen den Sites fehlt, und isn1 hat nur MTU 1500.',
+    tasks=[],
     checks=[check('Infra zwischen den Sites ok', 'msite'),
             check('web1 → ham-web1 (L2 gestreckt)', 'traffic', src='web1', dst='ham-web1', expect=True, via='ISN'),
             check('web1 → ham-app1 tcp/8080', 'traffic', src='web1', dst='ham-app1', proto='tcp', port=8080, expect=True, via='ISN'),
-            check('web1 → ham-app1 tcp/22 blockiert', 'traffic', src='web1', dst='ham-app1', proto='tcp', port=22, expect=False)],
+            check('web1 → ham-app1 tcp/22 blockiert', 'traffic', src='web1', dst='ham-app1', proto='tcp', port=22, expect=False, reason='POLICY_', category='security')],
+    questions=[{'id': 'q1', 'q': 'Woran erkennst du im APIC, dass ein Objekt vom NDO kommt?', 'options': ['An der Annotation orchestrator:msc', 'Am Namen', 'An der Farbe', 'Gar nicht'], 'answer': 0, 'explain': 'Solche Objekte sollte man nicht direkt im APIC ändern – der NDO überschreibt sie beim nächsten Deploy.'}],
     solution='NDO: onboard (Site ID 1), Infra `' + json.dumps(INFRA31) + '`, Deploy Infra; ISN-MTU auf 9150; Templates `' + json.dumps(TPL31A) +
              '` und `' + json.dumps(TPL31B) + '` deployen.')
 
@@ -2899,7 +2894,10 @@ SOLUTIONS = {
                            ['uni/tn-Ops/ap-Ops/epg-Backup', mo('fvAEPg', {}, mo('fvRsBd', {'tnFvBDName': 'BD-Backup'}))],
                            ['uni/tn-Ops/brc-web-to-app/subj-subj', mo('vzSubj', {'revFltPorts': 'yes'})]],
     '08-rest-api': [['uni', mo('fvTenant', {'name': 'Automation'}, mo('fvCtx', {'name': 'v1'}), bd('bd1', 'v1', '192.168.1.1/24'),
-                               mo('fvAp', {'name': 'app'}, epg('epg1', 'bd1', dom=None)))]],
+                               mo('fvAp', {'name': 'app'}, epg('epg1', 'bd1', dom=None)), mo('aaaDomainRef', {'name': 'Auto-Dom'}))],
+                    ['uni/userext', mo('aaaUserEp', {}, mo('aaaDomain', {'name': 'Auto-Dom'}),
+                                       mo('aaaUser', {'name': 'ansible', 'pwd': 'Ansible#2026'},
+                                          mo('aaaUserDomain', {'name': 'Auto-Dom'}, mo('aaaUserRole', {'name': 'tenant-admin', 'privType': 'writePriv'}))))]],
     '09-l3out-bgp': [BGP_RR,
                      ['uni', access('VLAN-Pool-ISP', 300, 310, 'L3Dom-ISP', 'AAEP-ISP', 'IPG-ISP', 'IntProf-Leaf104', 'isp',
                                     47, 47, 'SwProf-Leaf104', 104, 104, l3=True)],

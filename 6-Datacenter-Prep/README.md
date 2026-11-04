@@ -136,53 +136,53 @@ Unter *Simulation > Labs & Stände* laden. Jedes Lab setzt die Konfiguration auf
 | Lab | Thema | Dauer |
 |---|---|---|
 | 00 | Day 0: APIC-Ersteinrichtung mit Setup-Dialog | 20 min |
-| 01 | Fabric Discovery: physische und logische Sicht (neues Format) | 30 min |
-| 02 | Access Policies: vom VLAN zum Port, Fault F0467 (neues Format) | 30 min |
-| 03 | Tenant, VRF, Bridge Domains und EPGs (neues Format) | 30 min |
-| 04 | Contracts, Filter und vzAny (neues Format) | 35 min |
-| 05 | vPC mit LACP für einen Datenbankserver (neues Format) | 35 min |
-| 06 | L3Out mit OSPF ins WAN (MTU-Problem, MP-BGP; neues Format) | 45 min |
-| 07 | Troubleshooting: sechs Tickets (neues Format) | 45 min |
+| 01 | Fabric Discovery: physische und logische Sicht | 30 min |
+| 02 | Access Policies: vom VLAN zum Port, Fault F0467 | 30 min |
+| 03 | Tenant, VRF, Bridge Domains und EPGs | 30 min |
+| 04 | Contracts, Filter und vzAny | 35 min |
+| 05 | vPC mit LACP für einen Datenbankserver | 35 min |
+| 06 | L3Out mit OSPF ins WAN (MTU-Problem, MP-BGP) | 45 min |
+| 07 | Troubleshooting: sechs Tickets | 45 min |
 | 08 | Automatisierung über die REST-API | 30 min |
-| 09 | L3Out mit eBGP über Sub-Interface (neues Format) | 45 min |
-| 10 | OOB-Management und NTP (neues Format) | 30 min |
-| 11 | Static Leaf und Taboo Contracts (neues Format) | 25 min |
-| 12 | VMM-Integration mit VMware vCenter (neues Format) | 40 min |
-| 13 | Shared Services: Route Leaking zwischen Tenants (neues Format) | 35 min |
-| 14 | L2Out und Migration: stille Hosts und ARP Flooding (neues Format) | 40 min |
-| 15 | Transit Routing und Route Control (neues Format) | 40 min |
-| 16 | Service Graph mit Policy-Based Redirect (Firewall) (neues Format) | 45 min |
-| 17 | L3Out: SVI auf vPC mit Secondary IP und BFD (neues Format) | 40 min |
-| 18 | eBGP über Loopbacks: Multihop, MD5, Timer und Summarization (neues Format) | 40 min |
-| 19 | EIGRP und Static Route mit IP SLA Track (neues Format) | 40 min |
-| 20 | Floating SVI für einen virtuellen Router (neues Format) | 30 min |
-| 21 | AAA: TACACS+, Login-Domain und RBAC (neues Format) | 35 min |
-| 22 | In-Band-Management (neues Format) | 35 min |
-| 23 | Endpoint Security Groups und uSeg EPGs (neues Format) | 35 min |
-| 24 | Firmware-Upgrade mit Upgrade Groups (neues Format) | 35 min |
-| 25 | Config Export und Import (neues Format) | 30 min |
-| 26 | Monitoring: SNMP, Syslog und Callhome (neues Format) | 40 min |
-| 27 | DHCP Relay (neues Format) | 25 min |
-| 28 | Loop Protection mit MCP und QoS-Klassen (neues Format) | 30 min |
+| 09 | L3Out mit eBGP über Sub-Interface | 45 min |
+| 10 | OOB-Management und NTP | 30 min |
+| 11 | Static Leaf und Taboo Contracts | 25 min |
+| 12 | VMM-Integration mit VMware vCenter | 40 min |
+| 13 | Shared Services: Route Leaking zwischen Tenants | 35 min |
+| 14 | L2Out und Migration: stille Hosts und ARP Flooding | 40 min |
+| 15 | Transit Routing und Route Control | 40 min |
+| 16 | Service Graph mit Policy-Based Redirect (Firewall) | 45 min |
+| 17 | L3Out: SVI auf vPC mit Secondary IP und BFD | 40 min |
+| 18 | eBGP über Loopbacks: Multihop, MD5, Timer und Summarization | 40 min |
+| 19 | EIGRP und Static Route mit IP SLA Track | 40 min |
+| 20 | Floating SVI für einen virtuellen Router | 30 min |
+| 21 | AAA: TACACS+, Login-Domain und RBAC | 35 min |
+| 22 | In-Band-Management | 35 min |
+| 23 | Endpoint Security Groups und uSeg EPGs | 35 min |
+| 24 | Firmware-Upgrade mit Upgrade Groups | 35 min |
+| 25 | Config Export und Import | 30 min |
+| 26 | Monitoring: SNMP, Syslog und Callhome | 40 min |
+| 27 | DHCP Relay | 25 min |
+| 28 | Loop Protection mit MCP und QoS-Klassen | 30 min |
 | 29 | Multi-Pod mit Inter-Pod Network | 50 min |
 | 30 | Remote Leaf in der Filiale | 40 min |
 | 31 | Multi-Site mit dem Nexus Dashboard Orchestrator | 45 min |
-| 32 | **Least Privilege: HTTPS von WEB zu APP** (neues Format, Abnahmefall) | 25 min |
-| 33 | Zwei Endpoints in derselben EPG (neues Format) | 15 min |
-| 34 | Zwei EPGs in derselben Bridge Domain: Bridging ist nicht Policy (neues Format) | 20 min |
-| 35 | Falscher Port, falsche Richtung: eine kaputte Freigabe reparieren (neues Format) | 20 min |
-| 36 | Endpoint Move nachvollziehen: Verlauf lesen, alte Bindung entfernen (neues Format) | 25 min |
-| 37 | Interface-Ausfall oder Policy-Drop? Drei Tickets, drei Ursachen (neues Format) | 25 min |
-| 38 | Innerhalb einer EPG einschränken: Isolation und Intra-EPG-Contract (neues Format) | 20 min |
-| 39 | Preferred Group für eine Migration (neues Format) | 20 min |
-| 40 | IT-/OT-Segmentierung einer Fertigungslinie: fünf Zonen, laterale Bewegung verhindern (neues Format, didaktisch) | 60 min |
-| 41 | Routingfehler oder fehlender Contract? Externer Verkehr Schritt für Schritt (neues Format) | 25 min |
-| 42 | Fehlender Rückweg: nur ankündigen, was außen gebraucht wird (neues Format) | 20 min |
-| 43 | Change mit Snapshot absichern und zurückrollen (neues Format) | 20 min |
-| 44 | Access-Diagnose: drei Server, drei Ursachen (Domain, VLAN Pool, Static Port; neues Format) | 30 min |
-| 45 | Zwei Bridge Domains, eine VRF: Routing ohne L3Out (neues Format) | 20 min |
+| 32 | **Least Privilege: HTTPS von WEB zu APP** (Abnahmefall) | 25 min |
+| 33 | Zwei Endpoints in derselben EPG | 15 min |
+| 34 | Zwei EPGs in derselben Bridge Domain: Bridging ist nicht Policy | 20 min |
+| 35 | Falscher Port, falsche Richtung: eine kaputte Freigabe reparieren | 20 min |
+| 36 | Endpoint Move nachvollziehen: Verlauf lesen, alte Bindung entfernen | 25 min |
+| 37 | Interface-Ausfall oder Policy-Drop? Drei Tickets, drei Ursachen | 25 min |
+| 38 | Innerhalb einer EPG einschränken: Isolation und Intra-EPG-Contract | 20 min |
+| 39 | Preferred Group für eine Migration | 20 min |
+| 40 | IT-/OT-Segmentierung einer Fertigungslinie: fünf Zonen, laterale Bewegung verhindern (didaktisch) | 60 min |
+| 41 | Routingfehler oder fehlender Contract? Externer Verkehr Schritt für Schritt | 25 min |
+| 42 | Fehlender Rückweg: nur ankündigen, was außen gebraucht wird | 20 min |
+| 43 | Change mit Snapshot absichern und zurückrollen | 20 min |
+| 44 | Access-Diagnose: drei Server, drei Ursachen (Domain, VLAN Pool, Static Port) | 30 min |
+| 45 | Zwei Bridge Domains, eine VRF: Routing ohne L3Out | 20 min |
 
-**Neues Lab-Format** (Labs 01 bis 28 außer 08 sowie 32 bis 45): Statt einer Klickanleitung gibt es Anforderungen. Der Rest im Überblick:
+**Lab-Format** (alle Labs): Statt einer Klickanleitung gibt es Anforderungen. Der Rest im Überblick:
 
 - **Hinweise** in vier Stufen: Konzept, Objekte, Prüfschritt, Lösung. Die Oberfläche zählt, wie viele genutzt wurden.
 - **Bewertung** getrennt nach *Funktion* und *Sicherheit / Least Privilege*. Eine Permit-any-Abkürzung funktioniert zwar, besteht aber nicht.
