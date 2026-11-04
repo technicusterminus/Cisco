@@ -42,6 +42,16 @@ const check = (ok, msg) => { console.log((ok ? '  ok   ' : '  FEHLER ') + msg); 
     check(await p.evaluate(() => App.state.lab && App.state.lab.id) === '03-tenant-epg', 'Lab 03 gestartet');
     await p.click('.card.lab button:has-text("Lab prüfen")'); await p.waitForSelector('.trace-sum');
     check(/von 9 Prüfungen/.test(await p.textContent('.trace-sum')), 'Lab-Prüfung läuft');
+    // B-09: Farbschema und Tastatur
+    const theme = p.locator('button.tbtn[aria-label="Farbschema"]');
+    await theme.click(); await theme.click();
+    check(await p.evaluate(() => document.documentElement.getAttribute('data-theme')) === 'dark', 'Farbschema auf Dunkel umschaltbar');
+    await theme.click();
+    check(await p.evaluate(() => !document.documentElement.hasAttribute('data-theme')), 'Farbschema zurück auf Auto');
+    check(await p.evaluate(() => document.querySelector('.tabs .tab').getAttribute('tabindex')) === '0', 'Haupt-Tabs sind per Tastatur erreichbar');
+    await p.keyboard.press('Alt+3'); await p.waitForTimeout(300);
+    check(await p.evaluate(() => App.tab) === 'fabric', 'Alt+3 wechselt zu Fabric');
+    await p.evaluate(() => App.go('sim', 'labs')); await p.waitForSelector('.card.lab');
     await p.click('.card.lab button:has-text("Stand speichern")'); await p.waitForSelector('.modal');
     await p.fill('.modal input', 'mein-stand'); await confirm();
     await p.evaluate(() => App.go('sim', 'labs')); await p.waitForTimeout(600);

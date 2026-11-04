@@ -6,7 +6,6 @@ Alle Punkte sind offen. Erledigt ist, was in `docs/GAP-ANALYSE.md` als „behobe
 
 | # | Punkt | Begründung | Umfang |
 |---|---|---|---|
-| B-09 | Dark Mode und Tastaturbedienung (Fokus-Reihenfolge, Shortcuts) | Barrierefreiheit | CSS-Tokens, Frontend |
 
 ## Phase 3: Troubleshooting
 

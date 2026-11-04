@@ -79,6 +79,8 @@ const App = {
       h('div', { class: 'brand', onclick: () => this.go('system', 'dash') }, h('span', { class: 'logo-mark small' }, 'DC'), h('span', { class: 'brand-sub' }, 'Datacenter Prep')),
       this.el.tabs,
       h('div', { class: 'tools' }, this.el.badges,
+        h('button', { class: 'tbtn', title: 'Farbschema wechseln: Auto (System) → Hell → Dunkel', 'aria-label': 'Farbschema', onclick: ev => { ev.currentTarget.textContent = Theme.label(Theme.cycle()); } }, Theme.label(Theme.get())),
+        h('button', { class: 'tbtn', title: 'Tastenkürzel (?)', 'aria-label': 'Tastenkürzel', onclick: () => App.keyHelp() }, '?'),
         h('button', { class: 'tbtn', title: 'Zustand speichern (Konfiguration, simulierte Welt und Lab)', onclick: () => Saves.saveDialog() }, '💾'),
         h('button', { class: 'tbtn', title: 'APIC- und Switch-CLI', onclick: () => Term.open() }, '⌨ CLI'),
         h('button', { class: 'tbtn', title: 'API Inspector', onclick: () => Inspector.toggle() }, '{ } API Inspector'),
@@ -88,12 +90,36 @@ const App = {
     root.appendChild(this.el.subs);
     root.appendChild(this.el.main);
     TABS.forEach(t => this.el.tabs.appendChild(h('a', { class: 'tab' + (t.special ? ' special' : ''), 'data-id': t.id, onclick: () => this.go(t.id) }, t.l)));
+    this.initKeys();
     await this.refreshState();
     const hs = location.hash.slice(1).split('|');
     if (hs[0] && TABS.find(t => t.id === hs[0])) this.go(hs[0], hs[1] || null, hs[2] ? decodeURIComponent(hs[2]) : null);
     else this.go('system', 'dash');
     clearInterval(this.timer);
     this.timer = setInterval(() => this.poll(), 3000);
+  },
+
+  keyHelp() {
+    const keys = [['?', 'Diese Hilfe'], ['Alt + 1 … 9', 'Hauptbereich wechseln (System, Tenants, Fabric …)'],
+      ['Tab / Shift + Tab', 'Zum nächsten / vorigen Element'], ['Enter / Leertaste', 'Element auslösen'], ['Esc', 'Dialog schließen'],
+      ['Alt + T', 'Traffic Inspector'], ['Alt + L', 'Labs & Stände'], ['Alt + C', 'CLI öffnen']];
+    const kbd = k => k.split(' ').map(x => (x === '+' || x === '/' || x === '…') ? ' ' + x + ' ' : h('kbd', null, x));
+    const rows = keys.map(([k, d]) => h('tr', null, h('td', null, kbd(k)), h('td', null, d)));
+    modal('Tastenkürzel', h('div', { class: 'kbdhelp' }, h('table', { class: 'tbl' }, h('tbody', null, rows))), [{ l: 'Schließen', primary: true }]);
+  },
+
+  initKeys() {
+    if (this._keys) return;
+    this._keys = true;
+    document.addEventListener('keydown', ev => {
+      const typing = /^(INPUT|SELECT|TEXTAREA)$/.test((ev.target || {}).tagName || '');
+      if (ev.key === '?' && !typing && !document.querySelector('.modal')) { ev.preventDefault(); this.keyHelp(); return; }
+      if (!ev.altKey || ev.ctrlKey || ev.metaKey) return;
+      const n = parseInt(ev.key, 10);
+      if (n >= 1 && n <= TABS.length && n <= 9) { ev.preventDefault(); this.go(TABS[n - 1].id); return; }
+      const k = ev.key.toLowerCase();
+      if (k === 't') { ev.preventDefault(); this.go('ops', 'vis'); } else if (k === 'l') { ev.preventDefault(); this.go('sim', 'labs'); } else if (k === 'c') { ev.preventDefault(); Term.open(); }
+    });
   },
 
   async logout() {

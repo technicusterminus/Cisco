@@ -19,8 +19,41 @@ function h(tag, attrs, ...kids) {
     if (c === null || c === undefined || c === false) return;
     el.appendChild(c instanceof Node ? c : document.createTextNode(String(c)));
   });
+  // Tastaturbedienung: klickbare Elemente ohne eigene Fokussierbarkeit (a ohne href, span, div) bekommen Fokus und Rolle
+  if (attrs && attrs.onclick && !el.hasAttribute('tabindex') && ((tag === 'a' && !el.hasAttribute('href')) || tag === 'span' || tag === 'div' || tag === 'li')) {
+    el.setAttribute('tabindex', '0');
+    if (!el.hasAttribute('role')) el.setAttribute('role', 'button');
+  }
   return el;
 }
+
+// Enter und Leertaste loesen auf solchen Elementen den Klick aus
+document.addEventListener('keydown', ev => {
+  const t = ev.target;
+  if ((ev.key === 'Enter' || ev.key === ' ') && t && t.getAttribute && t.getAttribute('role') === 'button' && !/^(BUTTON|INPUT|SELECT|TEXTAREA)$/.test(t.tagName)) {
+    ev.preventDefault();
+    t.click();
+  }
+});
+
+// Farbschema: auto (System), hell, dunkel - gespeichert pro Browser
+const Theme = {
+  KEY: 'dcprep-theme',
+  get() { try { return localStorage.getItem(this.KEY) || 'auto'; } catch (e) { return 'auto'; } },
+  apply(v) {
+    if (v === 'auto') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', v);
+  },
+  cycle() {
+    const order = ['auto', 'light', 'dark'];
+    const v = order[(order.indexOf(this.get()) + 1) % order.length];
+    try { localStorage.setItem(this.KEY, v); } catch (e) { /* privat */ }
+    this.apply(v);
+    return v;
+  },
+  label(v) { return { auto: 'Auto', light: 'Hell', dark: 'Dunkel' }[v]; },
+};
+Theme.apply(Theme.get());
 
 function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); return el; }
 
