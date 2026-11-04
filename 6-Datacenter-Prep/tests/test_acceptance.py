@@ -1217,6 +1217,34 @@ class TestOverlay(unittest.TestCase):
         self.assertIn('web1', ov['uni/tn-Shop/BD-BD-Web']['hosts'])
 
 
+class TestSimClock(unittest.TestCase):
+    """B-07: simulierte Uhr - Discovery laeuft nach Sekunden-Einstellung, Vorspulen ersetzt das Warten."""
+
+    def test_discovery_waits_for_clock_and_advance_completes_it(self):
+        S = Sim(tempfile.mkdtemp(), 'admin')
+        S.sim['settings']['discoverySeconds'] = 120
+        S.reset('empty')
+        post(S.store, 'uni/controller/nodeidentpol', mo('fabricNodeIdentP', {'serial': 'SAL1931LA01', 'nodeId': '101', 'name': 'leaf101'}))
+        S.changed()
+        state = lambda: next(n['state'] for n in S.engine.nodes.values() if n['serial'] == 'SAL1931LA01')
+        self.assertNotEqual(state(), 'active', 'ohne Vorspulen dauert die Discovery')
+        self.assertIsNotNone(S.engine.next_event)
+        for _ in range(5):
+            if state() == 'active':
+                break
+            r = S.advance_clock(to_next=True)
+            self.assertGreater(r['advanced'], 0)
+        self.assertEqual(state(), 'active', 'nach dem Vorspulen ist leaf101 aktiv')
+        self.assertGreater(S.sim['clockOffset'], 100)
+
+    def test_advance_is_bounded_and_noop_without_event(self):
+        S = Sim(tempfile.mkdtemp(), 'admin')
+        S.sim['settings']['discoverySeconds'] = 0
+        S.changed()
+        self.assertEqual(S.advance_clock(to_next=True)['advanced'], 0.0)
+        self.assertEqual(S.advance_clock(10 ** 9)['advanced'], 86400.0)
+
+
 class TestCliHonesty(unittest.TestCase):
     """B-14: Das Terminal sagt, was echt ist, was simulator-spezifisch ist und was es nicht kann."""
 

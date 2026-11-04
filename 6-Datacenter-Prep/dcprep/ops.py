@@ -738,7 +738,7 @@ def _upgrade(S, dn, a, user):
         if ver_key(ver) <= ver_key(e.apic_version):
             return fail('Zielversion %s ist nicht neuer als die laufende Version %s' % (plain(ver), e.apic_version))
         S.sim.setdefault('upgrades', []).append({'kind': 'ctrl', 'grp': 'controller', 'version': ver, 'serials': ['apic'],
-                                                 'start': time.time(), 'dur': dur, 'user': user})
+                                                 'start': S.now(), 'dur': dur, 'user': user})
         log.append({'ts': now_ts(), 'policy': dn, 'ok': True, 'text': 'APIC-Upgrade auf %s gestartet' % plain(ver)})
         return
     ver = a['version']
@@ -762,7 +762,7 @@ def _upgrade(S, dn, a, user):
             log.append({'ts': now_ts(), 'policy': dn, 'ok': True, 'text': 'Upgrade Group %s laeuft bereits mit %s' % (g['name'], plain(ver))})
             continue
         S.sim.setdefault('upgrades', []).append({'kind': 'switch', 'grp': g['name'], 'version': ver, 'serials': todo,
-                                                 'start': time.time(), 'dur': dur, 'user': user, 'warn': g['warn']})
+                                                 'start': S.now(), 'dur': dur, 'user': user, 'warn': g['warn']})
         log.append({'ts': now_ts(), 'policy': dn, 'ok': True, 'text': 'Upgrade Group %s (Nodes %s) auf %s gestartet%s' % (
             g['name'], ', '.join(map(str, nodes)), plain(ver), (' - Warnung: ' + '; '.join(g['warn'])) if g['warn'] else '')})
     del log[:-100]
