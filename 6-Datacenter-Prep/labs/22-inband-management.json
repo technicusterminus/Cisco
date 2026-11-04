@@ -5,12 +5,41 @@
  "level": "Fortgeschritten",
  "duration": "35 min",
  "fabric": "discovered",
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Labs 10 und 21"
+ ],
+ "tools": [
+  "Tenants > mgmt",
+  "Fabric > Access Policies",
+  "Admin > AAA",
+  "CLI: show controller, show vlan extended"
+ ],
  "goals": [
-  "In-Band-Management mit eigenem VLAN, BD inb und In-Band EPG einrichten",
+  "In-Band-Management mit eigenem VLAN, BD und In-Band EPG einrichten",
   "Verstehen, warum die APIC-Ports eine Access Policy brauchen",
   "Einen AAA-Server über In-Band ansprechen"
  ],
- "intro": "Das Management soll zusätzlich **In-Band** über die Fabric laufen: Netz **10.90.0.0/24**, Gateway **10.90.0.1** (BD **inb** im Tenant mgmt), **vlan-90**. Adressen: apic1 **10.90.0.10**, leaf101 **10.90.0.101**, leaf102 **10.90.0.102**.\n\nAnschließend soll der RADIUS-Server **192.168.20.41** (Key **Rad#2026**) über das In-Band EPG erreicht werden. Benutzer dort: **opsuser** / Ops#2026 mit AV-Pair `shell:domains=all/read-all/`.",
+ "intro": "Das Management soll zusätzlich **In-Band** über die Fabric laufen: Netz **10.90.0.0/24**, Gateway **10.90.0.1** (BD **inb** im Tenant mgmt), **vlan-90**. Adressen: apic1 **10.90.0.10**, leaf101 **10.90.0.101**, leaf102 **10.90.0.102**. Der APIC hängt an **leaf101 eth1/48** und **leaf102 eth1/48**.\n\nAnschließend soll der RADIUS-Server **192.168.20.41** (Key **Rad#2026**) über das In-Band-Netz erreicht werden, Anmelde-Domain **RAD**. Benutzer dort: **opsuser** / Ops#2026 mit AV-Pair `shell:domains=all/read-all/`.",
+ "requirements": [
+  "apic1, leaf101 und leaf102 sind In-Band mit den Adressen aus dem Plan erreichbar; es gibt keine Konfigurationsfehler im Tenant mgmt.",
+  "vlan-90 darf nur auf die Ports zum APIC (eth1/48), nicht auf die Server-Ports.",
+  "opsuser meldet sich über RADIUS an, erreicht über In-Band, und darf nur lesen."
+ ],
+ "limits": [
+  "In-Band wird über die Zuordnung von Knoten, Adressen, VLAN und APIC-Ports simuliert; In-Band-Contracts und -Routing nach außen fehlen."
+ ],
+ "hints": [
+  "**Konzept:** Das In-Band-VLAN läuft über die Fabric bis zu den APIC-Ports. Diese Ports brauchen deshalb – wie Server-Ports – eine Access-Kette mit Domain und VLAN Pool. Der In-Band EPG verbindet VLAN, BD und Knotenadressen.",
+  "**Objekte:** VLAN Pool, Physical Domain, AAEP, Policy Group und ein eigener Port-Selector für eth1/48. Im Tenant mgmt: Subnetz am BD inb, In-Band Management EPG mit Adressen. RADIUS Provider mit Management EPG In-Band, Provider Group, Login Domain.",
+  "**Prüfschritte:** Operational-Tab des In-Band EPG und Faults im Tenant mgmt (S0211). `show controller`, auf leaf101 `show vlan extended`: Auf welchen Ports liegt vlan-90? Login-Protokoll für opsuser.",
+  "**Lösung:** VLAN-Pool-INB (vlan-90), PhysDom-INB, AAEP-APIC, IPG-APIC und Selector APIC-Ports nur für 1/48. BD inb 10.90.0.1/24, In-Band EPG default (vlan-90, BD inb, Adressen für Node 1, 101, 102). RADIUS Provider 192.168.20.41 mit Key und In-Band (default), Provider Group RAD, Login Domain RAD."
+ ],
+ "cause": "Es gibt keine In-Band-Konfiguration; die APIC-Ports haben keine Access Policy für vlan-90.",
  "config": [
   {
    "polUni": {
@@ -203,29 +232,7 @@
    ]
   }
  ],
- "tasks": [
-  {
-   "title": "Access Policies für die APIC-Ports",
-   "text": "Der APIC hängt an **leaf101/102 eth1/48**. VLAN Pool **VLAN-Pool-INB** (static, vlan-90), Physical Domain **PhysDom-INB**, AAEP **AAEP-APIC**, Policy Group **IPG-APIC** und im Interface Profile IntProf-Leaf101-102 einen Selector **APIC-Ports** für Port 1/48.",
-   "hint": "Ohne diese Kette darf vlan-90 nicht auf den Port zum APIC – Fault S0211 am In-Band EPG."
-  },
-  {
-   "title": "BD inb",
-   "text": "Im Tenant **mgmt** am BD **inb** das Subnetz **10.90.0.1/24** anlegen."
-  },
-  {
-   "title": "In-Band EPG",
-   "text": "**Tenants > mgmt > Node Management EPGs**: Rechtsklick **Create In-Band Management EPG**: **default**, vlan-90, BD inb, Adressen für Node 1 (APIC), 101 und 102."
-  },
-  {
-   "title": "RADIUS über In-Band",
-   "text": "RADIUS Provider 192.168.20.41 mit Key Rad#2026 und Management EPG **In-Band (default)**, Provider Group **RAD**, Login Domain **RAD** (Realm RADIUS)."
-  },
-  {
-   "title": "Verifizieren",
-   "text": "Operational-Tab des In-Band EPG, `show controller`, auf leaf101 `show vlan extended`. Login als `opsuser` mit Domain RAD."
-  }
- ],
+ "tasks": [],
  "checks": [
   {
    "desc": "In-Band aktiv auf apic1, leaf101 und leaf102",
@@ -237,17 +244,72 @@
    ]
   },
   {
-   "desc": "Kein S0211-Fault mehr",
+   "desc": "Keine In-Band-Faults im Tenant mgmt",
    "type": "nofaults",
    "under": "uni/tn-mgmt",
    "code": "S0211"
   },
   {
-   "desc": "opsuser meldet sich über RADIUS (In-Band) an",
+   "desc": "opsuser meldet sich über RADIUS an",
    "type": "login",
    "user": "apic#RAD\\opsuser",
    "pwd": "Ops#2026",
    "role": "read-all"
+  },
+  {
+   "desc": "RADIUS wird über In-Band erreicht",
+   "type": "class",
+   "cls": "aaaRsSecProvToEpg",
+   "under": "uni/userext/radiusext/",
+   "attrs": {
+    "tDn": "uni/tn-mgmt/mgmtp-default/inb-default"
+   }
+  },
+  {
+   "desc": "opsuser darf nichts ändern",
+   "type": "rbac",
+   "user": "apic#RAD\\opsuser",
+   "pwd": "Ops#2026",
+   "dn": "uni/tn-common/BD-default",
+   "expect": false,
+   "category": "security"
+  },
+  {
+   "desc": "vlan-90 kommt nicht auf die Server-Ports",
+   "type": "class",
+   "cls": "infraRsDomP",
+   "under": "uni/infra/attentp-AAEP-Server/",
+   "attrs": {
+    "tDn": "uni/phys-PhysDom-INB"
+   },
+   "expect": false,
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Warum braucht der Port zum APIC eine Access Policy, obwohl der APIC kein Server ist?",
+   "options": [
+    "Das In-Band-VLAN wird wie jedes andere VLAN auf einem Access-Port gegen Domain und Pool geprüft",
+    "Braucht er nicht",
+    "Wegen LLDP",
+    "Wegen der Discovery"
+   ],
+   "answer": 0,
+   "explain": "Ohne die Kette darf vlan-90 nicht auf eth1/48 – Fault S0211 am In-Band EPG."
+  },
+  {
+   "id": "q2",
+   "q": "Was ist der Vorteil von In-Band gegenüber OOB, was der Nachteil?",
+   "options": [
+    "In-Band braucht kein eigenes Management-Netz, hängt aber an der Fabric – fällt sie aus, ist auch das Management weg",
+    "In-Band ist immer sicherer",
+    "OOB geht nur mit RADIUS",
+    "Kein Unterschied"
+   ],
+   "answer": 0,
+   "explain": "Deshalb betreiben viele beides: OOB als Rückfallweg."
   }
  ],
  "solution": "Access: `{\"polUni\": {\"attributes\": {}, \"children\": [{\"infraInfra\": {\"attributes\": {}, \"children\": [{\"fvnsVlanInstP\": {\"attributes\": {\"name\": \"VLAN-Pool-INB\", \"allocMode\": \"static\"}, \"children\": [{\"fvnsEncapBlk\": {\"attributes\": {\"from\": \"vlan-90\", \"to\": \"vlan-90\"}}}]}}, {\"infraAttEntityP\": {\"attributes\": {\"name\": \"AAEP-APIC\"}, \"children\": [{\"infraRsDomP\": {\"attributes\": {\"tDn\": \"uni/phys-PhysDom-INB\"}}}]}}, {\"infraFuncP\": {\"attributes\": {}, \"children\": [{\"infraAccPortGrp\": {\"attributes\": {\"name\": \"IPG-APIC\"}, \"children\": [{\"infraRsAttEntP\": {\"attributes\": {\"tDn\": \"uni/infra/attentp-AAEP-APIC\"}}}]}}]}}, {\"infraAccPortP\": {\"attributes\": {\"name\": \"IntProf-Leaf101-102\"}, \"children\": [{\"infraHPortS\": {\"attributes\": {\"name\": \"APIC-Ports\", \"type\": \"range\"}, \"children\": [{\"infraPortBlk\": {\"attributes\": {\"name\": \"block2\", \"fromPort\": \"48\", \"toPort\": \"48\"}}}, {\"infraRsAccBaseGrp\": {\"attributes\": {\"tDn\": \"uni/infra/funcprof/accportgrp-IPG-APIC\"}}}]}}]}}]}}, {\"physDomP\": {\"attributes\": {\"name\": \"PhysDom-INB\"}, \"children\": [{\"infraRsVlanNs\": {\"attributes\": {\"tDn\": \"uni/infra/vlanns-[VLAN-Pool-INB]-static\"}}}]}}]}}`\\n\\nIn-Band: `{\"fvTenant\": {\"attributes\": {\"name\": \"mgmt\"}, \"children\": [{\"fvBD\": {\"attributes\": {\"name\": \"inb\"}, \"children\": [{\"fvSubnet\": {\"attributes\": {\"ip\": \"10.90.0.1/24\"}}}]}}, {\"mgmtMgmtP\": {\"attributes\": {\"name\": \"default\"}, \"children\": [{\"mgmtInB\": {\"attributes\": {\"name\": \"default\", \"encap\": \"vlan-90\"}, \"children\": [{\"mgmtRsMgmtBD\": {\"attributes\": {\"tnFvBDName\": \"inb\"}}}, {\"mgmtRsInBStNode\": {\"attributes\": {\"tDn\": \"topology/pod-1/node-1\", \"addr\": \"10.90.0.10/24\", \"gw\": \"10.90.0.1\"}}}, {\"mgmtRsInBStNode\": {\"attributes\": {\"tDn\": \"topology/pod-1/node-101\", \"addr\": \"10.90.0.101/24\", \"gw\": \"10.90.0.1\"}}}, {\"mgmtRsInBStNode\": {\"attributes\": {\"tDn\": \"topology/pod-1/node-102\", \"addr\": \"10.90.0.102/24\", \"gw\": \"10.90.0.1\"}}}]}}]}}]}}`\\n\\nRADIUS-Provider mit `aaaRsSecProvToEpg tDn=uni/tn-mgmt/mgmtp-default/inb-default`.",

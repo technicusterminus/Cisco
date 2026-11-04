@@ -1351,31 +1351,47 @@ SOL19 = mo('fvTenant', {'name': 'Shop'},
                  mo('ipRouteP', {'ip': '0.0.0.0/0'}, mo('ipRsRouteTrack', {'tDn': 'uni/tn-Shop/tracklist-inet-track'}))))))
 RT19 = 'uni/tn-Shop/out-Internet/lnodep-border/rsnodeL3OutAtt-[topology/pod-1/node-104]/rt-[0.0.0.0/0]'
 lab(id='19-eigrp-static-track', title='19 EIGRP und Static Route mit IP SLA Track', topic='L3Out / Routing', level='Fortgeschritten',
-    duration='40 min', fabric='discovered',
-    goals=['Ein L3Out mit EIGRP aufbauen', 'Eine Static Route über IP SLA und Track List an die Erreichbarkeit des Next Hops koppeln',
+    duration='40 min', fabric='discovered', kind='requirements', modes=['guided', 'exam'],
+    prerequisites=['Lab 06'], tools=['Tenant > Networking > L3Outs', 'Tenant > Policies > Protocol > IP SLA', 'Simulation > Externe Router',
+                                    'CLI: show ip eigrp neighbors vrf, show track, show ip route vrf'],
+    goals=['Ein L3Out mit EIGRP aufbauen', 'Eine Static Route an die Erreichbarkeit ihres Next Hops koppeln',
            'Mit show track und show ip route verifizieren'],
-    intro='Zwei externe Anbindungen im VRF Prod:\n- Die Filiale **branch1** spricht **EIGRP AS 100** über **leaf103 eth1/48** '
-          '(Routed, 172.16.0.1/30 ↔ 172.16.0.2/30, MTU 1500) und hat das Netz **10.50.0.0/16**.\n'
+    intro='Zwei externe Anbindungen im VRF Prod:\n- Die Filiale **branch1** spricht **EIGRP AS 100** (Hello 5 s, Hold 15 s) über '
+          '**leaf103 eth1/48** (Routed, 172.16.0.1/30 ↔ 172.16.0.2/30, MTU 1500) und hat das Netz **10.50.0.0/16**.\n'
           '- Der Internet-Router **inet1** an **leaf104 eth1/47** ist per **Static Route** angebunden (L3Out **Internet**, Default Route '
-          'über 172.16.1.2 ist schon konfiguriert).\n\nFällt inet1 aus, soll die Default Route verschwinden, damit die Fabric nicht in ein '
-          'schwarzes Loch routet. Access Policies und Contracts sind vorbereitet.',
-    config=[SERVER_ACCESS] + ACC19 + [BGP_TREE, shop_tenant(), TEN19], hosts=[WEB1, APP1], routers=[BRANCH19, INET19],
-    tasks=[
-        task('EIGRP Interface Policy', 'Im Tenant Shop: EIGRP Interface Policy **EIGRP-Branch** (Hello 5, Hold 15).'),
-        task('L3Out Branch', 'L3Out **Branch**, VRF Prod, Domain **L3Dom-WAN**, Protokoll **EIGRP** mit AS **100**. Node 103 (1.1.1.103), '
-             'Routed Interface eth1/48 mit 172.16.0.1/30 und MTU 1500, EIGRP Interface Profile mit EIGRP-Branch. External EPG **BranchNet** '
-             '10.50.0.0/16, Contract **web-to-branch** provided.', 'BD-Web ist schon mit dem L3Out Branch verknüpft.'),
-        task('IP SLA und Track', 'Unter **Policies > Protocol > IP SLA**: Monitoring Policy **icmp-5s** (ICMP, 5 s), Track Member **inet1-gw** '
-             '(Ziel 172.16.1.2, Scope L3Out Internet, Policy icmp-5s), Track List **inet-track** mit diesem Member.'),
-        task('Track an die Route', 'An der Static Route 0.0.0.0/0 (L3Out Internet, Node 104) die **Track Policy** inet-track eintragen.'),
-        task('Verifizieren und Ausfall testen', 'leaf103: `show ip eigrp neighbors vrf Shop:Prod`. leaf104: `show track`, `show ip route vrf Shop:Prod`. '
-             'Dann unter Simulation > Externe Router inet1 auf **ausgeschaltet** stellen: Track geht DOWN, die Default Route verschwindet.'),
-    ],
+          'über 172.16.1.2 ist schon konfiguriert).\n\nAccess Policies und die Contracts web-to-branch und web-to-internet (jeweils Ping) '
+          'sind vorbereitet; BD-Web ist schon mit dem L3Out Branch verknüpft.',
+    requirements=['Ein L3Out **Branch** bringt EIGRP zu branch1 hoch; web1 erreicht die Filiale per Ping, sonst nichts.',
+                  'Fällt inet1 aus, verschwindet die Default Route, damit die Fabric nicht in ein schwarzes Loch routet. Läuft inet1, ist sie da.',
+                  'web1 erreicht das Internet weiterhin per Ping.',
+                  'Die Filiale sieht das App-Netz nicht, und app1 erreicht die Filiale nicht.'],
+    limits=['EIGRP vereinfacht: AS, Hello/Hold, MTU; keine Metrik-Berechnung. IP SLA: ICMP-Probe als erreichbar/nicht erreichbar.'],
+    hints=['**Konzept:** Eine Static Route weiß nicht, ob ihr Next Hop lebt. Mit IP SLA prüft der Leaf das Ziel regelmäßig; eine Track List '
+           'fasst Prüfungen zusammen; hängt sie an der Route, verschwindet die Route, wenn das Ziel nicht antwortet.',
+           '**Objekte:** EIGRP Interface Policy (Timer), L3Out mit EIGRP-AS, Node, Routed Interface, External EPG mit Contract. '
+           'IP SLA Monitoring Policy, Track Member (Ziel, Scope), Track List und an der Static Route die Track Policy.',
+           '**Prüfschritte:** leaf103 `show ip eigrp neighbors vrf Shop:Prod`: keine Nachbarschaft? AS, Timer und MTU vergleichen. '
+           'leaf104 `show track`, `show ip route vrf Shop:Prod`. Unter *Simulation > Externe Router* inet1 ausschalten und erneut schauen.',
+           '**Lösung:** EIGRP Interface Policy (Hello 5, Hold 15). L3Out Branch (Prod, L3Dom-WAN, EIGRP AS 100), Node 103, eth1/48 '
+           '172.16.0.1/30 MTU 1500, External EPG 10.50.0.0/16 mit web-to-branch (bereitstellen). IP SLA icmp alle 5 s, Track Member auf '
+           '172.16.1.2 (Scope L3Out Internet), Track List, an der Route 0.0.0.0/0 die Track Policy.'],
+    cause='Es gibt kein L3Out zur Filiale; die Default Route bleibt auch bei einem Ausfall von inet1 stehen.',
+    config=[SERVER_ACCESS] + ACC19 + [BGP_TREE, shop_tenant(), TEN19], hosts=[WEB1, APP1], routers=[BRANCH19, INET19], tasks=[],
     checks=[check('EIGRP-Nachbarschaft zu branch1', 'router', name='branch1', adj='UP'),
             check('web1 → 10.50.1.10 Ping', 'traffic', src='web1', dst='10.50.1.10', proto='icmp', expect=True),
-            check('Static Route mit Track Policy', 'exists', dn=RT19 + '/rsRouteTrack'),
+            check('Default Route hängt an einer Erreichbarkeitsprüfung des Next Hops', 'class', cls='ipRsRouteTrack', under='uni/tn-Shop/out-Internet/'),
             check('Default Route auf leaf104 aktiv', 'route', node=104, vrf='Shop:Prod', prefix='0.0.0.0/0', proto='static'),
-            check('web1 → 8.8.8.8 Ping', 'traffic', src='web1', dst='8.8.8.8', proto='icmp', expect=True)],
+            check('web1 → 8.8.8.8 Ping', 'traffic', src='web1', dst='8.8.8.8', proto='icmp', expect=True),
+            check('Least Privilege Web → Filiale: nur Ping', 'exposure', src='web1', dst='10.50.1.10', allow=['icmp'], category='security'),
+            check('branch1 lernt 10.10.20.0/24 nicht', 'learned', router='branch1', prefix='10.10.20.0/24', expect=False, category='security'),
+            check('app1 → 10.50.1.10 blockiert', 'traffic', src='app1', dst='10.50.1.10', proto='icmp', expect=False, category='security')],
+    questions=[{'id': 'q1', 'q': 'Was passiert ohne Track, wenn inet1 ausfällt, der Link zum Leaf aber oben bleibt?',
+                'options': ['Die Default Route bleibt, der Verkehr läuft ins Leere (Blackhole)', 'Die Route verschwindet automatisch',
+                            'Die ACI nimmt den Weg über die Filiale', 'Nichts, Static Routes prüfen den Next Hop selbst'],
+                'answer': 0, 'explain': 'Eine Static Route ist aktiv, solange das Interface oben ist – genau das behebt IP SLA Tracking.'},
+               {'id': 'q2', 'q': 'Die EIGRP-Nachbarschaft kommt nicht hoch, die AS stimmt. Was prüfst du als Nächstes?',
+                'options': ['Hello/Hold-Timer und MTU', 'Den Contract', 'Die Track List', 'Die Router ID'],
+                'answer': 0, 'explain': 'Abweichende Timer oder MTU verhindern die Nachbarschaft; der Contract betrifft nur den Datenverkehr.'}],
     solution='`' + json.dumps(SOL19) + '`\\n\\nIP SLA (fvIPSLAMonitoringPol) → Track Member (Ziel-IP, Scope) → Track List (Schwellwert) → '
              '`ipRsRouteTrack` an der Static Route. Ohne Antwort vom Ziel nimmt die ACI die Route aus der Routing-Tabelle.')
 
@@ -1397,29 +1413,46 @@ SOL20 = mo('fvTenant', {'name': 'Shop'},
                        mo('l3extRsDynPathAtt', {'tDn': 'uni/phys-PhysDom-Server', 'floatingAddr': '172.16.10.100/24'})))),
               mo('l3extInstP', {'name': 'VNF-Net'}, mo('l3extSubnet', {'ip': '10.77.0.0/16'}), mo('fvRsProv', {'tnVzBrCPName': 'web-to-vnf'}))))
 lab(id='20-floating-svi', title='20 Floating SVI für einen virtuellen Router', topic='L3Out / Routing', level='Fortgeschritten',
-    duration='30 min', fabric='discovered',
+    duration='30 min', fabric='discovered', kind='requirements', modes=['guided', 'exam'],
+    prerequisites=['Lab 17'], tools=['Tenant > Networking > L3Outs', 'Simulation > Externe Router', 'CLI: show ip ospf neighbors vrf'],
     goals=['Verstehen, wofür Floating SVI gedacht ist (virtuelle Router/Firewalls, die zwischen Leafs wandern)',
            'Anchor Node, Primary IP und Floating IP richtig vergeben'],
     intro='Der virtuelle Router **vrtr1** (eine VM) läuft gerade auf einem Host an **leaf101 eth1/9** und kann jederzeit auf einen anderen '
           'Server wandern. Er spricht **OSPF Area 0.0.0.2** in **vlan-150** (172.16.10.30/24, MTU 1500) und hat das Netz **10.77.0.0/16**.\n\n'
-          'Statt auf jedem möglichen Leaf ein SVI zu bauen, nutzt du eine **Floating SVI**: Anchor Node ist **leaf103** (172.16.10.11/24, '
-          'hier läuft das Routing), auf allen anderen Leafs mit der Domain **PhysDom-Server** nimmt die ACI die Floating IP **172.16.10.100/24**.',
-    config=[SERVER_ACCESS, ACC19[0], BGP_TREE, shop_tenant(), TEN20], hosts=[WEB1], routers=[VR20],
-    tasks=[
-        task('L3Out VNF', 'L3Out **VNF**, VRF Prod, Domain L3Dom-WAN, OSPF Area **0.0.0.2**. Node Profile mit Node 103 (1.1.1.103), Logical '
-             'Interface Profile mit OSPF Interface Profile.'),
-        task('Floating SVI', 'Im Interface Profile **Create Floating SVI**: Anchor Node 103, vlan-150, 172.16.10.11/24, MTU 1500. Path '
-             'Attribute: Domain **PhysDom-Server** mit Floating IP **172.16.10.100/24**.',
-             'Ohne Floating IP erreicht ein Router an einem Nicht-Anchor-Leaf die ACI nicht.'),
-        task('External EPG', 'External EPG **VNF-Net** 10.77.0.0/16, Contract **web-to-vnf** provided.'),
-        task('Verifizieren', 'leaf103: `show ip ospf neighbors vrf Shop:Prod`. Ping von web1 zu 10.77.1.1. Wandert die VM (Router-Anschluss '
-             'auf einen anderen Leaf-Port mit derselben Domain), bleibt die Nachbarschaft bestehen.'),
-    ],
-    checks=[check('OSPF FULL zwischen vrtr1 und dem Anchor leaf103', 'router', name='vrtr1', adj='FULL', nodes=[103]),
+          'Adressplan: leaf103 ist der Leaf, auf dem das Routing läuft (172.16.10.11/24). Auf jedem anderen Leaf mit der Domain '
+          '**PhysDom-Server** soll die ACI unter **172.16.10.100/24** erreichbar sein. Der Contract web-to-vnf (Ping) ist vorbereitet.',
+    requirements=['Ein L3Out **VNF** baut OSPF zu vrtr1 auf, gleich an welchem Leaf mit PhysDom-Server die VM gerade läuft.',
+                  'Es wird nicht auf jedem Leaf ein eigenes Interface gebaut.',
+                  'web1 erreicht 10.77.0.0/16 per Ping, sonst nichts.',
+                  'vrtr1 lernt nur das Web-Netz, nicht das App-Netz.'],
+    limits=['Die Wanderung der VM wird über den Anschluss des simulierten Routers abgebildet; vMotion selbst wird nicht simuliert.'],
+    hints=['**Konzept:** Für Router, die wandern, gibt es ein Interface, das an einem Leaf verankert ist und auf den anderen Leafs '
+           'automatisch mit einer gemeinsamen Adresse auftaucht – sobald dort ein Port der passenden Domain das VLAN braucht.',
+           '**Objekte:** L3Out mit OSPF-Area, Node Profile mit dem Anker-Leaf, Logical Interface Profile mit OSPF Interface Profile, '
+           'darin das Floating-Interface mit Anchor, Encap, Adresse und einem Path Attribute (Domain, zweite Adresse). External EPG mit Contract.',
+           '**Prüfschritte:** leaf103 `show ip ospf neighbors vrf Shop:Prod`. Hängt vrtr1 an leaf101, braucht leaf101 eine Adresse im '
+           'Transfernetz – woher kommt sie? *Simulation > Externe Router*: Was lernt vrtr1?',
+           '**Lösung:** L3Out VNF (Prod, L3Dom-WAN, OSPF Area 0.0.0.2), Node 103 (Router ID), Floating SVI: Anchor 103, vlan-150, '
+           '172.16.10.11/24, MTU 1500, Path Attribute PhysDom-Server mit Floating IP 172.16.10.100/24. External EPG 10.77.0.0/16 mit '
+           'web-to-vnf (bereitstellen). BD-Web ist schon public und mit VNF verknüpft.'],
+    cause='Es gibt kein L3Out zum virtuellen Router.',
+    config=[SERVER_ACCESS, ACC19[0], BGP_TREE, shop_tenant(), TEN20], hosts=[WEB1, APP1], routers=[VR20], tasks=[],
+    checks=[check('OSPF FULL zwischen vrtr1 und leaf103', 'router', name='vrtr1', adj='FULL', nodes=[103]),
+            check('Andere Leafs antworten unter 172.16.10.100/24', 'class', cls='l3extRsDynPathAtt', under='uni/tn-Shop/out-VNF/',
+                  attrs={'floatingAddr': '172.16.10.100/24'}),
             check('vrtr1 lernt 10.10.10.0/24', 'learned', router='vrtr1', prefix='10.10.10.0/24'),
-            check('web1 → 10.77.1.1 Ping', 'traffic', src='web1', dst='10.77.1.1', proto='icmp', expect=True)],
+            check('web1 → 10.77.1.1 Ping', 'traffic', src='web1', dst='10.77.1.1', proto='icmp', expect=True),
+            check('Least Privilege Web → VNF-Netz: nur Ping', 'exposure', src='web1', dst='10.77.1.1', allow=['icmp'], category='security'),
+            check('vrtr1 lernt 10.10.20.0/24 nicht', 'learned', router='vrtr1', prefix='10.10.20.0/24', expect=False, category='security'),
+            check('app1 → 10.77.1.1 blockiert', 'traffic', src='app1', dst='10.77.1.1', proto='icmp', expect=False, category='security')],
+    questions=[{'id': 'q1', 'q': 'Warum braucht man neben der Anchor-Adresse eine Floating IP?',
+                'options': ['Damit der Router an einem Nicht-Anchor-Leaf eine Adresse der ACI im Transfernetz erreicht',
+                            'Für BFD', 'Als Router ID', 'Für den Contract'],
+                'answer': 0, 'explain': 'Die Floating IP wird nur auf den Leafs aktiv, an denen der Router gerade hängt.'},
+               {'id': 'q2', 'q': 'Wo läuft bei Floating SVI das Routing-Protokoll?',
+                'options': ['Auf dem Anchor Node', 'Auf jedem Leaf mit der Domain', 'Auf den Spines', 'Auf dem APIC'],
+                'answer': 0, 'explain': 'Die anderen Leafs leiten nur weiter; die Nachbarschaft hat der Router zum Anchor.'}],
     solution='`' + json.dumps(SOL20) + '`')
-
 
 # ----------------------------------------------------------------------------
 # Lab 21 - AAA mit TACACS+, Login-Domain und RBAC
@@ -1511,32 +1544,49 @@ INB22 = mo('fvTenant', {'name': 'mgmt'},
               *[mo('mgmtRsInBStNode', {'tDn': 'topology/pod-1/node-%d' % n, 'addr': '10.90.0.%d/24' % (10 if n == 1 else n), 'gw': '10.90.0.1'})
                 for n in (1, 101, 102)])))
 lab(id='22-inband-management', title='22 In-Band-Management', topic='Fabric-Betrieb', level='Fortgeschritten', duration='35 min',
-    fabric='discovered',
-    goals=['In-Band-Management mit eigenem VLAN, BD inb und In-Band EPG einrichten', 'Verstehen, warum die APIC-Ports eine Access Policy brauchen',
+    fabric='discovered', kind='requirements', modes=['guided', 'exam'],
+    prerequisites=['Labs 10 und 21'], tools=['Tenants > mgmt', 'Fabric > Access Policies', 'Admin > AAA', 'CLI: show controller, show vlan extended'],
+    goals=['In-Band-Management mit eigenem VLAN, BD und In-Band EPG einrichten', 'Verstehen, warum die APIC-Ports eine Access Policy brauchen',
            'Einen AAA-Server über In-Band ansprechen'],
     intro='Das Management soll zusätzlich **In-Band** über die Fabric laufen: Netz **10.90.0.0/24**, Gateway **10.90.0.1** (BD **inb** im '
-          'Tenant mgmt), **vlan-90**. Adressen: apic1 **10.90.0.10**, leaf101 **10.90.0.101**, leaf102 **10.90.0.102**.\n\n'
-          'Anschließend soll der RADIUS-Server **192.168.20.41** (Key **Rad#2026**) über das In-Band EPG erreicht werden. Benutzer dort: '
-          '**opsuser** / Ops#2026 mit AV-Pair `shell:domains=all/read-all/`.',
+          'Tenant mgmt), **vlan-90**. Adressen: apic1 **10.90.0.10**, leaf101 **10.90.0.101**, leaf102 **10.90.0.102**. Der APIC hängt an '
+          '**leaf101 eth1/48** und **leaf102 eth1/48**.\n\n'
+          'Anschließend soll der RADIUS-Server **192.168.20.41** (Key **Rad#2026**) über das In-Band-Netz erreicht werden, Anmelde-Domain '
+          '**RAD**. Benutzer dort: **opsuser** / Ops#2026 mit AV-Pair `shell:domains=all/read-all/`.',
+    requirements=['apic1, leaf101 und leaf102 sind In-Band mit den Adressen aus dem Plan erreichbar; es gibt keine Konfigurationsfehler im Tenant mgmt.',
+                  'vlan-90 darf nur auf die Ports zum APIC (eth1/48), nicht auf die Server-Ports.',
+                  'opsuser meldet sich über RADIUS an, erreicht über In-Band, und darf nur lesen.'],
+    limits=['In-Band wird über die Zuordnung von Knoten, Adressen, VLAN und APIC-Ports simuliert; In-Band-Contracts und -Routing nach außen fehlen.'],
+    hints=['**Konzept:** Das In-Band-VLAN läuft über die Fabric bis zu den APIC-Ports. Diese Ports brauchen deshalb – wie Server-Ports – eine '
+           'Access-Kette mit Domain und VLAN Pool. Der In-Band EPG verbindet VLAN, BD und Knotenadressen.',
+           '**Objekte:** VLAN Pool, Physical Domain, AAEP, Policy Group und ein eigener Port-Selector für eth1/48. Im Tenant mgmt: Subnetz am BD '
+           'inb, In-Band Management EPG mit Adressen. RADIUS Provider mit Management EPG In-Band, Provider Group, Login Domain.',
+           '**Prüfschritte:** Operational-Tab des In-Band EPG und Faults im Tenant mgmt (S0211). `show controller`, auf leaf101 '
+           '`show vlan extended`: Auf welchen Ports liegt vlan-90? Login-Protokoll für opsuser.',
+           '**Lösung:** VLAN-Pool-INB (vlan-90), PhysDom-INB, AAEP-APIC, IPG-APIC und Selector APIC-Ports nur für 1/48. BD inb 10.90.0.1/24, '
+           'In-Band EPG default (vlan-90, BD inb, Adressen für Node 1, 101, 102). RADIUS Provider 192.168.20.41 mit Key und In-Band (default), '
+           'Provider Group RAD, Login Domain RAD.'],
+    cause='Es gibt keine In-Band-Konfiguration; die APIC-Ports haben keine Access Policy für vlan-90.',
     config=[SERVER_ACCESS], hosts=[WEB1],
     aaa=[{'name': 'radius1', 'ip': '192.168.20.41', 'type': 'radius', 'key': 'Rad#2026', 'down': False,
-          'users': [{'name': 'opsuser', 'pwd': 'Ops#2026', 'avpair': 'shell:domains=all/read-all/'}]}],
-    tasks=[
-        task('Access Policies für die APIC-Ports', 'Der APIC hängt an **leaf101/102 eth1/48**. VLAN Pool **VLAN-Pool-INB** (static, vlan-90), '
-             'Physical Domain **PhysDom-INB**, AAEP **AAEP-APIC**, Policy Group **IPG-APIC** und im Interface Profile IntProf-Leaf101-102 '
-             'einen Selector **APIC-Ports** für Port 1/48.',
-             'Ohne diese Kette darf vlan-90 nicht auf den Port zum APIC – Fault S0211 am In-Band EPG.'),
-        task('BD inb', 'Im Tenant **mgmt** am BD **inb** das Subnetz **10.90.0.1/24** anlegen.'),
-        task('In-Band EPG', '**Tenants > mgmt > Node Management EPGs**: Rechtsklick **Create In-Band Management EPG**: **default**, '
-             'vlan-90, BD inb, Adressen für Node 1 (APIC), 101 und 102.'),
-        task('RADIUS über In-Band', 'RADIUS Provider 192.168.20.41 mit Key Rad#2026 und Management EPG **In-Band (default)**, Provider Group '
-             '**RAD**, Login Domain **RAD** (Realm RADIUS).'),
-        task('Verifizieren', 'Operational-Tab des In-Band EPG, `show controller`, auf leaf101 `show vlan extended`. Login als `opsuser` '
-             'mit Domain RAD.'),
-    ],
+          'users': [{'name': 'opsuser', 'pwd': 'Ops#2026', 'avpair': 'shell:domains=all/read-all/'}]}], tasks=[],
     checks=[check('In-Band aktiv auf apic1, leaf101 und leaf102', 'inb', nodes=[1, 101, 102]),
-            check('Kein S0211-Fault mehr', 'nofaults', under='uni/tn-mgmt', code='S0211'),
-            check('opsuser meldet sich über RADIUS (In-Band) an', 'login', user='apic#RAD\\opsuser', pwd='Ops#2026', role='read-all')],
+            check('Keine In-Band-Faults im Tenant mgmt', 'nofaults', under='uni/tn-mgmt', code='S0211'),
+            check('opsuser meldet sich über RADIUS an', 'login', user='apic#RAD\\opsuser', pwd='Ops#2026', role='read-all'),
+            check('RADIUS wird über In-Band erreicht', 'class', cls='aaaRsSecProvToEpg', under='uni/userext/radiusext/',
+                  attrs={'tDn': 'uni/tn-mgmt/mgmtp-default/inb-default'}),
+            check('opsuser darf nichts ändern', 'rbac', user='apic#RAD\\opsuser', pwd='Ops#2026', dn='uni/tn-common/BD-default', expect=False,
+                  category='security'),
+            check('vlan-90 kommt nicht auf die Server-Ports', 'class', cls='infraRsDomP', under='uni/infra/attentp-AAEP-Server/',
+                  attrs={'tDn': 'uni/phys-PhysDom-INB'}, expect=False, category='security')],
+    questions=[{'id': 'q1', 'q': 'Warum braucht der Port zum APIC eine Access Policy, obwohl der APIC kein Server ist?',
+                'options': ['Das In-Band-VLAN wird wie jedes andere VLAN auf einem Access-Port gegen Domain und Pool geprüft',
+                            'Braucht er nicht', 'Wegen LLDP', 'Wegen der Discovery'],
+                'answer': 0, 'explain': 'Ohne die Kette darf vlan-90 nicht auf eth1/48 – Fault S0211 am In-Band EPG.'},
+               {'id': 'q2', 'q': 'Was ist der Vorteil von In-Band gegenüber OOB, was der Nachteil?',
+                'options': ['In-Band braucht kein eigenes Management-Netz, hängt aber an der Fabric – fällt sie aus, ist auch das Management weg',
+                            'In-Band ist immer sicherer', 'OOB geht nur mit RADIUS', 'Kein Unterschied'],
+                'answer': 0, 'explain': 'Deshalb betreiben viele beides: OOB als Rückfallweg.'}],
     solution='Access: `' + json.dumps(INBACC22) + '`\\n\\nIn-Band: `' + json.dumps(INB22) + '`\\n\\nRADIUS-Provider mit `aaaRsSecProvToEpg '
              'tDn=uni/tn-mgmt/mgmtp-default/inb-default`.')
 

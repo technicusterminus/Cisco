@@ -432,6 +432,9 @@ class TestRequirementLabs(unittest.TestCase):
         '16-service-graph-pbr': ['vlan-400', 'Encap Block', 'Redirect', 'vnsLDevVip', 'Device Selection', 'PBR'],
         '17-l3out-vpc-svi-bfd': ['OSPF-BFD', 'Interface Control', 'Side A', 'Secondary IP', 'ext-svi'],
         '18-ebgp-loopback-md5-summary': ['Multihop', 'TTL', 'Static Route', 'Node Profile', 'Summarization Policy', 'bgpRtSummPol'],
+        '19-eigrp-static-track': ['IP SLA', 'Track List', 'ipRsRouteTrack', 'EIGRP-Branch', 'icmp-5s'],
+        '20-floating-svi': ['Floating SVI', 'Floating IP', 'Anchor', 'l3extVirtualLIfP', 'Path Attribute'],
+        '22-inband-management': ['S0211', 'VLAN Pool', 'AAEP', 'In-Band EPG', 'Provider Group', 'IPG-APIC'],
         '21-aaa-tacacs-rbac': ['Provider Group', 'aaaLoginDomain', 'aaaDomainRef', 'readPriv', 'ISE-TACACS', 'Security Domain'],
         '23-esg-useg': ['fvIpAttr', 'IP-Attribut', 'isAttrBasedEPg', 'EPG Selector', 'frontend-to-backend', 'Consumer', 'Provider'],
         '32-https-least-privilege': ['Consumer', 'Provider', 'web-to-app-https', 'Reverse'],
@@ -1008,6 +1011,30 @@ class TestConvertedLabs(unittest.TestCase):
         self.apply(('uni/tn-Shop/out-Partner/instP-PartnerNet/extsubnet-[10.10.0.0/16]/rsSubnetToRtSumm', mo('l3extRsSubnetToRtSumm', {'status': 'deleted'})))
         by = self.by()
         self.assertFalse(by['partner1 lernt 10.10.10.0/24 nicht einzeln'] and by['partner1 lernt 10.10.20.0/24 nicht einzeln'])
+
+
+    def test_lab19_track_removes_default_route_on_failure(self):
+        lab = self.S.load_lab('19-eigrp-static-track')
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+        next(r for r in self.S.sim['routers'] if r['name'] == 'inet1')['down'] = True
+        self.S.changed()
+        self.assertFalse(self.by()['Default Route auf leaf104 aktiv'], 'Mit Track verschwindet die Route bei Ausfall')
+
+    def test_lab20_floating_svi_without_floating_ip_fails(self):
+        lab = self.S.load_lab('20-floating-svi')
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+        dn = next(d for d in self.S.store.by_class('l3extRsDynPathAtt'))
+        self.apply((dn, mo('l3extRsDynPathAtt', {'floatingAddr': '0.0.0.0'})))
+        self.assertFalse(self.by()['Andere Leafs antworten unter 172.16.10.100/24'])
+
+    def test_lab22_inb_domain_on_server_aaep_fails_security(self):
+        lab = self.S.load_lab('22-inband-management')
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+        self.apply(('uni/infra/attentp-AAEP-Server', mo('infraAttEntityP', {}, mo('infraRsDomP', {'tDn': 'uni/phys-PhysDom-INB'}))))
+        self.assertFalse(self.by()['vlan-90 kommt nicht auf die Server-Ports'])
 
 
 class TestOperationsLabs(unittest.TestCase):
