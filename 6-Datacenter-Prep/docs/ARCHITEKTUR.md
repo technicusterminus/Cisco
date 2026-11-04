@@ -28,8 +28,8 @@ Ein Prozess, ein Python-Paket (`dcprep/`), eine statische Weboberfläche (`stati
 |---|---|---|
 | A Domänenmodell | `model.py` (`mo(...)`-Tabelle) | Klassen mit RN-Format, Eltern, Defaults, Enums, Relationen (`tDn`/`tn…Name`) |
 | B Änderungen und Validierung | `model.post`, `Store` | atomar: Fehler im Baum → nichts wird übernommen. Fehlercodes 102/103/121/122/801 im APIC-Format |
-| C Operational State | `engine.py` (`Engine.rebuild`) | wird nach jeder Änderung vollständig neu berechnet. Konfiguriert ≠ funktionsfähig: Endpoints, Deployments, Nachbarschaften und Faults entstehen hier aus Konfiguration + simulierter Welt |
-| D Connectivity/Policy | `trace.py`, `Engine.packet` | ein Test = Folge von Prüfschritten. Ergebnis `verdict` ALLOW/DROP/UNRESOLVED, `reason`, `location`, `policy`, `path`, `hint` |
+| C Operational State | `engine.py` (`Engine.rebuild`), Mixins `engine_access.py`, `engine_endpoints.py`, `engine_routing.py`, `engine_policy.py`, Helfer `engine_util.py` | wird nach jeder Änderung vollständig neu berechnet. Konfiguriert ≠ funktionsfähig: Endpoints, Deployments, Nachbarschaften und Faults entstehen hier aus Konfiguration + simulierter Welt |
+| D Connectivity/Policy | `trace.py`, `Engine.packet` (`engine_policy.py`) | ein Test = Folge von Prüfschritten. Ergebnis `verdict` ALLOW/DROP/UNRESOLVED, `reason`, `location`, `policy`, `path`, `hint` |
 | E Lab- und Assessment-Engine | `Sim.check_lab`, `Sim.exposure_check`, `labs/*.json` | deklarative Checks, Kategorien `function`/`security`, Fragen, Hinweise, Modi |
 | F Persistenz, Szenarien | `Sim.save`, `save_blob`/`load_blob`, `users.py` | `data/users/<name>/state.json`, `saves/`, `snapshots/`, `progress.json`. Spielstand mit `kind` und `version` |
 | G UI | `static/js/*.js` | Darstellung, Formulare (`specs.js`), Traffic Inspector (`traceCard` in `views.js`), Lab-Karte |

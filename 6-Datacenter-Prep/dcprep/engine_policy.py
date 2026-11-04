@@ -1,0 +1,410 @@
+"""Relationen, Klassen (pcTags), Contracts und Zoning Rules, Service Graphs und die Policy-Entscheidung je Paket."""
+
+from .model import CLASSES, parent_dn, tenant_of
+
+from .engine_util import (vlan_num, port_val)
+
+
+class PolicyMixin:
+    # ------------------------------------------------------------------
+    # Relationen auflösen
+    # ------------------------------------------------------------------
+    def _resolve(self):
+        st = self.store
+        for dn, (cls, a, oper) in list(st.objs.items()):
+            meta = CLASSES[cls]
+            if not meta.rel or oper:
+                continue
+            rel = meta.rel
+            if rel[0] == 'name':
+                attr, tcls, scope = rel[1], rel[2], rel[3]
+                name = a.get(attr) or 'default'
+                rn = CLASSES[tcls].rn.format(name=name)
+                if scope == 'tenant':
+                    tn = tenant_of(dn)
+                    cands = [tn + '/' + rn, 'uni/tn-common/' + rn] if tn else []
+                elif scope == 'fabric':
+                    cands = ['uni/fabric/' + rn]
+                else:
+                    cands = ['uni/infra/' + rn]
+                tgt = next((c for c in cands if c in st.objs and st.objs[c][0] == tcls), '')
+                a['tDn'] = tgt
+                a['tCl'] = tcls
+                a['state'] = 'formed' if tgt else 'missing-target'
+                a['stateQual'] = ('default-target' if not a.get(attr) else 'none') if tgt else 'target-not-found'
+                if not tgt and cls not in ('fvRsBd', 'fvRsCtx', 'l3extRsEctx'):
+                    self.fault(dn, 'S1123', 'warning',
+                               'Failed to form relation to MO %s of class %s' % (cands[0] if cands else name, tcls),
+                               'resolution-failed')
+            else:
+                t = a.get('tDn', '')
+                o = st.objs.get(t)
+                ok = o is not None and o[0] in rel[2]
+                a['tCl'] = o[0] if o else rel[2][0]
+                a['state'] = 'formed' if ok else 'missing-target'
+                a['stateQual'] = 'none' if ok else 'target-not-found'
+                if not ok and t and cls not in ('fvRsPathAtt', 'l3extRsPathL3OutAtt'):
+                    self.fault(dn, 'S1123', 'warning',
+                               'Failed to form relation to MO %s of class %s' % (t or '(leer)', rel[2][0]),
+                               'resolution-failed', domain='tenant' if tenant_of(dn) else 'access')
+
+    # ------------------------------------------------------------------
+    # EPGs, External EPGs und Contracts als "Klassen" (pcTags)
+    # ------------------------------------------------------------------
+    def _rs_targets(self, dn, cls):
+        return [self.A(r)['tDn'] for r in self.kids(dn, cls) if self.A(r)['state'] == 'formed']
+
+    def _classes(self):
+        self.cls = {}
+        for dn in self.store.by_class('fvAEPg'):
+            a = self.A(dn)
+            bd = self.A(dn + '/rsbd')['tDn'] if self.has(dn + '/rsbd') else ''
+            vrf = self.A(bd + '/rsctx')['tDn'] if bd and self.has(bd + '/rsctx') else ''
+            a['scope'] = self.A(vrf)['scope'] if vrf else ''
+            self.cls[dn] = {'dn': dn, 'kind': 'epg', 'name': a['name'], 'tenant': tenant_of(dn),
+                            'ap': parent_dn(dn), 'bd': bd, 'vrf': vrf, 'pcTag': a['pcTag'],
+                            'prov': self._rs_targets(dn, 'fvRsProv'),
+                            'cons': self._rs_targets(dn, 'fvRsCons'),
+                            'pref': a['prefGrMemb'] == 'include',
+                            'isolation': a['pcEnfPref'] == 'enforced',
+                            'intra': self._rs_targets(dn, 'fvRsIntraEpg')}
+        for dn in self.store.by_class('fvESg'):
+            a = self.A(dn)
+            vrs = self.A(dn + '/rsscope') or {}
+            vrf = vrs.get('tDn') if vrs.get('state') == 'formed' else ''
+            self.cls[dn] = {'dn': dn, 'kind': 'esg', 'name': a['name'], 'tenant': tenant_of(dn), 'ap': parent_dn(dn), 'bd': None,
+                            'vrf': vrf, 'pcTag': a['pcTag'], 'prov': self._rs_targets(dn, 'fvRsProv'),
+                            'cons': self._rs_targets(dn, 'fvRsCons'), 'pref': a['prefGrMemb'] == 'include',
+                            'isolation': a['pcEnfPref'] == 'enforced'}
+        for dn in self.store.by_class('l3extInstP'):
+            a = self.A(dn)
+            out = parent_dn(dn)
+            vrf = self.A(out + '/rsectx')['tDn'] if self.has(out + '/rsectx') else ''
+            a['scope'] = self.A(vrf)['scope'] if vrf else ''
+            self.cls[dn] = {'dn': dn, 'kind': 'ext', 'name': a['name'], 'tenant': tenant_of(dn),
+                            'ap': None, 'bd': None, 'vrf': vrf, 'pcTag': a['pcTag'], 'out': out,
+                            'prov': self._rs_targets(dn, 'fvRsProv'),
+                            'cons': self._rs_targets(dn, 'fvRsCons'),
+                            'pref': a['prefGrMemb'] == 'include', 'isolation': False}
+        for dn in self.store.by_class('l2extInstP'):
+            a = self.A(dn)
+            out = parent_dn(dn)
+            rs = self.A(out + '/rseBd') or {}
+            bd = rs.get('tDn', '') if rs.get('state') == 'formed' else ''
+            vrf = self.A(bd + '/rsctx')['tDn'] if bd and self.has(bd + '/rsctx') else ''
+            a['scope'] = self.A(vrf)['scope'] if vrf else ''
+            self.cls[dn] = {'dn': dn, 'kind': 'l2ext', 'name': a['name'], 'tenant': tenant_of(dn),
+                            'ap': None, 'bd': bd, 'vrf': vrf, 'pcTag': a['pcTag'], 'out': out,
+                            'prov': self._rs_targets(dn, 'fvRsProv'),
+                            'cons': self._rs_targets(dn, 'fvRsCons'),
+                            'pref': a['prefGrMemb'] == 'include', 'isolation': False}
+        for dn, c in self.cls.items():
+            for cif in self._rs_targets(dn, 'fvRsConsIf'):
+                t = (self.A(cif + '/rsif') or {})
+                if t.get('state') == 'formed':
+                    c['cons'].append(t['tDn'])
+                    c.setdefault('imported', []).append((cif, t['tDn']))
+        for dn in self.store.by_class('fvBD'):
+            vrf = self.A(dn + '/rsctx')['tDn'] if self.has(dn + '/rsctx') else ''
+            self.A(dn)['scope'] = self.A(vrf)['scope'] if vrf else ''
+        self.contracts = {}
+        for dn, c in self.cls.items():
+            for k in ('prov', 'cons'):
+                for brc in c[k]:
+                    self.contracts.setdefault(brc, {'prov': set(), 'cons': set(), 'prov_any': set(),
+                                                    'cons_any': set()})[k].add(dn)
+        # Shared Services: Provider-EPG bekommt einen globalen pcTag (< 16384)
+        for brc, rel in self.contracts.items():
+            if (self.A(brc) or {}).get('scope') not in ('tenant', 'global'):
+                continue
+            for p in rel['prov']:
+                pc = self.cls.get(p)
+                if pc and pc['kind'] == 'epg' and pc['pcTag'].isdigit() and int(pc['pcTag']) >= 16384 and any(
+                        self.cls.get(c, {}).get('vrf') not in (None, '', pc['vrf']) for c in rel['cons']):
+                    pc['localTag'] = pc['pcTag']
+                    pc['pcTag'] = str(10000 + int(pc['pcTag']) % 6000)
+        for vrf in self.store.by_class('fvCtx'):
+            anyd = vrf + '/any'
+            if not self.has(anyd):
+                continue
+            for brc in self._rs_targets(anyd, 'vzRsAnyToProv'):
+                self.contracts.setdefault(brc, {'prov': set(), 'cons': set(), 'prov_any': set(),
+                                                'cons_any': set()})['prov_any'].add(vrf)
+            for brc in self._rs_targets(anyd, 'vzRsAnyToCons'):
+                self.contracts.setdefault(brc, {'prov': set(), 'cons': set(), 'prov_any': set(),
+                                                'cons_any': set()})['cons_any'].add(vrf)
+
+    # ------------------------------------------------------------------
+    # L4-L7: Service Graph mit Policy-Based Redirect
+    # ------------------------------------------------------------------
+    def _services(self):
+        self.graphs = {}
+        self.fw_hosts = []
+        for dev in self.sim.get('devices', []):
+            for i in dev.get('ifs', []):
+                self.fw_hosts.append({'name': '%s:%s' % (dev['name'], i['name']), 'mac': i['mac'], 'ip': i['ip'], 'gw': '',
+                                      'vlan': int(i.get('vlan') or 0), 'links': dev.get('links', []), 'bond': 'none',
+                                      'dev': dev['name'], 'devif': i['name']})
+        tag = 49153
+        for rs in sorted(self.store.by_class('vzRsSubjGraphAtt')):
+            ra = self.A(rs)
+            subj = parent_dn(rs)
+            brc = parent_dn(subj)
+            tn = tenant_of(brc)
+            if ra['state'] != 'formed':
+                continue
+            graph = ra['tDn']
+            rel = self.contracts.get(brc, {'prov': set(), 'cons': set()})
+            cons = sorted(rel['cons'])
+            prov = sorted(rel['prov'])
+            vrf = next((self.cls[x]['vrf'] for x in cons + prov if x in self.cls and self.cls[x]['vrf']), '')
+            gi = '%s/GraphInst_C-[%s]-G-[%s]-S-[%s]' % (tn, brc, graph, vrf)
+            info = {'dn': gi, 'subj': subj, 'brc': brc, 'graph': graph, 'state': 'failed', 'reasons': [], 'conns': {},
+                    'node': None, 'dev': None, 'redirect': False, 'vrf': vrf}
+            self.graphs[subj] = info
+            self.store.add(gi, 'vnsGraphInst', {'ctrctDn': brc, 'graphDn': graph, 'scopeDn': vrf, 'configSt': 'failed-to-apply'}, True)
+
+            def fail(why, code='S1690'):
+                info['reasons'].append(why)
+                self.fault(gi, code, 'major', 'Graph %s for contract %s could not be rendered: %s' % (
+                    self.A(graph)['name'], self.A(brc)['name'], why), 'graph-rendering-failure')
+            if not cons or not prov:
+                fail('Contract hat keinen Consumer oder keinen Provider')
+                continue
+            nodes = self.kids(graph, 'vnsAbsNode')
+            if not nodes:
+                fail('Service Graph Template enthaelt keinen Function Node')
+                continue
+            node = nodes[0]
+            na = self.A(node)
+            info['node'] = na['name']
+            info['redirect'] = na['routingMode'] == 'Redirect'
+            cname, gname = self.A(brc)['name'], self.A(graph)['name']
+            ctx = next((d for d in self.kids(tn, 'vnsLDevCtx')
+                        if self.A(d)['ctrctNameOrLbl'] in (cname, 'any') and self.A(d)['graphNameOrLbl'] in (gname, 'any')
+                        and self.A(d)['nodeNameOrLbl'] in (na['name'], 'any')), None)
+            if not ctx:
+                fail('Keine Device Selection Policy fuer Contract %s, Graph %s, Node %s (Apply L4-L7 Service Graph Template '
+                     'ausfuehren)' % (cname, gname, na['name']))
+                continue
+            ldev = (self.A(ctx + '/rsLDevCtxToLDev') or {})
+            if ldev.get('state') != 'formed':
+                fail('Device Selection Policy verweist auf kein gueltiges L4-L7 Device')
+                continue
+            ldev = ldev['tDn']
+            info['dev'] = ldev
+            domrs = self.A(ldev + '/rsALDevToPhysDomP') or {}
+            if domrs.get('state') != 'formed':
+                fail('L4-L7 Device %s hat keine gueltige Physical Domain' % self.A(ldev)['name'])
+                continue
+            dom = domrs['tDn']
+            ok = True
+            for conn in ('consumer', 'provider'):
+                lic = ctx + '/lIfCtx-c-' + conn
+                if not self.has(lic):
+                    fail('Logical Interface Context %s fehlt in der Device Selection Policy' % conn)
+                    ok = False
+                    break
+                bdrs = self.A(lic + '/rsLIfCtxToBD') or {}
+                lifrs = self.A(lic + '/rsLIfCtxToLIf') or {}
+                pbrrs = self.A(lic + '/rsLIfCtxToSvcRedirectPol') or {}
+                if bdrs.get('state') != 'formed':
+                    fail('%s-Connector: keine gueltige Bridge Domain' % conn)
+                    ok = False
+                    break
+                if lifrs.get('state') != 'formed':
+                    fail('%s-Connector: kein gueltiges Cluster Interface' % conn)
+                    ok = False
+                    break
+                bd = bdrs['tDn']
+                bvrf = (self.A(bd + '/rsctx') or {}).get('tDn')
+                if bvrf != vrf:
+                    fail('%s-Connector: BD %s liegt in VRF %s, der Contract in VRF %s' % (conn, self.short(bd), self.short(bvrf), self.short(vrf)))
+                    ok = False
+                    break
+                lif = lifrs['tDn']
+                vlan = vlan_num(self.A(lif)['encap'])
+                cifs = [self.A(r)['tDn'] for r in self.kids(lif, 'vnsRsCIfAttN') if self.A(r)['state'] == 'formed']
+                if vlan is None or not cifs:
+                    fail('Cluster Interface %s: Encap oder Concrete Interface fehlt' % self.A(lif)['name'])
+                    ok = False
+                    break
+                prs = self.A(cifs[0] + '/rsCIfPathAtt') or {}
+                path = self.paths.get(prs.get('tDn', ''))
+                if not path:
+                    fail('Concrete Interface %s: Path fehlt oder existiert nicht' % self.A(cifs[0])['name'], 'F0467')
+                    ok = False
+                    break
+                if not self.vlan_in_domain(dom, vlan):
+                    fail('vlan-%d des Cluster Interfaces %s ist nicht im VLAN Pool der Domain %s (invalid-vlan)'
+                         % (vlan, self.A(lif)['name'], self.short(dom)), 'F0467')
+                    ok = False
+                    break
+                pgdoms = self._pg_info(path['pg'])['domains'] if path['pg'] else []
+                if dom not in pgdoms:
+                    fail('%s: Die Access Policy des Ports enthaelt die Domain %s nicht (invalid-path)' % (path['name'], self.short(dom)), 'F0467')
+                    ok = False
+                    break
+                pol = pbrrs.get('tDn') if pbrrs.get('state') == 'formed' else None
+                if info['redirect'] and not pol:
+                    fail('%s-Connector: Routing Mode Redirect braucht eine L4-L7 Policy-Based Redirect Policy' % conn)
+                    ok = False
+                    break
+                dests = [{'ip': self.A(d)['ip'], 'mac': (self.A(d)['mac'] or '').upper()} for d in self.kids(pol, 'vnsRedirectDest')] if pol else []
+                if pol and not dests:
+                    fail('PBR Policy %s hat keine Destination' % self.short(pol))
+                    ok = False
+                    break
+                sh = gi + '/EPpInfo-' + conn
+                tag += 1
+                c = {'dn': sh, 'kind': 'svc', 'name': '%s-%s' % (self.A(ldev)['name'], conn), 'tenant': tn, 'ap': None,
+                     'vname': '%s:%sctx%s:%s' % (tn[7:], self.A(ldev)['name'], vrf.split('/ctx-')[-1], conn),
+                     'bd': bd, 'vrf': vrf, 'pcTag': str(tag), 'prov': [], 'cons': [], 'pref': False, 'isolation': False}
+                self.store.add(sh, 'vnsEPpInfo', {'name': conn, 'pcTag': str(tag), 'bdDn': bd, 'encap': 'vlan-%d' % vlan}, True)
+                self.cls[sh] = c
+                self._deploy(sh, c, prs['tDn'], path, vlan, 'regular')
+                info['conns'][conn] = {'bd': bd, 'vlan': vlan, 'path': prs['tDn'], 'pol': pol, 'dests': dests,
+                                       'lif': lif, 'shadow': sh, 'pcTag': str(tag)}
+            if ok:
+                info['state'] = 'applied'
+                self.A(gi)['configSt'] = 'applied'
+
+    # ------------------------------------------------------------------
+    # Contracts: Paketentscheidung
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _rng(p, f, t):
+        fv, tv = port_val(f), port_val(t)
+        if fv is None and tv is None:
+            return True
+        if p is None:
+            return False
+        fv = fv if fv is not None else tv
+        tv = tv if tv is not None else fv
+        return fv <= p <= tv
+
+    def _entry_match(self, e, proto, sport, dport, flags, rev):
+        if e['etherT'] not in ('unspecified', 'ip', 'ipv4'):
+            return False
+        if e['prot'] not in ('unspecified', proto):
+            return False
+        if proto in ('tcp', 'udp') and e['prot'] == proto:
+            d = (e['dFromPort'], e['dToPort'])
+            s = (e['sFromPort'], e['sToPort'])
+            if rev:
+                d, s = s, d
+            if not self._rng(dport, *d) or not self._rng(sport, *s):
+                return False
+        if 'est' in (e.get('tcpRules') or '').split(',') and proto == 'tcp' and flags != 'ack':
+            return False
+        if 'est' in (e.get('tcpRules') or '').split(',') and proto != 'tcp':
+            return False
+        return True
+
+    def packet(self, s, d, proto, sport, dport, flags):
+        """Entscheidet ein einzelnes Paket von Klasse s nach Klasse d -> (permit|deny, Begruendung).
+        Danach stehen in last_code der Reason Code und in last_rule die angewandte Regel."""
+        self._code, self.last_rule = None, None
+        act, why = self._packet(s, d, proto, sport, dport, flags)
+        self.last_code = self._code
+        return act, why
+
+    def _decide(self, code, act, why, rule=None):
+        self._code = code
+        self.last_rule = rule
+        return act, why
+
+    def _packet(self, s, d, proto, sport, dport, flags):
+        self.last_hit = None
+        vrf = s['vrf']
+        va = self.A(vrf) or {}
+        if va.get('pcEnfPref') == 'unenforced':
+            return self._decide('POLICY_VRF_UNENFORCED', 'permit', 'VRF %s steht auf "unenforced" - keine Policy-Pruefung' % self.short(vrf))
+        for tb in self._rs_targets(d['dn'], 'fvRsProtBy'):
+            for ts in self.kids(tb, 'vzTSubj'):
+                for rd in self.kids(ts, 'vzRsDenyRule'):
+                    rda = self.A(rd)
+                    if rda['state'] != 'formed':
+                        continue
+                    for e in self.kids(rda['tDn'], 'vzEntry'):
+                        if self._entry_match(self.A(e), proto, sport, dport, flags, False):
+                            return self._decide('POLICY_TABOO', 'deny', 'Taboo Contract %s (Filter %s) schuetzt %s' % (
+                                self.short(tb), self.A(rda['tDn'])['name'], self.short(d['dn'])), {'contract': tb, 'filter': rda['tDn'], 'entry': e})
+        if (s['kind'] == 'esg') != (d['kind'] == 'esg') and 'epg' in (s['kind'], d['kind']):
+            return self._decide('POLICY_ESG_EPG_MIX', 'deny', 'Contracts zwischen einer ESG und einer EPG werden nicht unterstuetzt - beide Seiten '
+                                'muessen ESGs sein (oder ein External EPG)')
+        if s['dn'] == d['dn']:
+            if s.get('intra'):
+                # Intra-EPG-Contract: innerhalb der EPG gilt nur noch, was der Contract erlaubt (EPG ist Consumer und Provider)
+                for brc in s['intra']:
+                    for subj in self.kids(brc, 'vzSubj'):
+                        sa = self.A(subj)
+                        for rf in self.kids(subj, 'vzRsSubjFiltAtt'):
+                            rfa = self.A(rf)
+                            if rfa['state'] != 'formed':
+                                continue
+                            for e in self.kids(rfa['tDn'], 'vzEntry'):
+                                ea = self.A(e)
+                                hit = self._entry_match(ea, proto, sport, dport, flags, False) or \
+                                    self._entry_match(ea, proto, sport, dport, flags, sa['revFltPorts'] == 'yes')
+                                if hit:
+                                    return self._decide('POLICY_INTRA_EPG_CONTRACT', rfa['action'],
+                                                        'Intra-EPG-Contract %s / %s / %s' % (self.short(brc), sa['name'], self.A(rfa['tDn'])['name']),
+                                                        {'contract': brc, 'subject': subj, 'filter': rfa['tDn'], 'entry': e, 'direction': 'intra'})
+                return self._decide('POLICY_INTRA_EPG_CONTRACT_DENY', 'deny', 'Intra-EPG-Contract an %s erlaubt diesen Verkehr nicht'
+                                    % self.short(s['dn']), {'epg': s['dn']})
+            if s.get('isolation'):
+                return self._decide('POLICY_INTRA_EPG_ISOLATION', 'deny', 'Intra-EPG-Isolation ist aktiv', {'epg': s['dn']})
+            return self._decide('POLICY_SAME_EPG', 'permit', 'Quelle und Ziel in derselben EPG - kein Contract noetig', {'epg': s['dn']})
+        anya = self.A(vrf + '/any') or {}
+        if anya.get('prefGrMemb') == 'enabled' and s['pref'] and d['pref']:
+            return self._decide('POLICY_PREFERRED_GROUP', 'permit', 'Beide sind Mitglied der Preferred Group', {'vrf': vrf})
+        hits = []
+        for brc, rel in self.contracts.items():
+            s_cons = s['dn'] in rel['cons'] or vrf in rel['cons_any']
+            s_prov = s['dn'] in rel['prov'] or vrf in rel['prov_any']
+            d_cons = d['dn'] in rel['cons'] or d['vrf'] in rel['cons_any']
+            d_prov = d['dn'] in rel['prov'] or d['vrf'] in rel['prov_any']
+            fwd, rev = s_cons and d_prov, s_prov and d_cons
+            if not (fwd or rev):
+                continue
+            ca = self.A(brc)
+            if ca['scope'] == 'application-profile' and (s['ap'] is None or s['ap'] != d['ap']):
+                continue
+            if ca['scope'] == 'context' and s['vrf'] != d['vrf']:
+                continue
+            if ca['scope'] == 'tenant' and s['tenant'] != d['tenant']:
+                continue
+            for subj in self.kids(brc, 'vzSubj'):
+                sa = self.A(subj)
+                for rf in self.kids(subj, 'vzRsSubjFiltAtt'):
+                    rfa = self.A(rf)
+                    if rfa['state'] != 'formed':
+                        continue
+                    for e in self.kids(rfa['tDn'], 'vzEntry'):
+                        ea = self.A(e)
+                        where = '%s / %s / %s / %s' % (self.short(brc), sa['name'], self.A(rfa['tDn'])['name'],
+                                                       ea['name'])
+                        if fwd and self._entry_match(ea, proto, sport, dport, flags, False):
+                            hits.append((rfa['action'], where + ' (Consumer -> Provider)', subj, 'c2p', brc, rfa['tDn'], e))
+                        # stateful: Provider -> Consumer nur TCP mit ACK (Antworten), kein Verbindungsaufbau vom Provider
+                        if rev and ea.get('stateful') == 'yes' and (proto != 'tcp' or flags != 'ack'):
+                            continue
+                        if rev and self._entry_match(ea, proto, sport, dport, flags, sa['revFltPorts'] == 'yes'):
+                            hits.append((rfa['action'], where + ' (Provider -> Consumer%s)'
+                                         % (', Ports getauscht' if sa['revFltPorts'] == 'yes' else ''), subj, 'p2c', brc, rfa['tDn'], e))
+        deny = [h for h in hits if h[0] == 'deny']
+        if deny:
+            return self._decide('POLICY_DENY_RULE', 'deny', 'Deny-Filter: ' + deny[0][1], self._rule(deny[0]))
+        if hits:
+            # gleiche Prioritaet: Deny vor Redirect vor Permit
+            redir = [h for h in hits if (getattr(self, 'graphs', {}).get(h[2]) or {}).get('state') == 'applied']
+            h0 = redir[0] if redir else hits[0]
+            self.last_hit = (h0[2], h0[3])
+            return self._decide('POLICY_CONTRACT_PERMIT', 'permit', 'Contract: ' + h0[1], self._rule(h0))
+        return self._decide('POLICY_IMPLICIT_DENY', 'deny', 'Implicit Deny: kein Contract mit passendem Filter zwischen %s und %s' % (
+            self.short(s['dn']), self.short(d['dn'])))
+
+    def _rule(self, h):
+        """Angewandte Regel als Objektreferenzen."""
+        return {'contract': h[4], 'subject': h[2], 'filter': h[5], 'entry': h[6], 'direction': h[3]}

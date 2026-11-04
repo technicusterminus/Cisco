@@ -25,5 +25,4 @@ Alle Punkte sind offen. Erledigt ist, was in `docs/GAP-ANALYSE.md` als „behobe
 
 | # | Punkt |
 |---|---|
-| T-01 | `engine.py` (2.300 Zeilen) entlang der Verantwortungen teilen: Access, Endpoints, Routing, Policy |
 | T-02 | Typprüfung einführen (Lint mit `ruff --select E9,F` ist eingeführt und sauber) |
