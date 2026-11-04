@@ -100,7 +100,8 @@ class Engine(OpsMixin, PodMixin, SiteMixin):
 
     # ------------------------------------------------------------------
     def rebuild(self, now=None):
-        now = time.time() if now is None else now
+        # simulierte Uhr (B-07): Wanduhr plus Versatz aus 'Zeit vorspulen'
+        now = time.time() + float(self.sim.get('clockOffset', 0)) if now is None else now
         self.now = now
         self.store.clear_oper()
         self.faults = {}

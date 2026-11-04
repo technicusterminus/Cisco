@@ -33,7 +33,7 @@ Untersucht wurden:
 - **Keine Datenebene:** Der Traffic-Test berechnet und zeigt eine Entscheidung, es fließen keine Pakete. Das ist dokumentiert.
 - Die **Topologie-Grafik** zeigt die Fabric, aber keinen berechneten Pfad. Der Pfad stand nur als Text im Traffic-Test. Im Traffic Inspector gibt es jetzt eine Pfadleiste aus Engine-Daten. Die Overlays in der Topologie fehlen noch.
 - **Health Scores** sind aus Faults abgeleitet und vereinfacht, nicht zufällig.
-- Der **Ablauf über die Zeit** (Discovery, Upgrades, Fault-Lebenszyklus) richtet sich nach der Wanduhr, nicht nach einer simulierten Uhr.
+- Der **Ablauf über die Zeit** (Discovery, Upgrades) läuft auf einer simulierten Uhr, die sich vorspulen lässt; ein Fault-Lebenszyklus fehlt noch.
 
 ## 3. Was fachlich falsch oder unvollständig war
 

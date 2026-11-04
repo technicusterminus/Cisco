@@ -909,6 +909,14 @@ const Views = {
       h('div', { class: 'form' }, h('div', { class: 'frow' }, h('label', { class: 'flab' }, 'Sekunden pro Discovery-Schritt'), h('div', { class: 'fctl' }, inp, h('div', { class: 'help' }, 'Ein echter Switch braucht mehrere Minuten, bis er nach der Registrierung aktiv ist. 0 = sofort.')))),
       h('div', { class: 'form' }, h('div', { class: 'frow' }, h('label', { class: 'flab' }, 'Sekunden pro Firmware-Upgrade'), h('div', { class: 'fctl' }, up, h('div', { class: 'help' }, 'Dauer von Installation und Reload je Upgrade Group bzw. APIC (echt: 15–40 Minuten).')))),
       h('div', { class: 'formbtns' }, h('button', { class: 'btn primary', onclick: async () => { await API.sim('settings', { discoverySeconds: Number(inp.value), upgradeSeconds: Number(up.value) }); toast('Gespeichert'); App.refreshState(); } }, 'Speichern'))));
+    const clk = h('span', { class: 'muted small' });
+    const showClk = c => { clk.textContent = 'Versatz ' + Math.round(c.offset || 0) + ' s' + (c.nextEvent ? ' · nächstes Ereignis in ' + Math.max(0, Math.round(c.nextEvent - c.now)) + ' s' : ' · kein Ereignis geplant'); };
+    const adv = async body => { const c = await API.sim('clock', body); showClk(c); toast(c.advanced ? 'Zeit um ' + c.advanced + ' s vorgespult' : 'Kein Ereignis geplant'); App.refreshState(); };
+    API.sim('clock').then(showClk).catch(() => {});
+    w.appendChild(h('div', { class: 'card' }, h('div', { class: 'card-h' }, 'Simulierte Uhr'),
+      h('p', null, 'Discovery, Firmware-Upgrades und ihre Countdowns laufen auf einer simulierten Uhr. Statt zu warten, kannst du sie vorspulen. Anmeldungen und Sitzungen nutzen weiter die echte Zeit.'),
+      h('div', { class: 'formbtns' }, h('button', { class: 'btn', onclick: () => adv({ seconds: 60 }) }, '+1 min'), h('button', { class: 'btn', onclick: () => adv({ seconds: 600 }) }, '+10 min'),
+        h('button', { class: 'btn primary', onclick: () => adv({ next: true }) }, 'Bis zum nächsten Ereignis'), clk)));
     w.appendChild(h('div', { class: 'card' }, h('div', { class: 'card-h' }, 'Zurücksetzen'),
       h('p', null, 'Setzt die gesamte Konfiguration zurück. Hosts und Router werden entfernt.'),
       h('div', { class: 'formbtns' },

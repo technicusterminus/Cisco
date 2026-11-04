@@ -11,7 +11,7 @@ Alle Punkte sind offen. Erledigt ist, was in `docs/GAP-ANALYSE.md` als „behobe
 
 | # | Punkt | Begründung |
 |---|---|---|
-| B-07 | Simulierte Uhr statt Wanduhr für Discovery, Upgrades und Fault-Lebenszyklus (soaking → raised → retaining) | Determinismus |
+| B-07 | Fault-Lebenszyklus (soaking → raised → retaining) auf der simulierten Uhr; die Uhr selbst ist umgesetzt | Realismus der Fault-Anzeige |
 
 ## Phase 4: Erweiterungen
 

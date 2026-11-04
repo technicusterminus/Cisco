@@ -116,9 +116,24 @@ class Sim:
         self.rebuild()
         self.save()
 
+    def now(self):
+        """Simulierte Uhr (B-07): Wanduhr plus Versatz. Gilt fuer Discovery, Upgrades und Countdowns, nicht fuer Logins."""
+        return time.time() + float(self.sim.get('clockOffset', 0))
+
+    def advance_clock(self, seconds=None, to_next=False):
+        """Zeit vorspulen: um Sekunden oder bis zum naechsten Ereignis (Discovery-Schritt, Upgrade-Ende)."""
+        if to_next:
+            ne = self.engine.next_event
+            seconds = max(0.0, ne - self.now()) + 0.01 if ne is not None else 0.0
+        seconds = max(0.0, min(float(seconds or 0), 86400.0))
+        self.sim['clockOffset'] = float(self.sim.get('clockOffset', 0)) + seconds
+        self.changed()
+        return {'advanced': round(seconds, 2), 'offset': round(self.sim['clockOffset'], 2), 'nextEvent': self.engine.next_event,
+                'now': self.now()}
+
     def tick(self):
         ne = self.engine.next_event
-        if ne is not None and time.time() >= ne:
+        if ne is not None and self.now() >= ne:
             self.rebuild()
             self.save()
 
@@ -1354,7 +1369,7 @@ class Sim:
             s = self.store.attrs(d)['severity']
             sev[s] = sev.get(s, 0) + 1
         lab = self.lab(self.sim.get('lab')) if self.sim.get('lab') else None
-        return {'now': time.time(), 'apic': topo['apic'], 'pod': topo.get('pod', 1), 'setup': self.sim.get('setup'), 'nodes': nodes, 'links': topo['links'],
+        return {'now': self.now(), 'apic': topo['apic'], 'pod': topo.get('pod', 1), 'setup': self.sim.get('setup'), 'nodes': nodes, 'links': topo['links'],
                 'ipnlinks': topo.get('ipnlinks', []), 'multipod': bool(topo.get('ipnlinks')),
                 'pending': e.pending, 'hosts': hosts, 'routers': routers, 'settings': self.sim['settings'],
                 'faults': sev, 'vpc': e.vpc_groups, 'mpbgp': e.mpbgp_ok,
@@ -1599,7 +1614,7 @@ def make_handler(hub):
                     raise AciError(400, 'POST/DELETE only on /api/mo')
                 up = getattr(S.engine, 'apic_upgrade', None)
                 if up:
-                    pct = int((time.time() - up['start']) * 100 / max(up['dur'], 1))
+                    pct = int((S.now() - up['start']) * 100 / max(up['dur'], 1))
                     raise AciError(503, 'APIC-Upgrade auf %s laeuft (%d%%) - der Controller nimmt bis zum Abschluss keine '
                                    'Konfiguration an' % (ops.plain(up['version']), min(pct, 99)), 503)
                 if method == 'POST':
@@ -1808,7 +1823,7 @@ def make_handler(hub):
                                                        'objects': len((v.get('export') or {}).get('rows', []))}
                                                       for k, v in sorted(fs['files'].items())]))
                 if rest == 'firmware':
-                    now = time.time()
+                    now = S.now()
                     ups = [dict(u, pct=100 if u.get('done') else int(min(99, (now - u['start']) * 100 / max(u['dur'], 1))),
                                 left=max(0, int(u['start'] + u['dur'] - now))) for u in S.sim.get('upgrades', [])[-20:]]
                     vers = [{'id': 1, 'name': S.sim['topology']['apic']['name'], 'role': 'controller', 'version': e.apic_version,
@@ -1860,6 +1875,10 @@ def make_handler(hub):
                     return self.send(200, {'ok': True, 'title': lab['title']})
                 if rest == 'labs/check':
                     return self.send(200, S.check_lab() or {'checks': []})
+                if rest == 'clock':
+                    if method == 'POST':
+                        return self.send(200, S.advance_clock(b.get('seconds'), bool(b.get('next'))))
+                    return self.send(200, {'now': S.now(), 'offset': S.sim.get('clockOffset', 0), 'nextEvent': e.next_event})
                 if rest == 'overlay':
                     return self.send(200, e.overlay())
                 if rest == 'changes':
