@@ -1237,6 +1237,35 @@ class TestSimClock(unittest.TestCase):
         self.assertEqual(state(), 'active', 'nach dem Vorspulen ist leaf101 aktiv')
         self.assertGreater(S.sim['clockOffset'], 100)
 
+    def test_fault_lifecycle_on_sim_clock(self):
+        """B-07: soaking -> raised, behoben -> retaining (cleared) -> weg; Bewertung zaehlt cleared nicht."""
+        S = Sim(tempfile.mkdtemp(), 'admin')
+        S.sim['settings'].update({'discoverySeconds': 0, 'faultSoakSeconds': 120, 'faultRetainSeconds': 300})
+        S.load_lab('44-access-diagnosis')
+        S.sim['settings'].update({'faultSoakSeconds': 120, 'faultRetainSeconds': 300})
+        S.changed()
+        app = 'uni/tn-Shop/ap-Webshop/epg-App/fault-F0467'
+        lc = lambda: S.store.attrs(app)['lc'] if app in S.store.objs else None
+        self.assertEqual(lc(), 'soaking')
+        S.advance_clock(to_next=True)
+        self.assertEqual(lc(), 'raised')
+        post(S.store, 'uni/tn-Shop/ap-Webshop/epg-App', mo('fvAEPg', {}, mo('fvRsDomAtt', {'tDn': 'uni/phys-PhysDom-Server'})))
+        S.changed()
+        self.assertEqual((lc(), S.store.attrs(app)['severity']), ('retaining', 'cleared'))
+        nof = [c for c in S.check_lab(count=False)['checks'] if c['desc'].startswith('Keine Konfigurationsfehler')][0]
+        self.assertIn('1 Fault', nof['info'], 'der DB-Fault ist noch aktiv, der behobene zaehlt nicht')
+        for _ in range(4):
+            if lc() is None:
+                break
+            S.advance_clock(to_next=True)
+        self.assertIsNone(lc(), 'nach der Retention ist der Fault weg')
+
+    def test_fault_lifecycle_off_by_default(self):
+        S = Sim(tempfile.mkdtemp(), 'admin')
+        S.sim['settings']['discoverySeconds'] = 0
+        S.load_lab('44-access-diagnosis')
+        self.assertEqual(S.store.attrs('uni/tn-Shop/ap-Webshop/epg-App/fault-F0467')['lc'], 'raised')
+
     def test_advance_is_bounded_and_noop_without_event(self):
         S = Sim(tempfile.mkdtemp(), 'admin')
         S.sim['settings']['discoverySeconds'] = 0

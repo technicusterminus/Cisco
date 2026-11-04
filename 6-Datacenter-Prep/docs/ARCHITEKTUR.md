@@ -47,7 +47,7 @@ Ein Prozess, ein Python-Paket (`dcprep/`), eine statische Weboberfläche (`stati
 
 - Gleicher Ausgangszustand + gleiche Aktionen = gleiches Ergebnis. Getestet in `TestStartState.test_start_state_fails_lab_and_is_reproducible`.
 - Kein Zufall in Engine und Labs. Die Ausnahme ist die vorgeschlagene MAC beim Anlegen eines Hosts in der GUI; sie ist nur ein Formularvorschlag.
-- Zeitabhängig sind Discovery-Schritte und Firmware-Upgrades. Sie laufen auf der simulierten Uhr `Sim.now()` = Wanduhr + `sim.clockOffset`; *Simulation > Einstellungen* und `POST /sim/clock` (`seconds` oder `next`) spulen vor. Für Tests steht die Discovery-Einstellung auf 0 Sekunden, `TestSimClock` prüft das Vorspulen. Logins und Sitzungen nutzen die echte Zeit. Faults haben noch keinen Lebenszyklus (B-07).
+- Zeitabhängig sind Discovery-Schritte und Firmware-Upgrades. Sie laufen auf der simulierten Uhr `Sim.now()` = Wanduhr + `sim.clockOffset`; *Simulation > Einstellungen* und `POST /sim/clock` (`seconds` oder `next`) spulen vor. Für Tests steht die Discovery-Einstellung auf 0 Sekunden, `TestSimClock` prüft das Vorspulen. Logins und Sitzungen nutzen die echte Zeit. Faults haben einen vereinfachten Lebenszyklus auf derselben Uhr: soaking → raised, behoben → retaining (Severity cleared); Dauern in `settings.faultSoakSeconds` und `faultRetainSeconds`, Standard 0. Bewertung (`nofaults`) und Health zählen cleared nicht.
 
 ## Change-History
 

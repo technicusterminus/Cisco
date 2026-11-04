@@ -904,11 +904,15 @@ const Views = {
     const st = App.state;
     const inp = h('input', { value: st.settings.discoverySeconds, style: { width: '80px' } });
     const up = h('input', { value: st.settings.upgradeSeconds || 60, style: { width: '80px' } });
+    const soak = h('input', { value: st.settings.faultSoakSeconds || 0, style: { width: '80px' } });
+    const retain = h('input', { value: st.settings.faultRetainSeconds || 0, style: { width: '80px' } });
     w.appendChild(paneHead('Simulation – Einstellungen', ''));
-    w.appendChild(h('div', { class: 'card' }, h('div', { class: 'card-h' }, 'Fabric Discovery'),
+    w.appendChild(h('div', { class: 'card' }, h('div', { class: 'card-h' }, 'Zeiten: Discovery, Upgrades, Faults'),
       h('div', { class: 'form' }, h('div', { class: 'frow' }, h('label', { class: 'flab' }, 'Sekunden pro Discovery-Schritt'), h('div', { class: 'fctl' }, inp, h('div', { class: 'help' }, 'Ein echter Switch braucht mehrere Minuten, bis er nach der Registrierung aktiv ist. 0 = sofort.')))),
       h('div', { class: 'form' }, h('div', { class: 'frow' }, h('label', { class: 'flab' }, 'Sekunden pro Firmware-Upgrade'), h('div', { class: 'fctl' }, up, h('div', { class: 'help' }, 'Dauer von Installation und Reload je Upgrade Group bzw. APIC (echt: 15–40 Minuten).')))),
-      h('div', { class: 'formbtns' }, h('button', { class: 'btn primary', onclick: async () => { await API.sim('settings', { discoverySeconds: Number(inp.value), upgradeSeconds: Number(up.value) }); toast('Gespeichert'); App.refreshState(); } }, 'Speichern'))));
+      h('div', { class: 'form' }, h('div', { class: 'frow' }, h('label', { class: 'flab' }, 'Fault Soaking (Sekunden)'), h('div', { class: 'fctl' }, soak, h('div', { class: 'help' }, 'So lange steht ein neuer Fault im Zustand soaking, bevor er raised wird. 0 = sofort raised (Standard, für Labs).')))),
+      h('div', { class: 'form' }, h('div', { class: 'frow' }, h('label', { class: 'flab' }, 'Fault Retaining (Sekunden)'), h('div', { class: 'fctl' }, retain, h('div', { class: 'help' }, 'So lange bleibt ein behobener Fault als retaining (Severity cleared) sichtbar. 0 = sofort weg. Vereinfachter Lebenszyklus, ohne Clearing-Intervall.')))),
+      h('div', { class: 'formbtns' }, h('button', { class: 'btn primary', onclick: async () => { await API.sim('settings', { discoverySeconds: Number(inp.value), upgradeSeconds: Number(up.value), faultSoakSeconds: Number(soak.value), faultRetainSeconds: Number(retain.value) }); toast('Gespeichert'); App.refreshState(); } }, 'Speichern'))));
     const clk = h('span', { class: 'muted small' });
     const showClk = c => { clk.textContent = 'Versatz ' + Math.round(c.offset || 0) + ' s' + (c.nextEvent ? ' · nächstes Ereignis in ' + Math.max(0, Math.round(c.nextEvent - c.now)) + ' s' : ' · kein Ereignis geplant'); };
     const adv = async body => { const c = await API.sim('clock', body); showClk(c); toast(c.advanced ? 'Zeit um ' + c.advanced + ' s vorgespult' : 'Kein Ereignis geplant'); App.refreshState(); };
