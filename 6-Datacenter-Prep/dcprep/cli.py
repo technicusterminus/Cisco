@@ -1292,8 +1292,8 @@ def redir_info(self, nid):
     return '\n'.join(out)
 
 
-Cli._destgrp = _destgrp
-Cli.redir_info = redir_info
+setattr(Cli, '_destgrp', _destgrp)  # nachgereichte CLI-Befehle (siehe oben)
+setattr(Cli, 'redir_info', redir_info)  # nachgereichte CLI-Befehle (siehe oben)
 
 
 def dispatch_extra(self, nid, c):
@@ -1455,7 +1455,7 @@ def apic_extra(self, cmd):
     return None
 
 
-Cli.apic_extra = apic_extra
+setattr(Cli, 'apic_extra', apic_extra)  # nachgereichte CLI-Befehle (siehe oben)
 
 
 # ---------------------------------------------------------------------- Betrieb
@@ -1567,8 +1567,8 @@ def ops_apic(self, c):
     return None
 
 
-Cli.ops_leaf = ops_leaf
-Cli.ops_apic = ops_apic
+setattr(Cli, 'ops_leaf', ops_leaf)  # nachgereichte CLI-Befehle (siehe oben)
+setattr(Cli, 'ops_apic', ops_apic)  # nachgereichte CLI-Befehle (siehe oben)
 
 
 def infra_ospf(self, nid):
@@ -1593,4 +1593,4 @@ def infra_ospf(self, nid):
     return '\n'.join(out)
 
 
-Cli.infra_ospf = infra_ospf
+setattr(Cli, 'infra_ospf', infra_ospf)  # nachgereichte CLI-Befehle (siehe oben)

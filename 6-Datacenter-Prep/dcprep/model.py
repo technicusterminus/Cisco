@@ -116,7 +116,7 @@ class Meta:
         return (set(self.attrs) - self.ro) | COMMON_RW
 
 
-CLASSES = {}
+CLASSES: dict = {}
 
 
 def mo(name, rn, parents, attrs=None, **kw):

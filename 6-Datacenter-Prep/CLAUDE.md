@@ -12,11 +12,12 @@ node tests/gui/troubleshooting.js              # GUI: Endpoint-Verlauf, Link-Aus
 node tests/gui/run_all.js                      # alle GUI-Tests mit Bericht
 for f in static/js/*.js; do node --check $f; done   # Syntax des Frontends
 ruff check --select E9,F dcprep tests Labs-Quelle werkzeuge   # Lint (wenn ruff installiert ist)
+mypy dcprep --ignore-missing-imports            # Typprüfung (wenn mypy installiert ist)
 python3 Labs-Quelle/build_labs.py              # labs/*.json neu erzeugen (deterministisch)
 python3 start.py --no-browser                  # Start (Port 8080, belegt -> nächster freier)
 ```
 
-Build und Typecheck gibt es nicht. Lint: `ruff` mit Fehlern und pyflakes-Regeln (E9, F), muss sauber bleiben.
+Einen Build gibt es nicht. Lint (`ruff`, Regeln E9 und F) und Typprüfung (`mypy`, Standardeinstellung) müssen sauber bleiben.
 
 ## Regeln
 
