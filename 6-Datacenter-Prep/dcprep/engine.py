@@ -35,6 +35,8 @@ class Engine(AccessMixin, EndpointMixin, RoutingMixin, PolicyMixin, OpsMixin, Po
         self.store = store
         self.sim = sim
         self.fault_first = {}
+        self.fault_cleared = {}   # Fault-Lebenszyklus: behobene Faults in retaining (fdn -> (Zeit, Attribute))
+        self.fault_attrs = {}     # letzte Attribute je aktivem Fault
         self.next_event = None
         self.health = {}
         self.stats = {}
@@ -449,28 +451,55 @@ class Engine(AccessMixin, EndpointMixin, RoutingMixin, PolicyMixin, OpsMixin, Po
     # Faults und Health
     # ------------------------------------------------------------------
     def _emit_faults(self):
-        seen = set()
+        """Faults als faultInst. Lebenszyklus (B-07, vereinfacht): soaking -> raised, behoben -> retaining (severity cleared).
+        Die Dauern stehen in settings.faultSoakSeconds / faultRetainSeconds; 0 (Standard) heisst sofort raised bzw. sofort weg."""
+        st = self.sim.get('settings', {})
+        soak, retain = float(st.get('faultSoakSeconds', 0) or 0), float(st.get('faultRetainSeconds', 0) or 0)
+        seen, upcoming = set(), []
         for dn, codes in self.faults.items():
             if dn not in self.store.objs:
                 continue
             for code, f in codes.items():
                 fdn = dn + '/fault-' + code
-                key = (fdn, f['descr'])
                 seen.add(fdn)
+                self.fault_cleared.pop(fdn, None)
                 first = self.fault_first.get(fdn)
                 if not first or first[1] != f['descr']:
-                    first = (now_ts(self.now), f['descr'])
+                    first = (now_ts(self.now), f['descr'], self.now)
                     self.fault_first[fdn] = first
-                self.store.add(fdn, 'faultInst', {
+                t0 = first[2] if len(first) > 2 else self.now
+                soaking = soak > 0 and self.now < t0 + soak
+                if soaking:
+                    upcoming.append(t0 + soak)
+                lc = 'soaking' if soaking else 'raised'
+                last = first[0] if soaking or soak <= 0 else now_ts(t0 + soak)
+                attrs = {
                     'ack': 'no', 'cause': f['cause'], 'changeSet': '', 'code': code, 'created': first[0],
                     'descr': f['descr'], 'domain': f['domain'], 'highestSeverity': f['severity'],
-                    'lastTransition': first[0], 'lc': 'raised', 'occur': '1', 'origSeverity': f['severity'],
+                    'lastTransition': last, 'lc': lc, 'occur': '1', 'origSeverity': f['severity'],
                     'prevSeverity': f['severity'], 'rule': f['rule'] or f['cause'], 'severity': f['severity'],
-                    'subject': CLASSES[self.store.objs[dn][0]].label, 'type': f['type']}, True)
-                _ = key
+                    'subject': CLASSES[self.store.objs[dn][0]].label, 'type': f['type']}
+                self.store.add(fdn, 'faultInst', attrs, True)
+                self.fault_attrs[fdn] = attrs
         for k in list(self.fault_first):
-            if k not in seen:
-                del self.fault_first[k]
+            if k in seen:
+                continue
+            if retain > 0 and k in self.fault_attrs:
+                # behoben: bleibt als retaining mit severity cleared sichtbar, bis die Retention abgelaufen ist
+                self.fault_cleared[k] = (self.now, self.fault_attrs[k])
+            del self.fault_first[k]
+            self.fault_attrs.pop(k, None)
+        for k, (t1, attrs) in list(self.fault_cleared.items()):
+            parent = k.rsplit('/fault-', 1)[0]
+            if retain <= 0 or self.now >= t1 + retain or parent not in self.store.objs:
+                del self.fault_cleared[k]
+                continue
+            upcoming.append(t1 + retain)
+            self.store.add(k, 'faultInst', dict(attrs, lc='retaining', severity='cleared', prevSeverity=attrs['severity'],
+                                                 lastTransition=now_ts(t1)), True)
+        if upcoming:
+            nxt = min(upcoming)
+            self.next_event = nxt if self.next_event is None else min(self.next_event, nxt)
 
     def _health(self):
         pen = {}

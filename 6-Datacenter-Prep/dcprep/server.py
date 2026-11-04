@@ -483,6 +483,7 @@ class Sim:
                             else 'nicht gelernt')
                 elif t == 'nofaults':
                     fl = [d for d in self.store.by_class('faultInst') if d.startswith(c.get('under', ''))
+                          and self.store.attrs(d)['severity'] != 'cleared'
                           and (not c.get('code') or self.store.attrs(d)['code'] == c['code'])]
                     ok = not fl
                     info = '%d Fault(s)' % len(fl)
@@ -1852,6 +1853,9 @@ def make_handler(hub):
                     S.sim['settings']['discoverySeconds'] = max(0.0, min(v, 600.0))
                     u = float(b.get('upgradeSeconds', S.sim['settings'].get('upgradeSeconds', 60)))
                     S.sim['settings']['upgradeSeconds'] = max(5.0, min(u, 1800.0))
+                    for k, hi in (('faultSoakSeconds', 3600.0), ('faultRetainSeconds', 86400.0)):
+                        if k in b:
+                            S.sim['settings'][k] = max(0.0, min(float(b[k]), hi))
                     S.changed()
                     return self.send(200, {'ok': True})
                 if rest == 'labs':

@@ -108,4 +108,6 @@ Jede Regel nennt die Quelle (Dokument) und ihren Status. Die Testreferenz zeigt,
 | R-14 | Zwischen VRFs braucht es Contract mit passendem Scope und Subnetze „Shared between VRFs“. | L3 Networking Config Guide, *Shared Services* | umgesetzt | Lab 13 |
 | R-15 | External EPG klassifiziert per Subnetz mit „External Subnets for the External EPG“ (Longest Prefix Match). Der Rückweg braucht ein exportiertes BD-Subnetz (Advertised Externally) beim externen Router. | L3 Networking Config Guide | umgesetzt | Labs 06, 09, 15 |
 
+Fault-Lebenszyklus: Der Simulator kennt `lc` = soaking, raised und retaining (Severity cleared). Die Zwischenzustände soaking-clearing und raised-clearing sowie das Clearing-Intervall fehlen; Standarddauern sind 0, die APIC-Defaults sind nicht gegen ein Gerät geprüft.
+
 Unsicherheiten, die beim Abgleich zuerst geprüft werden sollten: R-08 (Prioritäten zwischen vzAny-, EPG- und Taboo-Regeln), R-13 (welche Protokolle das Pervasive Gateway beantwortet), R-02 (Kombination aus Isolation und Intra-EPG-Contract) und die Fault-Codes außer F0467.
