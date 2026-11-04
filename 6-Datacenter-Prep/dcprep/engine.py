@@ -143,6 +143,7 @@ class Engine(OpsMixin, PodMixin, SiteMixin):
         for kind, cls, rn in (('audit', 'aaaModLR', 'mod'), ('events', 'eventRecord', 'rec')):
             for r in self.sim.get(kind, [])[-1500:]:
                 a = dict(r)
+                a.pop('source', None)  # simulator-spezifisch, kein Attribut von aaaModLR
                 a['id'] = str(a['id'])
                 self.store.add('subj-[%s]/%s-%s' % (a['affected'], rn, a['id']), cls, a, True)
 
@@ -358,7 +359,6 @@ class Engine(OpsMixin, PodMixin, SiteMixin):
             if m and self.A(r)['addr']:
                 self.oob[int(m.group(1))] = self.A(r)['addr']
         # APIC
-        version = '6.0(5h)-sim'
         atep = apic_setup.apic_tep(self.tep_pool)
         self.apic_tep = atep
         adn = self.poddn + '/node-1'
@@ -2117,7 +2117,6 @@ class Engine(OpsMixin, PodMixin, SiteMixin):
 
     def _emit_ports(self):
         for (nid, port), pi in sorted(self.ports.items(), key=lambda x: (x[0][0], pnum(x[0][1]) or 0)):
-            n = self.nodes[nid]
             base = '%s/node-%d/sys/phys-[%s]' % (self.pdn(nid), nid, port)
             usage = ','.join(sorted(pi['usage'])) or 'discovery'
             self.store.add(base, 'l1PhysIf', {'id': port, 'adminSt': pi.get('admin', 'up'), 'usage': usage, 'mtu': '9000',

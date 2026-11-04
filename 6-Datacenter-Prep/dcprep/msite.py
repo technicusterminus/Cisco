@@ -208,7 +208,7 @@ def ndo_op(S, b):
             {'fabricExtConnP': {'attributes': {'id': '1', 'siteId': n['sites']['local']['siteId'], 'name': 'Multisite', 'annotation': ANNOT}}}]}}
         mit_post(S.store, 'uni/tn-infra', body)
         inf['deployed'] = True
-        S.audit('ndo', [{'dn': 'uni/tn-infra/out-intersite', 'cls': 'l3extOut', 'ind': 'modification', 'changes': {'deploy': ('', 'NDO Infra')}}])
+        S.audit('ndo', [{'dn': 'uni/tn-infra/out-intersite', 'cls': 'l3extOut', 'ind': 'modification', 'changes': {'deploy': ('', 'NDO Infra')}}], source='NDO')
     elif op == 'template':
         t = b.get('template') or {}
         if not re.match(r'^[A-Za-z0-9_.-]{1,64}$', t.get('name', '')) or not re.match(r'^[A-Za-z0-9_.-]{1,64}$', t.get('tenant', '')):
@@ -227,7 +227,7 @@ def ndo_op(S, b):
             if not n['sites']['local']['onboarded']:
                 raise AciError(400, 'Der lokale APIC ist nicht onboardet')
             mit_post(S.store, 'uni', _tenant_body(t))
-            S.audit('ndo', [{'dn': 'uni/tn-' + t['tenant'], 'cls': 'fvTenant', 'ind': 'modification', 'changes': {'deploy': ('', 'NDO Template ' + t['name'])}}])
+            S.audit('ndo', [{'dn': 'uni/tn-' + t['tenant'], 'cls': 'fvTenant', 'ind': 'modification', 'changes': {'deploy': ('', 'NDO Template ' + t['name'])}}], source='NDO')
         t['deployed'] = {s: now_ts() for s in t['sites']}
     else:
         raise AciError(400, 'Unbekannte NDO-Aktion')

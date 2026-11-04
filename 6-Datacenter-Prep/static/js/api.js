@@ -18,7 +18,7 @@ const API = {
   },
   async req(method, url, body, quiet) {
     const t0 = performance.now();
-    const opt = { method, credentials: 'same-origin', headers: {} };
+    const opt = { method, credentials: 'same-origin', headers: { 'X-DCPrep-Client': 'gui' } };  // Herkunft fuer die Change-History
     if (body !== undefined) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
     let r, j = null;
     try {

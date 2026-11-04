@@ -49,6 +49,10 @@ Ein Prozess, ein Python-Paket (`dcprep/`), eine statische Weboberfläche (`stati
 - Kein Zufall in Engine und Labs. Die Ausnahme ist die vorgeschlagene MAC beim Anlegen eines Hosts in der GUI; sie ist nur ein Formularvorschlag.
 - Zeitabhängig sind Discovery-Schritte, Firmware-Upgrades und Fault-Lebenszyklus (Wanduhr × Einstellung). Für Tests steht die Einstellung auf 0 Sekunden. Eine echte simulierte Uhr fehlt noch (Backlog B-07).
 
+## Change-History
+
+`Sim.audit(user, changes, source)` schreibt jede Konfigurationsänderung ins Audit-Log (`aaaModLR`). Die Herkunft `source` (GUI, REST, Import, Rollback, NDO) ist simulator-spezifisch und erscheint nicht als Attribut von `aaaModLR`. Die eigene Oberfläche markiert ihre Aufrufe mit dem Header `X-DCPrep-Client: gui`. Ein Config Rollback wird über `config_diff` als Diff protokolliert. `GET /sim/changes` gruppiert das Log je Transaktion (*System > Change-History*).
+
 ## Lab-Sitzung
 
 `sim.labSession = {mode, hints, answers, checks, started, log}`. Sie wird bei jedem Lab-Start und Reset neu angelegt, ist Teil des Spielstands und verändert nie die Konfiguration. `log` ist das Diagnoseprotokoll (`Sim.lab_log`, höchstens 200 Einträge): Traffic-Tests und CLI-Befehle über HTTP, Hinweise, Antworten und Prüfläufe. Es wird angezeigt (`GET /sim/labs/log`, Lab-Karte), fließt aber nie in die Bewertung ein. `lab_public()` liefert der Oberfläche nur, was der Modus erlaubt.

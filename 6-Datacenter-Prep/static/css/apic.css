@@ -306,3 +306,6 @@ svg.topo .xmark { fill: #c94a4a; font-size: 22px; font-weight: 800; }
 table.pmatrix td.pm { cursor: pointer; font-size: 12px; max-width: 220px; }
 table.pmatrix td.pm-none { color: #8a96a0; } table.pmatrix td.pm-some { background: #e7f6ec; } table.pmatrix td.pm-all { background: #fbe9e9; font-weight: 700; }
 table.pmatrix td.pm-self { outline: 1px dashed #b9c2c9; outline-offset: -3px; }
+
+/* Change-History */
+.chg summary { cursor: pointer; } .chgdiff td { vertical-align: top; } .chgdiff code { white-space: pre-wrap; word-break: break-word; }

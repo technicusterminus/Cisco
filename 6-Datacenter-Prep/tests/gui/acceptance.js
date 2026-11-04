@@ -87,6 +87,9 @@ const SOLUTION = { fvTenant: { attributes: { name: 'Shop' }, children: [
     const pm = await p.innerText('table.pmatrix');
     check(pm.includes('tcp/443') && pm.includes('Shop:Webshop:Web'), 'Policy-Matrix zeigt Web → App: tcp/443');
     await shot('03-allow');
+    await p.evaluate(() => App.go('system', 'changes')); await p.waitForSelector('details.chg');
+    const chg = await p.innerText('details.chg');
+    check(chg.includes('GUI') && chg.includes('admin'), 'Change-History zeigt die Änderung mit Herkunft GUI');
     t = await trafficTest('app1', 'tcp', 22);
     check(t.includes('DROP') && t.includes('POLICY_IMPLICIT_DENY'), 'SSH bleibt blockiert');
 

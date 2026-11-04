@@ -391,6 +391,31 @@ class TestOverHttp(unittest.TestCase):
         self.assertEqual(row['modes'], ['guided', 'exam'])
 
 
+    def test_change_history_source_and_rollback_diff(self):
+        """B-12: Herkunft je Aenderung (GUI/REST/Rollback), Rollback als Diff, aaaModLR ohne erfundenes Attribut."""
+        self.assertEqual(self.req('POST', '/api/aaaLogin.json', {'aaaUser': {'attributes': {'name': 'admin', 'pwd': 'admin'}}})[0], 200)
+        self.assertEqual(self.req('POST', '/sim/labs/load', {'id': LAB, 'mode': 'guided'})[0], 200)
+        self.assertEqual(self.req('POST', '/sim/snapshots', {'op': 'create', 'name': 'vor-test'})[0], 200)
+        self.req('POST', '/api/mo/uni.json', {'fvTenant': {'attributes': {'name': 'ChgRest'}}})
+        r = urllib.request.Request('http://127.0.0.1:%d/api/mo/uni.json' % self.port, method='POST',
+                                   data=json.dumps({'fvTenant': {'attributes': {'name': 'ChgGui', 'descr': 'x'}}}).encode(),
+                                   headers={'X-DCPrep-Client': 'gui'})
+        with self.opener.open(r) as resp:
+            self.assertEqual(resp.status, 200)
+        self.assertEqual(self.req('POST', '/sim/snapshots', {'op': 'rollback', 'name': 'vor-test'})[0], 200)
+        st, ch = self.req('GET', '/sim/changes')
+        by_src = {}
+        for t in ch:
+            by_src.setdefault(t['source'], []).append(t)
+        self.assertIn('uni/tn-ChgRest', [i['affected'] for t in by_src['REST'] for i in t['items']])
+        self.assertIn('uni/tn-ChgGui', [i['affected'] for t in by_src['GUI'] for i in t['items']])
+        rb = by_src['Rollback'][0]
+        self.assertEqual(ch[0]['source'], 'Rollback', 'neueste zuerst')
+        self.assertTrue({i['affected'] for i in rb['items'] if i['ind'] == 'deletion'} >= {'uni/tn-ChgRest', 'uni/tn-ChgGui'})
+        st, mods = self.req('GET', '/api/class/aaaModLR.json')
+        self.assertTrue(mods['imdata'])
+        self.assertNotIn('source', mods['imdata'][0]['aaaModLR']['attributes'], 'Herkunft ist simulator-spezifisch')
+
     def test_diagnosis_log_records_without_grading_or_changes(self):
         """B-13: Traffic-Tests, CLI und Pruefungen landen im Protokoll der Lab-Sitzung, auch im Pruefungsmodus, ohne Bewertung."""
         self.assertEqual(self.req('POST', '/api/aaaLogin.json', {'aaaUser': {'attributes': {'name': 'admin', 'pwd': 'admin'}}})[0], 200)
@@ -902,7 +927,7 @@ class TestConvertedLabs(unittest.TestCase):
         self.assertFalse(by['app1 → 8.8.8.8 blockiert'])
 
     def test_lab11_removing_icmp_from_contract_is_not_a_taboo(self):
-        lab = self.S.load_lab('11-static-leaf-taboo')
+        self.S.load_lab('11-static-leaf-taboo')
         self.apply(('uni/tn-Shop/ap-Webshop/epg-App', mo('fvAEPg', {}, mo('fvRsNodeAtt', {'tDn': 'topology/pod-1/node-102', 'encap': 'vlan-120'}))),
                    ('uni/tn-Shop/brc-web-to-app/subj-subj', mo('vzSubj', {}, mo('vzRsSubjFiltAtt', {'tnVzFilterName': 'icmp', 'status': 'deleted'}))))
         r = trace.run(self.S.engine, self.S.sim, 'web1', 'app1', 'icmp')

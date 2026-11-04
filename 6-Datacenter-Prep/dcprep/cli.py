@@ -636,7 +636,6 @@ class Cli:
         for r, rs, a in self._adjs(nid, vrf, 'eigrp'):
             if a['state'] != 'UP':
                 continue
-            pol = a['iface']['eigrp_pol']
             out.append('%-3d %-23s %-15s %-5s %-7s %-6s %-4s %-2s %s' % (k, str(ip_of(r['ip'])), e.if_name(a['iface']),
                                                                          r.get('eigrp', {}).get('hold', 15), '00:12:01', '1', '50', '0', '12'))
             k += 1
@@ -854,7 +853,6 @@ def _verify_methods():
         vrf = self._vrf_by_name(vname)
         if not vrf or vrf not in e.dep_vrf.get(nid, set()):
             return '%% VRF %s ist auf diesem Switch nicht deployed' % vname
-        piv = {d['epg']: vid for vid, _, _, _, _, d in self._pivlans(nid) if d}
         bdv = {bd: vid for vid, _, _, _, bd, d in self._pivlans(nid) if d is None}
         rows = []
         for h in e.all_hosts():
@@ -944,7 +942,6 @@ def _verify_methods():
         pi = e.ports.get((nid, port))
         if not pi:
             return '%% Invalid interface %s' % port
-        n = e.nodes[nid]
         up = pi['oper'] == 'up'
         qual = pi['qual']
         reason = {'link-up': 'none', 'link-not-connected': 'Link not connected', 'admin-down': 'Administratively down',
