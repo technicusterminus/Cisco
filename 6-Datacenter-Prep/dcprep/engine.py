@@ -2180,6 +2180,25 @@ class Engine(OpsMixin, PodMixin, SiteMixin):
             return '%s (%s)' % (self.nodes[nid]['name'], serial)
         return serial
 
+    def overlay(self):
+        """Topologie-Overlay (B-08): je EPG, BD und VRF die Leafs mit Deployment und die gelernten Hosts."""
+        out = {}
+
+        def ent(kind, dn):
+            return out.setdefault(dn, {'kind': kind, 'dn': dn, 'name': self.short(dn), 'leafs': set(), 'hosts': set()})
+        for d in self.deploys:
+            for kind, dn in (('EPG', d['epg']), ('BD', d['bd']), ('VRF', d['vrf'])):
+                ent(kind, dn)['leafs'].update(self.nodes[n]['name'] for n in d['nodes'] if n in self.nodes)
+        for name, hs in self.hosts.items():
+            if not hs.get('learned'):
+                continue
+            for kind, dn in (('EPG', hs.get('epg')), ('BD', hs.get('bd')), ('VRF', hs.get('vrf'))):
+                if dn:
+                    ent(kind, dn)['hosts'].add(name)
+        order = {'VRF': 0, 'BD': 1, 'EPG': 2}
+        return [dict(o, leafs=sorted(o['leafs']), hosts=sorted(o['hosts']))
+                for o in sorted(out.values(), key=lambda o: (order[o['kind']], o['name']))]
+
     def path_label(self, path):
         p = self.paths.get(path)
         if not p:

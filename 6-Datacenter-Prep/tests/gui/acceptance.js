@@ -90,6 +90,11 @@ const SOLUTION = { fvTenant: { attributes: { name: 'Shop' }, children: [
     await p.evaluate(() => App.go('system', 'changes')); await p.waitForSelector('details.chg');
     const chg = await p.innerText('details.chg');
     check(chg.includes('GUI') && chg.includes('admin'), 'Change-History zeigt die Änderung mit Herkunft GUI');
+    await p.evaluate(() => App.go('sim', 'topo')); await p.waitForSelector('select.ovsel');
+    await p.selectOption('select.ovsel', 'uni/tn-Shop/ap-Webshop/epg-App'); await p.waitForTimeout(300);
+    const ovOn = await p.$$eval('svg.topo .nd.ov', gs => gs.map(g => g.dataset.k));
+    const ovTxt = await p.innerText('.ovbar');
+    check(ovOn.includes('host:app1') && !ovOn.includes('host:web1') && ovTxt.includes('leaf102'), 'Overlay EPG App: leaf102 und app1 hervorgehoben, web1 nicht');
     t = await trafficTest('app1', 'tcp', 22);
     check(t.includes('DROP') && t.includes('POLICY_IMPLICIT_DENY'), 'SSH bleibt blockiert');
 

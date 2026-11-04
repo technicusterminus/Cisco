@@ -6,7 +6,6 @@ Alle Punkte sind offen. Erledigt ist, was in `docs/GAP-ANALYSE.md` als „behobe
 
 | # | Punkt | Begründung | Umfang |
 |---|---|---|---|
-| B-08 | Topologie: Overlays für EPG, BD, VRF und Policy (Pfad und Drop-Punkt aus dem Traffic-Test sind umgesetzt) | Zusammenhänge sichtbar machen | Frontend |
 | B-09 | Dark Mode und Tastaturbedienung (Fokus-Reihenfolge, Shortcuts) | Barrierefreiheit | CSS-Tokens, Frontend |
 
 ## Phase 3: Troubleshooting
@@ -29,4 +28,3 @@ Alle Punkte sind offen. Erledigt ist, was in `docs/GAP-ANALYSE.md` als „behobe
 |---|---|
 | T-01 | `engine.py` (2.300 Zeilen) entlang der Verantwortungen teilen: Access, Endpoints, Routing, Policy |
 | T-02 | Typprüfung einführen (Lint mit `ruff --select E9,F` ist eingeführt und sauber) |
-| T-03 | GUI-Tests in einen gemeinsamen Runner mit Bericht |

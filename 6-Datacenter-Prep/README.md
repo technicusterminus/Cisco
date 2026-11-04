@@ -105,6 +105,8 @@ Wie beim APIC:
 
 Oben rechts: Fault-Zähler, **CLI** (APIC und alle Switches), **API Inspector** (zeigt jeden REST-Aufruf der GUI mit Payload und Antwort) und **Visore** (Object Store Browser).
 
+*Fabric > Topology* und *Simulation > Topologie & Hosts* haben ein **Overlay**: Wähle eine VRF, BD oder EPG, und die Topologie zeigt, auf welchen Leafs sie deployed ist und welche Hosts dazu gelernt sind.
+
 *System > Change-History* zeigt jede Änderung je Transaktion mit Benutzer, Herkunft (GUI, REST, Import, Rollback, NDO) und Diff; Config Rollbacks erscheinen dort ebenfalls.
 
 Datacenter Prep bildet Aufbau, Begriffe und Arbeitsabläufe der APIC-GUI nach. Layout und Grafik sind eigenständig, Bereiche ohne Funktion (z. B. L4-L7, SNMP, Kubernetes) sind als Menüpunkt vorhanden und so gekennzeichnet.

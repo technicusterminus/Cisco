@@ -1203,6 +1203,20 @@ if __name__ == '__main__':
     unittest.main()
 
 
+class TestOverlay(unittest.TestCase):
+    """B-08: Overlay je EPG/BD/VRF aus der Engine (Deployment auf Leafs, gelernte Hosts)."""
+
+    def test_overlay_follows_deployment_and_learning(self):
+        S = Sim(tempfile.mkdtemp(), 'admin')
+        S.sim['settings']['discoverySeconds'] = 0
+        S.load_lab('37-link-or-policy')
+        ov = {o['dn']: o for o in S.engine.overlay()}
+        app = ov['uni/tn-Shop/ap-Webshop/epg-App']
+        self.assertEqual((app['kind'], app['leafs'], app['hosts']), ('EPG', ['leaf102'], []), 'deployed, aber app1 ist nicht gelernt')
+        self.assertEqual(ov['uni/tn-Shop/ctx-Prod']['leafs'], ['leaf101', 'leaf102'])
+        self.assertIn('web1', ov['uni/tn-Shop/BD-BD-Web']['hosts'])
+
+
 class TestCliHonesty(unittest.TestCase):
     """B-14: Das Terminal sagt, was echt ist, was simulator-spezifisch ist und was es nicht kann."""
 

@@ -1860,6 +1860,8 @@ def make_handler(hub):
                     return self.send(200, {'ok': True, 'title': lab['title']})
                 if rest == 'labs/check':
                     return self.send(200, S.check_lab() or {'checks': []})
+                if rest == 'overlay':
+                    return self.send(200, e.overlay())
                 if rest == 'changes':
                     return self.send(200, S.changes(int((q.get('limit') or ['100'])[0])))
                 if rest == 'labs/log':
