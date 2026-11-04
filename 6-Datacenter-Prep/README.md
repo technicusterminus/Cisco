@@ -105,6 +105,8 @@ Wie beim APIC:
 
 Oben rechts: Fault-Zähler, **CLI** (APIC und alle Switches), **API Inspector** (zeigt jeden REST-Aufruf der GUI mit Payload und Antwort) und **Visore** (Object Store Browser).
 
+**Bedienung:** Das Farbschema (Auto/Hell/Dunkel) lässt sich oben rechts umschalten; Auto folgt dem System. `?` zeigt die Tastenkürzel (z. B. `Alt+1…9` für die Hauptbereiche, `Alt+T` Traffic Inspector, `Alt+L` Labs). Alle klickbaren Elemente sind per Tab erreichbar und mit Enter/Leertaste auslösbar.
+
 *Fabric > Topology* und *Simulation > Topologie & Hosts* haben ein **Overlay**: Wähle eine VRF, BD oder EPG, und die Topologie zeigt, auf welchen Leafs sie deployed ist und welche Hosts dazu gelernt sind.
 
 *System > Change-History* zeigt jede Änderung je Transaktion mit Benutzer, Herkunft (GUI, REST, Import, Rollback, NDO) und Diff; Config Rollbacks erscheinen dort ebenfalls.

@@ -51,6 +51,7 @@ Untersucht wurden:
 | Endpoint Move und Link-Ausfall nicht als Ereignis | Labs 16, 17 nicht möglich, Link-Probleme erschienen als EP_NOT_LEARNED | **behoben**: Events S9101–S9103, Endpoint-Verlauf, Codes LINK_DOWN/PORT_ADMIN_DOWN, Labs 36 und 37 |
 | CLI meldete nicht unterstützte Befehle wie ein echtes Gerät („Invalid command“) | Lernende konnten Grenzen des Simulators nicht von echten Fehlbedienungen unterscheiden | **behoben**: Herkunft je Ausgabe (`device`/`sim`/`unsupported`), Diagnoseweg bei nicht unterstützten Befehlen, `TestCliHonesty` |
 | Diagnoseweg nicht nachvollziehbar | Nach einem Lab war unklar, welche Tests und Befehle zum Ergebnis geführt haben | **behoben**: Diagnoseprotokoll je Lab-Sitzung, ohne Bewertung |
+| Kein Dark Mode, Tastaturbedienung lückenhaft | Klickbare Links ohne Fokus, keine Shortcuts | **behoben**: Farb-Tokens mit dunklem Satz, sichtbarer Fokus, Rollen und Tastenkürzel |
 | Topologie zeigte keine logischen Objekte | Wo eine VRF, BD oder EPG wirkt, war nur aus Tabellen ablesbar | **behoben**: Overlay in der Topologie (`GET /sim/overlay`) |
 | Keine Change-History | Wer was wann über welchen Weg geändert hat, war nur im Audit-Log je Objekt zu sehen; Rollbacks gar nicht | **behoben**: Herkunft je Änderung, Rollback als Diff, *System > Change-History* |
 | Prioritäten zwischen vzAny, EPG-Regeln und Taboo vereinfacht | mögliche Fehlaussagen bei überlappenden Regeln | offen, zuerst gegen echtes ACI prüfen |
