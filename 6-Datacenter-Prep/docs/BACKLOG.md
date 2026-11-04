@@ -23,6 +23,4 @@ Alle Punkte sind offen. Erledigt ist, was in `docs/GAP-ANALYSE.md` als „behobe
 
 ## Technik
 
-| # | Punkt |
-|---|---|
-| T-02 | Typprüfung einführen (Lint mit `ruff --select E9,F` ist eingeführt und sauber) |
+Keine offenen Punkte. Lint (`ruff`), Typprüfung (`mypy`), Aufteilung der Engine und der GUI-Testrunner sind umgesetzt.
