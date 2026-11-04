@@ -199,6 +199,44 @@ class TestSolutions(LabBase):
         self.assertEqual(e().packet(e().cls[app], e().cls[web], 'tcp', 443, 49152, 'ack')[0], 'permit')
         self.assertEqual(self.tr('web1', 'app1', 'tcp', 443)['verdict'], 'ALLOW')
 
+    def test_subject_without_apply_both_directions_uses_own_filter_per_direction(self):
+        """B-06: Ohne Apply Both Directions gelten vzInTerm (Consumer -> Provider) und vzOutTerm (Provider -> Consumer)
+        getrennt, ohne Port-Tausch. Fehlt der Rueckrichtungs-Filter, scheitert die Antwort."""
+        e = lambda: self.S.engine
+        web, app = 'uni/tn-Shop/ap-Webshop/epg-Web', 'uni/tn-Shop/ap-Webshop/epg-App'
+
+        def tree(with_out):
+            terms = [mo('vzInTerm', {}, mo('vzRsFiltAtt', {'tnVzFilterName': 'to-443'}))]
+            if with_out:
+                terms.append(mo('vzOutTerm', {}, mo('vzRsFiltAtt', {'tnVzFilterName': 'from-443'})))
+            return [('uni', mo('fvTenant', {'name': 'Shop'},
+                               mo('vzFilter', {'name': 'to-443'}, mo('vzEntry', {'name': 'e', 'etherT': 'ip', 'prot': 'tcp',
+                                                                                'dFromPort': '443', 'dToPort': '443'})),
+                               mo('vzFilter', {'name': 'from-443'}, mo('vzEntry', {'name': 'e', 'etherT': 'ip', 'prot': 'tcp',
+                                                                                  'sFromPort': '443', 'sToPort': '443'})),
+                               mo('vzBrCP', {'name': 'c-https'}, mo('vzSubj', {'name': 's'}, *terms)),
+                               mo('fvAp', {'name': 'Webshop'},
+                                  mo('fvAEPg', {'name': 'Web'}, mo('fvRsCons', {'tnVzBrCPName': 'c-https'})),
+                                  mo('fvAEPg', {'name': 'App'}, mo('fvRsProv', {'tnVzBrCPName': 'c-https'})))))]
+        self.apply(tree(False))
+        self.assertTrue(self.S.store.get('uni/tn-Shop/brc-c-https/subj-s/intmnl/rsfiltAtt-to-443'))
+        self.assertEqual(e().packet(e().cls[web], e().cls[app], 'tcp', 50000, 443, 'syn')[0], 'permit')
+        self.assertEqual(e().packet(e().cls[app], e().cls[web], 'tcp', 443, 50000, 'ack')[0], 'deny',
+                         'ohne vzOutTerm gibt es keine Rueckrichtung, auch kein automatischer Port-Tausch')
+        r = self.tr('web1', 'app1', 'tcp', 443)
+        self.assertEqual((r['verdict'], r['reason']), ('DROP', 'POLICY_REPLY_DENIED'))
+        self.S.load_lab(LAB)
+        self.apply(tree(True))
+        self.assertEqual(e().packet(e().cls[app], e().cls[web], 'tcp', 443, 50000, 'ack')[0], 'permit')
+        self.assertEqual(e().packet(e().cls[app], e().cls[web], 'tcp', 50000, 443, 'syn')[0], 'deny',
+                         'der Rueckrichtungs-Filter gilt nur wie definiert (Quell-Port 443)')
+        self.assertEqual(self.tr('web1', 'app1', 'tcp', 443)['verdict'], 'ALLOW')
+        z = Cli(self.S.engine, self.S.sim).run('leaf101', 'show zoning-rule')
+        rules = [ln for ln in z.split('\n') if 'c-https' in ln]
+        self.assertEqual(len(rules), 2, z)
+        self.assertTrue(all('| uni-dir ' in ln for ln in rules), z)
+        self.assertNotIn('bi-dir', '\n'.join(rules))
+
     def test_service_model_is_separate_from_policy(self):
         self.apply(solution())
         self.S.sim['hosts'] = [dict(h, services=['tcp/22']) if h['name'] == 'app1' else h for h in self.S.sim['hosts']]
@@ -220,6 +258,87 @@ class TestSolutions(LabBase):
         res, by = self.check()
         self.assertFalse(by['web1 → app1 SSH (TCP 22) ist durch die Policy blockiert']['ok'])
         self.assertFalse(by['web1 → app1 HTTPS (TCP 443) funktioniert']['ok'])
+
+
+class TestContractPriorities(LabBase):
+    """B-16: Prioritaeten nach Cisco ACI Contract Guide (Table 8 Zoning-Rule-Prioritaet, Table 23 Filter-Prioritaet).
+    Spezifischere EPG-Paare gewinnen ueber vzAny; Deny gewinnt nur bei gleicher Zoning-Rule-Prioritaet."""
+
+    WEB, APP = 'uni/tn-Shop/ap-Webshop/epg-Web', 'uni/tn-Shop/ap-Webshop/epg-App'
+    SSH = {'name': 'ssh', 'etherT': 'ip', 'prot': 'tcp', 'dFromPort': '22', 'dToPort': '22'}
+
+    def build(self, any_action='permit', epg_action='deny', any_entry=None, epg_entry=None, pref=None):
+        e = self.S.engine
+        vrf = e.cls[self.WEB]['vrf']
+        flt = lambda n, en: mo('vzFilter', {'name': n}, mo('vzEntry', dict(en, name='e')))
+        subj = lambda f, act: mo('vzSubj', {'name': 's', 'revFltPorts': 'yes'},
+                                 mo('vzRsSubjFiltAtt', {'tnVzFilterName': f, 'action': act}))
+        kids = [flt('f-any', any_entry or self.SSH), flt('f-epg', epg_entry or self.SSH),
+                mo('vzBrCP', {'name': 'c-any'}, subj('f-any', any_action)),
+                mo('vzBrCP', {'name': 'c-epg'}, subj('f-epg', epg_action)),
+                mo('fvAp', {'name': 'Webshop'},
+                   mo('fvAEPg', {'name': 'Web', **({'prefGrMemb': pref[0]} if pref else {})},
+                      mo('fvRsCons', {'tnVzBrCPName': 'c-epg'})),
+                   mo('fvAEPg', {'name': 'App', **({'prefGrMemb': pref[1]} if pref else {})},
+                      mo('fvRsProv', {'tnVzBrCPName': 'c-epg'})))]
+        self.apply([('uni', mo('fvTenant', {'name': 'Shop'}, *kids)),
+                    (vrf + '/any', mo('vzAny', {'prefGrMemb': 'enabled' if pref else 'disabled'},
+                                      mo('vzRsAnyToCons', {'tnVzBrCPName': 'c-any'}),
+                                      mo('vzRsAnyToProv', {'tnVzBrCPName': 'c-any'})))])
+
+    def pkt(self, src, dst, port=22):
+        e = self.S.engine
+        return e.packet(e.cls[src], e.cls[dst], 'tcp', 50000, port, 'syn')
+
+    def test_epg_deny_beats_vzany_permit(self):
+        """Figure 134: vzAny-to-vzAny permit SSH (17), EPG-to-EPG deny SSH (7) -> Web -> App SSH verworfen."""
+        self.build('permit', 'deny')
+        act, why = self.pkt(self.WEB, self.APP)
+        self.assertEqual((act, self.S.engine.last_code), ('deny', 'POLICY_DENY_RULE'))
+        self.assertIn('fully_qual(7)', why)
+
+    def test_epg_permit_beats_vzany_deny(self):
+        """Hoehere Zoning-Rule-Prioritaet gewinnt vor der Aktion: EPG-to-EPG permit (7) vor vzAny-to-vzAny deny (17)."""
+        self.build('deny', 'permit')
+        act, why = self.pkt(self.WEB, self.APP)
+        self.assertEqual(act, 'permit', why)
+        self.assertIn('fully_qual(7)', why)
+
+    def test_same_priority_deny_wins_over_more_specific_permit(self):
+        """Figure 135: gleiche Prioritaet (EPG-to-EPG), Deny any-IP gewinnt gegen spezifischeren Permit SSH."""
+        self.build('permit', 'deny', epg_entry={'etherT': 'ip'})
+        self.apply([('uni/tn-Shop', mo('fvTenant', {}, mo('vzBrCP', {'name': 'c-epg2'}, mo('vzSubj', {'name': 's'},
+                    mo('vzRsSubjFiltAtt', {'tnVzFilterName': 'f-any'}))))),
+                    (self.WEB, mo('fvAEPg', {}, mo('fvRsCons', {'tnVzBrCPName': 'c-epg2'}))),
+                    (self.APP, mo('fvAEPg', {}, mo('fvRsProv', {'tnVzBrCPName': 'c-epg2'})))])
+        self.assertEqual(self.pkt(self.WEB, self.APP)[0], 'deny')
+
+    def test_any_filter_has_lower_priority_than_specific_filter(self):
+        """EPG-to-EPG mit default-Filter ist src_dst_any(9), mit spezifischem Filter fully_qual(7)."""
+        self.build('deny', 'permit', epg_entry={'etherT': 'unspecified'}, any_entry={'etherT': 'unspecified'})
+        act, why = self.pkt(self.WEB, self.APP, 443)
+        self.assertEqual(act, 'permit', 'EPG-to-EPG (9) vor vzAny-to-vzAny (21)')
+        self.assertIn('src_dst_any(9)', why)
+
+    def test_preferred_group_loses_to_contract_deny(self):
+        """Preferred Group permit ist grp_any_any_any_permit(20): ein Deny-Contract (7) zwischen Mitgliedern gewinnt."""
+        self.build('permit', 'deny', pref=('include', 'include'))
+        self.assertEqual(self.pkt(self.WEB, self.APP)[0], 'deny')
+        self.assertEqual(self.pkt(self.WEB, self.APP, 443)[0], 'permit', 'anderer Verkehr ueber die Preferred Group')
+        self.assertEqual(self.S.engine.last_code, 'POLICY_PREFERRED_GROUP')
+
+    def test_preferred_group_non_member_denies_vzany_any_filter(self):
+        """Nicht-Mitglied: grp-Denies (18/19) liegen vor vzAny-to-vzAny mit any-Filter (21), aber hinter 17."""
+        self.build('permit', 'permit', any_entry={'etherT': 'unspecified'}, epg_entry=self.SSH, pref=('include', 'exclude'))
+        self.assertEqual(self.pkt(self.WEB, self.APP, 443)[0], 'deny')
+        self.assertEqual(self.pkt(self.WEB, self.APP)[0], 'permit', 'EPG-to-EPG SSH (7)')
+
+    def test_zoning_rule_shows_guide_priorities(self):
+        self.build('permit', 'deny')
+        z = Cli(self.S.engine, self.S.sim).run('leaf101', 'show zoning-rule')
+        any_rows = [ln for ln in z.split('\n') if 'c-any' in ln]
+        self.assertTrue(any_rows and all('any_any_filter(17)' in ln for ln in any_rows), z)
+        self.assertTrue(all('fully_qual(7)' in ln for ln in z.split('\n') if '| c-epg ' in ln), z)
 
 
 class TestConnectivityCases(LabBase):

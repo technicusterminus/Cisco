@@ -5,6 +5,36 @@ from .model import CLASSES, parent_dn, tenant_of
 from .engine_util import (vlan_num, port_val)
 
 
+def entry_is_any(ea):
+    """Filter Entry ohne EtherType ("unspecified") entspricht dem default-/any-Filter."""
+    return ea.get('etherT', 'unspecified') == 'unspecified'
+
+
+def rule_prio(src_specific, dst_specific, any_filter):
+    """Zoning-Rule-Prioritaet nach Cisco ACI Contract Guide, Table 8 (EPG-to-EPG, EPG-to-vzAny, vzAny-to-EPG,
+    vzAny-to-vzAny; je mit spezifischem oder any-Filter). Kleinere Zahl = hoehere Prioritaet."""
+    table = {(True, True): ((7, 'fully_qual'), (9, 'src_dst_any')),
+             (True, False): ((13, 'src_any_filter'), (15, 'src_any_any')),
+             (False, True): ((14, 'any_dest_filter'), (16, 'any_dest_any')),
+             (False, False): ((17, 'any_any_filter'), (21, 'any_any_any'))}
+    n, name = table[(bool(src_specific), bool(dst_specific))][1 if any_filter else 0]
+    return n, '%s(%d)' % (name, n)
+
+
+def filter_prio(ea):
+    """Filter-Prioritaet nach Contract Guide, Table 23 (1 = am spezifischsten). Entscheidet nur zwischen Permit
+    und Redirect gleicher Zoning-Rule-Prioritaet."""
+    if entry_is_any(ea):
+        return 7
+    if ea.get('tcpRules'):
+        return 1
+    if ea.get('applyToFrag') == 'yes':
+        return 6
+    spec = lambda a, b: (ea.get(a, 'unspecified'), ea.get(b, 'unspecified')) != ('unspecified', 'unspecified')
+    sp, dp = spec('sFromPort', 'sToPort'), spec('dFromPort', 'dToPort')
+    return 2 if sp and dp else 3 if dp else 4 if sp else 5
+
+
 class PolicyMixin:
     # ------------------------------------------------------------------
     # Relationen auflösen
@@ -339,14 +369,15 @@ class PolicyMixin:
                 for brc in s['intra']:
                     for subj in self.kids(brc, 'vzSubj'):
                         sa = self.A(subj)
-                        for rf in self.kids(subj, 'vzRsSubjFiltAtt'):
+                        for rf, dirn in self.subj_filters(subj):
                             rfa = self.A(rf)
                             if rfa['state'] != 'formed':
                                 continue
                             for e in self.kids(rfa['tDn'], 'vzEntry'):
                                 ea = self.A(e)
+                                # EPG ist Consumer und Provider: Richtungsfilter (vzInTerm/vzOutTerm) gelten wie definiert
                                 hit = self._entry_match(ea, proto, sport, dport, flags, False) or \
-                                    self._entry_match(ea, proto, sport, dport, flags, sa['revFltPorts'] == 'yes')
+                                    (dirn == 'both' and self._entry_match(ea, proto, sport, dport, flags, sa['revFltPorts'] == 'yes'))
                                 if hit:
                                     return self._decide('POLICY_INTRA_EPG_CONTRACT', rfa['action'],
                                                         'Intra-EPG-Contract %s / %s / %s' % (self.short(brc), sa['name'], self.A(rfa['tDn'])['name']),
@@ -357,8 +388,7 @@ class PolicyMixin:
                 return self._decide('POLICY_INTRA_EPG_ISOLATION', 'deny', 'Intra-EPG-Isolation ist aktiv', {'epg': s['dn']})
             return self._decide('POLICY_SAME_EPG', 'permit', 'Quelle und Ziel in derselben EPG - kein Contract noetig', {'epg': s['dn']})
         anya = self.A(vrf + '/any') or {}
-        if anya.get('prefGrMemb') == 'enabled' and s['pref'] and d['pref']:
-            return self._decide('POLICY_PREFERRED_GROUP', 'permit', 'Beide sind Mitglied der Preferred Group', {'vrf': vrf})
+        pref_on = anya.get('prefGrMemb') == 'enabled'
         hits = []
         for brc, rel in self.contracts.items():
             s_cons = s['dn'] in rel['cons'] or vrf in rel['cons_any']
@@ -377,33 +407,67 @@ class PolicyMixin:
                 continue
             for subj in self.kids(brc, 'vzSubj'):
                 sa = self.A(subj)
-                for rf in self.kids(subj, 'vzRsSubjFiltAtt'):
+                for rf, dirn in self.subj_filters(subj):
                     rfa = self.A(rf)
                     if rfa['state'] != 'formed':
                         continue
+                    swap = dirn == 'both' and sa['revFltPorts'] == 'yes'
                     for e in self.kids(rfa['tDn'], 'vzEntry'):
                         ea = self.A(e)
                         where = '%s / %s / %s / %s' % (self.short(brc), sa['name'], self.A(rfa['tDn'])['name'],
                                                        ea['name'])
-                        if fwd and self._entry_match(ea, proto, sport, dport, flags, False):
-                            hits.append((rfa['action'], where + ' (Consumer -> Provider)', subj, 'c2p', brc, rfa['tDn'], e))
-                        # stateful: Provider -> Consumer nur TCP mit ACK (Antworten), kein Verbindungsaufbau vom Provider
-                        if rev and ea.get('stateful') == 'yes' and (proto != 'tcp' or flags != 'ack'):
+                        if fwd and dirn != 'p2c' and self._entry_match(ea, proto, sport, dport, flags, False):
+                            hits.append((rfa['action'], where + ' (Consumer -> Provider)', subj, 'c2p', brc, rfa['tDn'], e,
+                                         rule_prio(s['dn'] in rel['cons'], d['dn'] in rel['prov'], entry_is_any(ea))))
+                        if not rev or dirn == 'c2p':
                             continue
-                        if rev and self._entry_match(ea, proto, sport, dport, flags, sa['revFltPorts'] == 'yes'):
+                        # stateful: Provider -> Consumer nur TCP mit ACK (Antworten), kein Verbindungsaufbau vom Provider
+                        if ea.get('stateful') == 'yes' and (proto != 'tcp' or flags != 'ack'):
+                            continue
+                        if self._entry_match(ea, proto, sport, dport, flags, swap):
                             hits.append((rfa['action'], where + ' (Provider -> Consumer%s)'
-                                         % (', Ports getauscht' if sa['revFltPorts'] == 'yes' else ''), subj, 'p2c', brc, rfa['tDn'], e))
-        deny = [h for h in hits if h[0] == 'deny']
-        if deny:
-            return self._decide('POLICY_DENY_RULE', 'deny', 'Deny-Filter: ' + deny[0][1], self._rule(deny[0]))
+                                         % (', Ports getauscht' if swap else ', eigener Filter' if dirn == 'p2c' else ''),
+                                         subj, 'p2c', brc, rfa['tDn'], e,
+                                         rule_prio(s['dn'] in rel['prov'], d['dn'] in rel['cons'], entry_is_any(ea))))
+        # Zoning-Rule-Prioritaet (Contract Guide, Table 8): kleinere Zahl gewinnt. Preferred Group: Permit any-any (20);
+        # ist eine Seite kein Mitglied, greifen die impliziten Denies src_any_any_deny(18) / any_dest_any_deny(19).
+        if pref_on:
+            if s['pref'] and d['pref']:
+                hits = [h for h in hits if h[7][0] < 20]
+                if not hits:
+                    return self._decide('POLICY_PREFERRED_GROUP', 'permit', 'Beide sind Mitglied der Preferred Group '
+                                        '(grp_any_any_any_permit(20))', {'vrf': vrf})
+            else:
+                hits = [h for h in hits if h[7][0] < 18]
+                if not hits:
+                    return self._decide('POLICY_IMPLICIT_DENY', 'deny', 'Preferred Group aktiv, %s ist kein Mitglied: '
+                                        'implizites Deny (grp_src_any_any_deny(18) / grp_any_dest_any_deny(19))'
+                                        % self.short((d if s['pref'] else s)['dn']), {'vrf': vrf})
         if hits:
-            # gleiche Prioritaet: Deny vor Redirect vor Permit
-            redir = [h for h in hits if (getattr(self, 'graphs', {}).get(h[2]) or {}).get('state') == 'applied']
-            h0 = redir[0] if redir else hits[0]
+            best = min(h[7][0] for h in hits)
+            top = [h for h in hits if h[7][0] == best]
+            prio = ' [%s]' % top[0][7][1]
+            deny = [h for h in top if h[0] == 'deny']
+            if deny:
+                # gleiche Zoning-Rule-Prioritaet: Deny gewinnt, auch gegen einen spezifischeren Permit-Filter
+                return self._decide('POLICY_DENY_RULE', 'deny', 'Deny-Filter: ' + deny[0][1] + prio, self._rule(deny[0]))
+            # Redirect gegen Permit: spezifischerer Filter gewinnt (Table 23), bei gleicher Filter-Prioritaet Redirect
+            graphs = getattr(self, 'graphs', {})
+            key = lambda h: (filter_prio(self.A(h[6])), 0 if (graphs.get(h[2]) or {}).get('state') == 'applied' else 1)
+            h0 = min(top, key=key)
             self.last_hit = (h0[2], h0[3])
-            return self._decide('POLICY_CONTRACT_PERMIT', 'permit', 'Contract: ' + h0[1], self._rule(h0))
+            return self._decide('POLICY_CONTRACT_PERMIT', 'permit', 'Contract: ' + h0[1] + prio, self._rule(h0))
         return self._decide('POLICY_IMPLICIT_DENY', 'deny', 'Implicit Deny: kein Contract mit passendem Filter zwischen %s und %s' % (
             self.short(s['dn']), self.short(d['dn'])))
+
+    def subj_filters(self, subj):
+        """Filter eines Subjects mit Richtung: 'both' (Apply Both Directions, vzRsSubjFiltAtt), 'c2p' (vzInTerm),
+        'p2c' (vzOutTerm). Ohne Apply Both Directions gilt jede Richtung nur mit ihren eigenen Filtern, ohne Port-Tausch."""
+        out = [(rf, 'both') for rf in self.kids(subj, 'vzRsSubjFiltAtt')]
+        for term, dirn in (('/intmnl', 'c2p'), ('/outtmnl', 'p2c')):
+            if self.has(subj + term):
+                out += [(rf, dirn) for rf in self.kids(subj + term, 'vzRsFiltAtt')]
+        return out
 
     def _rule(self, h):
         """Angewandte Regel als Objektreferenzen."""
