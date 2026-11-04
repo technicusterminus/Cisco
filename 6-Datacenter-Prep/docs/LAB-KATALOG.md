@@ -2,7 +2,7 @@
 
 Die Tabelle vergleicht den geplanten Lernpfad (26 Labs) mit den vorhandenen Lab-Dateien in `labs/`.
 
-**Format neu** (Labs 01 bis 23 außer 08 sowie 32 bis 45) heißt, das Lab hat:
+**Format neu** (Labs 01 bis 28 außer 08 sowie 32 bis 45) heißt, das Lab hat:
 
 - Anforderungen statt Klickanleitung
 - vier Hinweisstufen
@@ -53,4 +53,4 @@ Weitere vorhandene Labs außerhalb dieses Pfads:
 - 05 vPC (neues Format)
 - 08 REST-API
 - 10 bis 12 (OOB/NTP, Static Leaf und Taboo, VMM – alle im neuen Format)
-- 14 bis 23 (L2Out, Transit Routing, PBR, L3Out-Varianten, EIGRP/IP SLA, Floating SVI, AAA, In-Band, ESG – neues Format) und 24 bis 31: Firmware, Export/Import, Monitoring, DHCP Relay, MCP, Multi-Pod, Remote Leaf, Multi-Site
+- 14 bis 28 (L2Out, Routing-Varianten, AAA, In-Band, ESG, Firmware, Export/Import, Monitoring, DHCP Relay, MCP – neues Format) und 29 bis 31: Multi-Pod, Remote Leaf, Multi-Site

@@ -5,6 +5,20 @@
  "level": "Fortgeschritten",
  "duration": "40 min",
  "fabric": "discovered",
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 10"
+ ],
+ "tools": [
+  "Fabric > Fabric Policies",
+  "Admin > External Data Collectors",
+  "Simulation > Monitoring",
+  "CLI: show snmp, show logging server"
+ ],
  "goals": [
   "SNMP-Polling mit Community und Client Group über die Pod Policy Group freigeben",
   "Faults und Audit Logs per Syslog und SNMP-Trap senden",
@@ -408,30 +422,50 @@
    "descr": "Applikationsserver"
   }
  ],
- "tasks": [
+ "requirements": [
+  "Der SNMP-Manager 192.168.10.61 fragt APIC und Switches mit der Community NMS-Read ab.",
+  "Faults und Audit Logs gehen per Syslog an 192.168.10.60 und als SNMP-Trap an 192.168.10.61; schwere Faults als Mail an noc@firma.de.",
+  "Nur der SNMP-Manager darf abfragen: kein anderer Rechner im OOB-Netz, keine Standard-Community."
+ ],
+ "limits": [
+  "Monitoring-Ziele und Empfang werden simuliert; SNMPv3, MIB-Inhalte und Mail-Formate sind vereinfacht."
+ ],
+ "hints": [
+  "**Konzept:** Abfragen (SNMP-Polling) und Senden (Syslog, Traps, Callhome) sind getrennte Wege. Polling wirkt erst, wenn die SNMP Policy über eine Pod Policy Group auf den Pod angewendet ist – und nur für Adressen, die in einer Client Group stehen.",
+  "**Objekte:** Static Node Management Addresses, SNMP Policy (Community, Client Group mit OOB), Pod Policy Group und Pod Profile, Destination Groups (Syslog, SNMP, Callhome), Monitoring Sources in der Common Policy.",
+  "**Prüfschritte:** *Simulation > Monitoring*: SNMP-Walk und empfangene Meldungen. Die Fehlermeldung des Walks nennt, was fehlt.",
+  "**Lösung:** OOB-Adressen 192.168.10.<ID>, SNMP Policy default mit Community NMS-Read und Client Group NMS (nur 192.168.10.61, OOB), in die Pod Policy Group, im Pod Profile zuordnen. Syslog-, SNMP-Trap- und Callhome-Gruppen mit OOB und die Sources in der Common Policy."
+ ],
+ "cause": "Die Switches haben keine Management-Adressen, es gibt keine SNMP Policy und keine Monitoring-Ziele.",
+ "monitors": [
   {
-   "title": "Management-Adressen",
-   "text": "**Tenant mgmt > Node Management Addresses**: Static Node Management Addresses für 101–104, 201, 202 (192.168.10.<Node-ID>/24, Gateway 192.168.10.254)."
+   "name": "syslog-srv",
+   "type": "syslog",
+   "ip": "192.168.10.60",
+   "port": 514
   },
   {
-   "title": "SNMP-Polling",
-   "text": "**Fabric > Fabric Policies > Policies > Pod > SNMP**: Policy **default** aktivieren, Contact und Location, Community **NMS-Read**, Client Group mit Management EPG default (Out-of-Band) und Client **192.168.10.61**. Dann eine Pod Policy Group **PodPol** mit dieser SNMP Policy und im Pod Profile default zuweisen.",
-   "hint": "Ohne Client Group beantwortet die ACI keine SNMP-Anfrage – auch mit richtiger Community nicht."
+   "name": "snmp-nms",
+   "type": "snmp",
+   "ip": "192.168.10.61",
+   "port": 162,
+   "community": "NMS-Read"
   },
   {
-   "title": "Destination Groups",
-   "text": "**Admin > External Data Collectors > Monitoring Destinations**: Syslog-Gruppe **Syslog** (Ziel 192.168.10.60, Severity information), SNMP-Gruppe **NMS-Traps** (192.168.10.61:162, v2c, NMS-Read), Callhome-Gruppe **NOC-Mail** (From apic1@firma.de, SMTP 192.168.10.62, Ziel noc@firma.de). Jeweils Management EPG default (Out-of-Band)."
+   "name": "mail-srv",
+   "type": "smtp",
+   "ip": "192.168.10.62",
+   "port": 25
   },
   {
-   "title": "Sources",
-   "text": "**Fabric Policies > Policies > Monitoring > Common Policy**: Syslog Source (Faults und Audit, ab warning), SNMP Source (Faults ab minor), Callhome Source (Faults ab major) – jeweils mit ihrer Destination Group.",
-   "hint": "Ohne Source sendet der APIC nichts, auch wenn die Destination Group fertig ist."
-  },
-  {
-   "title": "Testen",
-   "text": "Simulation > Fileserver & Monitoring: *snmpwalk* gegen apic1 und leaf101, dann einen Test-Fault **major** auslösen. Er muss beim Syslog-Server, beim SNMP-Manager und als Mail ankommen."
+   "name": "scanner",
+   "type": "snmp",
+   "ip": "192.168.10.99",
+   "port": 162,
+   "community": "public"
   }
  ],
+ "tasks": [],
  "checks": [
   {
    "desc": "SNMP-Walk auf apic1 mit NMS-Read",
@@ -473,6 +507,50 @@
    "type": "received",
    "collector": "mail-srv",
    "contains": "Mail an noc@firma.de"
+  },
+  {
+   "desc": "Ein fremder Rechner im OOB-Netz bekommt keine SNMP-Antwort",
+   "type": "snmp",
+   "manager": "scanner",
+   "node": "leaf101",
+   "community": "NMS-Read",
+   "expect": false,
+   "category": "security"
+  },
+  {
+   "desc": "Die Community public wird nicht beantwortet",
+   "type": "snmp",
+   "manager": "snmp-nms",
+   "node": "leaf101",
+   "community": "public",
+   "expect": false,
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Der SNMP-Walk auf leaf101 läuft in einen Timeout, auf dem APIC klappt er. Was fehlt?",
+   "options": [
+    "Eine Management-Adresse für leaf101",
+    "Die Community",
+    "Ein Contract",
+    "Die Callhome-Gruppe"
+   ],
+   "answer": 0,
+   "explain": "Ohne OOB-Adresse ist der Switch für den Manager nicht ansprechbar."
+  },
+  {
+   "id": "q2",
+   "q": "Warum gehört nur die Adresse des Managers in die Client Group?",
+   "options": [
+    "Jede eingetragene Adresse darf die Fabric abfragen – Least Privilege auch fürs Monitoring",
+    "Weil sonst Traps fehlen",
+    "Weil es nur eine Adresse geben darf",
+    "Das ist egal"
+   ],
+   "answer": 0,
+   "explain": "SNMP-Antworten verraten Version, Interfaces und Konfiguration."
   }
  ],
  "solution": "Management-Adressen: `{\"mgmtOoB\": {\"attributes\": {\"name\": \"default\"}, \"children\": [{\"mgmtRsOoBStNode\": {\"attributes\": {\"tDn\": \"topology/pod-1/node-101\", \"addr\": \"192.168.10.101/24\", \"gw\": \"192.168.10.254\"}}}, {\"mgmtRsOoBStNode\": {\"attributes\": {\"tDn\": \"topology/pod-1/node-102\", \"addr\": \"192.168.10.102/24\", \"gw\": \"192.168.10.254\"}}}, {\"mgmtRsOoBStNode\": {\"attributes\": {\"tDn\": \"topology/pod-1/node-103\", \"addr\": \"192.168.10.103/24\", \"gw\": \"192.168.10.254\"}}}, {\"mgmtRsOoBStNode\": {\"attributes\": {\"tDn\": \"topology/pod-1/node-104\", \"addr\": \"192.168.10.104/24\", \"gw\": \"192.168.10.254\"}}}, {\"mgmtRsOoBStNode\": {\"attributes\": {\"tDn\": \"topology/pod-1/node-201\", \"addr\": \"192.168.10.201/24\", \"gw\": \"192.168.10.254\"}}}, {\"mgmtRsOoBStNode\": {\"attributes\": {\"tDn\": \"topology/pod-1/node-202\", \"addr\": \"192.168.10.202/24\", \"gw\": \"192.168.10.254\"}}}]}}`\n\nFabric (uni): `{\"fabricInst\": {\"attributes\": {}, \"children\": [{\"snmpPol\": {\"attributes\": {\"name\": \"default\", \"adminSt\": \"enabled\", \"contact\": \"noc@firma.de\", \"loc\": \"RZ Frankfurt\"}, \"children\": [{\"snmpCommunityP\": {\"attributes\": {\"name\": \"NMS-Read\"}}}, {\"snmpClientGrpP\": {\"attributes\": {\"name\": \"NMS\"}, \"children\": [{\"snmpRsEpg\": {\"attributes\": {\"tDn\": \"uni/tn-mgmt/mgmtp-default/oob-default\"}}}, {\"snmpClientP\": {\"attributes\": {\"addr\": \"192.168.10.61\"}}}]}}]}}, {\"fabricFuncP\": {\"attributes\": {}, \"children\": [{\"fabricPodPGrp\": {\"attributes\": {\"name\": \"PodPol\"}, \"children\": [{\"fabricRsSnmpPol\": {\"attributes\": {\"tnSnmpPolName\": \"default\"}}}]}}]}}, {\"snmpGroup\": {\"attributes\": {\"name\": \"NMS-Traps\"}, \"children\": [{\"snmpTrapDest\": {\"attributes\": {\"host\": \"192.168.10.61\", \"port\": \"162\", \"ver\": \"v2c\", \"secName\": \"NMS-Read\"}, \"children\": [{\"snmpRsARemoteHostToEpg\": {\"attributes\": {\"tDn\": \"uni/tn-mgmt/mgmtp-default/oob-default\"}}}]}}]}}, {\"syslogGroup\": {\"attributes\": {\"name\": \"Syslog\"}, \"children\": [{\"syslogRemoteDest\": {\"attributes\": {\"host\": \"192.168.10.60\", \"severity\": \"information\"}, \"children\": [{\"fileRsARemoteHostToEpg\": {\"attributes\": {\"tDn\": \"uni/tn-mgmt/mgmtp-default/oob-default\"}}}]}}]}}, {\"callhomeGroup\": {\"attributes\": {\"name\": \"NOC-Mail\"}, \"children\": [{\"callhomeProf\": {\"attributes\": {\"from\": \"apic1@firma.de\", \"contact\": \"NOC\"}, \"children\": [{\"callhomeSmtpServer\": {\"attributes\": {\"host\": \"192.168.10.62\"}, \"children\": [{\"fileRsARemoteHostToEpg\": {\"attributes\": {\"tDn\": \"uni/tn-mgmt/mgmtp-default/oob-default\"}}}]}}]}}, {\"callhomeDest\": {\"attributes\": {\"name\": \"noc\", \"email\": \"noc@firma.de\"}}}]}}, {\"monCommonPol\": {\"attributes\": {}, \"children\": [{\"syslogSrc\": {\"attributes\": {\"name\": \"all\", \"minSev\": \"warning\", \"incl\": \"faults,audit\"}, \"children\": [{\"syslogRsDestGroup\": {\"attributes\": {\"tDn\": \"uni/fabric/slgroup-Syslog\"}}}]}}, {\"snmpSrc\": {\"attributes\": {\"name\": \"traps\", \"minSev\": \"minor\", \"incl\": \"faults\"}, \"children\": [{\"snmpRsDestGroup\": {\"attributes\": {\"tDn\": \"uni/fabric/snmpgroup-NMS-Traps\"}}}]}}, {\"callhomeSrc\": {\"attributes\": {\"minSev\": \"major\", \"incl\": \"faults\"}, \"children\": [{\"callhomeRsDestGroup\": {\"attributes\": {\"tDn\": \"uni/fabric/chgroup-NOC-Mail\"}}}]}}]}}]}}`\n\nPod Profile: `uni/fabric/podprof-default/pods-default-typ-ALL/rspodPGrp` tDn=uni/fabric/funcprof/podpgrp-PodPol. Danach Test-Fault auslösen.",

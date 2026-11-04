@@ -5,12 +5,25 @@
  "level": "Fortgeschritten",
  "duration": "30 min",
  "fabric": "discovered",
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 10"
+ ],
+ "tools": [
+  "Admin > Import/Export",
+  "Simulation > Fileserver",
+  "Traffic Inspector"
+ ],
  "goals": [
   "Eine Remote Location für SCP anlegen",
   "Einen gelöschten Tenant per Import (Merge) aus dem Backup wiederherstellen",
   "Exporte mit AES-Verschlüsselung erstellen, damit Passwörter und Keys enthalten sind"
  ],
- "intro": "Gestern Abend hat ein Kollege versehentlich den Tenant **Shop** gelöscht. Auf dem SCP-Server **192.168.10.50** (backup / Backup123!) liegt das nächtliche Backup **ce2_Shop-Nightly-2026-10-26T23-00-00.tar.gz** in `/backup`. Die Server web1 und app1 sind seitdem offline.\n\nDanach soll ein nächtlicher **Export der ganzen Fabric** eingerichtet werden – diesmal mit Passwörtern, also mit **Global AES Encryption** (Passphrase mindestens 16 Zeichen).",
+ "intro": "Gestern Abend hat ein Kollege versehentlich den Tenant **Shop** gelöscht. Auf dem SCP-Server **192.168.10.50** (backup / Backup123!) liegt das nächtliche Backup **ce2_Shop-Nightly-2026-10-26T23-00-00.tar.gz** in `/backup`. Die Server web1 und app1 sind seitdem offline.\n\nDanach soll ein nächtlicher **Export der ganzen Fabric** eingerichtet werden – diesmal mit Passwörtern und Keys.",
  "config": [
   {
    "polUni": {
@@ -607,29 +620,22 @@
    }
   }
  },
- "tasks": [
-  {
-   "title": "Remote Location",
-   "text": "**Admin > Import/Export > Remote Locations**: **SCP-Backup**, Host 192.168.10.50, SCP, Port 22, Pfad /backup, Benutzer backup, Management EPG **default (Out-of-Band)**."
-  },
-  {
-   "title": "Import",
-   "text": "**Import Policies > Configuration**: **Restore-Shop**, Datei aus dem Backup, Import Type **Merge**, Mode **Atomic**, Remote Location SCP-Backup, *Start Now: Triggered*. Ergebnis unter **Jobs**.",
-   "hint": "Replace würde alles, was nicht im Backup steht, im Zielbereich ersetzen – für einen einzelnen Tenant ist Merge der sichere Weg."
-  },
-  {
-   "title": "Prüfen",
-   "text": "web1 und app1 sind wieder gelernt, web1 → app1 tcp/8080 klappt."
-  },
-  {
-   "title": "AES-Verschlüsselung",
-   "text": "**System Settings > Global AES Passphrase Encryption Settings** (oder Import/Export > Global AES Encryption): Encryption einschalten, Passphrase z. B. `Nightly-Backup#2026`."
-  },
-  {
-   "title": "Export",
-   "text": "**Export Policies > Configuration**: **Fabric-Nightly**, Remote Location SCP-Backup, Include Secure Fields yes, sofort starten. Unter Simulation > Fileserver & Monitoring siehst du die Datei – jetzt *mit* Secure Properties."
-  }
+ "requirements": [
+  "Der Tenant Shop ist aus dem Backup wiederhergestellt, web1 erreicht app1 wieder.",
+  "Die übrige Konfiguration (z. B. die Access Policies) bleibt beim Wiederherstellen unverändert.",
+  "Ein nächtlicher Export der ganzen Fabric läuft – mit Passwörtern und Keys, die dafür verschlüsselt sein müssen."
  ],
+ "limits": [
+  "Export und Import arbeiten mit dem simulierten Fileserver; Dateiformat und Inhalt sind vereinfacht (JSON statt tar.gz mit XML)."
+ ],
+ "hints": [
+  "**Konzept:** Import und Export laufen über eine Remote Location. Ein Import kann zusammenführen (Merge) oder ersetzen (Replace). Passwörter und Keys landen nur in einem Export, wenn sie verschlüsselt werden.",
+  "**Objekte:** *Admin > Import/Export*: Remote Location (SCP, OOB), Import Policy (Merge/Replace, Atomic/Best Effort), Export Policy, *System > Global AES Passphrase Encryption Settings*.",
+  "**Prüfschritte:** Job-Status unter Import/Export: Fehlermeldung lesen. Danach Traffic Inspector web1 → app1. Steht im Export-Job „ohne Secure Properties“?",
+  "**Lösung:** Remote Location SCP-Backup (192.168.10.50, /backup, backup/Backup123!, OOB). Import Restore-Shop mit der Backup-Datei, Merge, Atomic. AES-Verschlüsselung mit Passphrase (mind. 16 Zeichen) aktivieren, dann Export der Fabric mit Secure Fields."
+ ],
+ "cause": "Der Tenant Shop ist gelöscht; es gibt weder Remote Location noch Import- oder Export-Policy.",
+ "tasks": [],
  "checks": [
   {
    "desc": "Import erfolgreich",
@@ -651,18 +657,51 @@
    "expect": true
   },
   {
-   "desc": "Global AES Encryption aktiv",
+   "desc": "Passwörter und Keys werden im Export verschlüsselt",
    "type": "exists",
    "dn": "uni/exportcryptkey",
    "attrs": {
     "strongEncryptionEnabled": "yes"
-   }
+   },
+   "category": "security"
   },
   {
-   "desc": "Export mit Secure Properties erfolgreich",
+   "desc": "Fabric-Export mit Passwörtern und Keys erfolgreich",
    "type": "job",
    "kind": "export",
-   "secure": true
+   "secure": true,
+   "category": "security"
+  },
+  {
+   "desc": "Access Policies bleiben erhalten",
+   "type": "exists",
+   "dn": "uni/infra/attentp-AAEP-Server"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Warum Merge und nicht Replace beim Wiederherstellen eines einzelnen Tenants?",
+   "options": [
+    "Replace ersetzt die Konfiguration im Geltungsbereich und kann Änderungen seit dem Backup löschen; Merge ergänzt nur",
+    "Replace geht nur für die ganze Fabric",
+    "Kein Unterschied",
+    "Merge ist schneller"
+   ],
+   "answer": 0,
+   "explain": "Für das Zurückholen gelöschter Objekte ist Merge der schonende Weg."
+  },
+  {
+   "id": "q2",
+   "q": "Was passiert mit Passwörtern in einem Export ohne AES-Verschlüsselung?",
+   "options": [
+    "Sie fehlen im Export – nach einem Restore müssen sie neu gesetzt werden",
+    "Sie stehen im Klartext drin",
+    "Der Export schlägt fehl",
+    "Sie werden mit einem Standard-Key verschlüsselt"
+   ],
+   "answer": 0,
+   "explain": "Deshalb vor dem Fabric-Export die Global AES Encryption aktivieren."
   }
  ],
  "solution": "`{\"fileRemotePath\": {\"attributes\": {\"name\": \"SCP-Backup\", \"host\": \"192.168.10.50\", \"protocol\": \"scp\", \"remotePath\": \"/backup\", \"remotePort\": \"22\", \"userName\": \"backup\", \"userPasswd\": \"Backup123!\"}, \"children\": [{\"fileRsARemoteHostToEpg\": {\"attributes\": {\"tDn\": \"uni/tn-mgmt/mgmtp-default/oob-default\"}}}]}}` unter uni/fabric, dann `{\"configImportP\": {\"attributes\": {\"name\": \"Restore-Shop\", \"fileName\": \"ce2_Shop-Nightly-2026-10-26T23-00-00.tar.gz\", \"importType\": \"merge\", \"importMode\": \"atomic\", \"adminSt\": \"triggered\"}, \"children\": [{\"configRsRemotePath\": {\"attributes\": {\"tnFileRemotePathName\": \"SCP-Backup\"}}}]}}`; danach `uni/exportcryptkey` mit strongEncryptionEnabled=yes und Passphrase, zuletzt `{\"configExportP\": {\"attributes\": {\"name\": \"Fabric-Nightly\", \"adminSt\": \"triggered\", \"includeSecureFields\": \"yes\"}, \"children\": [{\"configRsRemotePath\": {\"attributes\": {\"tnFileRemotePathName\": \"SCP-Backup\"}}}]}}`.",

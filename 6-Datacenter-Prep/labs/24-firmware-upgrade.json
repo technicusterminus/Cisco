@@ -8,6 +8,19 @@
  "settings": {
   "upgradeSeconds": 30
  },
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 05"
+ ],
+ "tools": [
+  "Admin > Firmware",
+  "Simulation > Fileserver",
+  "CLI: show firmware upgrade status, show version"
+ ],
  "goals": [
   "Firmware-Images ins Repository des APIC laden",
   "Das Upgrade in der richtigen Reihenfolge fahren: erst der APIC, dann die Switches",
@@ -481,30 +494,22 @@
    "descr": "Applikationsserver"
   }
  ],
- "tasks": [
-  {
-   "title": "Images laden",
-   "text": "**Admin > Firmware > Download Tasks** (bzw. *Images > Add Firmware to APIC*): beide Images vom Fileserver laden, z. B. SCP `192.168.10.50:/images/aci-apic-dk9.6.0.6c.iso` und HTTP `http://192.168.10.50/images/aci-n9000-dk9.16.0.6c.bin`."
-  },
-  {
-   "title": "Erst der APIC",
-   "text": "**Infrastructure > Controllers**: Zielversion apic-6.0(6c) wählen, dann *Actions > Upgrade Controller Now*. Während des Upgrades nimmt der APIC keine Konfiguration an.",
-   "hint": "Versuchst du zuerst die Switches, bricht die Kompatibilitätsprüfung ab: Switches dürfen nicht neuer sein als der APIC."
-  },
-  {
-   "title": "Upgrade Groups",
-   "text": "**Infrastructure > Nodes**: Zwei Gruppen **Odd** (101, 103, 201) und **Even** (102, 104, 202), Zielversion n9000-16.0(6c).",
-   "hint": "Eine Gruppe mit 101 und 102 erzeugt Fault S1801, eine mit beiden Spines S1802."
-  },
-  {
-   "title": "Gruppe für Gruppe",
-   "text": "Zuerst **Odd** starten (*Actions > Upgrade Now*) und während des Reloads den Traffic-Test web1 → app1 ausführen: web1 hängt **single-homed** an leaf101 und ist kurz offline – dual-homed Server (vPC) hätten keinen Ausfall, der vPC-Peer leaf102 lädt ja nicht gleichzeitig. Wenn Odd fertig ist, **Even** starten."
-  },
-  {
-   "title": "Verifizieren",
-   "text": "`show firmware upgrade status` und `show version` auf dem APIC, Upgrade-Übersicht unter Admin > Firmware."
-  }
+ "requirements": [
+  "APIC auf 6.0(6c), alle Switches auf 16.0(6c).",
+  "Der Webshop bleibt während des Upgrades erreichbar: Nie laden beide Switches eines vPC-Paares oder alle Spines gleichzeitig neu.",
+  "Jeder Switch ist genau einmal eingeplant."
  ],
+ "limits": [
+  "Download, Installation und Reload werden mit der eingestellten Dauer simuliert; Kompatibilitätsprüfungen und Pre-Upgrade-Validierungen fehlen."
+ ],
+ "hints": [
+  "**Konzept:** Erst der Controller, dann die Switches. Switches werden in Gruppen aktualisiert; eine Gruppe lädt gleichzeitig neu. Redundante Partner gehören deshalb in verschiedene Gruppen.",
+  "**Objekte:** *Admin > Firmware*: Images (Download Tasks) ins Repository, Controller-Upgrade, Switch-Upgrade-Gruppen mit Zielversion und Knoten.",
+  "**Prüfschritte:** `show firmware repository`, `show firmware upgrade status`. Die Bewertung meldet Gruppen mit beiden vPC-Peers oder allen Spines.",
+  "**Lösung:** Beide Images vom Fileserver laden. APIC auf 6.0(6c). Gruppe Odd (101, 103, 201) und Gruppe Even (102, 104, 202) mit 16.0(6c), nacheinander auslösen."
+ ],
+ "cause": "Die Fabric läuft auf der alten Version; es gibt keine Images im Repository und keine Upgrade Groups.",
+ "tasks": [],
  "checks": [
   {
    "desc": "APIC auf 6.0(6c), alle Switches auf 16.0(6c)",
@@ -513,9 +518,10 @@
    "switch": "16.0(6c)"
   },
   {
-   "desc": "Jeder Switch in genau einer Upgrade Group, kein vPC-Paar und nicht alle Spines zusammen",
+   "desc": "Ausfallsicherheit: jeder Switch einmal eingeplant, nie beide vPC-Peers oder alle Spines zusammen",
    "type": "fwgroups",
-   "min": 2
+   "min": 2,
+   "category": "security"
   },
   {
    "desc": "web1 → app1 tcp/8080 funktioniert",
@@ -525,6 +531,32 @@
    "proto": "tcp",
    "port": 8080,
    "expect": true
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Warum gehören leaf101 und leaf102 in verschiedene Upgrade Groups?",
+   "options": [
+    "Sie sind ein vPC-Paar – laden beide gleichzeitig neu, verlieren dual angebundene Server die Verbindung",
+    "Wegen der Lizenz",
+    "Weil sie verschiedene Images brauchen",
+    "Das ist egal"
+   ],
+   "answer": 0,
+   "explain": "Dasselbe gilt für die Spines: Mindestens einer muss immer laufen."
+  },
+  {
+   "id": "q2",
+   "q": "Warum zuerst der APIC?",
+   "options": [
+    "Der Controller muss die neue Switch-Version kennen und verwalten können",
+    "Weil er am schnellsten ist",
+    "Das ist Konvention ohne Grund",
+    "Weil Switches den APIC aktualisieren"
+   ],
+   "answer": 0,
+   "explain": "Ein älterer APIC kann neuere Switch-Software nicht sauber verwalten."
   }
  ],
  "solution": "1. Download Tasks: `{\"firmwareRepoP\": {\"attributes\": {}, \"children\": [{\"firmwareOSource\": {\"attributes\": {\"name\": \"apic-6.0.6c\", \"proto\": \"scp\", \"url\": \"192.168.10.50:/images/aci-apic-dk9.6.0.6c.iso\", \"user\": \"backup\", \"password\": \"Backup123!\"}}}, {\"firmwareOSource\": {\"attributes\": {\"name\": \"n9000-16.0.6c\", \"proto\": \"http\", \"url\": \"http://192.168.10.50/images/aci-n9000-dk9.16.0.6c.bin\"}}}]}}`\n2. `uni/controller/ctrlrfwpol` version=apic-6.0(6c), dann `uni/controller/ctrlrmaintpol` adminSt=triggered\n3. Upgrade Groups: `{\"fabricInst\": {\"attributes\": {}, \"children\": [{\"maintMaintP\": {\"attributes\": {\"name\": \"Odd\", \"version\": \"n9000-16.0(6c)\", \"adminSt\": \"triggered\"}}}, {\"maintMaintGrp\": {\"attributes\": {\"name\": \"Odd\"}, \"children\": [{\"maintRsMgrpp\": {\"attributes\": {\"tnMaintMaintPName\": \"Odd\"}}}, {\"fabricNodeBlk\": {\"attributes\": {\"name\": \"blk101\", \"from_\": \"101\", \"to_\": \"101\"}}}, {\"fabricNodeBlk\": {\"attributes\": {\"name\": \"blk103\", \"from_\": \"103\", \"to_\": \"103\"}}}, {\"fabricNodeBlk\": {\"attributes\": {\"name\": \"blk201\", \"from_\": \"201\", \"to_\": \"201\"}}}]}}]}}` und danach die Gruppe Even mit 102, 104, 202.",

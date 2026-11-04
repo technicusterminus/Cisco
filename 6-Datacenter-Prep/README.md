@@ -159,11 +159,11 @@ Unter *Simulation > Labs & Stände* laden. Jedes Lab setzt die Konfiguration auf
 | 21 | AAA: TACACS+, Login-Domain und RBAC (neues Format) | 35 min |
 | 22 | In-Band-Management (neues Format) | 35 min |
 | 23 | Endpoint Security Groups und uSeg EPGs (neues Format) | 35 min |
-| 24 | Firmware-Upgrade mit Upgrade Groups | 35 min |
-| 25 | Config Export und Import | 30 min |
-| 26 | Monitoring: SNMP, Syslog und Callhome | 40 min |
-| 27 | DHCP Relay | 25 min |
-| 28 | Loop Protection mit MCP und QoS-Klassen | 30 min |
+| 24 | Firmware-Upgrade mit Upgrade Groups (neues Format) | 35 min |
+| 25 | Config Export und Import (neues Format) | 30 min |
+| 26 | Monitoring: SNMP, Syslog und Callhome (neues Format) | 40 min |
+| 27 | DHCP Relay (neues Format) | 25 min |
+| 28 | Loop Protection mit MCP und QoS-Klassen (neues Format) | 30 min |
 | 29 | Multi-Pod mit Inter-Pod Network | 50 min |
 | 30 | Remote Leaf in der Filiale | 40 min |
 | 31 | Multi-Site mit dem Nexus Dashboard Orchestrator | 45 min |
@@ -182,7 +182,7 @@ Unter *Simulation > Labs & Stände* laden. Jedes Lab setzt die Konfiguration auf
 | 44 | Access-Diagnose: drei Server, drei Ursachen (Domain, VLAN Pool, Static Port; neues Format) | 30 min |
 | 45 | Zwei Bridge Domains, eine VRF: Routing ohne L3Out (neues Format) | 20 min |
 
-**Neues Lab-Format** (Labs 01 bis 23 außer 08 sowie 32 bis 45): Statt einer Klickanleitung gibt es Anforderungen. Der Rest im Überblick:
+**Neues Lab-Format** (Labs 01 bis 28 außer 08 sowie 32 bis 45): Statt einer Klickanleitung gibt es Anforderungen. Der Rest im Überblick:
 
 - **Hinweise** in vier Stufen: Konzept, Objekte, Prüfschritt, Lösung. Die Oberfläche zählt, wie viele genutzt wurden.
 - **Bewertung** getrennt nach *Funktion* und *Sicherheit / Least Privilege*. Eine Permit-any-Abkürzung funktioniert zwar, besteht aber nicht.

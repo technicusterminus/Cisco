@@ -5,6 +5,19 @@
  "level": "Mittel",
  "duration": "25 min",
  "fabric": "discovered",
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 03"
+ ],
+ "tools": [
+  "Tenant > Policies > Protocol > DHCP Relay",
+  "Traffic Inspector",
+  "CLI: show ip dhcp relay"
+ ],
  "goals": [
   "Eine DHCP Relay Policy mit Provider-EPG und Server-Adresse anlegen",
   "Die Policy per DHCP Relay Label an die Client-BD hängen",
@@ -421,21 +434,21 @@
    "dhcp": true
   }
  ],
- "tasks": [
-  {
-   "title": "Relay Policy",
-   "text": "**Tenant Office > Policies > Protocol > DHCP > Relay Policies**: **DHCP-Corp** mit Provider EPG **Services** und Server-Adresse **10.60.0.10**."
-  },
-  {
-   "title": "Relay Label",
-   "text": "Am **BD-Clients** unter *DHCP Relay Labels* das Label **DHCP-Corp** (Scope tenant) anlegen.",
-   "hint": "Der Name des Labels muss genau dem Namen der Relay Policy entsprechen. Der Relay Agent nutzt das BD-Gateway 10.50.0.1 als giaddr."
-  },
-  {
-   "title": "Verifizieren",
-   "text": "Simulation > Topologie & Hosts: pc1 und pc2 haben eine Adresse aus 10.50.0.100–199. Auf leaf101 `show ip dhcp relay`. Traffic-Test pc1 → dhcp1."
-  }
+ "requirements": [
+  "pc1 und pc2 bekommen ihre Adresse von dhcp1.",
+  "Die Clients dürfen zu den Services nur Ping und DHCP. Heute erlaubt der Contract clients-to-services noch alles."
  ],
+ "limits": [
+  "DHCP wird als Lease-Vergabe simuliert (Discover bis Ack in einem Schritt); Optionen wie 82 fehlen."
+ ],
+ "hints": [
+  "**Konzept:** Ein DHCP Discover ist ein Broadcast und bleibt im BD. Der Leaf kann ihn als Relay an einen Server in einem anderen BD weiterreichen – dafür braucht er eine Relay Policy und ein Label am BD der Clients.",
+  "**Objekte:** DHCP Relay Policy (Provider-EPG und Server-Adresse), DHCP Relay Label am BD-Clients. Für Least Privilege: Filter und Subject des Contracts clients-to-services.",
+  "**Prüfschritte:** Host-Status von pc1 (Lease?), `show ip dhcp relay` auf leaf101. Policy-Matrix VRF Corp: Was ist zwischen Clients und Services offen?",
+  "**Lösung:** Relay Policy DHCP-Corp mit Provider EPG Services und 10.60.0.10, Label DHCP-Corp (Owner tenant) am BD-Clients. Im Contract den Filter default durch einen Filter für UDP 67/68 ersetzen (icmp bleibt)."
+ ],
+ "cause": "Es gibt keine DHCP Relay Policy; der Contract erlaubt alles.",
+ "tasks": [],
  "checks": [
   {
    "desc": "pc1 hat ein DHCP-Lease",
@@ -453,6 +466,30 @@
    "src": "pc1",
    "dst": "dhcp1",
    "expect": true
+  },
+  {
+   "desc": "Least Privilege Clients → Services: nur Ping (und DHCP)",
+   "type": "exposure",
+   "src": "pc1",
+   "dst": "dhcp1",
+   "allow": [
+    "icmp"
+   ],
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Warum bekommt pc1 ohne Relay keine Adresse, obwohl ein Contract alles erlaubt?",
+   "options": [
+    "Der Discover ist ein Broadcast im BD-Clients; der Server steht in einem anderen BD",
+    "Weil UDP fehlt",
+    "Weil der Server aus ist",
+    "Weil der Contract falsch herum ist"
+   ],
+   "answer": 0,
+   "explain": "Contracts regeln Unicast zwischen EPGs; den Broadcast bringt erst der Relay zum Server."
   }
  ],
  "solution": "`{\"fvTenant\": {\"attributes\": {\"name\": \"Office\"}, \"children\": [{\"dhcpRelayP\": {\"attributes\": {\"name\": \"DHCP-Corp\", \"owner\": \"tenant\"}, \"children\": [{\"dhcpRsProv\": {\"attributes\": {\"tDn\": \"uni/tn-Office/ap-Office/epg-Services\", \"addr\": \"10.60.0.10\"}}}]}}, {\"fvBD\": {\"attributes\": {\"name\": \"BD-Clients\"}, \"children\": [{\"dhcpLbl\": {\"attributes\": {\"name\": \"DHCP-Corp\", \"owner\": \"tenant\"}}}]}}]}}`",
@@ -500,6 +537,69 @@
             "name": "DHCP-Corp",
             "owner": "tenant"
            }
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "uni/tn-Office",
+   {
+    "fvTenant": {
+     "attributes": {},
+     "children": [
+      {
+       "vzFilter": {
+        "attributes": {
+         "name": "dhcp"
+        },
+        "children": [
+         {
+          "vzEntry": {
+           "attributes": {
+            "name": "bootps",
+            "etherT": "ip",
+            "prot": "udp",
+            "dFromPort": "67",
+            "dToPort": "68"
+           }
+          }
+         }
+        ]
+       }
+      },
+      {
+       "vzBrCP": {
+        "attributes": {
+         "name": "clients-to-services"
+        },
+        "children": [
+         {
+          "vzSubj": {
+           "attributes": {
+            "name": "subj"
+           },
+           "children": [
+            {
+             "vzRsSubjFiltAtt": {
+              "attributes": {
+               "tnVzFilterName": "default",
+               "status": "deleted"
+              }
+             }
+            },
+            {
+             "vzRsSubjFiltAtt": {
+              "attributes": {
+               "tnVzFilterName": "dhcp"
+              }
+             }
+            }
+           ]
           }
          }
         ]

@@ -437,6 +437,11 @@ class TestRequirementLabs(unittest.TestCase):
         '22-inband-management': ['S0211', 'VLAN Pool', 'AAEP', 'In-Band EPG', 'Provider Group', 'IPG-APIC'],
         '21-aaa-tacacs-rbac': ['Provider Group', 'aaaLoginDomain', 'aaaDomainRef', 'readPriv', 'ISE-TACACS', 'Security Domain'],
         '23-esg-useg': ['fvIpAttr', 'IP-Attribut', 'isAttrBasedEPg', 'EPG Selector', 'frontend-to-backend', 'Consumer', 'Provider'],
+        '24-firmware-upgrade': ['Odd', 'Even', 'Upgrade Group', 'maintMaintGrp'],
+        '25-config-export-import': ['Merge', 'Replace', 'AES', 'Remote Location', 'configImportP'],
+        '26-monitoring-snmp-syslog': ['Client Group', 'Pod Policy Group', 'Destination Group', 'snmpClientGrpP'],
+        '27-dhcp-relay': ['Relay Label', 'dhcpLbl', 'Relay Policy', 'Filter default'],
+        '28-mcp-loop-qos': ['MCP', 'PDU per VLAN', 'Endpoint Loop Protection', 'mcpInstPol', 'Port Disable'],
         '32-https-least-privilege': ['Consumer', 'Provider', 'web-to-app-https', 'Reverse'],
         '33-same-epg': ['Static Port', 'fvRsPathAtt'],
         '34-two-epgs-same-bd': ['Consumer', 'Provider', 'admin-to-web'],
@@ -1035,6 +1040,14 @@ class TestConvertedLabs(unittest.TestCase):
         self.assertTrue(all(self.by().values()))
         self.apply(('uni/infra/attentp-AAEP-Server', mo('infraAttEntityP', {}, mo('infraRsDomP', {'tDn': 'uni/phys-PhysDom-INB'}))))
         self.assertFalse(self.by()['vlan-90 kommt nicht auf die Server-Ports'])
+
+
+    def test_lab27_relay_without_tightening_contract_fails(self):
+        lab = self.S.load_lab('27-dhcp-relay')
+        self.apply(lab['solutionConfig'][0])
+        by = self.by()
+        self.assertTrue(by['pc1 hat ein DHCP-Lease'])
+        self.assertFalse(by['Least Privilege Clients → Services: nur Ping (und DHCP)'], 'der Contract erlaubt noch alles')
 
 
 class TestOperationsLabs(unittest.TestCase):
