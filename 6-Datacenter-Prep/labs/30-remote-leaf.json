@@ -6,6 +6,20 @@
  "duration": "40 min",
  "fabric": "discovered",
  "topology": "multipod",
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 29"
+ ],
+ "tools": [
+  "Fabric > Inventory > Pod Fabric Setup Policy",
+  "Fabric Membership",
+  "Simulation > IPN/ISN",
+  "CLI: show ip ospf neighbors vrf overlay-1"
+ ],
  "ipn": {
   "routers": [
    {
@@ -645,34 +659,22 @@
    "descr": "Kassensystem in der Filiale"
   }
  ],
- "tasks": [
-  {
-   "title": "Remote Pool und External TEP",
-   "text": "**Fabric > Inventory > Quick Start > Add Remote Leaf** oder von Hand: Remote Pool 11 / 10.11.0.0/20 in der Pod Fabric Setup Policy, External TEP Pool 172.16.10.0/24 im Pod Connection Profile 1 der Fabric External Connection Policy."
-  },
-  {
-   "title": "WAN-Router",
-   "text": "Simulation > IPN & WAN: auf **wan-rl** das DHCP Relay zum APIC (10.0.0.1) eintragen."
-  },
-  {
-   "title": "Registrieren",
-   "text": "leaf301 als **Remote Leaf** (Node Type remote-leaf-wan, Remote Pool ID 11, Node ID 301) registrieren."
-  },
-  {
-   "title": "Uplink",
-   "text": "Im Infra-L3Out **multipod** ein Node Profile für Node 301 mit Sub-Interface eth1/54, vlan-4, 192.168.3.1/30 und OSPF.",
-   "hint": "Ohne OSPF zum WAN-Router bleibt der Remote Leaf in Discovery."
-  },
-  {
-   "title": "Access Policies und EPG",
-   "text": "Access Policies für leaf301 Port 1/1 (vlan-110, eigene Domain PhysDom-Store) und einen Static Port in der EPG Web."
-  },
-  {
-   "title": "Verkehr",
-   "text": "store1 → app1 tcp/8080. Klappt es nicht, die Meldung im Traffic-Test lesen und den WAN-Router prüfen.",
-   "hint": "VXLAN braucht mehr als 1500 Byte MTU im WAN."
-  }
+ "requirements": [
+  "leaf301 ist als Remote Leaf (ID 301) registriert und aktiv, mit OSPF zum WAN-Router.",
+  "store1 landet in der EPG Web und erreicht app1 auf TCP 8080.",
+  "Das Kassensystem erreicht App nur über das, was web-to-app erlaubt."
  ],
+ "limits": [
+  "Remote Leaf ohne Direct Traffic Forwarding und ohne Remote-Leaf-vPC; das WAN wird als ein Router simuliert."
+ ],
+ "hints": [
+  "**Konzept:** Ein Remote Leaf hängt nicht an Spines, sondern über ein routbares WAN an einem Pod. Er braucht einen eigenen TEP Pool, erreichbare External TEPs im Pod, eine OSPF-Nachbarschaft zum WAN-Router und DHCP Relay im WAN zu den APICs.",
+  "**Objekte:** Pod Fabric Setup Policy (Remote ID, Remote Pool), External TEP Pool (Routable Subnet), Infra-L3Out-Uplink für leaf301 (vlan-4, Adresse, Router ID), Registrierung als Remote Leaf. Im Tenant Shop ein Static Port für store1.",
+  "**Prüfschritte:** *Simulation > IPN/ISN*: DHCP Relay und MTU von wan-rl. Fabric Membership: erscheint leaf301? Traffic Inspector store1 → app1.",
+  "**Lösung:** Remote ID 11, Pool 10.11.0.0/20, External TEP 172.16.10.0/24, Uplink 192.168.3.1/30 vlan-4 Router ID 30.30.30.30, leaf301 als Remote Leaf registrieren, Access-Kette für leaf301 eth1/1 und Static Port vlan-110 an der EPG Web."
+ ],
+ "cause": "Es gibt weder Remote Pool noch External TEP noch Uplink für leaf301.",
+ "tasks": [],
  "checks": [
   {
    "desc": "leaf301 als Remote Leaf aktiv",
@@ -701,6 +703,31 @@
    "proto": "tcp",
    "port": 8080,
    "expect": true
+  },
+  {
+   "desc": "Least Privilege Kasse → App: nur TCP 8080 und Ping",
+   "type": "exposure",
+   "src": "store1",
+   "dst": "app1",
+   "allow": [
+    "tcp/8080",
+    "icmp"
+   ],
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Warum braucht ein Remote Leaf einen External TEP Pool im Pod?",
+   "options": [
+    "Er erreicht den Pod über ein geroutetes WAN; die internen TEPs sind dort nicht routbar",
+    "Wegen der Lizenz",
+    "Für BGP",
+    "Braucht er nicht"
+   ],
+   "answer": 0,
+   "explain": "Die External TEPs sind die routbaren Ziele der VXLAN-Tunnel aus der Filiale."
   }
  ],
  "solution": "Siehe Add-Remote-Leaf-Wizard; Objekte: fabricExtSetupP remoteId=11 tepPool=10.11.0.0/20, fabricExtRoutablePodSubnet 172.16.10.0/24, fabricNodeIdentP nodeType=remote-leaf-wan extPoolId=11, Node Profile mit `{\"l3extLIfP\": {\"attributes\": {\"name\": \"ipn-301\"}, \"children\": [{\"ospfIfP\": {\"attributes\": {}}}, {\"l3extRsPathL3OutAtt\": {\"attributes\": {\"tDn\": \"topology/pod-1/paths-301/pathep-[eth1/54]\", \"ifInstT\": \"sub-interface\", \"encap\": \"vlan-4\", \"addr\": \"192.168.3.1/30\"}}}]}}`. Auf wan-rl: Relay 10.0.0.1 und MTU 9150.",

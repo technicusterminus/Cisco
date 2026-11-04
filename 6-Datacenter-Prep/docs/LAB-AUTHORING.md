@@ -42,6 +42,7 @@ Jede Prüfung hat `desc`, `type` und `category`. Die Kategorie ist `function` (S
 | `router`, `learned`, `route`, `bfd`, `bgptimer` | siehe vorhandene Labs | externe Nachbarschaften und Routen |
 | `snapshot` | `prefix` | Ein Config-Snapshot mit diesem Namensanfang wurde nach dem Lab-Start angelegt |
 | `audited` | `dn`, optional `contains`, `expect` | Eine Änderung an diesem DN steht seit dem Lab-Start im Audit-Log (z. B. „Change wurde eingespielt“) |
+| `snmp` | `manager`, `node`, `community`, optional `expect` | SNMP-Walk eines simulierten Managers; mit `expect=False` für „darf nicht antworten“ |
 | weitere | `node`, `ntp`, `graph`, `login`, `rbac`, `firmware`, `job`, `mon`, `snmp`, `dhcp`, `loop`, `msite`, `ipnadj`, `inb`, `vmm`, `setup` | siehe `Sim.check_lab` |
 
 Regeln für gute Prüfungen:

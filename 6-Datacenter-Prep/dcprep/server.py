@@ -521,7 +521,7 @@ class Sim:
                     info = '%d Meldungen empfangen' % len(log)
                 elif t == 'snmp':
                     r = ops.snmp_walk(self, c['manager'], c['node'], c['community'])
-                    ok = r['ok']
+                    ok = r['ok'] == c.get('expect', True)
                     info = 'Antwort von %s' % c['node'] if ok else r['why']
                 elif t == 'dhcp':
                     d = getattr(e, 'dhcp_info', {}).get(c['host']) or {}

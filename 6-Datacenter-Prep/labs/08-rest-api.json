@@ -5,35 +5,40 @@
  "level": "Mittel",
  "duration": "30 min",
  "fabric": "discovered",
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 03"
+ ],
+ "tools": [
+  "REST-API (curl, Python, Ansible, Terraform)",
+  "API Inspector",
+  "beispiele/"
+ ],
  "goals": [
   "Mit aaaLogin ein Token holen",
   "Objekte per POST anlegen und per GET mit Filtern abfragen",
   "Ansible (cisco.aci), Python oder Terraform gegen den Simulator laufen lassen"
  ],
  "intro": "Der Simulator spricht die APIC-REST-API. Beispiele liegen im Ordner `beispiele/` (curl, Python, Ansible, Terraform). Schalte vorher den **API Inspector** (oben rechts) ein: Jede Aktion in der GUI zeigt dort den REST-Aufruf, den du nachbauen kannst.",
- "tasks": [
-  {
-   "title": "Anmelden",
-   "text": "`curl -c cookie.txt -X POST http://localhost:8080/api/aaaLogin.json -d '{\"aaaUser\":{\"attributes\":{\"name\":\"admin\",\"pwd\":\"admin\"}}}'`"
-  },
-  {
-   "title": "Tenant per POST",
-   "text": "Lege mit einem einzigen POST an `/api/mo/uni.json` den Tenant **Automation** mit VRF **v1**, BD **bd1** (Subnetz **192.168.1.1/24**), AP **app** und EPG **epg1** (BD bd1) an.",
-   "hint": "Ein Tenant-Objekt mit `children`. Vorlage: `beispiele/curl-tenant.sh`."
-  },
-  {
-   "title": "Abfragen",
-   "text": "Frage alle Bridge Domains mit Unicast Routing ab: `/api/class/fvBD.json?query-target-filter=eq(fvBD.unicastRoute,\"yes\")`. Und den ganzen Tenant: `/api/mo/uni/tn-Automation.json?rsp-subtree=full`."
-  },
-  {
-   "title": "Fehler provozieren",
-   "text": "Sende einen BD mit `\"arpFlood\":\"vielleicht\"`. Welchen Fehlercode liefert die API?"
-  },
-  {
-   "title": "Ansible (optional)",
-   "text": "Mit `ansible-playbook beispiele/ansible-tenant.yml` (Collection cisco.aci, `use_ssl: false`, Port 8080) denselben Tenant erzeugen."
-  }
+ "requirements": [
+  "Per REST-API entsteht der Tenant **Automation** mit VRF **v1**, BD **bd1** (192.168.1.1/24, in v1), AP **app** und EPG **epg1** (BD bd1).",
+  "Die Automatisierung bekommt einen eigenen lokalen Benutzer **ansible** (Passwort Ansible#2026), der den Tenant Automation ändern darf – und sonst nichts."
  ],
+ "limits": [
+  "Die REST-API ist ein Teilumfang der APIC-API (Klassen- und MO-Abfragen, Filter, rsp-subtree, POST mit children, Fehlercodes). WebSockets und Subscriptions fehlen."
+ ],
+ "hints": [
+  "**Konzept:** Ein einziger POST kann einen ganzen Objektbaum anlegen (children). Für Skripte gilt Least Privilege wie für Menschen: ein eigener Benutzer, beschränkt auf den Tenant, den er pflegt.",
+  "**Werkzeuge:** `aaaLogin` für das Token, `POST /api/mo/uni.json`, `GET /api/class/<Klasse>.json` mit `query-target-filter`, API Inspector als Vorlage. Für den Benutzer: Security Domain, Zuordnung zum Tenant, lokaler Benutzer mit Rolle.",
+  "**Prüfschritte:** `GET /api/mo/uni/tn-Automation.json?rsp-subtree=full`. Als ansible anmelden und versuchen, etwas außerhalb zu ändern.",
+  "**Lösung:** Ein POST mit fvTenant Automation und children (fvCtx, fvBD mit fvRsCtx und fvSubnet, fvAp mit fvAEPg und fvRsBd). Security Domain Auto-Dom, am Tenant aaaDomainRef, Benutzer ansible mit Domain Auto-Dom und Rolle tenant-admin (Write)."
+ ],
+ "cause": "Es gibt den Tenant Automation und den Benutzer ansible noch nicht.",
+ "tasks": [],
  "checks": [
   {
    "desc": "Tenant Automation mit VRF v1",
@@ -60,6 +65,57 @@
    "attrs": {
     "tnFvBDName": "bd1"
    }
+  },
+  {
+   "desc": "ansible darf den Tenant Automation ändern",
+   "type": "rbac",
+   "user": "ansible",
+   "pwd": "Ansible#2026",
+   "dn": "uni/tn-Automation/BD-bd1"
+  },
+  {
+   "desc": "ansible darf keine Access Policies ändern",
+   "type": "rbac",
+   "user": "ansible",
+   "pwd": "Ansible#2026",
+   "dn": "uni/infra/attentp-AAEP-Server",
+   "expect": false,
+   "category": "security"
+  },
+  {
+   "desc": "ansible darf andere Tenants nicht ändern",
+   "type": "rbac",
+   "user": "ansible",
+   "pwd": "Ansible#2026",
+   "dn": "uni/tn-common/BD-default",
+   "expect": false,
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Ein BD mit \"arpFlood\":\"vielleicht\" – welchen Fehlercode liefert die API?",
+   "options": [
+    "801 (property failed validation)",
+    "400 ohne Code",
+    "122",
+    "200"
+   ],
+   "answer": 0,
+   "explain": "Die API prüft Enums; nichts vom POST wird übernommen (atomar)."
+  },
+  {
+   "id": "q2",
+   "q": "Warum nicht einfach mit admin automatisieren?",
+   "options": [
+    "Ein gestohlenes oder fehlerhaftes Skript könnte dann die ganze Fabric ändern",
+    "admin darf keine REST-Aufrufe",
+    "Wegen der Lizenz",
+    "Das ist üblich und unbedenklich"
+   ],
+   "answer": 0,
+   "explain": "Least Privilege: Das Skript darf nur, was es braucht."
   }
  ],
  "solution": "`{\"fvTenant\": {\"attributes\": {\"name\": \"Automation\"}, \"children\": [{\"fvCtx\": {\"attributes\": {\"name\": \"v1\"}}}, {\"fvBD\": {\"attributes\": {\"name\": \"bd1\"}, \"children\": [{\"fvRsCtx\": {\"attributes\": {\"tnFvCtxName\": \"v1\"}}}, {\"fvSubnet\": {\"attributes\": {\"ip\": \"192.168.1.1/24\", \"scope\": \"private\"}}}]}}, {\"fvAp\": {\"attributes\": {\"name\": \"app\"}, \"children\": [{\"fvAEPg\": {\"attributes\": {\"name\": \"epg1\"}, \"children\": [{\"fvRsBd\": {\"attributes\": {\"tnFvBDName\": \"bd1\"}}}]}}]}}]}}`\n\nDer Fehler bei arpFlood ist Code **801** (property failed validation).",
@@ -126,6 +182,57 @@
              "fvRsBd": {
               "attributes": {
                "tnFvBDName": "bd1"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      },
+      {
+       "aaaDomainRef": {
+        "attributes": {
+         "name": "Auto-Dom"
+        }
+       }
+      }
+     ]
+    }
+   }
+  ],
+  [
+   "uni/userext",
+   {
+    "aaaUserEp": {
+     "attributes": {},
+     "children": [
+      {
+       "aaaDomain": {
+        "attributes": {
+         "name": "Auto-Dom"
+        }
+       }
+      },
+      {
+       "aaaUser": {
+        "attributes": {
+         "name": "ansible",
+         "pwd": "Ansible#2026"
+        },
+        "children": [
+         {
+          "aaaUserDomain": {
+           "attributes": {
+            "name": "Auto-Dom"
+           },
+           "children": [
+            {
+             "aaaUserRole": {
+              "attributes": {
+               "name": "tenant-admin",
+               "privType": "writePriv"
               }
              }
             }

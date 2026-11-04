@@ -6,6 +6,20 @@
  "duration": "50 min",
  "fabric": "discovered",
  "topology": "multipod",
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 01"
+ ],
+ "tools": [
+  "Fabric > Inventory > Pod Fabric Setup Policy",
+  "Tenant infra > L3Outs",
+  "Simulation > IPN/ISN",
+  "CLI: show ip ospf neighbors vrf overlay-1, acidiag fnvread"
+ ],
  "ipn": {
   "routers": [
    {
@@ -638,38 +652,23 @@
    "descr": "Applikationsserver in Pod 2"
   }
  ],
- "tasks": [
-  {
-   "title": "Infra-L3Out",
-   "text": "Im Tenant **infra** ein L3Out **multipod** (VRF overlay-1, OSPF Area 0, BGP) mit allen vier Spines und ihren Sub-Interfaces anlegen – am schnellsten über **Fabric > Inventory > Quick Start > Add Pod**. Unter Simulation > IPN & WAN wird ipn1 FULL."
-  },
-  {
-   "title": "Pod TEP Pool",
-   "text": "**Pod Fabric Setup Policy**: Pod 2 mit 10.1.0.0/16 (macht der Add-Pod-Wizard mit)."
-  },
-  {
-   "title": "DHCP Relay im IPN",
-   "text": "Simulation > IPN & WAN: auf **ipn1 und ipn2** das DHCP Relay auf die TEP-Adresse des APIC setzen. Danach erscheinen spine203/204 unter *Nodes Pending Registration*.",
-   "hint": "Ohne Relay kommt der DHCP Discover der Pod-2-Spines nie beim APIC an."
-  },
-  {
-   "title": "Registrieren",
-   "text": "spine203 (203), spine204 (204), leaf105 (105), leaf106 (106) – jeweils **Pod ID 2**."
-  },
-  {
-   "title": "IPN-Fehler finden",
-   "text": "Die Pod-2-Spines kommen nicht auf FULL. `show ip ospf neighbors vrf overlay-1` auf spine203 und die Simulation zeigen warum. Auf ipn2 die richtige MTU (9150) setzen.",
-   "hint": "Erst danach sind leaf105/106 vom APIC aus erreichbar."
-  },
-  {
-   "title": "Data Plane TEP",
-   "text": "Fabric External Connection Policy (Tenant infra) mit Pod Connection Profiles für Pod 1 und 2 prüfen."
-  },
-  {
-   "title": "Verkehr",
-   "text": "Traffic-Test web1 (Pod 1) → app1 (Pod 2) tcp/8080."
-  }
+ "requirements": [
+  "Pod 2 ist über das IPN angebunden; spine203/204 und leaf105/106 sind registriert und aktiv (IDs wie die Namen).",
+  "Alle vier Spines haben eine OSPF-Nachbarschaft zum IPN.",
+  "web1 (Pod 1) erreicht app1 (Pod 2) auf TCP 8080 über das IPN.",
+  "Zwischen Web und App gilt weiter nur, was web-to-app erlaubt."
  ],
+ "limits": [
+  "Das IPN wird als Router mit Interfaces, OSPF, MTU, PIM und DHCP Relay simuliert; Multicast-Verteilung und BUM-Verkehr werden nicht im Detail gezeigt."
+ ],
+ "hints": [
+  "**Konzept:** Pods sind über ein Layer-3-Netz (IPN) verbunden. Die Spines sprechen OSPF über Sub-Interfaces in vlan-4 mit dem IPN; neue Switches in Pod 2 finden den APIC per DHCP Relay im IPN. Das IPN braucht eine MTU, die VXLAN trägt.",
+  "**Objekte:** *Fabric > Inventory > Pod Fabric Setup Policy* (TEP Pool Pod 2), Tenant infra: L3Out multipod mit Spines, Sub-Interfaces, OSPF Area 0; Fabric External Connection Policy (Data Plane TEPs). Danach Registrierung der Pod-2-Switches.",
+  "**Prüfschritte:** *Simulation > IPN/ISN*: Nachbarschaften, MTU, PIM, Relay. `show ip ospf neighbors vrf overlay-1` auf den Spines. Traffic Inspector web1 → app1: Steht „Multi-Pod“ im Pfad?",
+  "**Lösung:** TEP Pool 10.1.0.0/16 für Pod 2, Infra-L3Out mit den vier Spine-Sub-Interfaces (vlan-4), External Connection Policy mit Data Plane TEP 172.16.1.1 und 172.16.2.1. MTU von ipn2 auf mindestens 9150. Spines 203/204 und Leafs 105/106 registrieren."
+ ],
+ "cause": "Pod 2 ist nicht eingerichtet; ipn2 hat außerdem nur MTU 1500.",
+ "tasks": [],
  "checks": [
   {
    "desc": "spine203 aktiv",
@@ -714,6 +713,54 @@
    "port": 8080,
    "expect": true,
    "via": "Multi-Pod"
+  },
+  {
+   "desc": "Least Privilege Web → App über Pods: nur TCP 8080 und Ping",
+   "type": "exposure",
+   "src": "web1",
+   "dst": "app1",
+   "allow": [
+    "tcp/8080",
+    "icmp"
+   ],
+   "category": "security"
+  },
+  {
+   "desc": "web1 → app1 SSH blockiert",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "app1",
+   "proto": "tcp",
+   "port": 22,
+   "expect": false,
+   "reason": "POLICY_",
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Die Spines in Pod 2 bleiben „discovering“, OSPF zum IPN läuft. Was fehlt am wahrscheinlichsten?",
+   "options": [
+    "DHCP Relay im IPN zu den APICs",
+    "Ein Contract",
+    "Die Route Reflector Policy",
+    "vlan-4 im VLAN Pool"
+   ],
+   "answer": 0,
+   "explain": "Neue Switches holen sich ihre TEP-Adresse per DHCP vom APIC – über Pod-Grenzen nur mit Relay."
+  },
+  {
+   "id": "q2",
+   "q": "Warum braucht das IPN eine höhere MTU als 1500?",
+   "options": [
+    "VXLAN fügt rund 50 Byte Header hinzu; Pakete mit voller MTU passen sonst nicht",
+    "Wegen OSPF",
+    "Wegen PIM",
+    "Braucht es nicht"
+   ],
+   "answer": 0,
+   "explain": "Typisch 9150 im IPN, passend zur Fabric-MTU."
   }
  ],
  "solution": "Infra (uni): `{\"fvTenant\": {\"attributes\": {\"name\": \"infra\"}, \"children\": [{\"l3extOut\": {\"attributes\": {\"name\": \"multipod\"}, \"children\": [{\"l3extRsEctx\": {\"attributes\": {\"tnFvCtxName\": \"overlay-1\"}}}, {\"ospfExtP\": {\"attributes\": {\"areaId\": \"0.0.0.0\"}}}, {\"bgpExtP\": {\"attributes\": {}}}, {\"l3extLNodeP\": {\"attributes\": {\"name\": \"spines\"}, \"children\": [{\"l3extRsNodeL3OutAtt\": {\"attributes\": {\"tDn\": \"topology/pod-1/node-201\", \"rtrId\": \"201.201.201.201\"}}}, {\"l3extRsNodeL3OutAtt\": {\"attributes\": {\"tDn\": \"topology/pod-1/node-202\", \"rtrId\": \"202.202.202.202\"}}}, {\"l3extRsNodeL3OutAtt\": {\"attributes\": {\"tDn\": \"topology/pod-2/node-203\", \"rtrId\": \"203.203.203.203\"}}}, {\"l3extRsNodeL3OutAtt\": {\"attributes\": {\"tDn\": \"topology/pod-2/node-204\", \"rtrId\": \"204.204.204.204\"}}}, {\"l3extLIfP\": {\"attributes\": {\"name\": \"ipn-201\"}, \"children\": [{\"ospfIfP\": {\"attributes\": {}}}, {\"l3extRsPathL3OutAtt\": {\"attributes\": {\"tDn\": \"topology/pod-1/paths-201/pathep-[eth1/32]\", \"ifInstT\": \"sub-interface\", \"encap\": \"vlan-4\", \"addr\": \"192.168.1.1/30\"}}}]}}, {\"l3extLIfP\": {\"attributes\": {\"name\": \"ipn-202\"}, \"children\": [{\"ospfIfP\": {\"attributes\": {}}}, {\"l3extRsPathL3OutAtt\": {\"attributes\": {\"tDn\": \"topology/pod-1/paths-202/pathep-[eth1/32]\", \"ifInstT\": \"sub-interface\", \"encap\": \"vlan-4\", \"addr\": \"192.168.1.5/30\"}}}]}}, {\"l3extLIfP\": {\"attributes\": {\"name\": \"ipn-203\"}, \"children\": [{\"ospfIfP\": {\"attributes\": {}}}, {\"l3extRsPathL3OutAtt\": {\"attributes\": {\"tDn\": \"topology/pod-2/paths-203/pathep-[eth1/32]\", \"ifInstT\": \"sub-interface\", \"encap\": \"vlan-4\", \"addr\": \"192.168.2.1/30\"}}}]}}, {\"l3extLIfP\": {\"attributes\": {\"name\": \"ipn-204\"}, \"children\": [{\"ospfIfP\": {\"attributes\": {}}}, {\"l3extRsPathL3OutAtt\": {\"attributes\": {\"tDn\": \"topology/pod-2/paths-204/pathep-[eth1/32]\", \"ifInstT\": \"sub-interface\", \"encap\": \"vlan-4\", \"addr\": \"192.168.2.5/30\"}}}]}}]}}]}}]}}` und `{\"fvTenant\": {\"attributes\": {\"name\": \"infra\"}, \"children\": [{\"fabricExtConnP\": {\"attributes\": {\"id\": \"1\", \"name\": \"Multipod\"}, \"children\": [{\"fabricPeeringP\": {\"attributes\": {\"type\": \"automatic_with_full_mesh\"}}}, {\"fabricPodConnP\": {\"attributes\": {\"id\": \"1\"}, \"children\": [{\"fabricIp\": {\"attributes\": {\"addr\": \"172.16.1.1/32\"}}}]}}, {\"fabricPodConnP\": {\"attributes\": {\"id\": \"2\"}, \"children\": [{\"fabricIp\": {\"attributes\": {\"addr\": \"172.16.2.1/32\"}}}]}}]}}]}}`, `uni/controller/setuppol` mit `fabricSetupP podId=2 tepPool=10.1.0.0/16`. Im IPN: Relay 10.0.0.1 auf ipn1/ipn2, MTU von ipn2 auf 9150. Registrierung mit podId=2.",

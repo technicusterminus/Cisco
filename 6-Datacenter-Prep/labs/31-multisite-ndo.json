@@ -6,6 +6,20 @@
  "duration": "45 min",
  "fabric": "discovered",
  "topology": "multisite",
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 29"
+ ],
+ "tools": [
+  "Simulation > Multi-Site (NDO)",
+  "Simulation > IPN/ISN",
+  "Traffic Inspector",
+  "CLI: show bgp l2vpn evpn summary vrf overlay-1 (simuliert eingeschränkt)"
+ ],
  "ipn": {
   "routers": [
    {
@@ -438,33 +452,23 @@
    "descr": "Applikationsserver"
   }
  ],
- "tasks": [
-  {
-   "title": "Site onboarden",
-   "text": "Im NDO den lokalen APIC mit admin und dem APIC-Passwort hinzufügen, Site ID **1**."
-  },
-  {
-   "title": "Infra",
-   "text": "Infra Configuration: OSPF Area, Spine-Interfaces zum ISN mit IP und BGP-EVPN Router-ID, Overlay Unicast TEP. **Deploy**. Danach im APIC: Tenant infra > L3Out **intersite** und die Site ID in der Fabric External Connection Policy."
-  },
-  {
-   "title": "ISN",
-   "text": "Die Spines kommen nicht auf OSPF FULL zum ISN. Ursache unter Simulation > IPN & WAN bzw. `show ip ospf neighbors vrf overlay-1` auf spine201 finden und am ISN beheben.",
-   "hint": "VXLAN zwischen den Sites braucht Jumbo Frames."
-  },
-  {
-   "title": "Template Shop-Stretched",
-   "text": "Schema mit Template **Shop-Stretched** (Tenant Shop, Sites lokal und DC-HAM): VRF Prod, BD-Web 10.10.10.1/24 mit **L2 Stretch**, AP Webshop mit EPG Web (konsumiert web-to-ham), Contract **web-to-ham** (tcp/8080, icmp). Deployen."
-  },
-  {
-   "title": "Template HAM-Local",
-   "text": "Template **HAM-Local** nur für DC-HAM: BD-HAM-App 10.20.20.1/24 (VRF Prod), EPG App-HAM stellt web-to-ham bereit. Deployen."
-  },
-  {
-   "title": "Prüfen",
-   "text": "Traffic-Test web1 → ham-web1 (gleiches Subnetz, L2 über das ISN) und web1 → ham-app1 tcp/8080. Im APIC sind Tenant, BD und EPG jetzt mit annotation orchestrator:msc markiert."
-  }
+ "requirements": [
+  "Die Fabric ist im NDO als Site 1 eingebunden; die Infra zwischen den Sites steht (ISN, OSPF, BGP EVPN, Overlay TEP).",
+  "web1 erreicht ham-web1 im selben, gestreckten Netz.",
+  "web1 erreicht ham-app1 auf TCP 8080, sonst nichts.",
+  "Objekte, die beide Sites brauchen, kommen aus dem NDO, nicht von Hand in den APIC."
  ],
+ "limits": [
+  "Der NDO und die Gegen-Site DC-HAM werden simuliert; Schema- und Template-Funktionen sind auf das Lab zugeschnitten."
+ ],
+ "hints": [
+  "**Konzept:** Bei Multi-Site ist jede Fabric eigenständig; der NDO verteilt gemeinsame Objekte per Template an die Sites. Zwischen den Sites laufen OSPF (Underlay) und BGP EVPN (Overlay) über das ISN.",
+  "**Objekte:** NDO: Site onboarden (Site ID), Infra-Konfiguration je Spine (Interface, OSPF, BGP-EVPN-Router-ID, Overlay TEP), Schema mit Templates (gestreckt und site-lokal), Deploy.",
+  "**Prüfschritte:** NDO-Infra-Status, *Simulation > IPN/ISN*: MTU von isn1. Traffic Inspector web1 → ham-web1: Steht „ISN“ im Pfad?",
+  "**Lösung:** Site ID 1, Infra wie im Design, ISN-MTU auf 9150, Templates Shop-Stretched (beide Sites) und HAM-Local deployen."
+ ],
+ "cause": "Die Site ist nicht im NDO, die Infra zwischen den Sites fehlt, und isn1 hat nur MTU 1500.",
+ "tasks": [],
  "checks": [
   {
    "desc": "Infra zwischen den Sites ok",
@@ -495,7 +499,23 @@
    "dst": "ham-app1",
    "proto": "tcp",
    "port": 22,
-   "expect": false
+   "expect": false,
+   "reason": "POLICY_",
+   "category": "security"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Woran erkennst du im APIC, dass ein Objekt vom NDO kommt?",
+   "options": [
+    "An der Annotation orchestrator:msc",
+    "Am Namen",
+    "An der Farbe",
+    "Gar nicht"
+   ],
+   "answer": 0,
+   "explain": "Solche Objekte sollte man nicht direkt im APIC ändern – der NDO überschreibt sie beim nächsten Deploy."
   }
  ],
  "solution": "NDO: onboard (Site ID 1), Infra `{\"area\": \"0.0.0.0\", \"ucastTep\": \"172.16.100.1/32\", \"peering\": \"full-mesh\", \"spines\": [{\"node\": 201, \"port\": \"eth1/31\", \"ip\": \"10.255.1.1/30\", \"evpnRid\": \"10.255.255.201\"}, {\"node\": 202, \"port\": \"eth1/31\", \"ip\": \"10.255.1.5/30\", \"evpnRid\": \"10.255.255.202\"}]}`, Deploy Infra; ISN-MTU auf 9150; Templates `{\"name\": \"Shop-Stretched\", \"tenant\": \"Shop\", \"sites\": [\"local\", \"DC-HAM\"], \"vrfs\": [\"Prod\"], \"bds\": [{\"name\": \"BD-Web\", \"vrf\": \"Prod\", \"subnet\": \"10.10.10.1/24\", \"l2stretch\": true, \"bum\": false}], \"aps\": [{\"name\": \"Webshop\", \"epgs\": [{\"name\": \"Web\", \"bd\": \"BD-Web\", \"cons\": [\"web-to-ham\"], \"prov\": []}]}], \"contracts\": [{\"name\": \"web-to-ham\", \"filter\": \"tcp/8080,icmp\"}]}` und `{\"name\": \"HAM-Local\", \"tenant\": \"Shop\", \"sites\": [\"DC-HAM\"], \"vrfs\": [], \"bds\": [{\"name\": \"BD-HAM-App\", \"vrf\": \"Prod\", \"subnet\": \"10.20.20.1/24\", \"l2stretch\": false, \"bum\": false}], \"aps\": [{\"name\": \"Webshop\", \"epgs\": [{\"name\": \"App-HAM\", \"bd\": \"BD-HAM-App\", \"cons\": [], \"prov\": [\"web-to-ham\"]}]}], \"contracts\": []}` deployen.",
