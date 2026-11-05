@@ -35,6 +35,7 @@ LEAF_HELP = """Verfuegbare Befehle auf Leaf/Spine (Ausgabe aus dem Simulator, Fo
   show lldp neighbors
   show interface status
   show vlan extended
+  show vlan encap-id <vlan> extended
   show endpoint [vrf <Tenant:VRF>] [ip <a.b.c.d>]
   show vrf
   show ip route vrf <Tenant:VRF>
@@ -399,6 +400,18 @@ class Cli:
                 out.append(' %-4d %-32s %-16s %s' % (8, 'infra:default', 'vxlan-16777209, vlan-%d' % e.infra_vlan,
                                                      ', '.join(p_.capitalize() for p_ in ctl)))
             for vid, name, encap, ports, _, _ in self._pivlans(nid):
+                out.append(' %-4d %-32s %-16s %s' % (vid, name[:32], encap, ', '.join(p.capitalize() for p in ports)))
+            return '\n'.join(out)
+        m = re.match(r'^show vlan encap-id (\d+) extended$', c)
+        if m:
+            # Cisco TechNote 220876: ab ACI 4.2; ist das Encap nicht deployed, bleibt die Ausgabe leer
+            rows = [(vid, name, encap, ports) for vid, name, encap, ports, _, _ in self._pivlans(nid)
+                    if encap == 'vlan-%s' % m.group(1)]
+            if not rows:
+                return ''
+            out = ['', ' VLAN Name                             Encap            Ports',
+                   ' ---- -------------------------------- ---------------- ------------------------']
+            for vid, name, encap, ports in rows:
                 out.append(' %-4d %-32s %-16s %s' % (vid, name[:32], encap, ', '.join(p.capitalize() for p in ports)))
             return '\n'.join(out)
         if words[:2] == ['show', 'endpoint']:
