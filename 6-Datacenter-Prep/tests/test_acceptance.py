@@ -260,6 +260,32 @@ class TestSolutions(LabBase):
         self.assertFalse(by['web1 → app1 HTTPS (TCP 443) funktioniert']['ok'])
 
 
+    def test_f0467_texts_follow_technote(self):
+        """Cisco TechNote 220876: Format und Texte von F0467 (invalid-vlan, encap-already-in-use) und
+        show vlan encap-id <n> extended (leer, wenn das Encap nicht deployed ist)."""
+        self.apply(solution())
+        app = 'uni/tn-Shop/ap-Webshop/epg-App'
+        cli = Cli(self.S.engine, self.S.sim)
+        self.assertIn('vlan-120', cli.run('leaf102', 'show vlan encap-id 120 extended'))
+        post(self.S.store, app + '/rspathAtt-[topology/pod-1/paths-102/pathep-[eth1/2]]', mo('fvRsPathAtt', {'encap': 'vlan-250'}))
+        self.S.changed()
+        d = self.S.engine.faults[app]['F0467']['descr']
+        self.assertEqual(d, 'Configuration failed for %s node 102 eth1/2 due to Invalid VLAN Configuration, debug message: '
+                            'invalid-vlan: vlan-250 :Either the EpG is not associated with a domain or the domain does not '
+                            'have this vlan assigned to it;' % app)
+        self.assertEqual(Cli(self.S.engine, self.S.sim).run('leaf102', 'show vlan encap-id 250 extended'), '')
+        post(self.S.store, app + '/rspathAtt-[topology/pod-1/paths-102/pathep-[eth1/2]]', mo('fvRsPathAtt', {'encap': 'vlan-120'}))
+        post(self.S.store, 'uni/tn-Shop/ap-Webshop/epg-Web', mo('fvAEPg', {}, mo('fvRsPathAtt', {
+            'tDn': 'topology/pod-1/paths-102/pathep-[eth1/3]', 'encap': 'vlan-120'})))
+        self.S.changed()
+        f = {dn: x['F0467']['descr'] for dn, x in self.S.engine.faults.items() if 'F0467' in x}
+        self.assertEqual(len(f), 1, f)
+        (dn, descr), = f.items()
+        other = 'Shop:Webshop:Web' if dn == app else 'Shop:Webshop:App'
+        self.assertIn('due to Encap Already Used in Another EPG, debug message: encap-already-in-use: Encap (vlan-120) is '
+                      'already in use by %s;' % other, descr)
+
+
 class TestContractPriorities(LabBase):
     """B-16: Prioritaeten nach Cisco ACI Contract Guide (Table 8 Zoning-Rule-Prioritaet, Table 23 Filter-Prioritaet).
     Spezifischere EPG-Paare gewinnen ueber vzAny; Deny gewinnt nur bei gleicher Zoning-Rule-Prioritaet."""

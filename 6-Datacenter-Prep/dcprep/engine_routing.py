@@ -247,9 +247,12 @@ class RoutingMixin:
         if err[0] == 'S':
             self.fault(ri, 'S0468', 'minor', err[1], 'l3if-config-failed')
         else:
-            self.fault(o['dn'], 'F0467', 'minor', 'Configuration failed for L3Out %s due to Invalid %s '
-                       'Configuration, debug message: %s: %s' % (
-                           o['name'], 'Path' if err[0] == 'invalid-path' else 'VLAN', err[0], err[1]),
+            # Format wie TechNote 220876 (F0467): DN, Node und Port, Text mit ';' am Ende
+            path = self.paths.get(self.A(ri)['tDn']) or {}
+            loc = ' node %s %s' % ('-'.join(str(n) for n in path['nodes']), path['name']) if path else ''
+            self.fault(o['dn'], 'F0467', 'minor', 'Configuration failed for %s%s due to Invalid %s '
+                       'Configuration, debug message: %s: %s;' % (
+                           o['dn'], loc, 'Path' if err[0] == 'invalid-path' else 'VLAN', err[0], err[1]),
                        'configuration-failed')
 
     def _if_common(self, o, lif, ospf_if, pol):
@@ -278,11 +281,10 @@ class RoutingMixin:
 
     def _l3if(self, o, np, lif, ri, ospf_if, pol):
         ia = self.A(ri)
-        name = o['name']
         path = self.paths.get(ia['tDn'])
         if path is None:
-            self.fault(o['dn'], 'F0467', 'minor', 'Configuration failed for L3Out %s due to Invalid Path '
-                       'Configuration, debug message: invalid-path: %s :: Path is not present' % (name, ia['tDn']),
+            self.fault(o['dn'], 'F0467', 'minor', 'Configuration failed for %s due to Invalid Path '
+                       'Configuration, debug message: invalid-path: %s :: Path is not present;' % (o['dn'], ia['tDn']),
                        'configuration-failed')
             return
         vlan = vlan_num(ia['encap'])

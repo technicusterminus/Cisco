@@ -290,18 +290,17 @@ class AccessMixin:
         if self.nodes.get(nid, {}).get('state') != 'active':
             return
         if vlan is None:
-            self._epg_fault(dn, 'invalid-vlan', '%s :: Encap is missing' % ra['tDn'])
+            self._epg_fault(dn, 'invalid-vlan', '%s :: Encap is missing' % ra['tDn'], 'node %d' % nid)
             return
         dom_vlan = [d for d in doms if self.vlan_in_domain(d, vlan)]
         if not dom_vlan:
-            self._epg_fault(dn, 'invalid-vlan', 'vlan-%d :: Either the EpG is not associated with a domain or '
-                            'the domain does not have this vlan assigned to it' % vlan)
+            self._epg_fault(dn, 'invalid-vlan', 'vlan-%d :Either the EpG is not associated with a domain or the domain does not have this vlan assigned to it' % vlan, 'node %d' % nid)
             return
         other = self.leaf_vlans.get(nid, {}).get(vlan)
         if other and other != dn:
             parts = split_dn(other)
             self._epg_fault(dn, 'encap-already-in-use', 'Encap (vlan-%d) is already in use by %s:%s:%s'
-                            % (vlan, parts[1][3:], parts[2][3:], parts[3][4:]))
+                            % (vlan, parts[1][3:], parts[2][3:], parts[3][4:]), 'node %d' % nid)
             return
         done = {d['path'] for d in self.deploys if d['epg'] == dn}
         for pdn, p in sorted(self.paths.items()):
@@ -311,12 +310,15 @@ class AccessMixin:
                 continue
             self._deploy(dn, c, pdn, p, vlan, ra['mode'])
 
-    def _epg_fault(self, dn, reason, text):
-        name = self.A(dn)['name']
+    def _epg_fault(self, dn, reason, text, loc=''):
+        """F0467 an der EPG. Format nach Cisco TechNote 220876 ("Troubleshoot Address ACI Fault Code F0467"):
+        'Configuration failed for <EPG-DN> node <id> <port> due to <Titel>, debug message: <cause>: <Text>;'.
+        Belegt sind die Texte fuer invalid-vlan, invalid-path und encap-already-in-use; andere Texte sind simulator-spezifisch."""
         titles = {'invalid-vlan': 'Invalid VLAN Configuration', 'invalid-path': 'Invalid Path Configuration',
                   'encap-already-in-use': 'Encap Already Used in Another EPG'}
-        self.fault(dn, 'F0467', 'minor', 'Configuration failed for EPG %s due to %s, debug message: %s: %s'
-                   % (name, titles[reason], reason, text), 'configuration-failed', rule='fv-nw-issues-config-failed')
+        self.fault(dn, 'F0467', 'minor', 'Configuration failed for %s%s due to %s, debug message: %s: %s;'
+                   % (dn, ' ' + loc if loc else '', titles[reason], reason, text), 'configuration-failed',
+                   rule='fv-nw-issues-config-failed')
 
     def _bind(self, rs, dn, c, doms):
         ra = self.A(rs)
@@ -327,29 +329,28 @@ class AccessMixin:
         if path is None:
             self._epg_fault(dn, 'invalid-path', '%s :: Path is not present in the fabric' % tdn)
             return
+        loc = 'node %s %s' % ('-'.join(str(n) for n in path['nodes']), path['name'])
         if path.get('member_of'):
             self._epg_fault(dn, 'invalid-path', '%s :: Port is a member of port-channel/vPC %s'
-                            % (tdn, path['member_of']))
+                            % (tdn, path['member_of']), loc)
             return
         if vlan is None:
-            self._epg_fault(dn, 'invalid-vlan', '%s :: Encap is missing' % tdn)
+            self._epg_fault(dn, 'invalid-vlan', '%s :: Encap is missing' % tdn, loc)
             return
         dom_vlan = [d for d in doms if self.vlan_in_domain(d, vlan)]
         if not dom_vlan:
-            self._epg_fault(dn, 'invalid-vlan', 'vlan-%d :: Either the EpG is not associated with a domain or '
-                            'the domain does not have this vlan assigned to it' % vlan)
+            self._epg_fault(dn, 'invalid-vlan', 'vlan-%d :Either the EpG is not associated with a domain or the domain does not have this vlan assigned to it' % vlan, loc)
             return
         pgdoms = self._pg_info(path['pg'])['domains'] if path['pg'] else []
         if not [d for d in dom_vlan if d in pgdoms]:
-            self._epg_fault(dn, 'invalid-path', 'vlan-%d :: Either the EpG/L3Out is not associated with a domain '
-                            'or the domain does not have this interface assigned to it' % vlan)
+            self._epg_fault(dn, 'invalid-path', 'Either the EpG/L3Out is not associated with a domain or the domain does not have this interface assigned to it', loc)
             return
         for nid in path['nodes']:
             other = self.leaf_vlans.get(nid, {}).get(vlan)
             if other and other != dn:
                 parts = split_dn(other)
                 self._epg_fault(dn, 'encap-already-in-use', 'Encap (vlan-%d) is already in use by %s:%s:%s'
-                                % (vlan, parts[1][3:], parts[2][3:], parts[3][4:]))
+                                % (vlan, parts[1][3:], parts[2][3:], parts[3][4:]), loc)
                 return
         self._deploy(dn, c, tdn, path, vlan, mode)
 
