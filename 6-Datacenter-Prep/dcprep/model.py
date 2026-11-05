@@ -264,7 +264,14 @@ mo('vzSubj', 'subj-{name}', ('vzBrCP',),
    enums={'revFltPorts': YN}, label='Contract Subject')
 mo('vzRsSubjFiltAtt', 'rssubjFiltAtt-{tnVzFilterName}', ('vzSubj',),
    {'action': 'permit', 'directives': '', 'priorityOverride': 'default'},
-   enums={'action': ('permit', 'deny')},
+   enums={'action': ('permit', 'deny'), 'priorityOverride': ('default', 'level1', 'level2', 'level3')},
+   rel=('name', 'tnVzFilterName', 'vzFilter', 'tenant'), label='Filter')
+# Subject ohne "Apply Both Directions": Filter je Richtung (vzInTerm = Consumer -> Provider, vzOutTerm = Provider -> Consumer)
+mo('vzInTerm', 'intmnl', ('vzSubj',), {'prio': 'unspecified', 'targetDscp': 'unspecified'}, label='Consumer to Provider')
+mo('vzOutTerm', 'outtmnl', ('vzSubj',), {'prio': 'unspecified', 'targetDscp': 'unspecified'}, label='Provider to Consumer')
+mo('vzRsFiltAtt', 'rsfiltAtt-{tnVzFilterName}', ('vzInTerm', 'vzOutTerm'),
+   {'action': 'permit', 'directives': '', 'priorityOverride': 'default'},
+   enums={'action': ('permit', 'deny'), 'priorityOverride': ('default', 'level1', 'level2', 'level3')},
    rel=('name', 'tnVzFilterName', 'vzFilter', 'tenant'), label='Filter')
 mo('vzFilter', 'flt-{name}', ('fvTenant',), {}, label='Filter')
 mo('vzEntry', 'e-{name}', ('vzFilter',),
@@ -478,7 +485,7 @@ PASSIVE = [
                 'fvRsEPgToCollectionStatsPol:rsEPgToCollectionStatsPol']),
     ('fvAp', ['fvRsApMonPol:rsApMonPol']),
     ('vzBrCP', ['vzRsGraphAtt:rsGraphAtt']),
-    ('vzSubj', ['vzInTerm:intmnl', 'vzOutTerm:outtmnl', 'vzRsSdwanPol:rssdwanPol']),
+    ('vzSubj', ['vzRsSdwanPol:rssdwanPol']),
     ('vnsAbsGraph', ['vnsAbsTermNodeCon:AbsTermNodeCon-{name}', 'vnsAbsTermNodeProv:AbsTermNodeProv-{name}',
                      'vnsAbsConnection:AbsConnection-{name}']),
     ('vnsAbsNode', ['vnsAbsFuncConn:AbsFConn-{name}', 'vnsRsNodeToAbsFuncProf:rsNodeToAbsFuncProf']),

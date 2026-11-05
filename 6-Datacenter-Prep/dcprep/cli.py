@@ -5,6 +5,7 @@ import shlex
 
 from .model import CLASSES, split_dn
 from .engine import ip_of, pnum, vlan_num
+from .engine_policy import entry_is_any, rule_prio
 from .query import eval_filter, out_attrs
 
 APIC_HELP = """Verfuegbare Befehle auf dem APIC (Ausgabe aus dem Simulator, Format vereinfacht; [S] = simulator-spezifisch):
@@ -562,7 +563,7 @@ class Cli:
                 for subj in e.kids(brc, 'vzSubj'):
                     g = getattr(e, 'graphs', {}).get(subj)
                     g = g if g and g['state'] == 'applied' and g['redirect'] else None
-                    for rf in e.kids(subj, 'vzRsSubjFiltAtt'):
+                    for rf, dirn in e.subj_filters(subj):
                         rfa = e.A(rf)
                         if rfa['state'] != 'formed':
                             continue
@@ -573,17 +574,25 @@ class Cli:
                             a2 = 'redir(destgrp-%d)' % self._destgrp(g, 'provider')
                         for cpt in cons:
                             for ppt in prov:
-                                if cpt == ppt:
+                                if cpt == ppt and cpt != '0':
                                     continue
-                                pr = 'fully_qual(7)' if cpt != '0' and ppt != '0' else 'any_dest_filter(14)'
+                                # Prioritaet je Regelrichtung (Contract Guide, Table 8); 0 = vzAny
+                                anyf = all(entry_is_any(e.A(x)) for x in e.kids(rfa['tDn'], 'vzEntry'))
+                                pr = lambda a_, b_: rule_prio(a_ != '0', b_ != '0', anyf)[1]
+                                if dirn != 'both':
+                                    # ohne Apply Both Directions: je Richtung eine eigene uni-dir-Regel
+                                    src, dst, act = (cpt, ppt, a1) if dirn == 'c2p' else (ppt, cpt, a2)
+                                    rows.append((rid, src, dst, f, 'uni-dir', 'enabled', vn, e.A(brc)['name'],
+                                                 act, pr(src, dst))); rid += 1
+                                    continue
                                 rows.append((rid, cpt, ppt, f, 'bi-dir', 'enabled', vn, e.A(brc)['name'],
-                                             a1, pr)); rid += 1
+                                             a1, pr(cpt, ppt))); rid += 1
                                 rows.append((rid, ppt, cpt, f, 'uni-dir-ignore', 'enabled', vn, e.A(brc)['name'],
-                                             a2, pr)); rid += 1
+                                             a2, pr(ppt, cpt))); rid += 1
                                 if g:
                                     sc_, sp_ = g['conns']['consumer']['pcTag'], g['conns']['provider']['pcTag']
-                                    rows.append((rid, sp_, ppt, f, 'bi-dir', 'enabled', vn, e.A(brc)['name'], 'permit', pr)); rid += 1
-                                    rows.append((rid, sc_, cpt, f, 'uni-dir-ignore', 'enabled', vn, e.A(brc)['name'], 'permit', pr)); rid += 1
+                                    rows.append((rid, sp_, ppt, f, 'bi-dir', 'enabled', vn, e.A(brc)['name'], 'permit', pr(sp_, ppt))); rid += 1
+                                    rows.append((rid, sc_, cpt, f, 'uni-dir-ignore', 'enabled', vn, e.A(brc)['name'], 'permit', pr(sc_, cpt))); rid += 1
         if not rows:
             return 'Keine Zoning-Rules (kein VRF auf diesem Switch deployed).'
         return _table(['Rule ID', 'SrcEPG', 'DstEPG', 'FilterID', 'Dir', 'operSt', 'Scope', 'Name', 'Action',
@@ -997,7 +1006,7 @@ def _verify_methods():
         fid = {}
         for brc, rel in sorted(e.contracts.items()):
             for subj in e.kids(brc, 'vzSubj'):
-                for rf in e.kids(subj, 'vzRsSubjFiltAtt'):
+                for rf, _ in e.subj_filters(subj):
                     rfa = e.A(rf)
                     if rfa['state'] == 'formed':
                         fid.setdefault(rfa['tDn'], 4 + len(fid) + 1)
