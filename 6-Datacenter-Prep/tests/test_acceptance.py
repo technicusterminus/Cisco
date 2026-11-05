@@ -356,6 +356,37 @@ class TestContractPriorities(LabBase):
         self.assertTrue(all('deny,log' in ln for ln in z.split('\n') if '| c-epg ' in ln), z)
         self.assertTrue(all(' permit ' in ln and 'log' not in ln.split('|')[9] for ln in z.split('\n') if '| c-any ' in ln), z)
 
+    def test_zoning_tables_follow_contract_guide(self):
+        """Contract Guide: Gegenrichtung mit eigener Filter-ID (vertauschte Ports, Prio sport), implizite Regel zum BD,
+        unenforced nur eine Regel, Preferred Group mit grp_*-Regeln, Intra-EPG class-eq-deny(2)."""
+        self.build('permit', 'permit')
+        cli = Cli(self.S.engine, self.S.sim)
+        rows = [[c.strip() for c in ln.strip('|').split('|')] for ln in cli.run('leaf102', 'show zoning-rule').split('\n')
+                if ln.startswith('|') and 'Rule ID' not in ln]
+        epg = [r for r in rows if r[7] == 'c-epg']
+        self.assertEqual([r[4] for r in epg], ['bi-dir', 'uni-dir-ignore'])
+        self.assertNotEqual(epg[0][3], epg[1][3], 'eigene Filter-ID fuer die Gegenrichtung')
+        flt = cli.run('leaf102', 'show zoning-filter filter %s' % epg[1][3])
+        self.assertIn('sport', flt)
+        bd = self.S.engine.A('uni/tn-Shop/BD-BD-App')['pcTag']
+        self.assertIn(['0', bd, 'implicit', 'any_dest_any(16)'], [[r[1], r[2], r[3], r[9]] for r in rows])
+        self.assertIn('\n[7:', '\n' + cli.run('leaf102', 'contract_parser.py'), 'Format [Prio:RuleId]')
+        self.apply([(self.APP, mo('fvAEPg', {'pcEnfPref': 'enforced'}))])
+        z = cli.run('leaf102', 'show zoning-rule')
+        tag = self.S.engine.cls[self.APP]['pcTag']
+        self.assertTrue(any('| %s ' % tag in ln and 'class-eq-deny(2)' in ln for ln in z.split('\n')), z)
+        vrf = self.S.engine.cls[self.WEB]['vrf']
+        self.apply([(vrf + '/any', mo('vzAny', {'prefGrMemb': 'enabled'})),
+                    (self.WEB, mo('fvAEPg', {'prefGrMemb': 'include'}))])
+        z = cli.run('leaf102', 'show zoning-rule')
+        self.assertIn('grp_any_any_any_permit(20)', z)
+        self.assertIn('grp_src_any_any_deny(18)', z, 'App ist kein Mitglied')
+        self.assertNotIn('any_any_any(21)', z)
+        self.apply([(vrf, mo('fvCtx', {'pcEnfPref': 'unenforced'}))])
+        z = [ln for ln in cli.run('leaf102', 'show zoning-rule').split('\n') if ln.startswith('|') and 'Rule ID' not in ln]
+        self.assertEqual(len(z), 1)
+        self.assertIn('permit', z[0])
+
     def test_zoning_rule_shows_guide_priorities(self):
         self.build('permit', 'deny')
         z = Cli(self.S.engine, self.S.sim).run('leaf101', 'show zoning-rule')

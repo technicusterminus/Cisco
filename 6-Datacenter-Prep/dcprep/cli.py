@@ -5,7 +5,7 @@ import shlex
 
 from .model import CLASSES, split_dn
 from .engine import ip_of, pnum, vlan_num
-from .engine_policy import entry_is_any, has_log, rule_prio
+from .engine_policy import entry_is_any, filter_prio, has_log, rule_prio
 from .query import eval_filter, out_attrs
 
 APIC_HELP = """Verfuegbare Befehle auf dem APIC (Ausgabe aus dem Simulator, Format vereinfacht; [S] = simulator-spezifisch):
@@ -546,11 +546,49 @@ class Cli:
             vn = va['scope']
             if scope and scope != vn:
                 continue
-            enforced = va['pcEnfPref'] == 'enforced'
-            rows.append((rid, 0, 0, 'implicit', 'uni-dir', 'enabled', vn, '',
-                         'deny,log' if enforced else 'permit', 'any_any_any(21)')); rid += 1
+            if va['pcEnfPref'] != 'enforced':
+                # Contract Guide, Unenforced mode: nur eine Permit-any-Regel, Contracts werden nicht programmiert
+                rows.append((rid, 0, 0, 'implicit', 'uni-dir', 'enabled', vn, '', 'permit', 'any_any_any(21)')); rid += 1
+                continue
+            # implizite Regeln nach Contract Guide (Table 2, Preferred group, Microsegmentation, Taboo)
+            pref = (e.A(vrf + '/any') or {}).get('prefGrMemb') == 'enabled'
+            vcls = sorted((c for c in e.cls.values() if c['vrf'] == vrf and c['kind'] in ('epg', 'esg', 'ext', 'l2ext')
+                           and str(c['pcTag']).isdigit()), key=lambda c: int(c['pcTag']))
+            if pref:
+                rows.append((rid, 0, 0, 'implicit', 'uni-dir', 'enabled', vn, '', 'permit', 'grp_any_any_any_permit(20)')); rid += 1
+            else:
+                rows.append((rid, 0, 0, 'implicit', 'uni-dir', 'enabled', vn, '', 'deny,log', 'any_any_any(21)')); rid += 1
             rows.append((rid, 0, 0, 'implarp', 'uni-dir', 'enabled', vn, '', 'permit', 'any_any_filter(17)')); rid += 1
-            rows.append((rid, 0, 15, 'implicit', 'uni-dir', 'enabled', vn, '', 'deny,log', 'any_vrf_any_deny(22)')); rid += 1
+            rows.append((rid, 0, 15, 'implicit', 'uni-dir', 'enabled', vn, '', 'deny,log',
+                         'grp_any_dest_any_deny(19)' if pref else 'any_vrf_any_deny(22)')); rid += 1
+            for bdn in sorted(b for b in e.dep_bd.get(nid, set()) if (e.A(b + '/rsctx') or {}).get('tDn') == vrf):
+                # Unknown Unicast zum BD: am Ingress-Leaf erlaubt, Policy am Egress-Leaf
+                rows.append((rid, 0, e.A(bdn)['pcTag'], 'implicit', 'uni-dir', 'enabled', vn, '', 'permit', 'any_dest_any(16)')); rid += 1
+            if pref:
+                if va.get('pcTag'):
+                    rows.append((rid, va['pcTag'], 0, 'implicit', 'uni-dir', 'enabled', vn, '', 'deny,log',
+                                 'grp_src_any_any_deny(18)')); rid += 1
+                for c in vcls:
+                    if not c['pref']:
+                        rows.append((rid, c['pcTag'], 0, 'implicit', 'uni-dir', 'enabled', vn, '', 'deny,log', 'grp_src_any_any_deny(18)')); rid += 1
+                        rows.append((rid, 0, c['pcTag'], 'implicit', 'uni-dir', 'enabled', vn, '', 'deny,log', 'grp_any_dest_any_deny(19)')); rid += 1
+            for c in vcls:
+                if c.get('isolation') or c.get('intra'):
+                    rows.append((rid, c['pcTag'], c['pcTag'], 'implicit', 'uni-dir', 'enabled', vn, '', 'deny,log', 'class-eq-deny(2)')); rid += 1
+                for brc in c.get('intra') or []:
+                    for subj in e.kids(brc, 'vzSubj'):
+                        for rf, sdir in e.subj_filters(subj):
+                            rfa = e.A(rf)
+                            if rfa['state'] == 'formed':
+                                for dirn, fk in (('bi-dir', rfa['tDn']), ('uni-dir-ignore', (rfa['tDn'], 'rev'))):
+                                    rows.append((rid, c['pcTag'], c['pcTag'], fid.get(fk, fid[rfa['tDn']]), dirn, 'enabled', vn,
+                                                 e.A(brc)['name'], rfa['action'], 'class-eq-filter(1)')); rid += 1
+                for tb in e._rs_targets(c['dn'], 'fvRsProtBy'):
+                    for ts in e.kids(tb, 'vzTSubj'):
+                        for rd in e.kids(ts, 'vzRsDenyRule'):
+                            rda = e.A(rd)
+                            if rda['state'] == 'formed':
+                                rows.append((rid, 0, c['pcTag'], fid[rda['tDn']], 'uni-dir', 'enabled', vn, '', 'deny', 'black_list(5)')); rid += 1
             for brc, rel in sorted(e.contracts.items()):
                 members = lambda k: [e.cls[d]['pcTag'] for d in rel[k] if d in e.cls and e.cls[d]['vrf'] == vrf] + \
                     (['0'] if vrf in rel[k + '_any'] else [])
@@ -568,6 +606,7 @@ class Cli:
                         if rfa['state'] != 'formed':
                             continue
                         f = fid[rfa['tDn']]
+                        f2 = fid.get((rfa['tDn'], 'rev'), f) if self._rev_filter(subj, dirn, rfa['tDn']) else f
                         a1 = a2 = rfa['action']
                         if has_log(rfa):
                             # Contract Guide: "log,permit" bzw. "deny,log" in show zoning-rule
@@ -590,12 +629,12 @@ class Cli:
                                     continue
                                 rows.append((rid, cpt, ppt, f, 'bi-dir', 'enabled', vn, e.A(brc)['name'],
                                              a1, pr(cpt, ppt))); rid += 1
-                                rows.append((rid, ppt, cpt, f, 'uni-dir-ignore', 'enabled', vn, e.A(brc)['name'],
+                                rows.append((rid, ppt, cpt, f2, 'uni-dir-ignore', 'enabled', vn, e.A(brc)['name'],
                                              a2, pr(ppt, cpt))); rid += 1
                                 if g:
                                     sc_, sp_ = g['conns']['consumer']['pcTag'], g['conns']['provider']['pcTag']
                                     rows.append((rid, sp_, ppt, f, 'bi-dir', 'enabled', vn, e.A(brc)['name'], 'permit', pr(sp_, ppt))); rid += 1
-                                    rows.append((rid, sc_, cpt, f, 'uni-dir-ignore', 'enabled', vn, e.A(brc)['name'], 'permit', pr(sc_, cpt))); rid += 1
+                                    rows.append((rid, sc_, cpt, f2, 'uni-dir-ignore', 'enabled', vn, e.A(brc)['name'], 'permit', pr(sc_, cpt))); rid += 1
         if not rows:
             return 'Keine Zoning-Rules (kein VRF auf diesem Switch deployed).'
         return _table(['Rule ID', 'SrcEPG', 'DstEPG', 'FilterID', 'Dir', 'operSt', 'Scope', 'Name', 'Action',
@@ -1009,32 +1048,72 @@ def _verify_methods():
         fid = {}
         for brc, rel in sorted(e.contracts.items()):
             for subj in e.kids(brc, 'vzSubj'):
-                for rf, _ in e.subj_filters(subj):
-                    rfa = e.A(rf)
-                    if rfa['state'] == 'formed':
-                        fid.setdefault(rfa['tDn'], 4 + len(fid) + 1)
+                self._fid_subj(fid, subj)
+        # Intra-EPG-Contracts und Taboo-Filter bekommen ebenfalls IDs
+        for c in sorted(e.cls.values(), key=lambda c: c['dn']):
+            for brc in c.get('intra') or []:
+                for subj in e.kids(brc, 'vzSubj'):
+                    self._fid_subj(fid, subj)
+            for tb in e._rs_targets(c['dn'], 'fvRsProtBy'):
+                for ts in e.kids(tb, 'vzTSubj'):
+                    for rd in e.kids(ts, 'vzRsDenyRule'):
+                        rda = e.A(rd)
+                        if rda['state'] == 'formed':
+                            fid.setdefault(rda['tDn'], 4 + len(fid) + 1)
         return fid
 
-    def zoning_filter(self, nid, which):
+    def _fid_subj(self, fid, subj):
+        """Filter-IDs eines Subjects. Mit Reverse Filter Ports bekommt die Gegenrichtung eine eigene ID mit vertauschten
+        Ports (Contract Guide: Filter 67 dport 22 / Filter 68 sport 22); any-Filter nutzen fuer beide Richtungen dieselbe ID."""
         e = self.e
-        rows = [(2, 'implarp', 'arp', 'unspecified', 'unspecified', 'unspecified', 'unspecified', 'no'),
-                (4, 'implicit', 'unspecified', 'unspecified', 'unspecified', 'unspecified', 'unspecified', 'no')]
-        for flt, i in sorted(self._filters().items(), key=lambda x: x[1]):
-            for en in e.kids(flt, 'vzEntry'):
-                a = e.A(en)
-                rows.append((i, '%s_%s' % (i, a['name']), a['etherT'], a.get('prot', 'unspecified'),
-                             '%s-%s' % (a.get('sFromPort', 'unspecified'), a.get('sToPort', 'unspecified')),
-                             '%s-%s' % (a.get('dFromPort', 'unspecified'), a.get('dToPort', 'unspecified')),
-                             a.get('tcpRules') or 'unspecified', a.get('stateful', 'no')))
+        for rf, dirn in e.subj_filters(subj):
+            rfa = e.A(rf)
+            if rfa['state'] != 'formed':
+                continue
+            fid.setdefault(rfa['tDn'], 4 + len(fid) + 1)
+            if self._rev_filter(subj, dirn, rfa['tDn']):
+                fid.setdefault((rfa['tDn'], 'rev'), 4 + len(fid) + 1)
+
+    def _rev_filter(self, subj, dirn, flt):
+        e = self.e
+        return dirn == 'both' and e.A(subj)['revFltPorts'] == 'yes' and \
+            not all(entry_is_any(e.A(x)) for x in e.kids(flt, 'vzEntry'))
+
+    def zoning_filter(self, nid, which):
+        """Spalten wie im Cisco ACI Contract Guide (show zoning-filter). Prio: def (EtherType unspecified), flags (TCP-Flags),
+        dport, sport, proto. Fuer Entries mit Quell- und Ziel-Port ist der echte Prio-Name nicht belegt; angezeigt wird dport."""
+        e = self.e
+        u = 'unspecified'
+        rows = [('implarp', 'implarp', 'arp', u, u, 'no', 'no', u, u, u, u, 'dport', u, u, ''),
+                ('implicit', 'implicit', u, u, u, 'no', 'no', u, u, u, u, 'implicit', u, u, '')]
+        for key, i in sorted(self._filters().items(), key=lambda x: x[1]):
+            rev = isinstance(key, tuple)
+            flt = key[0] if rev else key
+            for k, en in enumerate(e.kids(flt, 'vzEntry')):
+                a = dict(e.A(en))
+                if rev:
+                    for x, y in (('sFromPort', 'dFromPort'), ('sToPort', 'dToPort')):
+                        a[x], a[y] = a.get(y, u), a.get(x, u)
+                fp = filter_prio(a)
+                prio = {7: 'def', 1: 'flags', 6: 'frag', 5: 'proto', 4: 'sport'}.get(fp, 'dport')
+                tcp = a.get('tcpRules') or ''
+                if rev and a.get('stateful') == 'yes':
+                    # Contract Guide: Stateful -> Gegenrichtung nur mit ACK (TcpRules ack, Prio flags)
+                    tcp, prio = 'ack', 'flags'
+                rows.append((i, '%s_%d' % (i, k), 'ip' if a['etherT'] in ('ip', 'ipv4') else a['etherT'], a.get('arpOpc', u),
+                             a.get('prot', u), a.get('applyToFrag', 'no'), a.get('stateful', 'no'),
+                             a.get('sFromPort', u), a.get('sToPort', u), a.get('dFromPort', u), a.get('dToPort', u), prio,
+                             a.get('icmpv4T', u), a.get('icmpv6T', u), tcp))
         if which:
             rows = [r for r in rows if str(r[0]) == which]
-        return _table(['FilterId', 'Name', 'EtherT', 'Prot', 'SFromPort-SToPort', 'DFromPort-DToPort', 'TcpRules', 'Stateful'], rows)
+        return _table(['FilterId', 'Name', 'EtherT', 'ArpOpc', 'Prot', 'ApplyToFrag', 'Stateful', 'SFromPort', 'SToPort',
+                       'DFromPort', 'DToPort', 'Prio', 'Icmpv4T', 'Icmpv6T', 'TcpRules'], rows)
 
     def contract_parser(self, nid, vname):
         e = self.e
         vrf = self._vrf_by_name(vname) if vname else None
         names = {c['pcTag']: (c['dn'], c) for c in e.cls.values()}
-        fnames = {i: f for f, i in self._filters().items()}
+        fnames = {i: (f[0] if isinstance(f, tuple) else f) for f, i in self._filters().items()}
         out = []
         z = self.zoning(nid, e.A(vrf)['scope'] if vrf else None)
         if z.startswith('Keine'):
@@ -1063,7 +1142,7 @@ def _verify_methods():
                     desc.append('%s %s%s' % (a['etherT'], a.get('prot', ''), '' if port == 'unspecified' else ' eq %s' % port))
             vrfname = next((self._vname(v) for v in e.dep_vrf.get(nid, set()) if e.A(v)['scope'] == scope), scope)
             out.append('[%s:%s] [vrf:%s] %s %s %s %s [contract:%s] [hit=0]' % (
-                rid, prio.split('(')[-1].rstrip(')'), vrfname, action, ', '.join(desc) or 'ip', label(src), label(dst),
+                prio.split('(')[-1].rstrip(')'), rid, vrfname, action, ', '.join(desc) or 'ip', label(src), label(dst),
                 name or '-'))
         return '\n'.join(out) if out else 'Keine Contract-Regeln auf diesem Switch.'
 
@@ -1252,7 +1331,8 @@ def _verify_methods():
         out.insert(1, 'Total entries: %d' % n)
         return '\n'.join(out)
 
-    for f in (bd_svis, ip_int_brief, arp, mac_table, epm, show_interface, cdp, _filters, zoning_filter, contract_parser,
+    for f in (bd_svis, ip_int_brief, arp, mac_table, epm, show_interface, cdp, _filters, _fid_subj, _rev_filter, zoning_filter,
+              contract_parser,
               bgp_table, ospf_if, iping, overlay_routes, isis, vpnv4, coop):
         setattr(Cli, f.__name__, f)
 
