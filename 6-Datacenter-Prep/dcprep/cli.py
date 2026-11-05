@@ -590,6 +590,7 @@ class Cli:
                             if rda['state'] == 'formed':
                                 rows.append((rid, 0, c['pcTag'], fid[rda['tDn']], 'uni-dir', 'enabled', vn, '', 'deny', 'black_list(5)')); rid += 1
             shsrc, shprov = set(), set()
+            esg_tag = {c['pcTag']: True for c in e.cls.values() if c['kind'] == 'esg'}
             # External EPGs mit 0.0.0.0/0 (import-security): pcTag -> True, wenn das das einzige Subnetz ist
             ext0 = {}
             for c in e.cls.values():
@@ -644,7 +645,7 @@ class Cli:
                                     continue
                                 # Prioritaet je Regelrichtung (Contract Guide, Table 8); 0 = vzAny
                                 anyf = all(entry_is_any(e.A(x)) for x in e.kids(rfa['tDn'], 'vzEntry'))
-                                pr = lambda a_, b_: rule_prio(a_ != '0', b_ != '0', anyf)[1]
+                                pr = lambda a_, b_: rule_prio(a_ != '0', b_ != '0', anyf, esg_tag.get(a_) or esg_tag.get(b_))[1]
                                 xd = [t for t in (cpt, ppt) if t in ext0]
                                 if xd and dirn == 'both':
                                     # Contract Guide, L3Out EPG mit 0.0.0.0/0: Ziel = Class-ID 15, Quelle = VRF-Class-ID,
