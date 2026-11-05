@@ -232,8 +232,14 @@ def _contract_between(eng, s, d):
 def _leak(eng, t, sc, dc, shs, dhs, sh, dh):
     r = _contract_between(eng, sc, dc)
     if not r:
+        # Contract Guide: vzAny kann Consumer, aber nicht Provider eines Inter-VRF-Contracts sein
+        anyprov = [brc for brc, rel in eng.contracts.items() if (dc['vrf'] in rel['prov_any'] or sc['vrf'] in rel['prov_any'])
+                   and (sc['dn'] in rel['cons'] or dc['dn'] in rel['cons'] or sc['vrf'] in rel['cons_any'] or dc['vrf'] in rel['cons_any'])]
         t.step(False, 'Route Leaking', 'Ziel liegt in VRF %s, Quelle in VRF %s. Zwischen VRFs leakt die ACI Routen nur mit '
-               'einem Contract zwischen den EPGs (Scope Tenant oder Global)' % (eng.short(dhs['vrf']), eng.short(shs['vrf'])))
+               'einem Contract zwischen den EPGs (Scope Tenant oder Global)%s' % (
+                   eng.short(dhs['vrf']), eng.short(shs['vrf']),
+                   '. Contract %s wird von vzAny bereitgestellt - vzAny kann bei Inter-VRF-Contracts nur Consumer sein, '
+                   'Provider muss eine EPG mit Subnetz sein' % eng.short(anyprov[0]) if anyprov else ''))
         return False
     brc, prov, cons = r
     if not _shared_scope_ok(eng, brc, sc, dc):
