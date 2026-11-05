@@ -1172,7 +1172,11 @@ class TestConvertedLabs(unittest.TestCase):
                 if ln.startswith('|') and 'web-to-isp' in ln]
         web = e.cls['uni/tn-Shop/ap-Webshop/epg-Web']['pcTag']
         vrf_tag = e.A(e.cls['uni/tn-Shop/ap-Webshop/epg-Web']['vrf'])['pcTag']
-        self.assertEqual(sorted((r[1], r[2], r[4]) for r in rows), sorted([(web, '15', 'uni-dir'), (vrf_tag, web, 'uni-dir')]))
+        got = {(r[1], r[2], r[4]) for r in rows}
+        self.assertTrue({(web, '15', 'uni-dir'), (vrf_tag, web, 'uni-dir')} <= got, rows)
+        # Musterloesung nimmt das Transfernetz ins External EPG auf (Contract Guide): zusaetzlich Regeln mit eigenem pcTag
+        ext = e.cls['uni/tn-Shop/out-ISP/instP-Internet']['pcTag']
+        self.assertTrue({(web, ext, 'bi-dir'), (ext, web, 'uni-dir-ignore')} <= got, rows)
 
     def test_lab13_vzany_cannot_provide_inter_vrf_contract(self):
         """Contract Guide: vzAny kann bei Inter-VRF-Contracts nur Consumer sein, nicht Provider."""
@@ -1184,6 +1188,23 @@ class TestConvertedLabs(unittest.TestCase):
         r = trace.run(self.S.engine, self.S.sim, 'web1', 'dns1', 'udp', 53)
         self.assertEqual((r['verdict'], r['reason']), ('DROP', 'INTERVRF_LEAK_MISSING'))
         self.assertIn('vzAny kann bei Inter-VRF-Contracts nur Consumer sein', ' '.join(s['detail'] for s in r['steps']))
+
+    def test_lab09_transfer_subnet_is_class1_without_explicit_subnet(self):
+        """Contract Guide, Figures 127-132: Hat das External EPG nur 0.0.0.0/0, gilt die Interface-Adresse des Routers als
+        Class-ID 1 und darf ohne Contract zu web1 (Anfrage). Mit dem Transfernetz im External EPG greift der Contract."""
+        lab = self.S.load_lab('09-l3out-bgp')
+        self.apply(*lab['solutionConfig'])
+        self.apply(('uni/tn-Shop/out-ISP/instP-Internet/extsubnet-[172.16.1.0/30]', mo('l3extSubnet', {'status': 'deleted'})))
+        r = trace.run(self.S.engine, self.S.sim, 'isp1', 'web1', 'tcp', 22)
+        self.assertEqual(r['policy'][0]['code'], 'POLICY_IMPLICIT_CLASS1')
+        self.assertEqual(r['policy'][0]['action'], 'permit')
+        self.assertEqual(r['reason'], 'POLICY_REPLY_DENIED', 'web1 liegt nicht am Border Leaf: Antwort an Class-ID 15 ohne Contract')
+        self.assertFalse(self.by()['Least Privilege Provider → Web: nur Ping'])
+        self.S.load_lab('09-l3out-bgp')
+        self.apply(*lab['solutionConfig'])
+        r = trace.run(self.S.engine, self.S.sim, 'isp1', 'web1', 'tcp', 22)
+        self.assertEqual((r['policy'][0]['action'], r['policy'][0]['code']), ('deny', 'POLICY_IMPLICIT_DENY'))
+        self.assertTrue(all(self.by().values()))
 
     def test_lab09_permit_any_to_internet_fails(self):
         lab = self.S.load_lab('09-l3out-bgp')

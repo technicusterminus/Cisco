@@ -176,6 +176,30 @@ def _classify_ext(eng, vrf, ip):
     return best
 
 
+def _class1_if(eng, vrf, ip, cl):
+    """Contract Guide, L3Out EPG with 0.0.0.0/0: Liegt die IP im Subnetz eines L3Out-Interfaces und passt das External EPG
+    nur ueber 0.0.0.0/0, klassifiziert der Leaf, an dem das Interface lokal ist, sie als Class-ID 1 (pervasive Route).
+    Rueckgabe: Interface oder None."""
+    if cl and cl[0].prefixlen > 0:
+        return None
+    return next((i for i in eng.l3if if i.get('vrf') == vrf and i.get('net') is not None and ip in i['net']), None)
+
+
+def _class1_step(t, ok_req, ok_rep, s_label, d_label, flow, why_req, why_rep, refs):
+    """Policy-Schritt fuer Class-ID 1 (implizit erlaubt, simulator-spezifischer Code POLICY_IMPLICIT_CLASS1)."""
+    t.policy.append({'direction': 'request', 'flow': flow, 'action': 'permit' if ok_req else 'deny',
+                     'code': 'POLICY_IMPLICIT_CLASS1' if ok_req else 'POLICY_IMPLICIT_DENY', 'rule': None, 'text': why_req})
+    t.step(ok_req, 'Policy Anfrage %s -> %s (%s)' % (s_label, d_label, flow), why_req,
+           code='POLICY_IMPLICIT_CLASS1' if ok_req else 'POLICY_IMPLICIT_DENY', refs=refs)
+    if not ok_req:
+        return False
+    t.policy.append({'direction': 'reply', 'flow': flow, 'action': 'permit' if ok_rep else 'deny',
+                     'code': 'POLICY_IMPLICIT_CLASS1' if ok_rep else 'POLICY_REPLY_DENIED', 'rule': None, 'text': why_rep})
+    t.step(ok_rep, 'Policy Antwort %s -> %s' % (d_label, s_label), why_rep,
+           code='POLICY_IMPLICIT_CLASS1' if ok_rep else 'POLICY_REPLY_DENIED', refs=refs)
+    return ok_rep
+
+
 def _host_checks(eng, t, ep, role):
     h = ep['h']
     hs = eng.hosts.get(h['name'])
@@ -636,7 +660,16 @@ def _run(eng, sim, src, dst, proto='icmp', port=0):
         return t.result()
     t.step(True, 'Klassifizierung', '%s gehoert zum External EPG %s (Subnetz %s)' % (D['ip'], eng.short(cl[1]), cl[0]))
     dc = eng.cls[cl[1]]
-    if not _policy(eng, t, sc, dc, proto, port, sh['name'], str(D['ip'])):
+    c1 = _class1_if(eng, vrf, D['ip'], cl) if not leaked else None
+    if c1 and c1['nid'] in shs['nodes']:
+        flow = '%s%s' % (proto, '/%d' % port if proto in ('tcp', 'udp') else '')
+        why = ('%s liegt im L3Out-Interface-Subnetz %s, lokal auf %s. Weil das External EPG nur ueber 0.0.0.0/0 passt, '
+               'klassifiziert der Leaf die Adresse als Class-ID 1 (pervasive Route) - implizit erlaubt, ohne Contract. '
+               'Abhilfe laut Contract Guide: das Interface-Subnetz ins External EPG aufnehmen.' % (D['ip'], c1['net'], eng.nodes[c1['nid']]['name']))
+        if not _class1_step(t, True, True, sh['name'], str(D['ip']), flow, why, 'Antwort von Class-ID 1 - implizit erlaubt',
+                            [sc['dn'], dc['dn']]):
+            return t.result()
+    elif not _policy(eng, t, sc, dc, proto, port, sh['name'], str(D['ip'])):
         return t.result()
     r = _router(sim, rname)
     rs = eng.routers.get(rname, {})
@@ -689,10 +722,28 @@ def _from_router(eng, sim, t, S, D, proto, port):
     if not cl:
         t.step(False, 'Klassifizierung', 'Quell-IP %s passt zu keinem External EPG Subnetz' % src_ip)
         return t.result()
-    t.step(True, 'Klassifizierung', 'Quelle %s gehoert zum External EPG %s' % (src_ip, eng.short(cl[1])))
     sc = eng.cls[cl[1]]
-    if not _policy(eng, t, sc, dc, proto, port, r['name'], dh['name'], dst_host=dh):
-        return t.result()
+    c1 = _class1_if(eng, vrf, src_ip, cl)
+    if c1:
+        t.step(True, 'Klassifizierung', 'Quelle %s liegt im L3Out-Interface-Subnetz %s und das External EPG %s passt nur ueber '
+               '0.0.0.0/0: Der Border Leaf %s klassifiziert sie als Class-ID 1 (pervasive Route)'
+               % (src_ip, c1['net'], eng.short(cl[1]), eng.nodes[c1['nid']]['name']))
+        local = c1['nid'] in dhs['nodes']
+        flow = '%s%s' % (proto, '/%d' % port if proto in ('tcp', 'udp') else '')
+        rep_ok, rep_why = True, 'Ziel lokal auf demselben Leaf: Antwort an Class-ID 1 - implizit erlaubt'
+        if not local:
+            act, why = eng.packet(dc, sc, proto, port if proto in ('tcp', 'udp') else None, EPHEMERAL if proto in ('tcp', 'udp') else None, 'ack')
+            rep_ok = act == 'permit'
+            rep_why = ('Ziel nicht lokal: Der Leaf von %s klassifiziert %s als External EPG (0.0.0.0/0 -> Class-ID 15). %s'
+                       % (dh['name'], src_ip, why))
+        if not _class1_step(t, True, rep_ok, r['name'], dh['name'], flow,
+                            'Quelle Class-ID 1 -> implizit erlaubt (implizite Regel 1 -> 0, Contract Guide FAQ), ohne Contract. '
+                            'Abhilfe: das Interface-Subnetz %s ins External EPG aufnehmen.' % c1['net'], rep_why, [sc['dn'], dc['dn']]):
+            return t.result()
+    else:
+        t.step(True, 'Klassifizierung', 'Quelle %s gehoert zum External EPG %s' % (src_ip, eng.short(cl[1])))
+        if not _policy(eng, t, sc, dc, proto, port, r['name'], dh['name'], dst_host=dh):
+            return t.result()
     if not _gw_ok(eng, t, dh, dhs, 'Ziel (fuer die Antwort)'):
         return t.result()
     leaf = dhs['nodes'][0]
