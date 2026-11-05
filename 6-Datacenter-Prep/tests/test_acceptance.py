@@ -1146,6 +1146,34 @@ class TestConvertedLabs(unittest.TestCase):
         self.assertFalse(by['Least Privilege Web → DNS: nur UDP 53'])
 
 
+    def test_lab13_zoning_rules_in_consumer_vrf(self):
+        """Contract Guide, Consumer VRF enforcement: Contract-Regeln und shsrc_any_any_deny(12) im Consumer-VRF,
+        im Provider-VRF nur provider -> 14 permit_override src_dst_any(9)."""
+        lab = self.S.load_lab('13-shared-services')
+        self.apply(*lab['solutionConfig'])
+        e = self.S.engine
+        cli = Cli(e, self.S.sim)
+        rows = [[c.strip() for c in ln.strip('|').split('|')] for ln in cli.run('leaf102', 'show zoning-rule').split('\n')
+                if ln.startswith('|') and 'Rule ID' not in ln]
+        dns = next(c for c in e.cls.values() if c['name'] == 'DNS')
+        cons_scope = e.A(e.cls['uni/tn-Shop/ap-Webshop/epg-Web']['vrf'])['scope']
+        prov_scope = e.A(dns['vrf'])['scope']
+        self.assertIn([dns['pcTag'], '14', 'permit_override', 'src_dst_any(9)', prov_scope], [[r[1], r[2], r[8], r[9], r[6]] for r in rows])
+        self.assertIn([dns['pcTag'], '0', 'shsrc_any_any_deny(12)', cons_scope], [[r[1], r[2], r[9], r[6]] for r in rows])
+        self.assertFalse([r for r in rows if r[7] == 'dns' and r[6] == prov_scope], 'keine Contract-Regeln im Provider-VRF')
+        self.assertTrue([r for r in rows if r[7] == 'dns' and r[6] == cons_scope])
+
+    def test_lab09_default_route_external_epg_uses_special_class_ids(self):
+        """Contract Guide, L3Out EPG with 0.0.0.0/0: EPG -> 15 und VRF-Class-ID -> EPG, beide uni-dir."""
+        lab = self.S.load_lab('09-l3out-bgp')
+        self.apply(*lab['solutionConfig'])
+        e = self.S.engine
+        rows = [[c.strip() for c in ln.strip('|').split('|')] for ln in Cli(e, self.S.sim).run('leaf101', 'show zoning-rule').split('\n')
+                if ln.startswith('|') and 'web-to-isp' in ln]
+        web = e.cls['uni/tn-Shop/ap-Webshop/epg-Web']['pcTag']
+        vrf_tag = e.A(e.cls['uni/tn-Shop/ap-Webshop/epg-Web']['vrf'])['pcTag']
+        self.assertEqual(sorted((r[1], r[2], r[4]) for r in rows), sorted([(web, '15', 'uni-dir'), (vrf_tag, web, 'uni-dir')]))
+
     def test_lab09_permit_any_to_internet_fails(self):
         lab = self.S.load_lab('09-l3out-bgp')
         self.apply(*lab['solutionConfig'])
