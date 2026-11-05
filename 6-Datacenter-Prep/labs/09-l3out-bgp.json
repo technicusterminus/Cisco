@@ -554,6 +554,18 @@
    ],
    "answer": 0,
    "explain": "Fehlt VLAN 301 im Pool, gibt es einen Fault am L3Out und das Interface kommt nicht hoch."
+  },
+  {
+   "id": "q3",
+   "q": "Das External EPG Internet hat das Subnetz 0.0.0.0/0. Welche Class-ID steht in show zoning-rule, wenn Web das Internet erreicht (Web -> Internet)?",
+   "options": [
+    "15 als Ziel; in der Gegenrichtung ist die Quelle die Class-ID des VRF",
+    "Der pcTag des External EPG in beide Richtungen",
+    "0 (vzAny)",
+    "1 (Pervasive Route)"
+   ],
+   "answer": 0,
+   "explain": "Ein External EPG mit 0.0.0.0/0 nutzt Sonder-Class-IDs: als Ziel 15, als Quelle die VRF-Class-ID. Beide Regeln sind uni-dir."
   }
  ],
  "solution": "Interface: `l3extRsPathL3OutAtt tDn=topology/pod-1/paths-104/pathep-[eth1/47] ifInstT=sub-interface encap=vlan-301 addr=172.16.1.1/30`, darunter `bgpPeerP addr=172.16.1.2` mit `bgpAsP asn=65100`. Am L3Out `bgpExtP`. Ohne Fabric-AS (bgpAsP unter uni/fabric/bgpInstP-default) startet BGP nicht.",

@@ -611,6 +611,18 @@
    ],
    "answer": 0,
    "explain": "So leakt nur das Netz des Dienstes, nicht automatisch alles im BD."
+  },
+  {
+   "id": "q3",
+   "q": "In welcher VRF stehen nach der Lösung die Zoning Rules des Contracts dns (show zoning-rule)?",
+   "options": [
+    "In der VRF des Consumers (Shop:Prod); in der Provider-VRF steht nur DNS -> 14 permit_override",
+    "In der VRF des Providers (Shared:Services)",
+    "In beiden VRFs gleich",
+    "In keiner, Shared Services brauchen keine Regeln"
+   ],
+   "answer": 0,
+   "explain": "Bei Inter-VRF-Contracts setzt die Consumer-VRF die Policy durch. Dort steht zusätzlich DNS -> 0 shsrc_any_any_deny(12), damit der Provider nur über den Contract hinein darf."
   }
  ],
  "solution": "Tenant Shared: `vzBrCP dns scope=global` mit Filter udp/53, an der EPG DNS `fvRsProv` und `fvSubnet ip=10.99.0.1/24 scope=private,shared`. Export: `vzCPIf name=dns` im Tenant Shop mit `vzRsIf tDn=uni/tn-Shared/brc-dns`. Consumer: `fvRsConsIf tnVzCPIfName=dns` an der EPG Web und `fvSubnet 10.10.10.1/24 scope=private,shared` am BD-Web.",
