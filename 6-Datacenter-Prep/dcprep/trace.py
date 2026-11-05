@@ -250,6 +250,12 @@ def _contract_between(eng, s, d):
             return brc, d, s
         if s['dn'] in rel['prov'] and d['dn'] in rel['cons']:
             return brc, s, d
+    # Contract Guide: vzAny kann Consumer eines Inter-VRF-Contracts sein (Provider muss eine EPG sein)
+    for brc, rel in eng.contracts.items():
+        if s['vrf'] in rel['cons_any'] and d['dn'] in rel['prov']:
+            return brc, d, s
+        if d['vrf'] in rel['cons_any'] and s['dn'] in rel['prov']:
+            return brc, s, d
     return None
 
 

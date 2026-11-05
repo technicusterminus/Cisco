@@ -15,10 +15,18 @@ def entry_is_any(ea):
     return ea.get('etherT', 'unspecified') == 'unspecified'
 
 
+def is_global(c):
+    """Klasse mit globalem pcTag (16-16384): ESG oder Provider-EPG eines Inter-VRF-Contracts (Contract Guide)."""
+    tag = str(c.get('pcTag') or '')
+    return c.get('kind') == 'esg' or (tag.isdigit() and 16 <= int(tag) <= 16384)
+
+
 def rule_prio(src_specific, dst_specific, any_filter, esg=False):
     """Zoning-Rule-Prioritaet nach Cisco ACI Contract Guide, Table 8 (EPG-to-EPG, EPG-to-vzAny, vzAny-to-EPG,
     vzAny-to-vzAny; je mit spezifischem oder any-Filter). Kleinere Zahl = hoehere Prioritaet.
-    esg: die spezifische Seite einer vzAny-Regel ist eine ESG (globaler pcTag) -> 10/11 statt 13-16."""
+    esg: die spezifische Seite einer vzAny-Regel hat einen globalen pcTag (ESG, Inter-VRF-Provider) -> 10/11 statt 13-16
+    (Contract Guide, Table 8: shsrc_any_filt_perm / shsrc_any_any_perm).
+    Fuer vzAny -> globaler Provider-EPG (Inter-VRF) nennt Table 8 keine eigene Stufe; angenommen wie ESG (gleiche Begruendung)."""
     if esg and bool(src_specific) != bool(dst_specific):
         return (11, 'shsrc_any_any_perm(11)') if any_filter else (10, 'shsrc_any_filt_perm(10)')
     table = {(True, True): ((7, 'fully_qual'), (9, 'src_dst_any')),
@@ -151,16 +159,6 @@ class PolicyMixin:
                 for brc in c[k]:
                     self.contracts.setdefault(brc, {'prov': set(), 'cons': set(), 'prov_any': set(),
                                                     'cons_any': set()})[k].add(dn)
-        # Shared Services: Provider-EPG bekommt einen globalen pcTag (< 16384)
-        for brc, rel in self.contracts.items():
-            if (self.A(brc) or {}).get('scope') not in ('tenant', 'global'):
-                continue
-            for p in rel['prov']:
-                pc = self.cls.get(p)
-                if pc and pc['kind'] == 'epg' and pc['pcTag'].isdigit() and int(pc['pcTag']) >= 16384 and any(
-                        self.cls.get(c, {}).get('vrf') not in (None, '', pc['vrf']) for c in rel['cons']):
-                    pc['localTag'] = pc['pcTag']
-                    pc['pcTag'] = str(10000 + int(pc['pcTag']) % 6000)
         for vrf in self.store.by_class('fvCtx'):
             anyd = vrf + '/any'
             if not self.has(anyd):
@@ -171,6 +169,17 @@ class PolicyMixin:
             for brc in self._rs_targets(anyd, 'vzRsAnyToCons'):
                 self.contracts.setdefault(brc, {'prov': set(), 'cons': set(), 'prov_any': set(),
                                                 'cons_any': set()})['cons_any'].add(vrf)
+        # Shared Services: Provider-EPG bekommt einen globalen pcTag (< 16384)
+        for brc, rel in self.contracts.items():
+            if (self.A(brc) or {}).get('scope') not in ('tenant', 'global'):
+                continue
+            for p in rel['prov']:
+                pc = self.cls.get(p)
+                if pc and pc['kind'] == 'epg' and pc['pcTag'].isdigit() and int(pc['pcTag']) >= 16384 and any(
+                        self.cls.get(c, {}).get('vrf') not in (None, '', pc['vrf']) for c in rel['cons']) or any(
+                        v != pc['vrf'] for v in rel['cons_any']):
+                    pc['localTag'] = pc['pcTag']
+                    pc['pcTag'] = str(10000 + int(pc['pcTag']) % 6000)
 
     # ------------------------------------------------------------------
     # L4-L7: Service Graph mit Policy-Based Redirect
@@ -432,7 +441,7 @@ class PolicyMixin:
                         if fwd and dirn != 'p2c' and self._entry_match(ea, proto, sport, dport, flags, False):
                             hits.append((rfa['action'], where + ' (Consumer -> Provider)', subj, 'c2p', brc, rfa['tDn'], e,
                                          rule_prio(s['dn'] in rel['cons'], d['dn'] in rel['prov'], entry_is_any(ea),
-                                                   'esg' in (s['kind'], d['kind'])), rf))
+                                                   is_global(s) or is_global(d)), rf))
                         if not rev or dirn == 'c2p':
                             continue
                         # stateful: Provider -> Consumer nur TCP mit ACK (Antworten), kein Verbindungsaufbau vom Provider
@@ -443,7 +452,7 @@ class PolicyMixin:
                                          % (', Ports getauscht' if swap else ', eigener Filter' if dirn == 'p2c' else ''),
                                          subj, 'p2c', brc, rfa['tDn'], e,
                                          rule_prio(s['dn'] in rel['prov'], d['dn'] in rel['cons'], entry_is_any(ea),
-                                                   'esg' in (s['kind'], d['kind'])), rf))
+                                                   is_global(s) or is_global(d)), rf))
         # Zoning-Rule-Prioritaet (Contract Guide, Table 8): kleinere Zahl gewinnt. Preferred Group: Permit any-any (20);
         # ist eine Seite kein Mitglied, greifen die impliziten Denies src_any_any_deny(18) / any_dest_any_deny(19).
         if pref_on:

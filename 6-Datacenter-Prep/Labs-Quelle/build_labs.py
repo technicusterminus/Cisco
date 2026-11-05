@@ -2899,7 +2899,7 @@ lab(id='46-contract-priorities', title='46 Contract-Prioritäten: alles offen, e
                   'Die offene Freigabe vrf-open und ihre Beziehungen am VRF bleiben unverändert.'],
     limits=['Die Werte von priorityOverride (Deny-Priorität) sind im Modell vorhanden, ihre Wirkung ist nicht modelliert: Die Zuordnung '
             'level1–level3 zu lowest/medium/highest ist nicht belegt. Für dieses Lab ist der Standard (default) richtig.',
-            'Inter-VRF-Regeln von vzAny im Consumer-VRF (Priorität 10/11) sind nicht modelliert.',
+            'Die Rule Expansion für Inter-VRF vzAny-to-ESG (ab APIC 6.1(2)) ist nicht modelliert.',
             'Ob auf einem Host ein Dienst läuft, ist ein simulator-spezifisches Modell; hier laufen keine Dienste-Einschränkungen.'],
     hints=['**Konzept:** In ACI können mehrere Regeln auf dasselbe Paket passen. Zuerst gewinnt die spezifischere Regel '
            '(EPG zu EPG vor vzAny), erst bei gleicher Spezifität entscheidet die Aktion. Eine Freigabe für alle EPGs liegt ganz unten.',
