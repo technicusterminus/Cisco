@@ -1,0 +1,727 @@
+{
+ "id": "46-contract-priorities",
+ "title": "46 Contract-Prioritäten: alles offen, ein Paar gesperrt",
+ "topic": "Policy / Contracts",
+ "level": "Mittel",
+ "duration": "25 min",
+ "fabric": "discovered",
+ "kind": "requirements",
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 04: vzAny und Contracts",
+  "Lab 32: Filter, Subject, Consumer und Provider"
+ ],
+ "tools": [
+  "Traffic Inspector (Schritt Policy Anfrage zeigt die Regel-Priorität)",
+  "CLI auf dem Leaf: show zoning-rule",
+  "Tenant > Contracts, Tenant > Networking > VRFs > Prod > EPG Collection for VRF"
+ ],
+ "goals": [
+  "Zoning-Rule-Prioritäten lesen: welche Regel gewinnt, wenn mehrere passen",
+  "Eine Ausnahme in einem offenen VRF bauen, ohne die offene Freigabe zu verändern",
+  "Unterscheiden, wann die Aktion entscheidet und wann die Spezifität der Regel"
+ ],
+ "intro": "Der Tenant **Shop** ist während der Migration bewusst offen: Im VRF **Prod** erlaubt der Contract **vrf-open** (Filter **any-ip**) jeglichen IP-Verkehr zwischen allen EPGs des VRF. Es gibt die EPGs **Web**, **App** und **DB**.\n\n- web1: 10.10.10.11, leaf101 eth1/1, VLAN 110 (EPG Web)\n- app1: 10.10.20.11, leaf102 eth1/2, VLAN 120 (EPG App)\n- db1: 10.10.30.11, leaf102 eth1/3, VLAN 130 (EPG DB)\n\nDie Security fordert vor dem nächsten Audit: Der Webserver darf die Datenbank nicht mehr erreichen. Alles andere soll offen bleiben, bis die Migration abgeschlossen ist. Teste zuerst web1 → db1 und lies im Traffic Inspector, welche Regel greift.",
+ "requirements": [
+  "web1 erreicht db1 nicht mehr – weder TCP 1433 noch Ping noch andere Ports.",
+  "db1 baut auch keine Verbindungen zu web1 auf.",
+  "app1 erreicht db1 weiterhin (TCP 1433 und Ping), web1 erreicht app1 weiterhin (TCP 8080).",
+  "Die offene Freigabe vrf-open und ihre Beziehungen am VRF bleiben unverändert."
+ ],
+ "limits": [
+  "Die Werte von priorityOverride (Deny-Priorität) sind im Modell vorhanden, ihre Wirkung ist nicht modelliert: Die Zuordnung level1–level3 zu lowest/medium/highest ist nicht belegt. Für dieses Lab ist der Standard (default) richtig.",
+  "ESG- und Inter-VRF-Stufen (Priorität 10–12) sind nicht modelliert.",
+  "Ob auf einem Host ein Dienst läuft, ist ein simulator-spezifisches Modell; hier laufen keine Dienste-Einschränkungen."
+ ],
+ "hints": [
+  "**Konzept:** In ACI können mehrere Regeln auf dasselbe Paket passen. Zuerst gewinnt die spezifischere Regel (EPG zu EPG vor vzAny), erst bei gleicher Spezifität entscheidet die Aktion. Eine Freigabe für alle EPGs liegt ganz unten.",
+  "**Beteiligte Objekte:** Ein neuer Contract zwischen genau zwei EPGs, dessen Filter-Relation im Subject eine andere Aktion als permit hat. Der vorhandene Filter any-ip lässt sich wiederverwenden.",
+  "**Prüfschritt:** Auf leaf102 `show zoning-rule`: Die Regeln von vrf-open stehen mit 0 → 0 und any_any_filter(17). Nach der Änderung muss es für Web ↔ DB eine Regel mit fully_qual(7) geben. Danach app1 → db1 testen – das muss offen bleiben.",
+  "**Lösung:** Contract **web-to-db-deny** (Scope VRF) mit einem Subject, das den Filter **any-ip** mit Aktion **deny** (optional mit Directive **log**) enthält. EPG **Web** konsumiert, EPG **DB** stellt bereit. Die Regel Web ↔ DB hat Priorität 7 und schlägt vrf-open (17). Falsch wäre ein Deny-Filter im Contract vrf-open: Das sperrt alle EPGs, nicht nur Web ↔ DB."
+ ],
+ "cause": "vzAny konsumiert und stellt vrf-open bereit. Dadurch gibt es Regeln 0 → 0 mit any_any_filter(17), die jeden IP-Verkehr zwischen EPGs im VRF erlauben, auch Web → DB.",
+ "config": [
+  {
+   "polUni": {
+    "attributes": {},
+    "children": [
+     {
+      "infraInfra": {
+       "attributes": {},
+       "children": [
+        {
+         "fvnsVlanInstP": {
+          "attributes": {
+           "name": "VLAN-Pool-Server",
+           "allocMode": "static"
+          },
+          "children": [
+           {
+            "fvnsEncapBlk": {
+             "attributes": {
+              "from": "vlan-100",
+              "to": "vlan-199"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAttEntityP": {
+          "attributes": {
+           "name": "AAEP-Server"
+          },
+          "children": [
+           {
+            "infraRsDomP": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraFuncP": {
+          "attributes": {},
+          "children": [
+           {
+            "infraAccPortGrp": {
+             "attributes": {
+              "name": "IPG-Server-Access"
+             },
+             "children": [
+              {
+               "infraRsAttEntP": {
+                "attributes": {
+                 "tDn": "uni/infra/attentp-AAEP-Server"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraAccPortP": {
+          "attributes": {
+           "name": "IntProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraHPortS": {
+             "attributes": {
+              "name": "Server-Ports",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraPortBlk": {
+                "attributes": {
+                 "name": "block2",
+                 "fromPort": "1",
+                 "toPort": "10"
+                }
+               }
+              },
+              {
+               "infraRsAccBaseGrp": {
+                "attributes": {
+                 "tDn": "uni/infra/funcprof/accportgrp-IPG-Server-Access"
+                }
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        {
+         "infraNodeP": {
+          "attributes": {
+           "name": "SwProf-Leaf101-102"
+          },
+          "children": [
+           {
+            "infraLeafS": {
+             "attributes": {
+              "name": "101-102",
+              "type": "range"
+             },
+             "children": [
+              {
+               "infraNodeBlk": {
+                "attributes": {
+                 "name": "blk",
+                 "from_": "101",
+                 "to_": "102"
+                }
+               }
+              }
+             ]
+            }
+           },
+           {
+            "infraRsAccPortP": {
+             "attributes": {
+              "tDn": "uni/infra/accportprof-IntProf-Leaf101-102"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "physDomP": {
+       "attributes": {
+        "name": "PhysDom-Server"
+       },
+       "children": [
+        {
+         "infraRsVlanNs": {
+          "attributes": {
+           "tDn": "uni/infra/vlanns-[VLAN-Pool-Server]-static"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  {
+   "fvTenant": {
+    "attributes": {
+     "name": "Shop"
+    },
+    "children": [
+     {
+      "fvCtx": {
+       "attributes": {
+        "name": "Prod"
+       },
+       "children": [
+        {
+         "vzAny": {
+          "attributes": {},
+          "children": [
+           {
+            "vzRsAnyToCons": {
+             "attributes": {
+              "tnVzBrCPName": "vrf-open"
+             }
+            }
+           },
+           {
+            "vzRsAnyToProv": {
+             "attributes": {
+              "tnVzBrCPName": "vrf-open"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-Web"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.10.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-App"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.20.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvBD": {
+       "attributes": {
+        "name": "BD-DB"
+       },
+       "children": [
+        {
+         "fvRsCtx": {
+          "attributes": {
+           "tnFvCtxName": "Prod"
+          }
+         }
+        },
+        {
+         "fvSubnet": {
+          "attributes": {
+           "ip": "10.10.30.1/24",
+           "scope": "private"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzFilter": {
+       "attributes": {
+        "name": "any-ip"
+       },
+       "children": [
+        {
+         "vzEntry": {
+          "attributes": {
+           "name": "ip",
+           "etherT": "ip"
+          }
+         }
+        }
+       ]
+      }
+     },
+     {
+      "vzBrCP": {
+       "attributes": {
+        "name": "vrf-open",
+        "scope": "context"
+       },
+       "children": [
+        {
+         "vzSubj": {
+          "attributes": {
+           "name": "subj",
+           "revFltPorts": "yes"
+          },
+          "children": [
+           {
+            "vzRsSubjFiltAtt": {
+             "attributes": {
+              "tnVzFilterName": "any-ip"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     },
+     {
+      "fvAp": {
+       "attributes": {
+        "name": "Webshop"
+       },
+       "children": [
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "Web"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-Web"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-101/pathep-[eth1/1]",
+              "encap": "vlan-110",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "App"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-App"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/2]",
+              "encap": "vlan-120",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        },
+        {
+         "fvAEPg": {
+          "attributes": {
+           "name": "DB"
+          },
+          "children": [
+           {
+            "fvRsBd": {
+             "attributes": {
+              "tnFvBDName": "BD-DB"
+             }
+            }
+           },
+           {
+            "fvRsDomAtt": {
+             "attributes": {
+              "tDn": "uni/phys-PhysDom-Server"
+             }
+            }
+           },
+           {
+            "fvRsPathAtt": {
+             "attributes": {
+              "tDn": "topology/pod-1/paths-102/pathep-[eth1/3]",
+              "encap": "vlan-130",
+              "mode": "regular"
+             }
+            }
+           }
+          ]
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "hosts": [
+  {
+   "name": "web1",
+   "mac": "00:50:56:10:10:11",
+   "ip": "10.10.10.11/24",
+   "gw": "10.10.10.1",
+   "vlan": 110,
+   "links": [
+    [
+     "SAL1931LA01",
+     "eth1/1"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Webserver"
+  },
+  {
+   "name": "app1",
+   "mac": "00:50:56:10:20:11",
+   "ip": "10.10.20.11/24",
+   "gw": "10.10.20.1",
+   "vlan": 120,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/2"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Applikationsserver"
+  },
+  {
+   "name": "db1",
+   "mac": "00:50:56:10:30:11",
+   "ip": "10.10.30.11/24",
+   "gw": "10.10.30.1",
+   "vlan": 130,
+   "links": [
+    [
+     "SAL1931LA02",
+     "eth1/3"
+    ]
+   ],
+   "bond": "none",
+   "descr": "Datenbankserver"
+  }
+ ],
+ "tasks": [],
+ "checks": [
+  {
+   "desc": "web1 → db1 TCP 1433 ist durch die Policy blockiert",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "db1",
+   "proto": "tcp",
+   "port": 1433,
+   "expect": false,
+   "reason": "POLICY_",
+   "category": "security"
+  },
+  {
+   "desc": "web1 → db1 Ping ist durch die Policy blockiert",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "db1",
+   "proto": "icmp",
+   "expect": false,
+   "reason": "POLICY_",
+   "category": "security"
+  },
+  {
+   "desc": "db1 → web1 TCP 22 ist durch die Policy blockiert",
+   "type": "traffic",
+   "src": "db1",
+   "dst": "web1",
+   "proto": "tcp",
+   "port": 22,
+   "expect": false,
+   "reason": "POLICY_",
+   "category": "security"
+  },
+  {
+   "desc": "Least Privilege Web → DB: nichts offen",
+   "type": "exposure",
+   "src": "web1",
+   "dst": "db1",
+   "allow": [],
+   "category": "security"
+  },
+  {
+   "desc": "app1 → db1 TCP 1433 funktioniert weiter",
+   "type": "traffic",
+   "src": "app1",
+   "dst": "db1",
+   "proto": "tcp",
+   "port": 1433,
+   "expect": true
+  },
+  {
+   "desc": "app1 → db1 Ping funktioniert weiter",
+   "type": "traffic",
+   "src": "app1",
+   "dst": "db1",
+   "proto": "icmp",
+   "expect": true
+  },
+  {
+   "desc": "web1 → app1 TCP 8080 funktioniert weiter",
+   "type": "traffic",
+   "src": "web1",
+   "dst": "app1",
+   "proto": "tcp",
+   "port": 8080,
+   "expect": true
+  },
+  {
+   "desc": "vzAny konsumiert vrf-open weiterhin",
+   "type": "class",
+   "cls": "vzRsAnyToCons",
+   "under": "uni/tn-Shop/ctx-Prod/",
+   "attrs": {
+    "tnVzBrCPName": "vrf-open"
+   }
+  },
+  {
+   "desc": "vzAny stellt vrf-open weiterhin bereit",
+   "type": "class",
+   "cls": "vzRsAnyToProv",
+   "under": "uni/tn-Shop/ctx-Prod/",
+   "attrs": {
+    "tnVzBrCPName": "vrf-open"
+   }
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "q": "Warum gewinnt ein Contract zwischen Web und DB gegen die offene vzAny-Freigabe?",
+   "options": [
+    "Weil Deny immer vor Permit geht",
+    "Weil die Regel EPG zu EPG spezifischer ist (Priorität 7 vor 17)",
+    "Weil der neuere Contract gewinnt",
+    "Weil vzAny nur für Ping gilt"
+   ],
+   "answer": 1,
+   "explain": "Zuerst entscheidet die Zoning-Rule-Priorität. Deny vor Permit gilt nur bei gleicher Priorität. Ein Permit zwischen zwei EPGs würde deshalb auch ein Deny auf vzAny-Ebene schlagen."
+  },
+  {
+   "id": "q2",
+   "q": "Was passiert, wenn man stattdessen im Subject von vrf-open den Filter auf deny stellt?",
+   "options": [
+    "Nur Web ↔ DB ist gesperrt",
+    "Jeder Verkehr zwischen EPGs im VRF ist gesperrt",
+    "Nichts, vzAny-Regeln kennen kein Deny",
+    "Nur DB ist gesperrt"
+   ],
+   "answer": 1,
+   "explain": "vrf-open gilt für alle EPGs (0 → 0). Ein Deny dort trifft jedes EPG-Paar ohne spezifischere Regel."
+  },
+  {
+   "id": "q3",
+   "q": "Was ändert die Directive log an einem Deny-Filter?",
+   "options": [
+    "Die Aktion wird deny,log; der Verkehr wird verworfen und protokolliert",
+    "Der Verkehr wird erlaubt und protokolliert",
+    "Die Priorität steigt auf 5",
+    "Nichts"
+   ],
+   "answer": 0,
+   "explain": "Log ändert die Priorität nicht. In show zoning-rule steht deny,log; bei gleichem Filter gewinnt deny,log vor deny."
+  }
+ ],
+ "solution": "`POST /api/mo/uni.json` mit `{\"fvTenant\": {\"attributes\": {\"name\": \"Shop\"}, \"children\": [{\"vzBrCP\": {\"attributes\": {\"name\": \"web-to-db-deny\", \"scope\": \"context\"}, \"children\": [{\"vzSubj\": {\"attributes\": {\"name\": \"subj\", \"revFltPorts\": \"yes\"}, \"children\": [{\"vzRsSubjFiltAtt\": {\"attributes\": {\"tnVzFilterName\": \"any-ip\", \"action\": \"deny\", \"directives\": \"log\"}}}]}}]}}, {\"fvAp\": {\"attributes\": {\"name\": \"Webshop\"}, \"children\": [{\"fvAEPg\": {\"attributes\": {\"name\": \"Web\"}, \"children\": [{\"fvRsCons\": {\"attributes\": {\"tnVzBrCPName\": \"web-to-db-deny\"}}}]}}, {\"fvAEPg\": {\"attributes\": {\"name\": \"DB\"}, \"children\": [{\"fvRsProv\": {\"attributes\": {\"tnVzBrCPName\": \"web-to-db-deny\"}}}]}}]}}]}}`\n\nGleichwertig: Rollen vertauscht (DB konsumiert, Web stellt bereit), ein eigener Filter mit EtherType unspecified (Priorität 9, schlägt vrf-open ebenfalls), ohne Directive log.",
+ "routers": [],
+ "vcenters": [],
+ "devices": [],
+ "aaa": [],
+ "switches": [],
+ "solutionConfig": [
+  [
+   "uni",
+   {
+    "fvTenant": {
+     "attributes": {
+      "name": "Shop"
+     },
+     "children": [
+      {
+       "vzBrCP": {
+        "attributes": {
+         "name": "web-to-db-deny",
+         "scope": "context"
+        },
+        "children": [
+         {
+          "vzSubj": {
+           "attributes": {
+            "name": "subj",
+            "revFltPorts": "yes"
+           },
+           "children": [
+            {
+             "vzRsSubjFiltAtt": {
+              "attributes": {
+               "tnVzFilterName": "any-ip",
+               "action": "deny",
+               "directives": "log"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      },
+      {
+       "fvAp": {
+        "attributes": {
+         "name": "Webshop"
+        },
+        "children": [
+         {
+          "fvAEPg": {
+           "attributes": {
+            "name": "Web"
+           },
+           "children": [
+            {
+             "fvRsCons": {
+              "attributes": {
+               "tnVzBrCPName": "web-to-db-deny"
+              }
+             }
+            }
+           ]
+          }
+         },
+         {
+          "fvAEPg": {
+           "attributes": {
+            "name": "DB"
+           },
+           "children": [
+            {
+             "fvRsProv": {
+              "attributes": {
+               "tnVzBrCPName": "web-to-db-deny"
+              }
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  ]
+ ]
+}

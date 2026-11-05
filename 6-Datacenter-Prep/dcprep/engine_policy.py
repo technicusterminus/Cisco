@@ -5,6 +5,11 @@ from .model import CLASSES, parent_dn, tenant_of
 from .engine_util import (vlan_num, port_val)
 
 
+def has_log(rfa):
+    """Directive "log" an der Filter-Relation (vzRsSubjFiltAtt/vzRsFiltAtt), kommagetrennt wie "log,no_stats"."""
+    return 'log' in ((rfa or {}).get('directives') or '').split(',')
+
+
 def entry_is_any(ea):
     """Filter Entry ohne EtherType ("unspecified") entspricht dem default-/any-Filter."""
     return ea.get('etherT', 'unspecified') == 'unspecified'
@@ -350,6 +355,11 @@ class PolicyMixin:
         va = self.A(vrf) or {}
         if va.get('pcEnfPref') == 'unenforced':
             return self._decide('POLICY_VRF_UNENFORCED', 'permit', 'VRF %s steht auf "unenforced" - keine Policy-Pruefung' % self.short(vrf))
+        if proto == 'udp' and (sport, dport) in ((68, 67), (67, 68)):
+            # Contract Guide, FAQ: DHCPv4 (sport 0x44/dport 0x43 und umgekehrt) ist implizit erlaubt; Contract-Aktionen
+            # (Deny, Redirect, Taboo) greifen standardmaessig nicht. Das Abschalten der impliziten Regel ist nicht modelliert.
+            return self._decide('POLICY_IMPLICIT_PROTOCOL', 'permit', 'DHCP (UDP %s -> %s) ist ohne Contract implizit erlaubt'
+                                % (sport, dport))
         for tb in self._rs_targets(d['dn'], 'fvRsProtBy'):
             for ts in self.kids(tb, 'vzTSubj'):
                 for rd in self.kids(ts, 'vzRsDenyRule'):
@@ -418,7 +428,7 @@ class PolicyMixin:
                                                        ea['name'])
                         if fwd and dirn != 'p2c' and self._entry_match(ea, proto, sport, dport, flags, False):
                             hits.append((rfa['action'], where + ' (Consumer -> Provider)', subj, 'c2p', brc, rfa['tDn'], e,
-                                         rule_prio(s['dn'] in rel['cons'], d['dn'] in rel['prov'], entry_is_any(ea))))
+                                         rule_prio(s['dn'] in rel['cons'], d['dn'] in rel['prov'], entry_is_any(ea)), rf))
                         if not rev or dirn == 'c2p':
                             continue
                         # stateful: Provider -> Consumer nur TCP mit ACK (Antworten), kein Verbindungsaufbau vom Provider
@@ -428,7 +438,7 @@ class PolicyMixin:
                             hits.append((rfa['action'], where + ' (Provider -> Consumer%s)'
                                          % (', Ports getauscht' if swap else ', eigener Filter' if dirn == 'p2c' else ''),
                                          subj, 'p2c', brc, rfa['tDn'], e,
-                                         rule_prio(s['dn'] in rel['prov'], d['dn'] in rel['cons'], entry_is_any(ea))))
+                                         rule_prio(s['dn'] in rel['prov'], d['dn'] in rel['cons'], entry_is_any(ea)), rf))
         # Zoning-Rule-Prioritaet (Contract Guide, Table 8): kleinere Zahl gewinnt. Preferred Group: Permit any-any (20);
         # ist eine Seite kein Mitglied, greifen die impliziten Denies src_any_any_deny(18) / any_dest_any_deny(19).
         if pref_on:
@@ -447,10 +457,12 @@ class PolicyMixin:
             best = min(h[7][0] for h in hits)
             top = [h for h in hits if h[7][0] == best]
             prio = ' [%s]' % top[0][7][1]
-            deny = [h for h in top if h[0] == 'deny']
+            # gleicher Filter: Deny+Log vor Deny (Contract Guide, Priorities between actions) - beides verwirft
+            deny = sorted([h for h in top if h[0] == 'deny'], key=lambda h: 0 if has_log(self.A(h[8])) else 1)
             if deny:
                 # gleiche Zoning-Rule-Prioritaet: Deny gewinnt, auch gegen einen spezifischeren Permit-Filter
-                return self._decide('POLICY_DENY_RULE', 'deny', 'Deny-Filter: ' + deny[0][1] + prio, self._rule(deny[0]))
+                return self._decide('POLICY_DENY_RULE', 'deny', 'Deny-Filter%s: %s%s' % (
+                    ' (log)' if has_log(self.A(deny[0][8])) else '', deny[0][1], prio), self._rule(deny[0]))
             # Redirect gegen Permit: spezifischerer Filter gewinnt (Table 23), bei gleicher Filter-Prioritaet Redirect
             graphs = getattr(self, 'graphs', {})
             key = lambda h: (filter_prio(self.A(h[6])), 0 if (graphs.get(h[2]) or {}).get('state') == 'applied' else 1)
