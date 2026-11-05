@@ -663,7 +663,9 @@ lab(id='09-l3out-bgp', title='09 L3Out mit eBGP über Sub-Interface', topic='Ext
                   'Der Provider darf web1 zur Überwachung anpingen, sonst nichts.',
                   'app1 bleibt ohne Internet; das App-Netz 10.10.20.0/24 wird dem Provider nicht angekündigt.'],
     limits=['BGP ist vereinfacht: Session-Zustand, AS-Prüfung, Peer-Adresse, Timer und Passwort. Attribute wie Local Preference, '
-            'MED und Communities werden nicht ausgewertet.'],
+            'MED und Communities werden nicht ausgewertet.',
+            'Class-ID 1 für das L3Out-Interface-Subnetz ist nach dem Contract Guide modelliert, aber nur für die Adressen der '
+            'simulierten Router und ohne Abhängigkeit von Endpoint-Lernzuständen.'],
     hints=['**Konzept:** Bei eBGP muss beides stimmen: die Layer-3-Verbindung (Sub-Interface mit VLAN, Adresse) und die BGP-Parameter '
            '(eigene AS, Peer-Adresse, Remote AS). Die eigene AS der ACI ist die Fabric-AS.',
            '**Objekte:** L3 Domain mit einem VLAN Pool, der VLAN 301 enthält; AAEP, Policy Group, Profile für leaf104 eth1/47. L3Out mit '
@@ -673,8 +675,9 @@ lab(id='09-l3out-bgp', title='09 L3Out mit eBGP über Sub-Interface', topic='Ext
            'Peer-Adresse und VLAN vergleichen. Danach Traffic Inspector web1 → 1.1.1.1 und *Simulation > Externe Router*: Was kennt isp1?',
            '**Lösung:** Fabric-AS 65001 mit spine201/202 als Route Reflector. L3Dom-ISP mit VLAN-Pool 300–310, Access-Kette für 104/eth1/47. '
            'L3Out ISP (VRF Prod, BGP), Node 104 mit Router ID, Sub-Interface eth1/47 vlan-301 172.16.1.1/30, BGP Peer 172.16.1.2 Remote AS 65100. '
-           'External EPG 0.0.0.0/0, Contract nur icmp (Internet stellt bereit, Web konsumiert), BD-Web Advertised Externally und mit ISP '
-           'verknüpft. BD-App bleibt privat.'],
+           'External EPG 0.0.0.0/0 **plus das Transfernetz 172.16.1.0/30** (sonst gilt die Interface-Adresse von isp1 als Class-ID 1 '
+           'und darf ohne Contract zu web1), Contract nur icmp (Internet stellt bereit, Web konsumiert), BD-Web Advertised Externally '
+           'und mit ISP verknüpft. BD-App bleibt privat.'],
     cause='Es gibt weder Fabric-AS noch Access Policies noch L3Out für leaf104.',
     config=[SERVER_ACCESS, shop_tenant(with_contracts=True)], hosts=[WEB1, APP1],
     routers=[router('isp1', L104, 'eth1/47', '172.16.1.2/30', 'bgp', vlan=301, rid='100.64.0.1')], tasks=[],
@@ -3013,6 +3016,7 @@ SOLUTIONS = {
                                                                     'encap': 'vlan-301', 'addr': '172.16.1.1/30'},
                                             mo('bgpPeerP', {'addr': '172.16.1.2'}, mo('bgpAsP', {'asn': '65100'}))))),
                                    mo('l3extInstP', {'name': 'Internet'}, mo('l3extSubnet', {'ip': '0.0.0.0/0'}),
+                                      mo('l3extSubnet', {'ip': '172.16.1.0/30'}),
                                       mo('fvRsProv', {'tnVzBrCPName': 'web-to-isp'}))))]],
     '10-mgmt-ntp': [['uni/tn-mgmt/mgmtp-default/oob-default', mo('mgmtOoB', {}, *[mo('mgmtRsOoBStNode', {'tDn': 'topology/pod-1/node-%d' % i, 'addr': '192.168.10.%d/24' % i, 'gw': '192.168.10.1'}) for i, _ in NODES_ALL])],
                     ['uni/fabric/time-default', mo('datetimePol', {}, mo('datetimeNtpProv', {'name': '192.168.10.250'}, mo('datetimeRsNtpProvToEpg', {'tDn': 'uni/tn-mgmt/mgmtp-default/oob-default'})))],
