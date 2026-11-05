@@ -589,13 +589,37 @@ class Cli:
                             rda = e.A(rd)
                             if rda['state'] == 'formed':
                                 rows.append((rid, 0, c['pcTag'], fid[rda['tDn']], 'uni-dir', 'enabled', vn, '', 'deny', 'black_list(5)')); rid += 1
+            shsrc, shprov = set(), set()
+            # External EPGs mit 0.0.0.0/0 (import-security): pcTag -> True, wenn das das einzige Subnetz ist
+            ext0 = {}
+            for c in e.cls.values():
+                if c['kind'] == 'ext' and c['vrf'] == vrf:
+                    subs = [e.A(x) for x in e.kids(c['dn'], 'l3extSubnet')]
+                    sec = [x['ip'] for x in subs if 'import-security' in (x.get('scope') or '').split(',')]
+                    if '0.0.0.0/0' in sec:
+                        ext0[c['pcTag']] = len(sec) == 1
             for brc, rel in sorted(e.contracts.items()):
                 members = lambda k: [e.cls[d]['pcTag'] for d in rel[k] if d in e.cls and e.cls[d]['vrf'] == vrf] + \
                     (['0'] if vrf in rel[k + '_any'] else [])
                 cons, prov = members('cons'), members('prov')
-                if prov and e.A(brc)['scope'] in ('tenant', 'global'):
-                    # Shared Services: Regeln liegen im VRF des Providers
-                    cons += [e.cls[d]['pcTag'] for d in rel['cons'] if d in e.cls and e.cls[d]['vrf'] and e.cls[d]['vrf'] != vrf]
+                if e.A(brc)['scope'] in ('tenant', 'global'):
+                    # Shared Services (Contract Guide, Consumer VRF enforcement): die Contract-Regeln liegen im VRF des
+                    # Consumers, dazu dort provider -> 0 shsrc_any_any_deny(12); im Provider-VRF nur provider -> 14 permit_override
+                    xprov = [e.cls[d]['pcTag'] for d in rel['prov'] if d in e.cls and e.cls[d]['vrf'] and e.cls[d]['vrf'] != vrf]
+                    xcons = [d for d in rel['cons'] if d in e.cls and e.cls[d]['vrf'] and e.cls[d]['vrf'] != vrf]
+                    if cons and xprov:
+                        for pt in xprov:
+                            if pt not in shsrc:
+                                shsrc.add(pt)
+                                rows.append((rid, pt, 0, 'implicit', 'uni-dir', 'enabled', vn, '', 'deny,log',
+                                             'shsrc_any_any_deny(12)')); rid += 1
+                        prov = prov + xprov
+                    if prov and xcons:
+                        for pt in members('prov'):
+                            if pt not in shprov:
+                                shprov.add(pt)
+                                rows.append((rid, pt, 14, 'implicit', 'uni-dir', 'enabled', vn, '', 'permit_override',
+                                             'src_dst_any(9)')); rid += 1
                 if not cons or not prov:
                     continue
                 for subj in e.kids(brc, 'vzSubj'):
@@ -621,6 +645,18 @@ class Cli:
                                 # Prioritaet je Regelrichtung (Contract Guide, Table 8); 0 = vzAny
                                 anyf = all(entry_is_any(e.A(x)) for x in e.kids(rfa['tDn'], 'vzEntry'))
                                 pr = lambda a_, b_: rule_prio(a_ != '0', b_ != '0', anyf)[1]
+                                xd = [t for t in (cpt, ppt) if t in ext0]
+                                if xd and dirn == 'both':
+                                    # Contract Guide, L3Out EPG mit 0.0.0.0/0: Ziel = Class-ID 15, Quelle = VRF-Class-ID,
+                                    # beide Regeln uni-dir; weitere Subnetze des External EPG behalten den eigenen pcTag
+                                    to_x = lambda t: '15' if t in ext0 else t
+                                    from_x = lambda t: va['pcTag'] if t in ext0 else t
+                                    rows.append((rid, from_x(cpt), to_x(ppt), f, 'uni-dir', 'enabled', vn, e.A(brc)['name'],
+                                                 a1, pr(cpt, ppt))); rid += 1
+                                    rows.append((rid, from_x(ppt), to_x(cpt), f2, 'uni-dir', 'enabled', vn, e.A(brc)['name'],
+                                                 a2, pr(ppt, cpt))); rid += 1
+                                    if all(ext0.get(t) for t in xd):
+                                        continue
                                 if dirn != 'both':
                                     # ohne Apply Both Directions: je Richtung eine eigene uni-dir-Regel
                                     src, dst, act = (cpt, ppt, a1) if dirn == 'c2p' else (ppt, cpt, a2)
