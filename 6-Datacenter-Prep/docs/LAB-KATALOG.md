@@ -43,6 +43,7 @@ Startbar sind nur Labs, die es als Datei gibt. Die Spalte *Stand* gilt für die 
 | 23 | vzAny | 04 Contracts und vzAny | vollständig | Lösung pro EPG wird ebenfalls anerkannt (dokumentiert) |
 | 24 | Inter-VRF Shared Services | 13 Shared Services | vollständig | Least Privilege in beide Richtungen, Dienst im Provider-Tenant |
 | 25 | Fehlerhafte Änderung per Snapshot zurücksetzen | **43 Change mit Snapshot absichern und zurückrollen** | vollständig | bewertet Snapshot nach Lab-Start, eingespielten Change (Audit-Log) und vollständigen Rollback |
+| 27 | Contract-Prioritäten (vzAny vs. EPG-Deny) | **46 Contract-Prioritäten: alles offen, ein Paar gesperrt** | vollständig | Priorität 7 vor 17; Deny in der vzAny-Freigabe sperrt alle EPGs und scheitert |
 | 26 | IT-/OT-Segmentierung | **40 IT-/OT-Segmentierung einer Fertigungslinie** | vollständig | fünf Zonen, 18 Prüfungen, davon 10 Least-Privilege-Prüfungen inkl. lateraler Kommunikation; didaktisch, ohne Sicherheitsgarantie |
 
 Weitere Labs außerhalb dieses Pfads: 00 (Day 0), 08 (REST-API) und 14 bis 31 (L2Out, Routing-Varianten, AAA, In-Band, ESG, Firmware, Export/Import, Monitoring, DHCP Relay, MCP, Multi-Pod, Remote Leaf, Multi-Site).

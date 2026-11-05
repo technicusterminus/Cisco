@@ -5,7 +5,7 @@ import shlex
 
 from .model import CLASSES, split_dn
 from .engine import ip_of, pnum, vlan_num
-from .engine_policy import entry_is_any, rule_prio
+from .engine_policy import entry_is_any, has_log, rule_prio
 from .query import eval_filter, out_attrs
 
 APIC_HELP = """Verfuegbare Befehle auf dem APIC (Ausgabe aus dem Simulator, Format vereinfacht; [S] = simulator-spezifisch):
@@ -569,6 +569,9 @@ class Cli:
                             continue
                         f = fid[rfa['tDn']]
                         a1 = a2 = rfa['action']
+                        if has_log(rfa):
+                            # Contract Guide: "log,permit" bzw. "deny,log" in show zoning-rule
+                            a1 = a2 = 'log,permit' if rfa['action'] == 'permit' else 'deny,log'
                         if g:
                             a1 = 'redir(destgrp-%d)' % self._destgrp(g, 'consumer')
                             a2 = 'redir(destgrp-%d)' % self._destgrp(g, 'provider')

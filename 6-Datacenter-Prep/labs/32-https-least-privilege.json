@@ -33,7 +33,7 @@
  ],
  "limits": [
   "Contracts sind wie in ACI zustandslos: Auch die Antwort braucht eine passende Regel. Die Filter-Option Stateful erlaubt vom Provider zum Consumer nur TCP mit ACK (keine Prüfung von Sequenznummern).",
-  "Subjects ohne \"Apply Both Directions\" (vzInTerm/vzOutTerm) werden noch nicht unterstützt.",
+  "Subjects ohne \"Apply Both Directions\" (vzInTerm/vzOutTerm) haben je Richtung eigene Filter, ohne Port-Tausch.",
   "Ob auf einem Host ein Dienst läuft, ist ein simulator-spezifisches Modell (Feld Dienste am Host).",
   "ICMP wird nicht nach Type/Code unterschieden."
  ],

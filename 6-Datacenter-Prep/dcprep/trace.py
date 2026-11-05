@@ -307,7 +307,9 @@ def _gw_ok(eng, t, h, hs, who):
 
 def _policy(eng, t, s, d, proto, port, label_s, label_d, dst_host=None):
     dport = port if proto in ('tcp', 'udp') else None
-    act, why = eng.packet(s, d, proto, EPHEMERAL if dport else None, dport, 'syn')
+    # DHCP nutzt feste Quell-Ports (Client 68 -> Server 67), keinen Ephemeral-Port
+    sport = (68 if port == 67 else 67) if proto == 'udp' and port in (67, 68) else EPHEMERAL if dport else None
+    act, why = eng.packet(s, d, proto, sport, dport, 'syn')
     code, rule = getattr(eng, 'last_code', None), getattr(eng, 'last_rule', None)
     if act == 'permit':
         eng.count(s['dn'], 'txPkts')
@@ -316,7 +318,7 @@ def _policy(eng, t, s, d, proto, port, label_s, label_d, dst_host=None):
         eng.count(s['dn'], 'txPkts')
         eng.count(d['dn'], 'dropPkts')
     flow = '%s%s' % (proto, '/%d' % port if dport else '')
-    t.policy.append({'direction': 'request', 'from': s['dn'], 'to': d['dn'], 'flow': flow, 'sport': EPHEMERAL if dport else None,
+    t.policy.append({'direction': 'request', 'from': s['dn'], 'to': d['dn'], 'flow': flow, 'sport': sport,
                      'dport': dport, 'action': act, 'code': code, 'rule': rule, 'text': why})
     t.step(act == 'permit', 'Policy Anfrage %s -> %s (%s)' % (label_s, label_d, flow), why,
            code=code, refs=[s['dn'], d['dn'], (rule or {}).get('contract')], hint=POLICY_HINTS.get(code))
@@ -335,11 +337,11 @@ def _policy(eng, t, s, d, proto, port, label_s, label_d, dst_host=None):
                    % (dst_host['name'], svc, ', '.join(dst_host['services']) or 'keine'), refs=[d['dn']])
             return False
         t.step(True, 'Zieldienst %s auf %s' % (svc, dst_host['name']), 'Dienst laeuft (simulator-spezifisches Dienstmodell)')
-    act, why = eng.packet(d, s, proto, dport, EPHEMERAL if dport else None, 'ack')
+    act, why = eng.packet(d, s, proto, dport, sport, 'ack')
     code, rule = getattr(eng, 'last_code', None), getattr(eng, 'last_rule', None)
     eng.count(d['dn'], 'txPkts')
     eng.count(s['dn'], 'rxPkts' if act == 'permit' else 'dropPkts')
-    t.policy.append({'direction': 'reply', 'from': d['dn'], 'to': s['dn'], 'flow': flow, 'sport': dport, 'dport': EPHEMERAL if dport else None,
+    t.policy.append({'direction': 'reply', 'from': d['dn'], 'to': s['dn'], 'flow': flow, 'sport': dport, 'dport': sport,
                      'action': act, 'code': code, 'rule': rule, 'text': why})
     t.step(act == 'permit', 'Policy Antwort %s -> %s' % (label_d, label_s), why,
            code='POLICY_REPLY_DENIED' if act != 'permit' else code, refs=[d['dn'], s['dn'], (rule or {}).get('contract')],

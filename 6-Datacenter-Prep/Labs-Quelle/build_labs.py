@@ -377,7 +377,8 @@ lab(id='04-contracts', title='04 Contracts, Filter und vzAny', topic='Policy / C
                   'einzeln anfassen muss.',
                   'Sonst bleibt alles zu: Web nicht per SSH zu App, die EPGs nicht zu jump1.'],
     limits=['ICMP wird nicht nach Type unterschieden: Ein ICMP-Filter in beide Richtungen erlaubt auch Pings in der Gegenrichtung.',
-            'Contract-Prioritäten sind vereinfacht (Deny vor Permit, keine Priority-Stufen).',
+            'Contract-Prioritäten folgen dem Contract Guide (EPG-to-EPG vor vzAny, Deny vor Permit nur bei gleicher Priorität); '
+            'priorityOverride wirkt nicht.',
             'Ob die SSH-Freigabe auch für künftige EPGs gilt, kann die Bewertung nicht prüfen. Eine Lösung mit Provider-Beziehung an '
             'jeder einzelnen EPG wird ebenfalls als bestanden gewertet.'],
     hints=['**Konzept:** Freigaben sind gerichtet: Wer den Dienst anbietet und wer ihn nutzt, entscheidet über die Regeln. Für '
@@ -2075,7 +2076,7 @@ lab(id='32-https-least-privilege', title='32 Least Privilege: HTTPS von WEB zu A
                   'Access Policies, Bridge Domains und Routing bleiben unverändert.'],
     limits=['Contracts sind wie in ACI zustandslos: Auch die Antwort braucht eine passende Regel. '
             'Die Filter-Option Stateful erlaubt vom Provider zum Consumer nur TCP mit ACK (keine Prüfung von Sequenznummern).',
-            'Subjects ohne "Apply Both Directions" (vzInTerm/vzOutTerm) werden noch nicht unterstützt.',
+            'Subjects ohne "Apply Both Directions" (vzInTerm/vzOutTerm) haben je Richtung eigene Filter, ohne Port-Tausch.',
             'Ob auf einem Host ein Dienst läuft, ist ein simulator-spezifisches Modell (Feld Dienste am Host).',
             'ICMP wird nicht nach Type/Code unterschieden.'],
     hints=['**Konzept:** Zwischen Endpoints in verschiedenen EPGs gilt in ACI ohne Freigabe *Implicit Deny* (Whitelist-Modell). '
@@ -2843,6 +2844,93 @@ lab(id='45-two-bds-one-vrf', title='45 Zwei Bridge Domains, eine VRF', topic='Te
     solution='`POST /api/mo/uni.json` mit `' + json.dumps(SOL45) + '`')
 
 # ----------------------------------------------------------------------------
+# Lab 46 - Contract-Prioritaeten: vzAny offen, ein EPG-Paar gesperrt
+# ----------------------------------------------------------------------------
+DB46 = host('db1', '00:50:56:10:30:11', '10.10.30.11/24', '10.10.30.1', 130, [[L102, 'eth1/3']], descr='Datenbankserver')
+SHOP46 = mo('fvTenant', {'name': 'Shop'}, mo('fvCtx', {'name': 'Prod'}, mo('vzAny', {},
+                                                                          mo('vzRsAnyToCons', {'tnVzBrCPName': 'vrf-open'}),
+                                                                          mo('vzRsAnyToProv', {'tnVzBrCPName': 'vrf-open'}))),
+            bd('BD-Web', 'Prod', '10.10.10.1/24'), bd('BD-App', 'Prod', '10.10.20.1/24'), bd('BD-DB', 'Prod', '10.10.30.1/24'),
+            filt('any-ip', {'name': 'ip', 'etherT': 'ip'}),
+            contract('vrf-open', ['any-ip']),
+            mo('fvAp', {'name': 'Webshop'},
+               epg('Web', 'BD-Web', ports=[(path(101, 'eth1/1'), 110)]),
+               epg('App', 'BD-App', ports=[(path(102, 'eth1/2'), 120)]),
+               epg('DB', 'BD-DB', ports=[(path(102, 'eth1/3'), 130)])))
+SOL46 = mo('fvTenant', {'name': 'Shop'},
+           mo('vzBrCP', {'name': 'web-to-db-deny', 'scope': 'context'},
+              mo('vzSubj', {'name': 'subj', 'revFltPorts': 'yes'},
+                 mo('vzRsSubjFiltAtt', {'tnVzFilterName': 'any-ip', 'action': 'deny', 'directives': 'log'}))),
+           mo('fvAp', {'name': 'Webshop'},
+              mo('fvAEPg', {'name': 'Web'}, mo('fvRsCons', {'tnVzBrCPName': 'web-to-db-deny'})),
+              mo('fvAEPg', {'name': 'DB'}, mo('fvRsProv', {'tnVzBrCPName': 'web-to-db-deny'}))))
+lab(id='46-contract-priorities', title='46 Contract-Prioritäten: alles offen, ein Paar gesperrt', topic='Policy / Contracts',
+    level='Mittel', duration='25 min', fabric='discovered', kind='requirements', modes=['guided', 'exam'],
+    prerequisites=['Lab 04: vzAny und Contracts', 'Lab 32: Filter, Subject, Consumer und Provider'],
+    tools=['Traffic Inspector (Schritt Policy Anfrage zeigt die Regel-Priorität)', 'CLI auf dem Leaf: show zoning-rule',
+           'Tenant > Contracts, Tenant > Networking > VRFs > Prod > EPG Collection for VRF'],
+    goals=['Zoning-Rule-Prioritäten lesen: welche Regel gewinnt, wenn mehrere passen',
+           'Eine Ausnahme in einem offenen VRF bauen, ohne die offene Freigabe zu verändern',
+           'Unterscheiden, wann die Aktion entscheidet und wann die Spezifität der Regel'],
+    intro='Der Tenant **Shop** ist während der Migration bewusst offen: Im VRF **Prod** erlaubt der Contract **vrf-open** '
+          '(Filter **any-ip**) jeglichen IP-Verkehr zwischen allen EPGs des VRF. Es gibt die EPGs **Web**, **App** und **DB**.\n\n'
+          '- web1: 10.10.10.11, leaf101 eth1/1, VLAN 110 (EPG Web)\n'
+          '- app1: 10.10.20.11, leaf102 eth1/2, VLAN 120 (EPG App)\n'
+          '- db1: 10.10.30.11, leaf102 eth1/3, VLAN 130 (EPG DB)\n\n'
+          'Die Security fordert vor dem nächsten Audit: Der Webserver darf die Datenbank nicht mehr erreichen. Alles andere soll offen '
+          'bleiben, bis die Migration abgeschlossen ist. Teste zuerst web1 → db1 und lies im Traffic Inspector, welche Regel greift.',
+    requirements=['web1 erreicht db1 nicht mehr – weder TCP 1433 noch Ping noch andere Ports.',
+                  'db1 baut auch keine Verbindungen zu web1 auf.',
+                  'app1 erreicht db1 weiterhin (TCP 1433 und Ping), web1 erreicht app1 weiterhin (TCP 8080).',
+                  'Die offene Freigabe vrf-open und ihre Beziehungen am VRF bleiben unverändert.'],
+    limits=['Die Werte von priorityOverride (Deny-Priorität) sind im Modell vorhanden, ihre Wirkung ist nicht modelliert: Die Zuordnung '
+            'level1–level3 zu lowest/medium/highest ist nicht belegt. Für dieses Lab ist der Standard (default) richtig.',
+            'ESG- und Inter-VRF-Stufen (Priorität 10–12) sind nicht modelliert.',
+            'Ob auf einem Host ein Dienst läuft, ist ein simulator-spezifisches Modell; hier laufen keine Dienste-Einschränkungen.'],
+    hints=['**Konzept:** In ACI können mehrere Regeln auf dasselbe Paket passen. Zuerst gewinnt die spezifischere Regel '
+           '(EPG zu EPG vor vzAny), erst bei gleicher Spezifität entscheidet die Aktion. Eine Freigabe für alle EPGs liegt ganz unten.',
+           '**Beteiligte Objekte:** Ein neuer Contract zwischen genau zwei EPGs, dessen Filter-Relation im Subject eine andere Aktion '
+           'als permit hat. Der vorhandene Filter any-ip lässt sich wiederverwenden.',
+           '**Prüfschritt:** Auf leaf102 `show zoning-rule`: Die Regeln von vrf-open stehen mit 0 → 0 und any_any_filter(17). '
+           'Nach der Änderung muss es für Web ↔ DB eine Regel mit fully_qual(7) geben. Danach app1 → db1 testen – das muss offen bleiben.',
+           '**Lösung:** Contract **web-to-db-deny** (Scope VRF) mit einem Subject, das den Filter **any-ip** mit Aktion **deny** '
+           '(optional mit Directive **log**) enthält. EPG **Web** konsumiert, EPG **DB** stellt bereit. Die Regel Web ↔ DB hat Priorität '
+           '7 und schlägt vrf-open (17). Falsch wäre ein Deny-Filter im Contract vrf-open: Das sperrt alle EPGs, nicht nur Web ↔ DB.'],
+    cause='vzAny konsumiert und stellt vrf-open bereit. Dadurch gibt es Regeln 0 → 0 mit any_any_filter(17), die jeden IP-Verkehr '
+          'zwischen EPGs im VRF erlauben, auch Web → DB.',
+    config=[SERVER_ACCESS, SHOP46], hosts=[WEB1, APP1, DB46], tasks=[],
+    checks=[check('web1 → db1 TCP 1433 ist durch die Policy blockiert', 'traffic', src='web1', dst='db1', proto='tcp', port=1433,
+                  expect=False, reason='POLICY_', category='security'),
+            check('web1 → db1 Ping ist durch die Policy blockiert', 'traffic', src='web1', dst='db1', proto='icmp',
+                  expect=False, reason='POLICY_', category='security'),
+            check('db1 → web1 TCP 22 ist durch die Policy blockiert', 'traffic', src='db1', dst='web1', proto='tcp', port=22,
+                  expect=False, reason='POLICY_', category='security'),
+            check('Least Privilege Web → DB: nichts offen', 'exposure', src='web1', dst='db1', allow=[], category='security'),
+            check('app1 → db1 TCP 1433 funktioniert weiter', 'traffic', src='app1', dst='db1', proto='tcp', port=1433, expect=True),
+            check('app1 → db1 Ping funktioniert weiter', 'traffic', src='app1', dst='db1', proto='icmp', expect=True),
+            check('web1 → app1 TCP 8080 funktioniert weiter', 'traffic', src='web1', dst='app1', proto='tcp', port=8080, expect=True),
+            check('vzAny konsumiert vrf-open weiterhin', 'class', cls='vzRsAnyToCons', under='uni/tn-Shop/ctx-Prod/',
+                  attrs={'tnVzBrCPName': 'vrf-open'}),
+            check('vzAny stellt vrf-open weiterhin bereit', 'class', cls='vzRsAnyToProv', under='uni/tn-Shop/ctx-Prod/',
+                  attrs={'tnVzBrCPName': 'vrf-open'})],
+    questions=[{'id': 'q1', 'q': 'Warum gewinnt ein Contract zwischen Web und DB gegen die offene vzAny-Freigabe?',
+                'options': ['Weil Deny immer vor Permit geht', 'Weil die Regel EPG zu EPG spezifischer ist (Priorität 7 vor 17)',
+                            'Weil der neuere Contract gewinnt', 'Weil vzAny nur für Ping gilt'],
+                'answer': 1, 'explain': 'Zuerst entscheidet die Zoning-Rule-Priorität. Deny vor Permit gilt nur bei gleicher Priorität. '
+                                        'Ein Permit zwischen zwei EPGs würde deshalb auch ein Deny auf vzAny-Ebene schlagen.'},
+               {'id': 'q2', 'q': 'Was passiert, wenn man stattdessen im Subject von vrf-open den Filter auf deny stellt?',
+                'options': ['Nur Web ↔ DB ist gesperrt', 'Jeder Verkehr zwischen EPGs im VRF ist gesperrt',
+                            'Nichts, vzAny-Regeln kennen kein Deny', 'Nur DB ist gesperrt'],
+                'answer': 1, 'explain': 'vrf-open gilt für alle EPGs (0 → 0). Ein Deny dort trifft jedes EPG-Paar ohne spezifischere Regel.'},
+               {'id': 'q3', 'q': 'Was ändert die Directive log an einem Deny-Filter?',
+                'options': ['Die Aktion wird deny,log; der Verkehr wird verworfen und protokolliert',
+                            'Der Verkehr wird erlaubt und protokolliert', 'Die Priorität steigt auf 5', 'Nichts'],
+                'answer': 0, 'explain': 'Log ändert die Priorität nicht. In show zoning-rule steht deny,log; bei gleichem Filter gewinnt '
+                                        'deny,log vor deny.'}],
+    solution='`POST /api/mo/uni.json` mit `' + json.dumps(SOL46) + '`\n\nGleichwertig: Rollen vertauscht (DB konsumiert, Web stellt '
+             'bereit), ein eigener Filter mit EtherType unspecified (Priorität 9, schlägt vrf-open ebenfalls), ohne Directive log.')
+
+# ----------------------------------------------------------------------------
 # Maschinenlesbare Musterloesungen (fuer die Tests: [URL-DN, Body])
 # ----------------------------------------------------------------------------
 BGP_RR = ['uni/fabric/bgpInstP-default', mo('bgpInstPol', {}, mo('bgpAsP', {'asn': '65001'}),
@@ -2999,6 +3087,7 @@ SOLUTIONS = {
                                                                    mo('fvRsProv', {'tnVzBrCPName': 'web-to-app-https'}))]],
     '44-access-diagnosis': SOL44,
     '45-two-bds-one-vrf': [['uni', SOL45]],
+    '46-contract-priorities': [['uni', SOL46]],
 }
 
 

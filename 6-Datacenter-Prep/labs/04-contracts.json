@@ -34,7 +34,7 @@
  ],
  "limits": [
   "ICMP wird nicht nach Type unterschieden: Ein ICMP-Filter in beide Richtungen erlaubt auch Pings in der Gegenrichtung.",
-  "Contract-Prioritäten sind vereinfacht (Deny vor Permit, keine Priority-Stufen).",
+  "Contract-Prioritäten folgen dem Contract Guide (EPG-to-EPG vor vzAny, Deny vor Permit nur bei gleicher Priorität); priorityOverride wirkt nicht.",
   "Ob die SSH-Freigabe auch für künftige EPGs gilt, kann die Bewertung nicht prüfen. Eine Lösung mit Provider-Beziehung an jeder einzelnen EPG wird ebenfalls als bestanden gewertet."
  ],
  "hints": [

@@ -107,6 +107,8 @@ Jede Regel nennt die Quelle (Dokument) und ihren Status. Die Testreferenz zeigt,
 | R-13 | Gateway antwortet auf ICMP; andere Protokolle zum Pervasive Gateway werden nicht beantwortet. | Basic Config Guide | vereinfacht | Engine |
 | R-14 | Zwischen VRFs braucht es Contract mit passendem Scope und Subnetze „Shared between VRFs“. | L3 Networking Config Guide, *Shared Services* | umgesetzt | Lab 13 |
 | R-15 | External EPG klassifiziert per Subnetz mit „External Subnets for the External EPG“ (Longest Prefix Match). Der Rückweg braucht ein exportiertes BD-Subnetz (Advertised Externally) beim externen Router. | L3 Networking Config Guide | umgesetzt | Labs 06, 09, 15 |
+| R-16 | DHCPv4 (UDP 68 → 67 und 67 → 68) ist ohne Contract erlaubt; Deny, Redirect und Taboo greifen nicht. Reason Code `POLICY_IMPLICIT_PROTOCOL` (simulator-spezifisch). Nicht modelliert: Abschalten der impliziten DHCP-Regel, die übrigen implizit erlaubten Protokolle (OSPF, EIGRP, PIM, IGMP, ND), weil der Traffic-Test nur ICMP/TCP/UDP kennt. | Contract Guide, *FAQ* | umgesetzt + getestet | `test_dhcp_is_implicitly_permitted` |
+| R-17 | Directive `log` an der Filter-Relation: `show zoning-rule` zeigt `deny,log` bzw. `log,permit`; die Priorität ändert sich nicht; bei gleicher Priorität gewinnt Deny+Log vor Deny. Paket- und Flow-Logs (`show logging ip access-list`) sind nicht modelliert. | Contract Guide, *Log*, *Priorities between actions* | umgesetzt + getestet | `test_log_directive_in_zoning_rule_and_decision` |
 
 Fault-Lebenszyklus: Der Simulator kennt `lc` = soaking, raised und retaining (Severity cleared). Die Zwischenzustände soaking-clearing und raised-clearing sowie das Clearing-Intervall fehlen; Standarddauern sind 0, die APIC-Defaults sind nicht gegen ein Gerät geprüft.
 

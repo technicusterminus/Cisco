@@ -333,6 +333,29 @@ class TestContractPriorities(LabBase):
         self.assertEqual(self.pkt(self.WEB, self.APP, 443)[0], 'deny')
         self.assertEqual(self.pkt(self.WEB, self.APP)[0], 'permit', 'EPG-to-EPG SSH (7)')
 
+    def test_dhcp_is_implicitly_permitted(self):
+        """Contract Guide, FAQ: DHCPv4 ist ohne Contract erlaubt, auch ein Deny-Contract greift nicht."""
+        pol = lambda port: [(p['direction'], p['action'], p['code']) for p in self.tr('web1', 'app1', 'udp', port)['policy']]
+        self.assertEqual(pol(67)[0], ('request', 'permit', 'POLICY_IMPLICIT_PROTOCOL'),
+                         'Policy erlaubt; ob ein DHCP-Dienst laeuft, entscheidet das Dienstmodell')
+        e = self.S.engine
+        self.assertEqual(e.packet(e.cls[self.APP], e.cls[self.WEB], 'udp', 67, 68, 'ack')[0], 'permit', 'Server -> Client')
+        self.build('deny', 'deny', any_entry={'etherT': 'ip'}, epg_entry={'etherT': 'ip'})
+        self.assertEqual(pol(67)[0][1:], ('permit', 'POLICY_IMPLICIT_PROTOCOL'))
+        self.assertEqual(pol(69)[0][1], 'deny', 'nur DHCP, kein beliebiges UDP')
+
+    def test_log_directive_in_zoning_rule_and_decision(self):
+        """Contract Guide: Aktion "deny,log" / "log,permit"; bei gleichem Filter gewinnt Deny+Log vor Deny."""
+        self.build('permit', 'deny')
+        self.apply([(self.S.engine.contracts and 'uni/tn-Shop/brc-c-epg/subj-s/rssubjFiltAtt-f-epg',
+                     mo('vzRsSubjFiltAtt', {'directives': 'log'}))])
+        act, why = self.pkt(self.WEB, self.APP)
+        self.assertEqual(act, 'deny')
+        self.assertIn('(log)', why)
+        z = Cli(self.S.engine, self.S.sim).run('leaf101', 'show zoning-rule')
+        self.assertTrue(all('deny,log' in ln for ln in z.split('\n') if '| c-epg ' in ln), z)
+        self.assertTrue(all(' permit ' in ln and 'log' not in ln.split('|')[9] for ln in z.split('\n') if '| c-any ' in ln), z)
+
     def test_zoning_rule_shows_guide_priorities(self):
         self.build('permit', 'deny')
         z = Cli(self.S.engine, self.S.sim).run('leaf101', 'show zoning-rule')
@@ -605,6 +628,7 @@ class TestRequirementLabs(unittest.TestCase):
         '43-change-snapshot': ['Config Rollbacks', 'Port 8443'],
         '44-access-diagnosis': ['fvRsDomAtt', 'Encap Block', 'vlan-111', 'VLAN 111', 'ohne Domain', 'Pool'],
         '45-two-bds-one-vrf': ['10.10.21', 'VRF Test liegt', 'fvRsCtx', 'Subnetz ersetzen'],
+        '46-contract-priorities': ['web-to-db-deny', 'fully_qual', 'Priorität 7', 'Aktion deny', 'Web konsumiert'],
     }
 
     def setUp(self):
@@ -889,6 +913,24 @@ class TestTroubleshootingLabs(unittest.TestCase):
         self.S.load_lab('45-two-bds-one-vrf')
         self.apply(*lab['solutionConfig'])
         self.assertTrue(all(self.by().values()), '... die Musterloesung besteht')
+
+
+    def test_lab46_vzany_deny_shortcut_blocks_everything(self):
+        """Lab 46: Start offen (vzAny 17); Deny in vrf-open sperrt alles; EPG-Deny (7) trifft nur Web <-> DB."""
+        lab = self.S.load_lab('46-contract-priorities')
+        r = trace.run(self.S.engine, self.S.sim, 'web1', 'db1', 'tcp', 1433)
+        self.assertEqual(r['verdict'], 'ALLOW')
+        self.assertIn('any_any_filter(17)', r['policy'][0]['text'])
+        self.apply(('uni/tn-Shop/brc-vrf-open/subj-subj/rssubjFiltAtt-any-ip', mo('vzRsSubjFiltAtt', {'action': 'deny'})))
+        by = self.by()
+        self.assertTrue(by['web1 → db1 TCP 1433 ist durch die Policy blockiert'])
+        self.assertFalse(by['app1 → db1 TCP 1433 funktioniert weiter'], 'Deny auf vzAny-Ebene trifft alle EPGs')
+        self.S.load_lab('46-contract-priorities')
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+        r = trace.run(self.S.engine, self.S.sim, 'web1', 'db1', 'tcp', 1433)
+        self.assertEqual(r['policy'][0]['code'], 'POLICY_DENY_RULE')
+        self.assertIn('fully_qual(7)', r['policy'][0]['text'])
 
 
 class TestSegmentationLabs(unittest.TestCase):
