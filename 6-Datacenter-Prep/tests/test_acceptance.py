@@ -1219,6 +1219,21 @@ class TestConvertedLabs(unittest.TestCase):
         self.assertTrue(by['shopro kann sich anmelden'])
         self.assertFalse(by['shopro darf Shop nur lesen'])
 
+    def test_lab23_esg_vzany_rules_use_priority_10(self):
+        """Contract Guide, Table 8: Contract zwischen ESG und vzAny -> shsrc_any_filt_perm(10) statt 13/14."""
+        lab = self.S.load_lab('23-esg-useg')
+        self.apply(*lab['solutionConfig'])
+        self.apply(('uni/tn-Shop', mo('fvTenant', {}, mo('vzBrCP', {'name': 'any-to-backend'}, mo('vzSubj', {'name': 's'},
+                    mo('vzRsSubjFiltAtt', {'tnVzFilterName': 'icmp'}))))),
+                   ('uni/tn-Shop/ctx-Prod/any', mo('vzAny', {}, mo('vzRsAnyToCons', {'tnVzBrCPName': 'any-to-backend'}))),
+                   ('uni/tn-Shop/ap-Webshop/esg-Backend', mo('fvESg', {}, mo('fvRsProv', {'tnVzBrCPName': 'any-to-backend'}))))
+        e = self.S.engine
+        z = Cli(e, self.S.sim).run('leaf101', 'show zoning-rule')
+        rows = [ln for ln in z.split('\n') if 'any-to-backend' in ln]
+        self.assertTrue(rows and all('shsrc_any_filt_perm(10)' in ln for ln in rows), z)
+        esg = e.cls['uni/tn-Shop/ap-Webshop/esg-Backend']
+        self.assertEqual(e.packet(e.cls['uni/tn-Shop/ap-Webshop/esg-Frontend'], esg, 'icmp', None, None, 'syn')[0], 'permit')
+
     def test_lab23_epg_contract_instead_of_esg_and_permit_any(self):
         lab = self.S.load_lab('23-esg-useg')
         # Abkuerzung 1: klassischer EPG-Contract statt ESGs

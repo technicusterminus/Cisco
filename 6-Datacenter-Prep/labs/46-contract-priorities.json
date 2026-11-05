@@ -33,7 +33,7 @@
  ],
  "limits": [
   "Die Werte von priorityOverride (Deny-Priorität) sind im Modell vorhanden, ihre Wirkung ist nicht modelliert: Die Zuordnung level1–level3 zu lowest/medium/highest ist nicht belegt. Für dieses Lab ist der Standard (default) richtig.",
-  "ESG- und Inter-VRF-Stufen (Priorität 10–12) sind nicht modelliert.",
+  "Inter-VRF-Regeln von vzAny im Consumer-VRF (Priorität 10/11) sind nicht modelliert.",
   "Ob auf einem Host ein Dienst läuft, ist ein simulator-spezifisches Modell; hier laufen keine Dienste-Einschränkungen."
  ],
  "hints": [
