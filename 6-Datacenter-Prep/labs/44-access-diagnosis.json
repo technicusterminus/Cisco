@@ -33,7 +33,7 @@
   "An leaf101 eth1/9 hängt ein unbekanntes Gerät. Es darf in keiner EPG gelernt werden."
  ],
  "limits": [
-  "Die Fault-Texte (F0467, invalid-vlan / invalid-path) folgen dem APIC-Muster; der Wortlaut ist vereinfacht.",
+  "Die Fault-Texte (F0467, invalid-vlan / invalid-path) folgen Cisco TechNote 220876; Unterfälle ohne Beleg sind simulator-spezifisch formuliert.",
   "Server senden in der Simulation genau ein VLAN (Trunk) und reagieren auf alle Ports, solange kein Dienstmodell gesetzt ist."
  ],
  "hints": [

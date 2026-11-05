@@ -686,6 +686,7 @@ class TestRequirementLabs(unittest.TestCase):
         '44-access-diagnosis': ['fvRsDomAtt', 'Encap Block', 'vlan-111', 'VLAN 111', 'ohne Domain', 'Pool'],
         '45-two-bds-one-vrf': ['10.10.21', 'VRF Test liegt', 'fvRsCtx', 'Subnetz ersetzen'],
         '46-contract-priorities': ['web-to-db-deny', 'fully_qual', 'Priorität 7', 'Aktion deny', 'Web konsumiert'],
+        '47-encap-in-use': ['vlan-130 ändern', 'Static Port der EPG Batch steht'],
     }
 
     def setUp(self):
@@ -988,6 +989,22 @@ class TestTroubleshootingLabs(unittest.TestCase):
         r = trace.run(self.S.engine, self.S.sim, 'web1', 'db1', 'tcp', 1433)
         self.assertEqual(r['policy'][0]['code'], 'POLICY_DENY_RULE')
         self.assertIn('fully_qual(7)', r['policy'][0]['text'])
+
+
+    def test_lab47_encap_in_use_and_moving_app_fails(self):
+        """Lab 47: Start mit F0467 encap-already-in-use an Batch; App die VLAN wegzunehmen scheitert, die Musterloesung besteht."""
+        lab = self.S.load_lab('47-encap-in-use')
+        f = self.S.engine.faults['uni/tn-Shop/ap-Webshop/epg-Batch']['F0467']['descr']
+        self.assertIn('encap-already-in-use: Encap (vlan-120) is already in use by Shop:Webshop:App;', f)
+        self.assertIn('Shop:Webshop:App', Cli(self.S.engine, self.S.sim).run('leaf102', 'show vlan encap-id 120 extended'))
+        self.apply(('uni/tn-Shop/ap-Webshop/epg-App/rspathAtt-[%s]' % 'topology/pod-1/paths-102/pathep-[eth1/2]',
+                    mo('fvRsPathAtt', {'status': 'deleted'})))
+        by = self.by()
+        self.assertFalse(by['web1 → app1 TCP 8080 läuft weiter'])
+        self.assertFalse(by['App behält ihr VLAN'])
+        self.S.load_lab('47-encap-in-use')
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
 
 
 class TestSegmentationLabs(unittest.TestCase):

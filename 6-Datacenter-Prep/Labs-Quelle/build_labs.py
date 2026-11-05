@@ -2755,7 +2755,8 @@ lab(id='44-access-diagnosis', title='44 Access-Diagnose: drei Server, drei Ursac
                   'Ticket 3: „app1 erreicht db1 nicht auf TCP 5432.“',
                   'Die VLANs der Server und die Contracts bleiben, wie sie sind.',
                   'An leaf101 eth1/9 hängt ein unbekanntes Gerät. Es darf in keiner EPG gelernt werden.'],
-    limits=['Die Fault-Texte (F0467, invalid-vlan / invalid-path) folgen dem APIC-Muster; der Wortlaut ist vereinfacht.',
+    limits=['Die Fault-Texte (F0467, invalid-vlan / invalid-path) folgen Cisco TechNote 220876; Unterfälle ohne Beleg sind '
+            'simulator-spezifisch formuliert.',
             'Server senden in der Simulation genau ein VLAN (Trunk) und reagieren auf alle Ports, solange kein Dienstmodell gesetzt ist.'],
     hints=['**Konzept:** Ein Endpoint wird nur gelernt, wenn die ganze Kette steht: Port → Interface Policy Group → AAEP → Domain → '
            'VLAN Pool, und an der EPG Domain plus Static Port mit dem VLAN, das der Server sendet.',
@@ -2945,6 +2946,70 @@ lab(id='46-contract-priorities', title='46 Contract-Prioritäten: alles offen, e
              'bereit), ein eigener Filter mit EtherType unspecified (Priorität 9, schlägt vrf-open ebenfalls), ohne Directive log.')
 
 # ----------------------------------------------------------------------------
+# Lab 47 - F0467 encap-already-in-use: ein VLAN, zwei EPGs, ein Leaf
+# ----------------------------------------------------------------------------
+BATCH47 = host('batch1', '00:50:56:10:50:11', '10.10.50.11/24', '10.10.50.1', 130, [[L102, 'eth1/4']],
+               descr='Batch-Server (sendet VLAN 130)')
+SHOP47 = mo('fvTenant', {'name': 'Shop'}, mo('fvCtx', {'name': 'Prod'}),
+            bd('BD-Web', 'Prod', '10.10.10.1/24'), bd('BD-App', 'Prod', '10.10.20.1/24'), bd('BD-Batch', 'Prod', '10.10.50.1/24'),
+            filt('tcp-8080', {'name': 'tcp-8080', 'etherT': 'ip', 'prot': 'tcp', 'dFromPort': '8080', 'dToPort': '8080'}),
+            contract('web-to-app', ['tcp-8080', 'icmp']), contract('batch-to-app', ['tcp-8080']),
+            mo('fvAp', {'name': 'Webshop'},
+               epg('Web', 'BD-Web', ports=[(path(101, 'eth1/1'), 110)], cons=['web-to-app']),
+               epg('App', 'BD-App', ports=[(path(102, 'eth1/2'), 120)], prov=['web-to-app', 'batch-to-app']),
+               epg('Batch', 'BD-Batch', ports=[(path(102, 'eth1/4'), 120)], cons=['batch-to-app'])))
+SOL47 = [['uni/tn-Shop/ap-Webshop/epg-Batch', mo('fvAEPg', {}, mo('fvRsPathAtt', {'tDn': path(102, 'eth1/4'), 'encap': 'vlan-130'}))]]
+lab(id='47-encap-in-use', title='47 Ein VLAN, zwei EPGs: encap-already-in-use', topic='Access Policies / Troubleshooting',
+    level='Einstieg', duration='15 min', fabric='discovered', kind='troubleshooting', modes=['guided', 'exam'],
+    prerequisites=['Lab 03', 'Lab 44'],
+    tools=['Faults (Tenant > Faults)', 'Traffic Inspector', 'CLI: show vlan encap-id <vlan> extended, moquery -c faultInst'],
+    goals=['Die dritte Ursache von F0467 erkennen und von invalid-vlan/invalid-path unterscheiden',
+           'Ein VLAN-Encap pro Leaf einer EPG zuordnen', 'Einen Fehler beheben, ohne eine funktionierende EPG zu stören'],
+    intro='Der Webshop bekommt einen Batch-Server. Das Team hat die EPG **Batch** angelegt und meldet: „batch1 ist nicht erreichbar, '
+          'und im Tenant gibt es einen neuen Fault.“\n\n'
+          '- web1: leaf101 eth1/1, VLAN 110 (EPG Web)\n- app1: leaf102 eth1/2, VLAN 120 (EPG App)\n'
+          '- batch1: 10.10.50.11/24, Gateway 10.10.50.1, leaf102 eth1/4, sendet VLAN 130 (EPG Batch)\n\n'
+          'Der Contract batch-to-app (TCP 8080) ist abgenommen.',
+    requirements=['batch1 wird in der EPG Batch gelernt und erreicht app1 auf TCP 8080.',
+                  'app1 und web1 laufen ohne Unterbrechung weiter: Die Konfiguration von App und Web bleibt unverändert.',
+                  'Die Server-Konfiguration (VLANs) bleibt unverändert.',
+                  'Im Tenant Shop bleibt kein F0467 offen.'],
+    limits=['Per-Port VLAN (VLAN-Scope Port Local), das laut TechNote mehrere EPGs mit gleichem VLAN auf einem Leaf erlaubt, '
+            'ist nicht modelliert.',
+            'Welche der beiden EPGs den Fault bekommt, entscheidet die Reihenfolge des Deployments; im Simulator ist sie fest.'],
+    hints=['**Konzept:** Ein VLAN-Encap gilt standardmäßig für den ganzen Leaf (globaler Scope): Auf einem Leaf kann vlan-X nur zu '
+           'einer EPG gehören.',
+           '**Ebene:** Access, nicht Policy. Der Fault F0467 nennt im debug message die Ursache und die EPG, die das VLAN schon nutzt.',
+           '**Prüfschritte:** Fault im Tenant Shop lesen. Auf leaf102 `show vlan encap-id 120 extended` und `show vlan encap-id 130 extended`: '
+           'Welche EPG hat welches VLAN? Mit dem VLAN vergleichen, das batch1 sendet.',
+           '**Lösung:** Static Port der EPG Batch (leaf102 eth1/4) von vlan-120 auf **vlan-130** ändern – das sendet batch1, und vlan-130 '
+           'ist auf leaf102 frei. App und Web bleiben, wie sie sind.'],
+    cause='Der Static Port der EPG Batch steht auf vlan-120, das auf leaf102 schon die EPG App nutzt (F0467 encap-already-in-use). '
+          'batch1 sendet ohnehin VLAN 130.',
+    config=[SERVER_ACCESS, SHOP47], hosts=[WEB1, APP1, BATCH47], tasks=[],
+    checks=[check('batch1 ist in EPG Batch gelernt', 'endpoint', host='batch1', epg='uni/tn-Shop/ap-Webshop/epg-Batch'),
+            check('batch1 → app1 TCP 8080', 'traffic', src='batch1', dst='app1', proto='tcp', port=8080, expect=True),
+            check('web1 → app1 TCP 8080 läuft weiter', 'traffic', src='web1', dst='app1', proto='tcp', port=8080, expect=True),
+            check('App behält ihr VLAN', 'class', cls='fvRsPathAtt', under='uni/tn-Shop/ap-Webshop/epg-App/',
+                  attrs={'encap': 'vlan-120'}),
+            check('Keine Konfigurationsfehler (F0467) im Tenant Shop', 'nofaults', under='uni/tn-Shop', code='F0467'),
+            check('batch1 erreicht web1 nicht', 'traffic', src='batch1', dst='web1', proto='tcp', port=8080, expect=False,
+                  reason='POLICY_', category='security'),
+            check('Least Privilege Batch → App: nur TCP 8080', 'exposure', src='batch1', dst='app1', allow=['tcp/8080'],
+                  category='security')],
+    questions=[{'id': 'q1', 'q': 'Was sagt „encap-already-in-use: Encap (vlan-120) is already in use by Shop:Webshop:App“?',
+                'options': ['Auf diesem Leaf gehört vlan-120 schon der EPG App; eine zweite EPG kann es dort nicht nutzen',
+                            'vlan-120 fehlt im VLAN Pool', 'Die EPG hat keine Domain', 'Der Port ist in einem Port-Channel'],
+                'answer': 0, 'explain': 'Das ist die dritte Ursache von F0467. invalid-vlan (Pool/Domain) und invalid-path '
+                                        '(Access-Kette) sind die beiden anderen.'},
+               {'id': 'q2', 'q': 'Welche Abhilfe nennt der TechNote zusätzlich, wenn beide EPGs wirklich dasselbe VLAN brauchen?',
+                'options': ['Per-Port VLAN (VLAN-Scope Port Local) oder einen anderen Leaf/vPC nutzen',
+                            'Den Contract löschen', 'Die Bridge Domain tauschen', 'Unicast Routing ausschalten'],
+                'answer': 0, 'explain': 'Mit Port-Local-Scope kann dasselbe VLAN auf verschiedenen Ports eines Leafs zu verschiedenen '
+                                        'EPGs gehören. Im Simulator ist das nicht modelliert.'}],
+    solution='`POST /api/mo/uni/tn-Shop/ap-Webshop/epg-Batch.json` mit `' + json.dumps(SOL47[0][1]) + '`')
+
+# ----------------------------------------------------------------------------
 # Maschinenlesbare Musterloesungen (fuer die Tests: [URL-DN, Body])
 # ----------------------------------------------------------------------------
 BGP_RR = ['uni/fabric/bgpInstP-default', mo('bgpInstPol', {}, mo('bgpAsP', {'asn': '65001'}),
@@ -3103,6 +3168,7 @@ SOLUTIONS = {
     '44-access-diagnosis': SOL44,
     '45-two-bds-one-vrf': [['uni', SOL45]],
     '46-contract-priorities': [['uni', SOL46]],
+    '47-encap-in-use': SOL47,
 }
 
 
