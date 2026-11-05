@@ -104,7 +104,7 @@ Object.assign(Views, {
         w.appendChild(card);
       });
       w.appendChild(h('div', { class: 'card' }, h('div', { class: 'card-h' }, 'Testmeldung'),
-        h('p', null, 'Löst auf dem APIC einen Test-Fault (F9999) aus. Er geht an alle konfigurierten Syslog-, SNMP- und Callhome-Ziele, deren Filter passen.'),
+        h('p', null, 'Löst auf dem APIC einen Test-Fault (S9100, simulator-spezifisch) aus. Er geht an alle konfigurierten Syslog-, SNMP- und Callhome-Ziele, deren Filter passen.'),
         h('div', { class: 'formbtns' }, ['critical', 'major', 'minor', 'warning'].map(s => h('button', { class: 'btn small', onclick: async () => { await API.sim('monitors', { op: 'test', severity: s }); toast('Test-Fault ' + s + ' gesendet'); draw(); } }, s)))));
     };
     await draw();

@@ -37,7 +37,7 @@ Status-Begriffe in dieser Datei:
 | L3Out OSPF, eBGP, EIGRP, statisch, External EPG, Route Control | umgesetzt | simulierte externe Router mit Nachbarschafts-Zustandsautomat (vereinfacht) |
 | Service Graph mit PBR | vereinfacht | nur Firewall mit Redirect, keine Device Packages |
 | Multi-Pod, Remote Leaf, Multi-Site (NDO) | vereinfacht | siehe README, Abschnitt *Grenzen* |
-| Faults | vereinfacht | echte Codes nur, wo bekannt (z. B. F0467). Simulator-eigene Faults haben das Präfix **S** |
+| Faults | vereinfacht | echter Code nur F0467 (belegt). Alle anderen Faults, auch der Test-Fault aus dem Monitoring (S9100), haben das Präfix **S** und sind simulator-spezifisch |
 | Datenebene | **nicht unterstützt** | Es fließen keine Pakete. Der Traffic-Test berechnet die Entscheidung aus Konfiguration und Zustand |
 | Zieldienst auf Hosts | simulator-spezifisch | Feld *Dienste* (z. B. `tcp/443`). Leer bedeutet: Der Host antwortet auf jedem Port |
 | REST-API | Teilumfang | Abfragen und Fehler im APIC-Format. Unbekannte Attribute werden ohne `--strict` angenommen |
