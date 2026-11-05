@@ -5,7 +5,7 @@ import shlex
 
 from .model import CLASSES, split_dn
 from .engine import ip_of, pnum, vlan_num
-from .engine_policy import entry_is_any, filter_prio, has_log, rule_prio
+from .engine_policy import entry_is_any, filter_prio, has_log, is_global, rule_prio
 from .query import eval_filter, out_attrs
 
 APIC_HELP = """Verfuegbare Befehle auf dem APIC (Ausgabe aus dem Simulator, Format vereinfacht; [S] = simulator-spezifisch):
@@ -590,7 +590,7 @@ class Cli:
                             if rda['state'] == 'formed':
                                 rows.append((rid, 0, c['pcTag'], fid[rda['tDn']], 'uni-dir', 'enabled', vn, '', 'deny', 'black_list(5)')); rid += 1
             shsrc, shprov = set(), set()
-            esg_tag = {c['pcTag']: True for c in e.cls.values() if c['kind'] == 'esg'}
+            esg_tag = {c['pcTag']: True for c in e.cls.values() if is_global(c)}
             # External EPGs mit 0.0.0.0/0 (import-security): pcTag -> True, wenn das das einzige Subnetz ist
             ext0 = {}
             for c in e.cls.values():
@@ -607,7 +607,8 @@ class Cli:
                     # Shared Services (Contract Guide, Consumer VRF enforcement): die Contract-Regeln liegen im VRF des
                     # Consumers, dazu dort provider -> 0 shsrc_any_any_deny(12); im Provider-VRF nur provider -> 14 permit_override
                     xprov = [e.cls[d]['pcTag'] for d in rel['prov'] if d in e.cls and e.cls[d]['vrf'] and e.cls[d]['vrf'] != vrf]
-                    xcons = [d for d in rel['cons'] if d in e.cls and e.cls[d]['vrf'] and e.cls[d]['vrf'] != vrf]
+                    xcons = [d for d in rel['cons'] if d in e.cls and e.cls[d]['vrf'] and e.cls[d]['vrf'] != vrf] + \
+                        [v for v in rel['cons_any'] if v != vrf]
                     if cons and xprov:
                         for pt in xprov:
                             if pt not in shsrc:

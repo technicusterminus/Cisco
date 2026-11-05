@@ -1206,6 +1206,31 @@ class TestConvertedLabs(unittest.TestCase):
         self.assertEqual((r['policy'][0]['action'], r['policy'][0]['code']), ('deny', 'POLICY_IMPLICIT_DENY'))
         self.assertTrue(all(self.by().values()))
 
+    def test_lab13_vzany_consumes_inter_vrf_contract(self):
+        """Contract Guide, Appendix (Inter-VRF contract with vzAny as the consumer): vzAny im Consumer-VRF konsumiert einen
+        globalen Contract, den DNS bereitstellt. Route Leaking und Verkehr funktionieren; im Consumer-VRF stehen 0 <-> Provider
+        (globaler pcTag, Prioritaet 10), im Provider-VRF nur Provider -> 14."""
+        lab = self.S.load_lab('13-shared-services')
+        self.apply(*lab['solutionConfig'])
+        self.apply(('uni/tn-common', mo('fvTenant', {}, mo('vzFilter', {'name': 'dns53'}, mo('vzEntry', {
+                        'name': 'd', 'etherT': 'ip', 'prot': 'udp', 'dFromPort': '53', 'dToPort': '53'})),
+                        mo('vzBrCP', {'name': 'dns-common', 'scope': 'global'}, mo('vzSubj', {'name': 's'},
+                           mo('vzRsSubjFiltAtt', {'tnVzFilterName': 'dns53'}))))),
+                   ('uni/tn-Shop/ap-Webshop/epg-Web/rsconsIf-dns', mo('fvRsConsIf', {'status': 'deleted'})),
+                   ('uni/tn-Shared/ap-Infra/epg-DNS/rsprov-dns', mo('fvRsProv', {'status': 'deleted'})),
+                   ('uni/tn-Shared/ap-Infra/epg-DNS', mo('fvAEPg', {}, mo('fvRsProv', {'tnVzBrCPName': 'dns-common'}))),
+                   ('uni/tn-Shop/ctx-Prod/any', mo('vzAny', {}, mo('vzRsAnyToCons', {'tnVzBrCPName': 'dns-common'}))))
+        e = self.S.engine
+        self.assertEqual(trace.run(e, self.S.sim, 'web1', 'dns1', 'udp', 53)['verdict'], 'ALLOW')
+        self.assertEqual(trace.run(e, self.S.sim, 'web1', 'dns1', 'udp', 54)['reason'], 'POLICY_IMPLICIT_DENY')
+        dns = e.cls['uni/tn-Shared/ap-Infra/epg-DNS']['pcTag']
+        self.assertLess(int(dns), 16384, 'Provider bekommt einen globalen pcTag')
+        rows = [[c.strip() for c in ln.strip('|').split('|')] for ln in Cli(e, self.S.sim).run('leaf102', 'show zoning-rule').split('\n')
+                if ln.startswith('|') and 'Rule ID' not in ln]
+        got = {(r[1], r[2], r[9]) for r in rows if r[7] == 'dns-common'}
+        self.assertEqual(got, {('0', dns, 'shsrc_any_filt_perm(10)'), (dns, '0', 'shsrc_any_filt_perm(10)')})
+        self.assertIn((dns, '14', 'permit_override'), {(r[1], r[2], r[8]) for r in rows})
+
     def test_lab09_permit_any_to_internet_fails(self):
         lab = self.S.load_lab('09-l3out-bgp')
         self.apply(*lab['solutionConfig'])
