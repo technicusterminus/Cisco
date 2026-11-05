@@ -692,7 +692,13 @@ lab(id='09-l3out-bgp', title='09 L3Out mit eBGP über Sub-Interface', topic='Ext
                {'id': 'q2', 'q': 'Warum braucht das Sub-Interface ein VLAN aus dem Pool der L3 Domain?',
                 'options': ['Das Encap des Sub-Interfaces wird wie jedes Encap gegen die Domain des L3Outs geprüft', 'Braucht es nicht',
                             'Weil BGP VLANs zählt', 'Wegen des Contracts'],
-                'answer': 0, 'explain': 'Fehlt VLAN 301 im Pool, gibt es einen Fault am L3Out und das Interface kommt nicht hoch.'}],
+                'answer': 0, 'explain': 'Fehlt VLAN 301 im Pool, gibt es einen Fault am L3Out und das Interface kommt nicht hoch.'},
+               {'id': 'q3', 'q': 'Das External EPG Internet hat das Subnetz 0.0.0.0/0. Welche Class-ID steht in show zoning-rule, '
+                                 'wenn Web das Internet erreicht (Web -> Internet)?',
+                'options': ['15 als Ziel; in der Gegenrichtung ist die Quelle die Class-ID des VRF', 'Der pcTag des External EPG in beide Richtungen',
+                            '0 (vzAny)', '1 (Pervasive Route)'],
+                'answer': 0, 'explain': 'Ein External EPG mit 0.0.0.0/0 nutzt Sonder-Class-IDs: als Ziel 15, als Quelle die VRF-Class-ID. '
+                                        'Beide Regeln sind uni-dir.'}],
     solution='Interface: `l3extRsPathL3OutAtt tDn=topology/pod-1/paths-104/pathep-[eth1/47] ifInstT=sub-interface '
              'encap=vlan-301 addr=172.16.1.1/30`, darunter `bgpPeerP addr=172.16.1.2` mit `bgpAsP asn=65100`. Am L3Out '
              '`bgpExtP`. Ohne Fabric-AS (bgpAsP unter uni/fabric/bgpInstP-default) startet BGP nicht.')
@@ -912,7 +918,12 @@ lab(id='13-shared-services', title='13 Shared Services: Route Leaking zwischen T
                 'answer': 0, 'explain': 'Über Tenant- und VRF-Grenzen hinweg braucht es Scope Global (bzw. Tenant innerhalb eines Tenants).'},
                {'id': 'q2', 'q': 'Wo steht beim Provider das Subnetz für das Route Leaking?',
                 'options': ['An der EPG des Providers, mit Shared between VRFs', 'Nur am BD', 'Am L3Out', 'Nirgends'],
-                'answer': 0, 'explain': 'So leakt nur das Netz des Dienstes, nicht automatisch alles im BD.'}],
+                'answer': 0, 'explain': 'So leakt nur das Netz des Dienstes, nicht automatisch alles im BD.'},
+               {'id': 'q3', 'q': 'In welcher VRF stehen nach der Lösung die Zoning Rules des Contracts dns (show zoning-rule)?',
+                'options': ['In der VRF des Consumers (Shop:Prod); in der Provider-VRF steht nur DNS -> 14 permit_override',
+                            'In der VRF des Providers (Shared:Services)', 'In beiden VRFs gleich', 'In keiner, Shared Services brauchen keine Regeln'],
+                'answer': 0, 'explain': 'Bei Inter-VRF-Contracts setzt die Consumer-VRF die Policy durch. Dort steht zusätzlich '
+                                        'DNS -> 0 shsrc_any_any_deny(12), damit der Provider nur über den Contract hinein darf.'}],
     solution='Tenant Shared: `vzBrCP dns scope=global` mit Filter udp/53, an der EPG DNS `fvRsProv` und `fvSubnet ip=10.99.0.1/24 '
              'scope=private,shared`. Export: `vzCPIf name=dns` im Tenant Shop mit `vzRsIf tDn=uni/tn-Shared/brc-dns`. Consumer: '
              '`fvRsConsIf tnVzCPIfName=dns` an der EPG Web und `fvSubnet 10.10.10.1/24 scope=private,shared` am BD-Web.')
