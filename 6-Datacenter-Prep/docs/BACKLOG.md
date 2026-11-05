@@ -17,7 +17,7 @@ Alle Punkte sind offen. Erledigt ist, was in `docs/GAP-ANALYSE.md` als „behobe
 | # | Punkt |
 |---|---|
 | B-16 | Rest der Contract-Prioritäten: Wirkung von `priorityOverride` (level1–level3 ↔ lowest/medium/highest belegen), ESG-/Inter-VRF-Stufen 10–12, Deny+Log vor Deny. Table 8 und 23 des Contract Guide sind umgesetzt |
-| B-17 | Fault-Codes gegen die Fault Reference prüfen (heute belegt: F0467) |
+| B-17 | Fault-Codes gegen die Fault Reference prüfen. Belegt ist nur F0467; alle übrigen Faults tragen S-Codes (simulator-spezifisch). Eine Websuche (Nov. 2026) fand für keinen Kandidaten (z. B. F0523, F0956, F2534) eine Cisco-Quelle, nur Forenbeiträge. Der Test-Fault heißt jetzt S9100 statt F9999 |
 
 ## Technik
 

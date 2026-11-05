@@ -814,7 +814,7 @@ class TestOps(Base):
         self.S.monitor_op({'op': 'test', 'severity': 'major'})
         self.S.changed()
         log = self.S.sim['monlog']['syslog-srv']
-        self.assertIn('[F9999][raised]', log[-1]['text'])
+        self.assertIn('[S9100][raised]', log[-1]['text'])
         r = ops.snmp_walk(self.S, 'snmp-nms', 'apic1', 'NMS-Read')
         self.assertFalse(r['ok'])
         self.run_post('uni/fabric', {'snmpPol': {'attributes': {'name': 'default', 'adminSt': 'enabled'}, 'children': [

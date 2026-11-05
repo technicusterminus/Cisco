@@ -1224,7 +1224,7 @@ class Sim:
             return ops.snmp_walk(self, b.get('name'), b.get('node', ''), b.get('community', ''))
         if op == 'test':
             self._event('uni/fabric/moncommon', 'Test notification from %s' % self.sim['topology']['apic']['name'], sev='info',
-                        rec={'kind': 'fault', 'severity': b.get('severity', 'major'), 'orig': b.get('severity', 'major'), 'code': 'F9999',
+                        rec={'kind': 'fault', 'severity': b.get('severity', 'major'), 'orig': b.get('severity', 'major'), 'code': 'S9100',
                              'dn': 'topology/pod-1/node-1/sys', 'descr': 'Test fault raised by the simulator (Testmeldung)',
                              'lc': 'raised', 'cause': 'test'})
             return None
