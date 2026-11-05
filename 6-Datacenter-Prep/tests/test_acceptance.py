@@ -1174,6 +1174,17 @@ class TestConvertedLabs(unittest.TestCase):
         vrf_tag = e.A(e.cls['uni/tn-Shop/ap-Webshop/epg-Web']['vrf'])['pcTag']
         self.assertEqual(sorted((r[1], r[2], r[4]) for r in rows), sorted([(web, '15', 'uni-dir'), (vrf_tag, web, 'uni-dir')]))
 
+    def test_lab13_vzany_cannot_provide_inter_vrf_contract(self):
+        """Contract Guide: vzAny kann bei Inter-VRF-Contracts nur Consumer sein, nicht Provider."""
+        lab = self.S.load_lab('13-shared-services')
+        self.apply(*lab['solutionConfig'])
+        dns = next(c for c in self.S.engine.cls.values() if c['name'] == 'DNS')
+        self.apply((dns['vrf'] + '/any', mo('vzAny', {}, mo('vzRsAnyToProv', {'tnVzBrCPName': 'dns'}))),
+                   (dns['dn'] + '/rsprov-dns', mo('fvRsProv', {'status': 'deleted'})))
+        r = trace.run(self.S.engine, self.S.sim, 'web1', 'dns1', 'udp', 53)
+        self.assertEqual((r['verdict'], r['reason']), ('DROP', 'INTERVRF_LEAK_MISSING'))
+        self.assertIn('vzAny kann bei Inter-VRF-Contracts nur Consumer sein', ' '.join(s['detail'] for s in r['steps']))
+
     def test_lab09_permit_any_to_internet_fails(self):
         lab = self.S.load_lab('09-l3out-bgp')
         self.apply(*lab['solutionConfig'])
