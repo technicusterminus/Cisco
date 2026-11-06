@@ -316,6 +316,9 @@ class EndpointMixin:
             if bd in self.storm_bds:
                 hs['storm'] = self.storm_bds[bd]
                 hs['reasons'].append(self.storm_bds[bd])
+            if bd in getattr(self, 'rogue_bds', {}):
+                hs['rogue'] = self.rogue_bds[bd]
+                hs['reasons'].append(self.rogue_bds[bd])
             useg = self._useg(h, match)
             if useg:
                 hs['base'], hs['epg'] = match['epg'], useg

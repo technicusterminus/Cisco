@@ -162,11 +162,12 @@ class OpsMixin:
     def _loops(self):
         """Legacy-Switches, die an mehreren Ports haengen, bilden eine Schleife, wenn sie eine VLAN-Encap
         auf zwei Ports verbinden. MCP oder Endpoint Loop Protection koennen sie brechen."""
-        self.loops, self.storm_bds, self.learn_off = [], {}, {}
+        self.loops, self.storm_bds, self.learn_off, self.rogue_bds = [], {}, {}, {}
         mcp = self.A('uni/infra/mcpInstP-default') or {}
         mcp_on = mcp.get('adminSt') == 'enabled' and bool(mcp.get('key'))
         per_vlan = 'pdu-per-vlan' in (mcp.get('ctrl') or '')
         eplp = self.A('uni/infra/epLoopProtectP-default') or {}
+        rogue = (self.A('uni/infra/epCtrlP-default') or {}).get('adminSt') == 'enabled'
         for sw in self.sim.get('switches', []):
             legs = []
             for s, p in sw.get('links', []):
@@ -223,7 +224,22 @@ class OpsMixin:
                 info['text'] = 'MCP ist auf den betroffenen Ports per MCP Interface Policy deaktiviert'
             else:
                 info['text'] = 'MCP ist global nicht aktiv (MCP Instance Policy default: Admin State und Key)'
-            if eplp.get('adminSt') == 'enabled':
+            if rogue:
+                # White Paper "ACI Fabric Endpoint Learning", Rogue EP Control: springende Endpoints werden pro Leaf als rogue
+                # markiert und statisch gehalten (Hold Interval), nur fuer diese Endpoints pausiert das Lernen. Ep Loop Protection
+                # greift dann nicht. Die Schleife selbst bricht Rogue EP Control nicht.
+                ra = self.A('uni/infra/epCtrlP-default') or {}
+                for bd in bds:
+                    self.rogue_bds[bd] = ('Rogue EP Control: Endpoints im BD %s springen mehr als %s-mal in %s s zwischen %s - als rogue '
+                                          'markiert, statisch fuer %s s, Lernen nur fuer diese Endpoints pausiert'
+                                          % (self.short(bd), ra.get('rogueEpDetectMult', '4'), ra.get('rogueEpDetectIntvl', '60'),
+                                             names, ra.get('holdIntvl', '1800')))
+                    self.fault(bd, 'S2536', 'major', 'Rogue endpoints detected in bridge domain %s (moves between %s); learning paused '
+                               'for these endpoints' % (self.short(bd), names), 'rogue-ep-detected', domain='tenant')
+                info['action'] = 'rogue'
+                info['text'] += ('. Rogue EP Control hat die springenden Endpoints als rogue markiert (Ep Loop Protection greift dann '
+                                 'nicht); die Schleife selbst besteht weiter')
+            elif eplp.get('adminSt') == 'enabled':
                 act = eplp.get('action') or ''
                 if 'port-disable' in act:
                     victim = looped[-1]

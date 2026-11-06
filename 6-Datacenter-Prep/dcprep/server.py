@@ -442,8 +442,10 @@ class Sim:
                     info = '%s: %s' % (c['serial'], ('ID %s, %s, %s' % (nid, n['name'], n['state'])) if n
                                        else 'nicht registriert')
                 elif t == 'exists':
-                    a = self.store.attrs(c['dn'])
-                    ok = a is not None and all(a.get(k) == v for k, v in c.get('attrs', {}).items())
+                    # 'any': Liste gleichwertiger Alternativen [{dn, attrs}, ...]
+                    opts = c.get('any') or [{'dn': c['dn'], 'attrs': c.get('attrs', {})}]
+                    ok = any((self.store.attrs(o['dn']) is not None and
+                              all(self.store.attrs(o['dn']).get(k) == v for k, v in o.get('attrs', {}).items())) for o in opts)
                 elif t == 'class':
                     dns = self.store.by_class(c['cls'])
                     hit = [d for d in dns if all(self.store.attrs(d).get(k) == v for k, v in c.get('attrs', {}).items())

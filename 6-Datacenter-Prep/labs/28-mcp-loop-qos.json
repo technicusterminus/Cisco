@@ -22,7 +22,7 @@
  "goals": [
   "Eine Layer-2-Schleife über einen Legacy-Switch erkennen",
   "MCP global mit Key und PDU per VLAN aktivieren",
-  "Endpoint Loop Protection als zweite Verteidigungslinie kennen",
+  "Springende Endpoints mit Rogue EP Control oder Endpoint Loop Protection erkennen",
   "EPGs einer QoS-Klasse zuordnen"
  ],
  "intro": "Die Lager-IT hat einen alten Catalyst **cat-lager** mit zwei Kabeln an **leaf101 eth1/9** und **leaf102 eth1/9** gesteckt – ohne Port-Channel. Beide Ports liegen in der EPG **Web** (vlan-110). Seitdem ist der Webshop gestört: Broadcast-Storm im BD-Web, die MACs springen zwischen den Ports.\n\nDanach soll die EPG **App** die QoS-Klasse **Level2** bekommen.",
@@ -467,7 +467,7 @@
  ],
  "hints": [
   "**Konzept:** Die ACI leitet keine STP-BPDUs aus, sie flutet sie nur. Gegen Schleifen über fremde Switches hilft MCP: Die Fabric schickt eigene Pakete und schaltet einen Port ab, über den sie sie zurückbekommt.",
-  "**Objekte:** *Fabric > Access Policies > Policies > Global*: MCP Instance Policy (Admin State, Key, PDU per VLAN, Aktion), Endpoint Loop Protection. An der EPG App die QoS Class.",
+  "**Objekte:** *Fabric > Access Policies > Policies > Global*: MCP Instance Policy (Admin State, Key, PDU per VLAN, Aktion). Für springende Endpoints: *System > System Settings > Endpoint Controls* – Rogue EP Control (laut Cisco ab APIC 3.2 empfohlen) oder Ep Loop Protection. An der EPG App die QoS Class.",
   "**Prüfschritte:** `show mcp internal info interface all` auf leaf101/102, `show interface status err-disabled`. EP Tracker web1: springt die MAC?",
   "**Lösung:** MCP Instance Policy default: enabled, Key gesetzt, PDU per VLAN, Port Disable. Endpoint Loop Protection enabled. EPG App QoS Level2."
  ],
@@ -493,10 +493,24 @@
   {
    "desc": "Springende Endpoints werden erkannt",
    "type": "exists",
-   "dn": "uni/infra/epLoopProtectP-default",
+   "dn": "uni/infra/epCtrlP-default",
    "attrs": {
     "adminSt": "enabled"
-   }
+   },
+   "any": [
+    {
+     "dn": "uni/infra/epCtrlP-default",
+     "attrs": {
+      "adminSt": "enabled"
+     }
+    },
+    {
+     "dn": "uni/infra/epLoopProtectP-default",
+     "attrs": {
+      "adminSt": "enabled"
+     }
+    }
+   ]
   },
   {
    "desc": "web1 → app1 tcp/8080 wieder erreichbar",
@@ -540,7 +554,7 @@
    "explain": "Deshalb braucht es MCP (und ggf. die BPDUs des Fremdswitches, die über die Fabric laufen)."
   }
  ],
- "solution": "`uni/infra/mcpInstP-default`: `{\"mcpInstPol\": {\"attributes\": {\"adminSt\": \"enabled\", \"key\": \"Mcp#Fabric2026\", \"ctrl\": \"pdu-per-vlan\", \"loopProtectAct\": \"port-disable\"}}}`, `uni/infra/epLoopProtectP-default` adminSt=enabled, EPG App prio=level2.",
+ "solution": "`uni/infra/mcpInstP-default`: `{\"mcpInstPol\": {\"attributes\": {\"adminSt\": \"enabled\", \"key\": \"Mcp#Fabric2026\", \"ctrl\": \"pdu-per-vlan\", \"loopProtectAct\": \"port-disable\"}}}`, `uni/infra/epLoopProtectP-default` adminSt=enabled (gleichwertig und laut Cisco empfohlen: `uni/infra/epCtrlP-default` adminSt=enabled, Rogue EP Control), EPG App prio=level2.",
  "routers": [],
  "vcenters": [],
  "devices": [],

@@ -889,6 +889,11 @@ mo('infraRsMcpIfPol', 'rsmcpIfPol', ('infraAccPortGrp', 'infraAccBndlGrp'), {'tn
 mo('epLoopProtectP', 'epLoopProtectP-{name}', ('infraInfra',), {'adminSt': 'disabled', 'loopDetectIntvl': '60', 'loopDetectMult': '4',
                                                                'action': 'port-disable'},
    enums={'adminSt': ED}, sets={'action': ('', 'port-disable', 'bd-learn-disable')}, label='EP Loop Protection Policy')
+# Rogue EP Control (System > System Settings > Endpoint Controls). Klasse/Attribute belegt durch aci-go-client (epControlP,
+# uni/infra/epCtrlP-...); Defaults nach Cisco White Paper "ACI Fabric Endpoint Learning" (60 s, Faktor 4, Hold 1800 s).
+mo('epControlP', 'epCtrlP-{name}', ('infraInfra',), {'adminSt': 'disabled', 'rogueEpDetectIntvl': '60', 'rogueEpDetectMult': '4',
+                                                    'holdIntvl': '1800'},
+   enums={'adminSt': ED}, label='Rogue EP Control Policy')
 
 
 # ---------------------------- Multi-Pod und Remote Leaf -------------------
