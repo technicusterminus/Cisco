@@ -698,14 +698,21 @@ class Cli:
                                     rows.append((rid, src, dst, f, 'uni-dir', 'enabled', vn, cname(brc),
                                                  act, pr(src, dst))); rid += 1
                                     continue
-                                rows.append((rid, cpt, ppt, f, 'bi-dir', 'enabled', vn, cname(brc),
+                                # Mit Service Graph zeigt der Contract Guide die Regeln ohne Contract-Namen
+                                nm = '' if g else cname(brc)
+                                rows.append((rid, cpt, ppt, f, 'bi-dir', 'enabled', vn, nm,
                                              a1, pr(cpt, ppt))); rid += 1
-                                rows.append((rid, ppt, cpt, f2, 'uni-dir-ignore', 'enabled', vn, cname(brc),
+                                rows.append((rid, ppt, cpt, f2, 'uni-dir-ignore', 'enabled', vn, nm,
                                              a2, pr(ppt, cpt))); rid += 1
                                 if g:
+                                    # Contract Guide (Service graph with redirect): Regel mit Consumer-Klasse nutzt den Contract-
+                                    # Filter; die Regel zur Provider-EPG den Filter default (src_dst_any(9)), ausser
+                                    # "Filters after first node" = filters-from-contract
                                     sc_, sp_ = g['conns']['consumer']['pcTag'], g['conns']['provider']['pcTag']
-                                    rows.append((rid, sp_, ppt, f, 'bi-dir', 'enabled', vn, cname(brc), 'permit', pr(sp_, ppt))); rid += 1
-                                    rows.append((rid, sc_, cpt, f2, 'uni-dir-ignore', 'enabled', vn, cname(brc), 'permit', pr(sc_, cpt))); rid += 1
+                                    ffc = (e.A(g['graph']) or {}).get('filterBetweenNodes') == 'filters-from-contract'
+                                    rows.append((rid, sc_, cpt, f2, 'uni-dir', 'enabled', vn, '', 'permit', pr(sc_, cpt))); rid += 1
+                                    rows.append((rid, sp_, ppt, f if ffc else 'default', 'uni-dir', 'enabled', vn, '', 'permit',
+                                                 pr(sp_, ppt) if ffc else 'src_dst_any(9)')); rid += 1
         return rows
 
     def policy_stats(self, nid):
@@ -1169,7 +1176,8 @@ def _verify_methods():
         e = self.e
         u = 'unspecified'
         rows = [('implarp', 'implarp', 'arp', u, u, 'no', 'no', u, u, u, u, 'dport', u, u, ''),
-                ('implicit', 'implicit', u, u, u, 'no', 'no', u, u, u, u, 'implicit', u, u, '')]
+                ('implicit', 'implicit', u, u, u, 'no', 'no', u, u, u, u, 'implicit', u, u, ''),
+                ('default', 'any', u, u, u, 'no', 'no', u, u, u, u, 'def', u, u, '')]
         for key, i in sorted(self._filters().items(), key=lambda x: x[1]):
             rev = isinstance(key, tuple)
             flt = key[0] if rev else key

@@ -226,6 +226,7 @@ class PolicyMixin:
             na = self.A(node)
             info['node'] = na['name']
             info['redirect'] = na['routingMode'] == 'Redirect'
+            info['func'] = na.get('funcType', 'GoTo')
             cname, gname = self.A(brc)['name'], self.A(graph)['name']
             ctx = next((d for d in self.kids(tn, 'vnsLDevCtx')
                         if self.A(d)['ctrctNameOrLbl'] in (cname, 'any') and self.A(d)['graphNameOrLbl'] in (gname, 'any')
@@ -297,6 +298,21 @@ class PolicyMixin:
                     fail('%s-Connector: Routing Mode Redirect braucht eine L4-L7 Policy-Based Redirect Policy' % conn)
                     ok = False
                     break
+                if info['redirect']:
+                    # White Paper "Service Graph Design with Cisco ACI", BD tuning fuer PBR: Am BD des L4-L7-Geraets muss
+                    # IP Routing an sein; im Go-To-Modus braucht er ein Subnetz; GARP-based detection sollte an sein.
+                    bda = self.A(bd) or {}
+                    if bda.get('unicastRoute') != 'yes':
+                        fail('%s-Connector: PBR braucht am BD %s IP Routing (Unicast Routing)' % (conn, self.short(bd)))
+                        ok = False
+                        break
+                    if info.get('func') == 'GoTo' and not self.bd_subnets(bd):
+                        fail('%s-Connector: Im Go-To-Modus braucht der BD %s des L4-L7-Geraets ein Subnetz' % (conn, self.short(bd)))
+                        ok = False
+                        break
+                    if bda.get('epMoveDetectMode') != 'garp':
+                        self.fault(bd, 'S1691', 'warning', 'BD %s connects an L4-L7 device with PBR: GARP based EP move detection '
+                                   'should be enabled' % self.short(bd), 'pbr-bd-garp-recommended')
                 dests = [{'ip': self.A(d)['ip'], 'mac': (self.A(d)['mac'] or '').upper()} for d in self.kids(pol, 'vnsRedirectDest')] if pol else []
                 if pol and not dests:
                     fail('PBR Policy %s hat keine Destination' % self.short(pol))

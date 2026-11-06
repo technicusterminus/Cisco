@@ -726,7 +726,9 @@ mo('vnsCIf', 'cIf-[{name}]', ('vnsCDev',), {}, label='Concrete Interface')
 mo('vnsRsCIfPathAtt', 'rsCIfPathAtt', ('vnsCIf',), {'tDn': ''}, rel=('dn', 'tDn', ('fabricPathEp',)), label='Path')
 mo('vnsLIf', 'lIf-{name}', ('vnsLDevVip',), {'encap': 'unknown'}, checks={'encap': _vlan}, label='Cluster Interface')
 mo('vnsRsCIfAttN', 'rscIfAttN-[{tDn}]', ('vnsLIf',), {}, rel=('dn', 'tDn', ('vnsCIf',)), label='Concrete Interface')
-mo('vnsAbsGraph', 'AbsGraph-{name}', ('fvTenant',), {'type': 'legacy', 'uiTemplateType': 'UNSPECIFIED'}, label='L4-L7 Service Graph Template')
+# filterBetweenNodes: "Filters after first node" (allow-all Default, filters-from-contract ab APIC 4.2(3)) - Contract Guide
+mo('vnsAbsGraph', 'AbsGraph-{name}', ('fvTenant',), {'type': 'legacy', 'uiTemplateType': 'UNSPECIFIED', 'filterBetweenNodes': 'allow-all'},
+   enums={'filterBetweenNodes': ('allow-all', 'filters-from-contract')}, label='L4-L7 Service Graph Template')
 mo('vnsAbsNode', 'AbsNode-{name}', ('vnsAbsGraph',), {'funcTemplateType': 'FW_ROUTED', 'funcType': 'GoTo', 'routingMode': 'Redirect',
                                                      'managed': 'no', 'sequenceNumber': '0', 'isCopy': 'no', 'shareEncap': 'no'},
    enums={'routingMode': ('Redirect', 'unspecified'), 'funcType': ('GoTo', 'GoThrough', 'L1', 'L2', 'None')}, label='Function Node')

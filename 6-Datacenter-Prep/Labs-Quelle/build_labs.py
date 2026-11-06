@@ -1103,7 +1103,8 @@ LDEV16 = 'uni/tn-Shop/lDevVip-FW1'
 SOL16 = [
     ['uni/infra/vlanns-[VLAN-Pool-Server]-static', mo('fvnsVlanInstP', {}, mo('fvnsEncapBlk', {'from': 'vlan-400', 'to': 'vlan-410'}))],
     ['uni', mo('fvTenant', {'name': 'Shop'},
-               bd('BD-FW-Ext', 'Prod', '192.168.100.1/24'), bd('BD-FW-Int', 'Prod', '192.168.101.1/24'),
+               bd('BD-FW-Ext', 'Prod', '192.168.100.1/24', epMoveDetectMode='garp'),
+               bd('BD-FW-Int', 'Prod', '192.168.101.1/24', epMoveDetectMode='garp'),
                mo('vnsLDevVip', {'name': 'FW1', 'svcType': 'FW', 'devtype': 'PHYSICAL', 'funcType': 'GoTo'},
                   mo('vnsRsALDevToPhysDomP', {'tDn': 'uni/phys-PhysDom-Server'}),
                   mo('vnsCDev', {'name': 'fw1'},
@@ -1149,7 +1150,8 @@ lab(id='16-service-graph-pbr', title='16 Service Graph mit Policy-Based Redirect
            'zwei PBR Policies mit IP und MAC der Firewall, Service Graph Template mit Redirect, Device Selection Policy, am Subject der Graph.',
            '**Prüfschritte:** *Deployed Graph Instances*: applied oder Fault? Traffic Inspector web1 → app1 TCP 8080: Steht fw1 im Pfad? '
            'Warum scheitert Ping danach? Auf leaf101 `show zoning-rule` (Action redir) und `show service redir info`.',
-           '**Lösung:** vlan-400 bis 410 im VLAN-Pool-Server. BD-FW-Ext 192.168.100.1/24 und BD-FW-Int 192.168.101.1/24. Device FW1 '
+           '**Lösung:** vlan-400 bis 410 im VLAN-Pool-Server. BD-FW-Ext 192.168.100.1/24 und BD-FW-Int 192.168.101.1/24 (IP Routing an, '
+           'Subnetz als Gateway der Firewall, GARP-based EP Move Detection an – so empfiehlt es Cisco für Service-BDs mit PBR). Device FW1 '
            '(Firewall, physisch, GoTo) mit Cluster Interfaces consumer (vlan-401, outside) und provider (vlan-402, inside). PBR-Ext/PBR-Int '
            'mit IP und MAC der Firewall-Interfaces. Graph FW-Graph mit Redirect, auf web-to-app anwenden.'],
     cause='Es gibt kein L4-L7 Device, keinen Service Graph und keine PBR Policy; die Firewall-VLANs fehlen im Pool.',
