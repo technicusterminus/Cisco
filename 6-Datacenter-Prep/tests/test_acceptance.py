@@ -716,6 +716,7 @@ class TestRequirementLabs(unittest.TestCase):
         '45-two-bds-one-vrf': ['10.10.21', 'VRF Test liegt', 'fvRsCtx', 'Subnetz ersetzen'],
         '46-contract-priorities': ['web-to-db-deny', 'fully_qual', 'Priorität 7', 'Aktion deny', 'Web konsumiert'],
         '47-encap-in-use': ['vlan-130 ändern', 'Static Port der EPG Batch steht'],
+        '48-vip-dataplane-learning': ['disabled', 'Data-plane Learning', 'Data Plane', 'ipDataPlaneLearning'],
     }
 
     def setUp(self):
@@ -892,6 +893,34 @@ class TestEventsAndPhysical(unittest.TestCase):
         self.assertIn('S9101', self.codes())
         last = self.S.sim['ephist']['app1'][-1]
         self.assertEqual((last['event'], last['where'], last['detail']), ('moved', 'leaf102 eth1/8', 'vorher leaf102 eth1/2'))
+
+    def test_vip_standby_and_ip_dataplane_learning(self):
+        """White Paper "ACI Fabric Endpoint Learning", When to disable IP Data-plane Learning: Active/Standby teilen
+        eine VIP; sendet der Standby von der VIP, lernt der Leaf sie per Data Plane dort. Mit IP Data-plane Learning
+        aus (VRF) lernt er die IP nur per ARP/GARP vom Active (Table 2)."""
+        post(self.S.store, 'uni/tn-Shop/ap-Webshop/epg-App', mo('fvAEPg', {}, mo('fvRsPathAtt', {
+            'tDn': 'topology/pod-1/paths-102/pathep-[eth1/8]', 'encap': 'vlan-120'})))
+        app1 = self.S.sim['hosts'][1]
+        self.S.set_host(dict(app1, name='app2', mac='00:50:56:00:20:12', links=[[self.leaf102, 'eth1/8']], standby=True))
+        self.S.changed()
+        r = self.tr('web1', '10.10.20.11', 'tcp', 443)
+        self.assertEqual((r['verdict'], r['reason']), ('DROP', 'EP_IP_STANDBY'))
+        e = self.S.engine
+        bd = e.hosts['app2']['bd']
+        self.assertIn('S1692', e.faults.get(bd, {}))
+        self.assertEqual(e.ip_owner[('uni/tn-Shop/ctx-Prod', '10.10.20.11')], 'app2')
+        post(self.S.store, 'uni/tn-Shop/ctx-Prod', mo('fvCtx', {'ipDataPlaneLearning': 'disabled'}))
+        self.S.changed()
+        e = self.S.engine
+        r = self.tr('web1', '10.10.20.11', 'tcp', 443)
+        # Das Lab hat noch keinen Contract: Das Paket erreicht jetzt den Active und scheitert erst an der Policy
+        self.assertEqual((r['verdict'], r['reason']), ('DROP', 'POLICY_IMPLICIT_DENY'))
+        self.assertTrue([x for x in r['steps'] if x['title'].startswith('Ziel app1 gelernt')])
+        self.assertNotIn('S1692', e.faults.get(bd, {}))
+        cep2 = e.hosts['app2']['cep']
+        self.assertEqual(e.store.attrs(cep2)['ip'], '0.0.0.0')
+        self.assertFalse(e.store.children(cep2, 'fvIp'))
+        self.assertTrue(e.store.children(e.hosts['app1']['cep'], 'fvIp'))
 
     def test_move_to_unbound_port_is_not_learned(self):
         self.S.host_event({'op': 'move', 'name': 'app1', 'links': [[self.leaf102, 'eth1/9']]})

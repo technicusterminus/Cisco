@@ -665,18 +665,19 @@ const Views = {
       { k: 'gw', l: 'Default Gateway', ph: '10.1.1.1' }, { k: 'vlan', l: 'VLAN-Tag', ph: '0 = untagged', help: '0 = Host sendet untagged (Access-Port), sonst 802.1Q-Tag' },
       { k: 'bond', l: 'NIC-Bonding', t: 'select', o: [['none', 'keins (ein Link aktiv)'], ['lacp-active', 'LACP active (802.3ad)'], ['lacp-passive', 'LACP passive'], ['static', 'statisch (mode on)']] },
       { k: 'silent', l: 'Stiller Host', t: 'yesno', cl: 'sendet nichts von sich aus (kein GARP, kein Traffic) – wird erst durch ARP Flooding oder ARP Glean entdeckt' },
+      { k: 'standby', l: 'Standby (VIP)', t: 'yesno', cl: 'Standby eines Active/Standby-Paars mit derselben IP wie der Active; sendet gelegentlich von der VIP (z. B. TCP RST) – Thema IP Data-plane Learning' },
       { k: 'services', l: 'Dienste', ph: 'tcp/443, tcp/22, udp/53', help: 'laufende Dienste (simulator-spezifisch); leer = antwortet auf jedem Port' },
       { k: 'dhcp', l: 'IP per DHCP', t: 'yesno', cl: 'Host holt sich IP und Gateway per DHCP (IP-Feld wird dann ignoriert)' },
       { k: 'dhcpd', l: 'DHCP-Server (Scopes)', t: 'textarea', ph: '10.1.1.0/24 10.1.1.100-10.1.1.199 gw 10.1.1.1', help: 'Nur wenn dieser Host ein DHCP-Server ist: ein Scope pro Zeile' },
       { k: 'descr', l: 'Beschreibung' }],
-    x ? { name: x.name, mac: x.mac, ip: x.ip, gw: x.gw, vlan: String(x.vlan || 0), bond: x.bond, descr: x.descr, silent: x.silent ? 'yes' : 'no', dhcp: x.dhcp ? 'yes' : 'no',
-      dhcpd: (x.dhcpd || []).map(d => d.net + ' ' + d.from + '-' + d.to + (d.gw ? ' gw ' + d.gw : '')).join('\n'), services: (x.services || []).join(', ') } : { mac: randMac(), vlan: '0', bond: 'none', silent: 'no', dhcp: 'no' }, {}, 'create');
+    x ? { name: x.name, mac: x.mac, ip: x.ip, gw: x.gw, vlan: String(x.vlan || 0), bond: x.bond, descr: x.descr, silent: x.silent ? 'yes' : 'no', standby: x.standby ? 'yes' : 'no', dhcp: x.dhcp ? 'yes' : 'no',
+      dhcpd: (x.dhcpd || []).map(d => d.net + ' ' + d.from + '-' + d.to + (d.gw ? ' gw ' + d.gw : '')).join('\n'), services: (x.services || []).join(', ') } : { mac: randMac(), vlan: '0', bond: 'none', silent: 'no', standby: 'no', dhcp: 'no' }, {}, 'create');
     const body = h('div', null, f.el, h('div', { class: 'form' }, h('div', { class: 'frow' }, h('label', { class: 'flab' }, 'Link 1'), h('div', { class: 'fctl' }, links[0].el)),
       h('div', { class: 'frow' }, h('label', { class: 'flab' }, 'Link 2 (für PC/vPC)'), h('div', { class: 'fctl' }, links[1].el))));
     modal(x ? 'Host ' + x.name + ' bearbeiten' : 'Host hinzufügen', body, [{ l: 'Abbrechen' }, {
       l: 'Speichern', primary: true, fn: async () => {
         const v = f.get();
-        const host = Object.assign(v, { vlan: Number(v.vlan || 0), links: links.map(l => l.get()).filter(Boolean), silent: v.silent === 'yes', dhcp: v.dhcp === 'yes' });
+        const host = Object.assign(v, { vlan: Number(v.vlan || 0), links: links.map(l => l.get()).filter(Boolean), silent: v.silent === 'yes', standby: v.standby === 'yes', dhcp: v.dhcp === 'yes' });
         if (host.dhcp) { host.ip = '0.0.0.0/32'; host.gw = ''; }
         await API.sim('hosts', { host, old: x ? x.name : null });
         toast('Host ' + v.name + ' gespeichert');

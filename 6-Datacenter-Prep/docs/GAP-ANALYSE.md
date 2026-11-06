@@ -43,7 +43,7 @@ Untersucht wurden:
 | Ergebnis des Traffic-Tests nur `ok` + Text | keine maschinenlesbare Ursache, keine Policy-Referenz, keine Trennung „Pfad kaputt“ vs. „Policy“ | **behoben**: verdict, reason, location, policy, hint, path |
 | Kein Modell für Zieldienste | „Policy erlaubt“ wurde mit „Dienst erreichbar“ gleichgesetzt | **behoben**: Feld *Dienste*, `SERVICE_NOT_LISTENING`, getrennt vom Least-Privilege-Check |
 | Lab-Bewertung ohne Sicherheits-Kategorie | Ein Permit-any fiel nur auf, wenn zufällig ein negativer Test existierte | **behoben**: Kategorie `security`, Check `exposure` |
-| Labs sind Klickanleitungen | Die Lösung steht in der Aufgabe, wenig Transfer | **behoben**: alle 48 Labs im Anforderungsformat |
+| Labs sind Klickanleitungen | Die Lösung steht in der Aufgabe, wenig Transfer | **behoben**: alle 49 Labs im Anforderungsformat |
 | Hinweise einstufig, kein Prüfungsmodus | | **behoben** in der Engine; genutzt von allen Labs |
 | Lab-Generator nicht deterministisch (Zeitstempel in Lab 25) | Generierte Dateien änderten sich bei jedem Lauf | **behoben** |
 | Intra-EPG-Contracts nicht ausgewertet | Verkehr innerhalb einer EPG ließ sich nur ganz oder gar nicht erlauben | **behoben**: `fvRsIntraEpg` wird ausgewertet, Lab 38 |
