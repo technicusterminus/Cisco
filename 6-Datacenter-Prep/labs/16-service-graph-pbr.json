@@ -38,7 +38,7 @@
   "**Konzept:** Policy-Based Redirect leitet Verkehr, den ein Contract erlaubt, an ein L4-L7-Gerät um. Dafür braucht es drei Bausteine: das Gerät (wo es hängt, welche VLANs), die Vorlage (welcher Graph) und die Zuordnung zum Contract (welche BDs, welche Redirect-Ziele).",
   "**Objekte:** Encap-Block für die Firewall-VLANs im VLAN Pool, zwei Service-BDs, L4-L7 Device (Concrete Device, Cluster Interfaces), zwei PBR Policies mit IP und MAC der Firewall, Service Graph Template mit Redirect, Device Selection Policy, am Subject der Graph.",
   "**Prüfschritte:** *Deployed Graph Instances*: applied oder Fault? Traffic Inspector web1 → app1 TCP 8080: Steht fw1 im Pfad? Warum scheitert Ping danach? Auf leaf101 `show zoning-rule` (Action redir) und `show service redir info`.",
-  "**Lösung:** vlan-400 bis 410 im VLAN-Pool-Server. BD-FW-Ext 192.168.100.1/24 und BD-FW-Int 192.168.101.1/24. Device FW1 (Firewall, physisch, GoTo) mit Cluster Interfaces consumer (vlan-401, outside) und provider (vlan-402, inside). PBR-Ext/PBR-Int mit IP und MAC der Firewall-Interfaces. Graph FW-Graph mit Redirect, auf web-to-app anwenden."
+  "**Lösung:** vlan-400 bis 410 im VLAN-Pool-Server. BD-FW-Ext 192.168.100.1/24 und BD-FW-Int 192.168.101.1/24 (IP Routing an, Subnetz als Gateway der Firewall, GARP-based EP Move Detection an – so empfiehlt es Cisco für Service-BDs mit PBR). Device FW1 (Firewall, physisch, GoTo) mit Cluster Interfaces consumer (vlan-401, outside) und provider (vlan-402, inside). PBR-Ext/PBR-Int mit IP und MAC der Firewall-Interfaces. Graph FW-Graph mit Redirect, auf web-to-app anwenden."
  ],
  "cause": "Es gibt kein L4-L7 Device, keinen Service Graph und keine PBR Policy; die Firewall-VLANs fehlen im Pool.",
  "config": [
@@ -628,7 +628,8 @@
       {
        "fvBD": {
         "attributes": {
-         "name": "BD-FW-Ext"
+         "name": "BD-FW-Ext",
+         "epMoveDetectMode": "garp"
         },
         "children": [
          {
@@ -652,7 +653,8 @@
       {
        "fvBD": {
         "attributes": {
-         "name": "BD-FW-Int"
+         "name": "BD-FW-Int",
+         "epMoveDetectMode": "garp"
         },
         "children": [
          {

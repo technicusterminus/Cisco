@@ -644,6 +644,54 @@ class TestRouteControl(Base):
 
 
 class TestServiceGraph(Base):
+    def _pbr(self):
+        self.S.sim['settings']['discoverySeconds'] = 0
+        self.S.load_lab('16-service-graph-pbr')
+        for url, body in self.S.lab('16-service-graph-pbr')['solutionConfig']:
+            post(self.S.store, url, body)
+        self.S.changed()
+        return next(iter(self.S.engine.graphs.values()))
+
+    def test_pbr_filters_after_first_node(self):
+        """Contract Guide: Regel Service-Node -> Provider-EPG nutzt Filter default (src_dst_any(9)), mit
+        filterBetweenNodes=filters-from-contract den Contract-Filter."""
+        self._pbr()
+        e = self.S.engine
+        g = next(iter(e.graphs.values()))
+        sp_, app = g['conns']['provider']['pcTag'], e.cls['uni/tn-Shop/ap-Webshop/epg-App']['pcTag']
+        row = lambda: next(ln for ln in Cli(e, self.S.sim).run('leaf101', 'show zoning-rule').split('\n')
+                           if ln.startswith('|') and ('| %s ' % sp_) in ln and ('| %s ' % app) in ln.split(sp_, 1)[1])
+        self.assertIn('default', row())
+        self.assertIn('src_dst_any(9)', row())
+        post(self.S.store, g['graph'], {'vnsAbsGraph': {'attributes': {'filterBetweenNodes': 'filters-from-contract'}}})
+        self.S.changed()
+        e = self.S.engine
+        self.assertNotIn('default', row())
+        self.assertIn('fully_qual(7)', row())
+
+    def test_pbr_service_bd_requirements(self):
+        """White Paper "Service Graph Design": BD des L4-L7-Geraets mit PBR braucht IP Routing und (Go-To) ein Subnetz;
+        GARP-based detection sollte an sein (nur Warnung)."""
+        self.assertEqual(self._pbr()['state'], 'applied')
+        bd = 'uni/tn-Shop/BD-BD-FW-Ext'
+        self.assertNotIn('S1691', self.S.engine.faults.get(bd, {}), 'Musterloesung hat GARP-based detection an')
+        post(self.S.store, bd, {'fvBD': {'attributes': {'epMoveDetectMode': ''}}})
+        self.S.changed()
+        g = next(iter(self.S.engine.graphs.values()))
+        self.assertEqual(g['state'], 'applied', 'GARP ist eine Empfehlung, kein Blocker')
+        self.assertIn('S1691', self.S.engine.faults[bd])
+        post(self.S.store, bd, {'fvBD': {'attributes': {'unicastRoute': 'no'}}})
+        self.S.changed()
+        g = next(iter(self.S.engine.graphs.values()))
+        self.assertEqual(g['state'], 'failed')
+        self.assertIn('IP Routing', ' '.join(g['reasons']))
+        post(self.S.store, bd, {'fvBD': {'attributes': {'unicastRoute': 'yes'}}})
+        post(self.S.store, bd + '/subnet-[192.168.100.1/24]', {'fvSubnet': {'attributes': {'status': 'deleted'}}})
+        self.S.changed()
+        g = next(iter(self.S.engine.graphs.values()))
+        self.assertEqual(g['state'], 'failed')
+        self.assertIn('Subnetz', ' '.join(g['reasons']))
+
     def test_pbr(self):
         self.S.sim['settings']['discoverySeconds'] = 0
         self.S.load_lab('16-service-graph-pbr')
