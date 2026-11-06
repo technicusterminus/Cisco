@@ -20,7 +20,8 @@ APIC_HELP = """Verfuegbare Befehle auf dem APIC (Ausgabe aus dem Simulator, Form
   cat /data/data_admin/sam_exported.config   Werte aus dem Setup-Dialog
   acidiag touch clean | acidiag reboot       Konfiguration loeschen und neu starten (Werkszustand)
   show faults [detail]                aktive Faults der Fabric
-  show endpoints [ip <a.b.c.d>]       Endpoints der ganzen Fabric
+  show endpoints [ip <a.b.c.d> | mac <mac> | vlan <id> | leaf <id> interface ethernet <1/x>]
+                                      Endpoints der ganzen Fabric
   show bridge-domain | show epg       BDs und EPGs mit Zustand
   show vmware domain name <Domain>    VMM Domain mit vCenter, Port Groups, Hosts
   show firmware upgrade status        Versionen und laufende Upgrades je Node
@@ -39,7 +40,9 @@ LEAF_HELP = """Verfuegbare Befehle auf Leaf/Spine (Ausgabe aus dem Simulator, Fo
   show endpoint [vrf <Tenant:VRF>] [ip <a.b.c.d>]
   show vrf
   show ip route vrf <Tenant:VRF>
-  show zoning-rule [scope <VNID>]
+  show zoning-rule [src-epg <pcTag>] [dst-epg <pcTag>] [scope <VNID>]
+  show zoning-rule contract <Tenant:Contract>
+  show system internal policy-mgr stats
   show ip ospf neighbors vrf <Tenant:VRF>
   show bgp ipv4 unicast summary vrf <Tenant:VRF>
   show vpc brief
@@ -426,9 +429,14 @@ class Cli:
         m = re.match(r'^show ip route vrf (\S+)$', c)
         if m and m.group(1) != 'overlay-1':
             return self.route(nid, m.group(1))
-        m = re.match(r'^show zoning-rule(?: scope (\d+))?$', c)
+        m = re.match(r'^show zoning-rule(?: src-epg (\d+))?(?: dst-epg (\d+))?(?: scope (\d+))?$', c)
         if m:
-            return self.zoning(nid, m.group(1))
+            return self.zoning(nid, m.group(3), m.group(1), m.group(2))
+        m = re.match(r'^show zoning-rule contract (\S+)$', c)
+        if m:
+            return self.zoning(nid, None, contract=m.group(1))
+        if c == 'show system internal policy-mgr stats':
+            return self.policy_stats(nid)
         m = re.match(r'^show ip ospf neighbors? vrf (\S+)$', c)
         if m:
             return self.ospf(nid, m.group(1))
@@ -549,9 +557,21 @@ class Cli:
             out.extend(lines)
         return '\n'.join(out)
 
-    def zoning(self, nid, scope):
+    def zoning(self, nid, scope, src=None, dst=None, contract=None):
+        """show zoning-rule [src-epg X] [dst-epg Y] [scope Z] | show zoning-rule contract <Tenant:Contract>."""
+        rows = self.zoning_rows(nid, scope)
+        if not rows:
+            return 'Keine Zoning-Rules (kein VRF auf diesem Switch deployed).'
+        rows = [r for r in rows if (src is None or str(r[1]) == src) and (dst is None or str(r[2]) == dst)
+                and (contract is None or r[7] == contract)]
+        return _table(['Rule ID', 'SrcEPG', 'DstEPG', 'FilterID', 'Dir', 'operSt', 'Scope', 'Name', 'Action',
+                       'Priority'], rows)
+
+    def zoning_rows(self, nid, scope):
         e = self.e
-        rows = []
+        rows: list = []
+        # Name-Spalte wie im Contract Guide: <Tenant>:<Contract>
+        cname = lambda brc: '%s:%s' % (split_dn(brc)[1][3:], e.A(brc)['name'])
         fid = self._filters()
         rid = 4096
         for vrf in sorted(e.dep_vrf.get(nid, set())):
@@ -595,7 +615,7 @@ class Cli:
                             if rfa['state'] == 'formed':
                                 for dirn, fk in (('bi-dir', rfa['tDn']), ('uni-dir-ignore', (rfa['tDn'], 'rev'))):
                                     rows.append((rid, c['pcTag'], c['pcTag'], fid.get(fk, fid[rfa['tDn']]), dirn, 'enabled', vn,
-                                                 e.A(brc)['name'], rfa['action'], 'class-eq-filter(1)')); rid += 1
+                                                 cname(brc), rfa['action'], 'class-eq-filter(1)')); rid += 1
                 for tb in e._rs_targets(c['dn'], 'fvRsProtBy'):
                     for ts in e.kids(tb, 'vzTSubj'):
                         for rd in e.kids(ts, 'vzRsDenyRule'):
@@ -666,30 +686,43 @@ class Cli:
                                     # beide Regeln uni-dir; weitere Subnetze des External EPG behalten den eigenen pcTag
                                     to_x = lambda t: '15' if t in ext0 else t
                                     from_x = lambda t: va['pcTag'] if t in ext0 else t
-                                    rows.append((rid, from_x(cpt), to_x(ppt), f, 'uni-dir', 'enabled', vn, e.A(brc)['name'],
+                                    rows.append((rid, from_x(cpt), to_x(ppt), f, 'uni-dir', 'enabled', vn, cname(brc),
                                                  a1, pr(cpt, ppt))); rid += 1
-                                    rows.append((rid, from_x(ppt), to_x(cpt), f2, 'uni-dir', 'enabled', vn, e.A(brc)['name'],
+                                    rows.append((rid, from_x(ppt), to_x(cpt), f2, 'uni-dir', 'enabled', vn, cname(brc),
                                                  a2, pr(ppt, cpt))); rid += 1
                                     if all(ext0.get(t) for t in xd):
                                         continue
                                 if dirn != 'both':
                                     # ohne Apply Both Directions: je Richtung eine eigene uni-dir-Regel
                                     src, dst, act = (cpt, ppt, a1) if dirn == 'c2p' else (ppt, cpt, a2)
-                                    rows.append((rid, src, dst, f, 'uni-dir', 'enabled', vn, e.A(brc)['name'],
+                                    rows.append((rid, src, dst, f, 'uni-dir', 'enabled', vn, cname(brc),
                                                  act, pr(src, dst))); rid += 1
                                     continue
-                                rows.append((rid, cpt, ppt, f, 'bi-dir', 'enabled', vn, e.A(brc)['name'],
+                                rows.append((rid, cpt, ppt, f, 'bi-dir', 'enabled', vn, cname(brc),
                                              a1, pr(cpt, ppt))); rid += 1
-                                rows.append((rid, ppt, cpt, f2, 'uni-dir-ignore', 'enabled', vn, e.A(brc)['name'],
+                                rows.append((rid, ppt, cpt, f2, 'uni-dir-ignore', 'enabled', vn, cname(brc),
                                              a2, pr(ppt, cpt))); rid += 1
                                 if g:
                                     sc_, sp_ = g['conns']['consumer']['pcTag'], g['conns']['provider']['pcTag']
-                                    rows.append((rid, sp_, ppt, f, 'bi-dir', 'enabled', vn, e.A(brc)['name'], 'permit', pr(sp_, ppt))); rid += 1
-                                    rows.append((rid, sc_, cpt, f2, 'uni-dir-ignore', 'enabled', vn, e.A(brc)['name'], 'permit', pr(sc_, cpt))); rid += 1
-        if not rows:
-            return 'Keine Zoning-Rules (kein VRF auf diesem Switch deployed).'
-        return _table(['Rule ID', 'SrcEPG', 'DstEPG', 'FilterID', 'Dir', 'operSt', 'Scope', 'Name', 'Action',
-                       'Priority'], rows)
+                                    rows.append((rid, sp_, ppt, f, 'bi-dir', 'enabled', vn, cname(brc), 'permit', pr(sp_, ppt))); rid += 1
+                                    rows.append((rid, sc_, cpt, f2, 'uni-dir-ignore', 'enabled', vn, cname(brc), 'permit', pr(sc_, cpt))); rid += 1
+        return rows
+
+    def policy_stats(self, nid):
+        """show system internal policy-mgr stats - Zeilenformat nach Cisco ACI Contract Guide (Troubleshooting):
+        'Rule (4208) DN (sys/actrl/scope-2850817/rule-2850817-s-any-d-any-f-implicit) Ingress: 0, Egress: 0, Pkts: 0  RevPkts: 0'.
+        Pkts zaehlt die Treffer aus Traffic-Tests (Anfrage und Antwort); Ingress/Egress/RevPkts fuehrt der Simulator nicht."""
+        e = self.e
+        fnames = {i: (f[0] if isinstance(f, tuple) else f) for f, i in self._filters().items()}
+        hits = getattr(e, 'rule_hits', {})
+        out = []
+        for r in self.zoning_rows(nid, None):
+            rid, src, dst, fid, scope = r[0], str(r[1]), str(r[2]), r[3], r[6]
+            flt = fnames.get(fid) if isinstance(fid, int) else fid
+            n = sum(v for (hs, hd, hf), v in hits.items() if hf == flt and src in (hs, '0') and dst in (hd, '0'))
+            out.append('Rule (%s) DN (sys/actrl/scope-%s/rule-%s-s-%s-d-%s-f-%s) Ingress: 0, Egress: 0, Pkts: %d  RevPkts: 0' % (
+                rid, scope, scope, 'any' if src == '0' else src, 'any' if dst == '0' else dst, fid, n))
+        return '\n'.join(out) if out else 'Keine Zoning-Rules (kein VRF auf diesem Switch deployed).'
 
     def _adjs(self, nid, vrf, proto):
         e = self.e
@@ -1194,7 +1227,7 @@ def _verify_methods():
             vrfname = next((self._vname(v) for v in e.dep_vrf.get(nid, set()) if e.A(v)['scope'] == scope), scope)
             out.append('[%s:%s] [vrf:%s] %s %s %s %s [contract:%s] [hit=0]' % (
                 prio.split('(')[-1].rstrip(')'), rid, vrfname, action, ', '.join(desc) or 'ip', label(src), label(dst),
-                name or '-'))
+                ('uni/tn-%s/brc-%s' % tuple(name.split(':', 1))) if ':' in name else (name or '-')))
         return '\n'.join(out) if out else 'Keine Contract-Regeln auf diesem Switch.'
 
     def bgp_table(self, nid, vname):
@@ -1522,8 +1555,9 @@ def apic_extra(self, cmd):
             out.append(' %-6s %-8s %-56s %s' % (a['code'], a['severity'], a['dn'].rsplit('/fault-', 1)[0][:56], a['cause']))
         out.append('\n Total: %d' % len(rows))
         return '\n'.join(out)
-    m = re.match(r'^show endpoints?(?: ip (\S+))?$', c)
+    m = re.match(r'^show endpoints?(?: (ip|mac|vlan) (\S+)| leaf (\d+) interface ethernet (\S+))?$', c)
     if m:
+        norm = lambda x: re.sub(r'[^0-9a-f]', '', x.lower())
         out = [' Dynamic Endpoints:', ' Tenant      : Application : AEPg  MAC                IP               Node        Interface          Encap',
                ' ' + '-' * 112]
         for h in e.all_hosts():
@@ -1531,10 +1565,17 @@ def apic_extra(self, cmd):
             if not hs or not hs['learned']:
                 continue
             ip = str(ip_of(h['ip'])) if hs['ipLearned'] else '---'
-            if m.group(1) and ip != m.group(1):
+            p_ = e.paths[hs['path']]
+            kind, val = m.group(1), m.group(2)
+            if kind == 'ip' and ip != val:
+                continue
+            if kind == 'mac' and norm(h['mac']) != norm(val):
+                continue
+            if kind == 'vlan' and hs['encap'] != 'vlan-%s' % val:
+                continue
+            if m.group(3) and (int(m.group(3)) not in hs['nodes'] or p_['name'] != 'eth' + m.group(4)):
                 continue
             p = split_dn(hs['epg'])
-            p_ = e.paths[hs['path']]
             out.append(' %-38s %-18s %-16s %-11s %-18s %s' % (
                 ':'.join(x.split('-', 1)[1] for x in p[1:4]), h['mac'].upper(), ip,
                 ','.join(str(n) for n in hs['nodes']), p_['name'] if p_['type'] == 'port' else p_['name'], hs['encap']))
