@@ -341,11 +341,23 @@ def _gw_ok(eng, t, h, hs, who):
     return True
 
 
+def _hit(eng, s, d):
+    """Treffer der zuletzt entschiedenen Regel fuer show system internal policy-mgr stats zaehlen."""
+    rule, code = getattr(eng, 'last_rule', None) or {}, getattr(eng, 'last_code', None)
+    flt = rule.get('filter') if rule else None
+    if not flt and code == 'POLICY_IMPLICIT_DENY':
+        flt = 'implicit'
+    if flt and hasattr(eng, 'rule_hits'):
+        k = (str(s.get('pcTag')), str(d.get('pcTag')), flt)
+        eng.rule_hits[k] = eng.rule_hits.get(k, 0) + 1
+
+
 def _policy(eng, t, s, d, proto, port, label_s, label_d, dst_host=None):
     dport = port if proto in ('tcp', 'udp') else None
     # DHCP nutzt feste Quell-Ports (Client 68 -> Server 67), keinen Ephemeral-Port
     sport = (68 if port == 67 else 67) if proto == 'udp' and port in (67, 68) else EPHEMERAL if dport else None
     act, why = eng.packet(s, d, proto, sport, dport, 'syn')
+    _hit(eng, s, d)
     code, rule = getattr(eng, 'last_code', None), getattr(eng, 'last_rule', None)
     if act == 'permit':
         eng.count(s['dn'], 'txPkts')
@@ -374,6 +386,7 @@ def _policy(eng, t, s, d, proto, port, label_s, label_d, dst_host=None):
             return False
         t.step(True, 'Zieldienst %s auf %s' % (svc, dst_host['name']), 'Dienst laeuft (simulator-spezifisches Dienstmodell)')
     act, why = eng.packet(d, s, proto, dport, sport, 'ack')
+    _hit(eng, d, s)
     code, rule = getattr(eng, 'last_code', None), getattr(eng, 'last_rule', None)
     eng.count(d['dn'], 'txPkts')
     eng.count(s['dn'], 'rxPkts' if act == 'permit' else 'dropPkts')

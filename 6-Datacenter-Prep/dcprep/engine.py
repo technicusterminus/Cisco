@@ -40,6 +40,7 @@ class Engine(AccessMixin, EndpointMixin, RoutingMixin, PolicyMixin, OpsMixin, Po
         self.next_event = None
         self.health = {}
         self.stats = {}
+        self.rule_hits = {}       # (src pcTag, dst pcTag, Filter-DN|'implicit') -> Pakete (show system internal policy-mgr stats)
 
     # ------------------------------------------------------------------
     def A(self, dn):

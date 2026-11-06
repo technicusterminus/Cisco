@@ -379,8 +379,10 @@ class TestContractPriorities(LabBase):
         self.assertEqual(act, 'deny')
         self.assertIn('(log)', why)
         z = Cli(self.S.engine, self.S.sim).run('leaf101', 'show zoning-rule')
-        self.assertTrue(all('deny,log' in ln for ln in z.split('\n') if '| c-epg ' in ln), z)
-        self.assertTrue(all(' permit ' in ln and 'log' not in ln.split('|')[9] for ln in z.split('\n') if '| c-any ' in ln), z)
+        epg_rows = [ln for ln in z.split('\n') if '| Shop:c-epg ' in ln]
+        any_rows = [ln for ln in z.split('\n') if '| Shop:c-any ' in ln]
+        self.assertTrue(epg_rows and all('deny,log' in ln for ln in epg_rows), z)
+        self.assertTrue(any_rows and all(' permit ' in ln and 'log' not in ln.split('|')[9] for ln in any_rows), z)
 
     def test_zoning_tables_follow_contract_guide(self):
         """Contract Guide: Gegenrichtung mit eigener Filter-ID (vertauschte Ports, Prio sport), implizite Regel zum BD,
@@ -389,7 +391,7 @@ class TestContractPriorities(LabBase):
         cli = Cli(self.S.engine, self.S.sim)
         rows = [[c.strip() for c in ln.strip('|').split('|')] for ln in cli.run('leaf102', 'show zoning-rule').split('\n')
                 if ln.startswith('|') and 'Rule ID' not in ln]
-        epg = [r for r in rows if r[7] == 'c-epg']
+        epg = [r for r in rows if r[7] == 'Shop:c-epg']
         self.assertEqual([r[4] for r in epg], ['bi-dir', 'uni-dir-ignore'])
         self.assertNotEqual(epg[0][3], epg[1][3], 'eigene Filter-ID fuer die Gegenrichtung')
         flt = cli.run('leaf102', 'show zoning-filter filter %s' % epg[1][3])
@@ -413,12 +415,39 @@ class TestContractPriorities(LabBase):
         self.assertEqual(len(z), 1)
         self.assertIn('permit', z[0])
 
+    def test_zoning_filters_policy_stats_and_endpoints(self):
+        """Befehle aus dem Contract-Troubleshooting: show zoning-rule src-epg/dst-epg/contract,
+        show system internal policy-mgr stats (Format nach Contract Guide, Pkts steigt mit dem Traffic-Test),
+        show endpoints mac/vlan/leaf ... interface auf dem APIC."""
+        self.apply(solution())
+        e = self.S.engine
+        cli = Cli(e, self.S.sim)
+        web, app = e.cls[self.WEB]['pcTag'], e.cls[self.APP]['pcTag']
+        z = cli.run('leaf102', 'show zoning-rule src-epg %s dst-epg %s' % (web, app))
+        rows = [ln for ln in z.split('\n') if ln.startswith('|') and 'Rule ID' not in ln]
+        self.assertEqual(len(rows), 1, z)
+        self.assertIn('Shop:c-https', rows[0])
+        self.assertEqual(len([ln for ln in cli.run('leaf102', 'show zoning-rule contract Shop:c-https').split('\n')
+                              if '| Shop:c-https ' in ln]), 2)
+        rid = rows[0].strip('|').split('|')[0].strip()
+        line = lambda: next(ln for ln in cli.run('leaf102', 'show system internal policy-mgr stats').split('\n')
+                            if ln.startswith('Rule (%s)' % rid))
+        self.assertRegex(line(), r'^Rule \(\d+\) DN \(sys/actrl/scope-\d+/rule-\d+-s-%s-d-%s-f-\d+\) Ingress: 0, Egress: 0, '
+                                 r'Pkts: 0  RevPkts: 0$' % (web, app))
+        self.tr('web1', 'app1', 'tcp', 443)
+        self.assertIn('Pkts: 1 ', line())
+        self.assertIn('00:50:56:10:10:11', cli.run('apic1', 'show endpoints mac 0050.5610.1011'))
+        self.assertIn('vlan-110', cli.run('apic1', 'show endpoints vlan 110'))
+        self.assertNotIn('vlan-120', cli.run('apic1', 'show endpoints vlan 110'))
+        self.assertIn('vlan-120', cli.run('apic1', 'show endpoints leaf 102 interface ethernet 1/2'))
+
     def test_zoning_rule_shows_guide_priorities(self):
         self.build('permit', 'deny')
         z = Cli(self.S.engine, self.S.sim).run('leaf101', 'show zoning-rule')
         any_rows = [ln for ln in z.split('\n') if 'c-any' in ln]
         self.assertTrue(any_rows and all('any_any_filter(17)' in ln for ln in any_rows), z)
-        self.assertTrue(all('fully_qual(7)' in ln for ln in z.split('\n') if '| c-epg ' in ln), z)
+        epg_rows = [ln for ln in z.split('\n') if '| Shop:c-epg ' in ln]
+        self.assertTrue(epg_rows and all('fully_qual(7)' in ln for ln in epg_rows), z)
 
 
 class TestConnectivityCases(LabBase):
@@ -1203,8 +1232,8 @@ class TestConvertedLabs(unittest.TestCase):
         prov_scope = e.A(dns['vrf'])['scope']
         self.assertIn([dns['pcTag'], '14', 'permit_override', 'src_dst_any(9)', prov_scope], [[r[1], r[2], r[8], r[9], r[6]] for r in rows])
         self.assertIn([dns['pcTag'], '0', 'shsrc_any_any_deny(12)', cons_scope], [[r[1], r[2], r[9], r[6]] for r in rows])
-        self.assertFalse([r for r in rows if r[7] == 'dns' and r[6] == prov_scope], 'keine Contract-Regeln im Provider-VRF')
-        self.assertTrue([r for r in rows if r[7] == 'dns' and r[6] == cons_scope])
+        self.assertFalse([r for r in rows if r[7] == 'Shared:dns' and r[6] == prov_scope], 'keine Contract-Regeln im Provider-VRF')
+        self.assertTrue([r for r in rows if r[7] == 'Shared:dns' and r[6] == cons_scope])
 
     def test_lab09_default_route_external_epg_uses_special_class_ids(self):
         """Contract Guide, L3Out EPG with 0.0.0.0/0: EPG -> 15 und VRF-Class-ID -> EPG, beide uni-dir."""
@@ -1270,7 +1299,7 @@ class TestConvertedLabs(unittest.TestCase):
         self.assertLess(int(dns), 16384, 'Provider bekommt einen globalen pcTag')
         rows = [[c.strip() for c in ln.strip('|').split('|')] for ln in Cli(e, self.S.sim).run('leaf102', 'show zoning-rule').split('\n')
                 if ln.startswith('|') and 'Rule ID' not in ln]
-        got = {(r[1], r[2], r[9]) for r in rows if r[7] == 'dns-common'}
+        got = {(r[1], r[2], r[9]) for r in rows if r[7] == 'common:dns-common'}
         self.assertEqual(got, {('0', dns, 'shsrc_any_filt_perm(10)'), (dns, '0', 'shsrc_any_filt_perm(10)')})
         self.assertIn((dns, '14', 'permit_override'), {(r[1], r[2], r[8]) for r in rows})
 
