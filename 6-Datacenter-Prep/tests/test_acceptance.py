@@ -1274,6 +1274,25 @@ class TestConvertedLabs(unittest.TestCase):
         self.assertEqual(got, {('0', dns, 'shsrc_any_filt_perm(10)'), (dns, '0', 'shsrc_any_filt_perm(10)')})
         self.assertIn((dns, '14', 'permit_override'), {(r[1], r[2], r[8]) for r in rows})
 
+    def test_lab28_rogue_ep_control_quarantines_endpoints_only(self):
+        """White Paper "ACI Fabric Endpoint Learning": Rogue EP Control markiert springende Endpoints als rogue (nur diese,
+        kein Port aus, kein Lernstopp im BD); Ep Loop Protection greift dann nicht. Die Schleife selbst bleibt."""
+        lab = self.S.load_lab('28-mcp-loop-qos')
+        self.apply(('uni/infra/epCtrlP-default', mo('epControlP', {'adminSt': 'enabled'})),
+                   ('uni/infra/epLoopProtectP-default', mo('epLoopProtectP', {'adminSt': 'enabled', 'action': 'bd-learn-disable'})))
+        e = self.S.engine
+        loop = next(x for x in e.loops if x['name'] == 'cat-lager')
+        self.assertEqual(loop['action'], 'rogue')
+        self.assertEqual(e.learn_off, {}, 'Ep Loop Protection greift nicht, wenn Rogue EP Control aktiv ist')
+        bd = 'uni/tn-Shop/BD-BD-Web'
+        self.assertIn('S2536', e.faults[bd])
+        self.assertIn(bd, e.storm_bds, 'Rogue EP Control bricht die Schleife nicht')
+        self.assertIn('Rogue EP Control', ' '.join(e.hosts['web1']['reasons']))
+        self.assertTrue(self.by()['Springende Endpoints werden erkannt'], 'Rogue EP Control ist gleichwertig')
+        self.S.load_lab('28-mcp-loop-qos')
+        self.apply(*lab['solutionConfig'])
+        self.assertTrue(all(self.by().values()))
+
     def test_lab09_permit_any_to_internet_fails(self):
         lab = self.S.load_lab('09-l3out-bgp')
         self.apply(*lab['solutionConfig'])

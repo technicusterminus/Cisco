@@ -1873,25 +1873,28 @@ lab(id='28-mcp-loop-qos', title='28 Loop Protection mit MCP und QoS-Klassen', to
     prerequisites=['Lab 02'], tools=['Fabric > Access Policies > Global Policies', 'EP Tracker', 'Traffic Inspector',
                                     'CLI: show mcp internal info interface all, show interface status err-disabled'],
    
-    goals=['Eine Layer-2-Schleife über einen Legacy-Switch erkennen', 'MCP global mit Key und PDU per VLAN aktivieren', 'Endpoint Loop Protection '
-           'als zweite Verteidigungslinie kennen', 'EPGs einer QoS-Klasse zuordnen'],
+    goals=['Eine Layer-2-Schleife über einen Legacy-Switch erkennen', 'MCP global mit Key und PDU per VLAN aktivieren', 'Springende Endpoints mit Rogue EP Control '
+           'oder Endpoint Loop Protection erkennen', 'EPGs einer QoS-Klasse zuordnen'],
     intro='Die Lager-IT hat einen alten Catalyst **cat-lager** mit zwei Kabeln an **leaf101 eth1/9** und **leaf102 eth1/9** gesteckt – ohne '
           'Port-Channel. Beide Ports liegen in der EPG **Web** (vlan-110). Seitdem ist der Webshop gestört: Broadcast-Storm im BD-Web, '
           'die MACs springen zwischen den Ports.\n\nDanach soll die EPG **App** die QoS-Klasse **Level2** bekommen.',
     config=[SERVER_ACCESS, SHOP28], hosts=[WEB1, APP1], switches=[CAT28],
     requirements=['Die Schleife über cat-lager wird von der Fabric selbst erkannt und gebrochen; der Webshop läuft wieder.', 'Künftige Schleifen schaltet die Fabric automatisch ab, auch pro VLAN, abgesichert mit einem Schlüssel.', 'Springende Endpoints werden zusätzlich erkannt.', 'Die EPG App bekommt die QoS-Klasse Level2.'],
     limits=['Der Legacy-Switch wird als Brücke zwischen seinen Ports simuliert; Spanning Tree des Catalyst ist nicht modelliert.'],
-    hints=['**Konzept:** Die ACI leitet keine STP-BPDUs aus, sie flutet sie nur. Gegen Schleifen über fremde Switches hilft MCP: Die Fabric schickt eigene Pakete und schaltet einen Port ab, über den sie sie zurückbekommt.', '**Objekte:** *Fabric > Access Policies > Policies > Global*: MCP Instance Policy (Admin State, Key, PDU per VLAN, Aktion), Endpoint Loop Protection. An der EPG App die QoS Class.', '**Prüfschritte:** `show mcp internal info interface all` auf leaf101/102, `show interface status err-disabled`. EP Tracker web1: springt die MAC?', '**Lösung:** MCP Instance Policy default: enabled, Key gesetzt, PDU per VLAN, Port Disable. Endpoint Loop Protection enabled. EPG App QoS Level2.'],
+    hints=['**Konzept:** Die ACI leitet keine STP-BPDUs aus, sie flutet sie nur. Gegen Schleifen über fremde Switches hilft MCP: Die Fabric schickt eigene Pakete und schaltet einen Port ab, über den sie sie zurückbekommt.', '**Objekte:** *Fabric > Access Policies > Policies > Global*: MCP Instance Policy (Admin State, Key, PDU per VLAN, Aktion). Für springende Endpoints: *System > System Settings > Endpoint Controls* – Rogue EP Control (laut Cisco ab APIC 3.2 empfohlen) oder Ep Loop Protection. An der EPG App die QoS Class.', '**Prüfschritte:** `show mcp internal info interface all` auf leaf101/102, `show interface status err-disabled`. EP Tracker web1: springt die MAC?', '**Lösung:** MCP Instance Policy default: enabled, Key gesetzt, PDU per VLAN, Port Disable. Endpoint Loop Protection enabled. EPG App QoS Level2.'],
     cause='MCP ist global aus; die Schleife über cat-lager flutet den BD-Web.',
     tasks=[],
     checks=[check('Schleife von der Fabric gebrochen', 'loop', switch='cat-lager', action='mcp'),
             check('Schleifenerkennung pro VLAN aktiv', 'exists', dn='uni/infra/mcpInstP-default', attrs={'adminSt': 'enabled', 'ctrl': 'pdu-per-vlan'}, category='security'),
-            check('Springende Endpoints werden erkannt', 'exists', dn='uni/infra/epLoopProtectP-default', attrs={'adminSt': 'enabled'}),
+            check('Springende Endpoints werden erkannt', 'exists', dn='uni/infra/epCtrlP-default', attrs={'adminSt': 'enabled'},
+                  any=[{'dn': 'uni/infra/epCtrlP-default', 'attrs': {'adminSt': 'enabled'}},
+                       {'dn': 'uni/infra/epLoopProtectP-default', 'attrs': {'adminSt': 'enabled'}}]),
             check('web1 → app1 tcp/8080 wieder erreichbar', 'traffic', src='web1', dst='app1', proto='tcp', port=8080, expect=True),
             check('EPG App in QoS-Klasse Level2', 'exists', dn='uni/tn-Shop/ap-Webshop/epg-App', attrs={'prio': 'level2'}),
             check('Schleifen-Ports werden abgeschaltet', 'class', cls='mcpInstPol', under='uni/infra/mcpInstP-default', attrs={'loopProtectAct': 'port-disable'}, category='security')],
     questions=[{'id': 'q1', 'q': 'Warum erkennt die ACI die Schleife nicht über Spanning Tree?', 'options': ['Die ACI nimmt nicht an STP teil, sie flutet BPDUs nur im EPG/VLAN', 'Weil der Catalyst kein STP kann', 'Weil MCP STP ersetzt', 'Sie erkennt sie über STP'], 'answer': 0, 'explain': 'Deshalb braucht es MCP (und ggf. die BPDUs des Fremdswitches, die über die Fabric laufen).'}],
-    solution='`uni/infra/mcpInstP-default`: `' + json.dumps(MCP28) + '`, `uni/infra/epLoopProtectP-default` adminSt=enabled, '
+    solution='`uni/infra/mcpInstP-default`: `' + json.dumps(MCP28) + '`, `uni/infra/epLoopProtectP-default` adminSt=enabled '
+             '(gleichwertig und laut Cisco empfohlen: `uni/infra/epCtrlP-default` adminSt=enabled, Rogue EP Control), '
              'EPG App prio=level2.')
 
 

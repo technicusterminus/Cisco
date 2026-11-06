@@ -284,6 +284,7 @@ OPS_BASE = [
     ('uni/infra/mcpInstP-default', 'mcpInstPol', {'name': 'default'}),
     ('uni/infra/mcpIfP-default', 'mcpIfPol', {'name': 'default'}),
     ('uni/infra/epLoopProtectP-default', 'epLoopProtectP', {'name': 'default'}),
+    ('uni/infra/epCtrlP-default', 'epControlP', {'name': 'default'}),
 ]
 
 
