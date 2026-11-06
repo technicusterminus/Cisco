@@ -344,3 +344,50 @@ class EndpointMixin:
                 self.store.add(cep + '/ip-[%s]' % ip, 'fvIp', {'addr': str(ip), 'createTs': now_ts()}, True)
             self.store.add(cep + '/rscEpToPathEp-[%s]' % path, 'fvRsCEpToPathEp',
                            {'tDn': path, 'state': 'formed', 'lcC': 'learned'}, True)
+            hs['cep'] = cep
+        self._shared_ips()
+
+    def _shared_ips(self):
+        """White Paper Endpoint Learning, 'When to disable IP Data-plane Learning': Teilen sich Active und Standby
+        eine IP (VIP) und sendet der Standby noch Pakete von dieser IP (z. B. TCP RST), lernt der Leaf die IP per
+        Data Plane am Standby (Table 2). Mit IP Data-plane Learning aus (VRF) bzw. Endpoint Data-plane Learning aus
+        (BD) lernt er lokale IPs nur per ARP/GARP (Control Plane), also nur vom Active. Der Simulator nimmt den
+        unguenstigen Endzustand des Papers an: Das letzte Paket kam vom Standby."""
+        self.ip_owner = {}
+        groups = {}
+        for h in self.all_hosts():
+            hs = self.hosts[h['name']]
+            if hs.get('learned') and hs.get('ipLearned') and hs.get('cep'):
+                groups.setdefault((hs['vrf'], str(ip_of(h['ip']))), []).append(h)
+        for (vrf, ip), hl in sorted(groups.items()):
+            if len(hl) < 2:
+                continue
+            names = sorted(x['name'] for x in hl)
+            act = sorted(x['name'] for x in hl if not x.get('standby'))
+            sby = sorted(x['name'] for x in hl if x.get('standby'))
+            if len(act) != 1:
+                for n in names:
+                    self.hosts[n]['reasons'].append('IP %s ist mehrfach konfiguriert (%s): doppelte IP ohne '
+                                                    'Active/Standby-Rolle' % (ip, ', '.join(names)))
+                continue
+            dp_vrf = (self.A(vrf) or {}).get('ipDataPlaneLearning', 'enabled') == 'enabled'
+            dp = [n for n in sby if dp_vrf and (self.A(self.hosts[n]['bd']) or {}).get('ipLearning', 'yes') == 'yes']
+            owner = dp[0] if dp else act[0]
+            self.ip_owner[(vrf, ip)] = owner
+            for n in names:
+                hs = self.hosts[n]
+                if n == owner:
+                    if dp:
+                        hs['reasons'].append('VIP %s per Data Plane am Standby gelernt (z. B. TCP RST vom Standby) - '
+                                             'geroutete Pakete an die VIP gehen an %s' % (ip, n))
+                    continue
+                self.store.delete(hs['cep'] + '/ip-[%s]' % ip)
+                a = self.store.attrs(hs['cep'])
+                if a is not None:
+                    a['ip'] = '0.0.0.0'
+                hs['reasons'].append('VIP %s: Die Fabric fuehrt die IP am %s %s; hier nur die MAC gelernt'
+                                     % (ip, 'Standby' if dp else 'Active (ARP/GARP, IP Data-plane Learning aus)', owner))
+            if dp:
+                self.fault(self.hosts[owner]['bd'], 'S1692', 'warning',
+                           'IP %s learned via data plane on standby device %s; consider disabling IP Data-plane Learning '
+                           'in VRF %s' % (ip, owner, self.short(vrf)), 'ip-dataplane-learning-vip')

@@ -3014,6 +3014,67 @@ lab(id='47-encap-in-use', title='47 Ein VLAN, zwei EPGs: encap-already-in-use', 
                                         'EPGs gehören. Im Simulator ist das nicht modelliert.'}],
     solution='`POST /api/mo/uni/tn-Shop/ap-Webshop/epg-Batch.json` mit `' + json.dumps(SOL47[0][1]) + '`')
 
+SHOP48 = mo('fvTenant', {'name': 'Shop'}, mo('fvCtx', {'name': 'Prod'}),
+             bd('BD-Web', 'Prod', '10.10.10.1/24'), bd('BD-App', 'Prod', '10.10.20.1/24'),
+             mo('fvAp', {'name': 'Webshop'},
+                epg('Web', 'BD-Web', ports=[(path(101, 'eth1/1'), 110)], cons=['web-to-app']),
+                epg('App', 'BD-App', ports=[(path(102, 'eth1/2'), 120), (path(102, 'eth1/3'), 120)], prov=['web-to-app'])),
+             filt('tcp-8080', {'name': 'tcp-8080', 'etherT': 'ip', 'prot': 'tcp', 'dFromPort': '8080', 'dToPort': '8080'}),
+             contract('web-to-app', ['tcp-8080', 'icmp']))
+APP1_48 = dict(APP1, descr='Applikationsserver (Active, besitzt die VIP 10.10.20.11)')
+APP2_48 = dict(host('app2', '00:50:56:10:20:12', '10.10.20.11/24', '10.10.20.1', 120, [[L102, 'eth1/3']],
+                    descr='Applikationsserver (Standby, gleiche VIP)'), standby=True)
+SOL48 = [['uni/tn-Shop/ctx-Prod', mo('fvCtx', {'ipDataPlaneLearning': 'disabled'})]]
+
+lab(id='48-vip-dataplane-learning', title='48 VIP nach Failover: Traffic landet beim Standby', topic='Endpoint Learning / Troubleshooting',
+    level='Fortgeschritten', duration='20 min', fabric='discovered', kind='troubleshooting', modes=['guided', 'exam'],
+    prerequisites=['Lab 04', 'Lab 28'],
+    tools=['Traffic Inspector', 'Endpoints (Operations > EP Tracker)', 'Faults', 'CLI: show endpoint ip 10.10.20.11'],
+    goals=['Verstehen, wie die ACI lokale IPs per Data Plane lernt', 'Das VIP-Problem bei Active/Standby erkennen',
+           'Die passende Endpoint-Learning-Option finden und ihre Folgen einschätzen'],
+    intro='Die Applikation läuft als Active/Standby-Paar mit der gemeinsamen IP **10.10.20.11** (VIP). Nach einem Failover-Test '
+          'ist app1 wieder Active und hat per GARP die VIP übernommen. app2 ist Standby, hat aber beim Rollenwechsel noch TCP RST '
+          'von der VIP gesendet.\n\n'
+          '- web1: leaf101 eth1/1, VLAN 110 (EPG Web)\n- app1 (Active): leaf102 eth1/2, VLAN 120 (EPG App)\n'
+          '- app2 (Standby): leaf102 eth1/3, VLAN 120 (EPG App), gleiche IP 10.10.20.11\n\n'
+          'Das Team meldet: „web1 erreicht die Applikation nicht mehr, obwohl app1 läuft und der Contract stimmt.“',
+    requirements=['web1 erreicht die VIP auf app1 über TCP 8080.',
+                  'Die Fabric führt die VIP dauerhaft am Active, auch wenn der Standby noch Pakete von der VIP sendet.',
+                  'Server, Contract und Static Ports bleiben unverändert.',
+                  'Im Tenant Shop bleibt kein Warn-Fault zur VIP offen.'],
+    limits=['Der Simulator nimmt den ungünstigen Endzustand aus dem White Paper an: Das letzte Paket von der VIP kam vom Standby. '
+            'Zeitverhalten (Aging, Host Tracking) ist nicht modelliert.',
+            'Die Option IP Data-plane Learning an BD- oder EPG-Subnetzen (ab APIC 5.2) ist nicht modelliert.',
+            'Fault S1692 ist simulator-spezifisch.'],
+    hints=['**Konzept:** Ein Leaf lernt die Quell-IP jedes Pakets (Data Plane Learning). Sendet der Standby noch ein Paket von '
+           'der VIP, zeigt der Endpoint-Eintrag der VIP auf dessen Port.',
+           '**Ebene:** Endpoint Learning, nicht Policy. Der Traffic Inspector bricht vor der Policy ab.',
+           '**Prüfschritte:** Endpoints ansehen: An welchem Port ist 10.10.20.11 gelernt, an welchem nur eine MAC? Faults im Tenant lesen.',
+           '**Lösung:** In der VRF Prod **IP Data-plane Learning** auf `disabled` setzen. Dann lernt der Leaf lokale IPs nur aus '
+           'ARP/GARP/ND, also vom Active. Die BD-Option *Endpoint Data-plane Learning* ist laut Cisco nur für PBR gedacht.'],
+    cause='IP Data-plane Learning ist in der VRF aktiv. Der TCP RST des Standby app2 hat die VIP an leaf102 eth1/3 gelernt.',
+    config=[SERVER_ACCESS, SHOP48], hosts=[WEB1, APP1_48, APP2_48], tasks=[],
+    checks=[check('web1 → app1 (VIP) TCP 8080', 'traffic', src='web1', dst='app1', proto='tcp', port=8080, expect=True),
+            check('Lösung nach Cisco-Empfehlung für geteilte IPs', 'class', cls='fvCtx', under='uni/tn-Shop/',
+                  attrs={'name': 'Prod', 'ipDataPlaneLearning': 'disabled'}),
+            check('Kein VIP-Fault (S1692) im Tenant Shop', 'nofaults', under='uni/tn-Shop', code='S1692'),
+            check('Static Port des Standby bleibt', 'class', cls='fvRsPathAtt', under='uni/tn-Shop/ap-Webshop/epg-App/',
+                  attrs={'tDn': path(102, 'eth1/3'), 'encap': 'vlan-120'}),
+            check('Least Privilege Web → App: nur TCP 8080 und ICMP', 'exposure', src='web1', dst='app1',
+                  allow=['tcp/8080', 'icmp'], category='security')],
+    questions=[{'id': 'q1', 'q': 'Warum landet der Traffic an die VIP beim Standby?',
+                'options': ['Der Leaf hat die VIP aus einem Datenpaket des Standby (TCP RST) gelernt',
+                            'Der Contract erlaubt nur den Standby', 'Der Standby hat ein anderes VLAN',
+                            'ARP Flooding ist aus'],
+                'answer': 0, 'explain': 'Mit IP Data-plane Learning aktualisiert jedes Paket die IP-zu-Port-Bindung. Der GARP des '
+                                        'Active wird vom späteren RST des Standby überschrieben.'},
+               {'id': 'q2', 'q': 'Was lernt ein Leaf, wenn IP Data-plane Learning aus ist?',
+                'options': ['Lokale MACs weiter per Data Plane, lokale IPs nur per ARP/GARP/ND',
+                            'Gar keine Endpoints mehr', 'Nur Remote-Endpoints', 'Nur IPs, keine MACs'],
+                'answer': 0, 'explain': 'So steht es im White Paper (Table 2): MACs weiter per Data Plane, lokale IPs über die '
+                                        'Control Plane, Remote-IPs nicht aus Unicast-Paketen.'}],
+    solution='`POST /api/mo/uni/tn-Shop/ctx-Prod.json` mit `' + json.dumps(SOL48[0][1]) + '`')
+
 # ----------------------------------------------------------------------------
 # Maschinenlesbare Musterloesungen (fuer die Tests: [URL-DN, Body])
 # ----------------------------------------------------------------------------
@@ -3174,6 +3235,7 @@ SOLUTIONS = {
     '45-two-bds-one-vrf': [['uni', SOL45]],
     '46-contract-priorities': [['uni', SOL46]],
     '47-encap-in-use': SOL47,
+    '48-vip-dataplane-learning': SOL48,
 }
 
 

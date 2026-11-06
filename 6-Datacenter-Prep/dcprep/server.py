@@ -957,6 +957,8 @@ class Sim:
             clean['dhcp'] = True
         if h.get('linkdown'):
             clean['linkdown'] = True
+        if h.get('standby'):
+            clean['standby'] = True
         svc = h.get('services')
         if isinstance(svc, str):
             svc = [x for x in re.split(r'[\s,;]+', svc) if x]

@@ -17,6 +17,7 @@ STEP_CODES = [
     ('Layer-2-Schleife', 'L2_LOOP', 'endpoint', 'MCP und Legacy-Switches pruefen (Fabric > Access Policies > MCP Instance Policy).'),
     ('Route Leaking', 'INTERVRF_LEAK_MISSING', 'routing', 'Shared-Subnetze am Provider und Consumer sowie den Contract-Scope pruefen.'),
     ('Gateway', 'GATEWAY_INVALID', 'routing', 'BD: Unicast Routing, Subnetz/Gateway-IP und das Default Gateway des Hosts vergleichen.'),
+    ('VIP', 'EP_IP_STANDBY', 'endpoint', 'VRF-Option "IP Data-plane Learning" deaktivieren, damit die Fabric die VIP nur per ARP/GARP vom Active lernt.'),
     ('IP-Learning', 'EP_IP_NOT_LEARNED', 'endpoint', 'BD-Option "Limit IP Learning to Subnet" und das BD-Subnetz pruefen.'),
     ('Service Graph', 'SERVICE_GRAPH_NOT_APPLIED', 'policy', 'Operations > Service Graph: Rendering-Zustand und Fehlermeldungen pruefen.'),
     ('PBR', 'PBR_DEST_INVALID', 'policy', 'PBR Policy: Ziel-IP und MAC des Firewall-Interfaces pruefen.'),
@@ -142,7 +143,7 @@ def _resolve(eng, sim, x):
         ip = ipaddress.ip_address(x)
     except ValueError:
         return None
-    for h in _hosts(eng, sim):
+    for h in sorted(_hosts(eng, sim), key=lambda x: bool(x.get('standby'))):
         if ip_of(h['ip']) == ip:
             return {'kind': 'host', 'h': h, 'ip': ip}
     for r in sim.get('routers', []):
@@ -587,6 +588,12 @@ def _run(eng, sim, src, dst, proto='icmp', port=0):
             if dhs.get('silent_dst'):
                 t.step(True, 'ARP Glean', 'Die ACI fragt den stillen Host per ARP vom Pervasive Gateway aus an')
                 t.woken.append(dh['name'])
+            own = getattr(eng, 'ip_owner', {}).get((dhs['vrf'], str(D['ip'])))
+            if own and own != dh['name']:
+                t.step(False, 'VIP %s am Standby %s gelernt' % (D['ip'], own),
+                       'Der Standby hat Pakete von der VIP gesendet (z. B. TCP RST); mit IP Data-plane Learning hat der Leaf die '
+                       'IP an dessen Port gelernt. Geroutete Pakete an die VIP gehen an den Standby, der sie verwirft.')
+                return t.result()
             t.step(True, 'Routing in VRF %s' % eng.short(shs['vrf']),
                    '%s -> %s (Pervasive Route, Ziel-Leaf %s)' % (snet, net_of(dh['ip']),
                                                               '/'.join(eng.nodes[n]['name'] for n in dhs['nodes'])))

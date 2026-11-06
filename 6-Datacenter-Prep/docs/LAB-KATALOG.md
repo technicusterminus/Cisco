@@ -46,5 +46,6 @@ Startbar sind nur Labs, die es als Datei gibt. Die Spalte *Stand* gilt für die 
 | 28 | F0467 encap-already-in-use | **47 Ein VLAN, zwei EPGs: encap-already-in-use** | vollständig | Fault-Text nach TechNote 220876; App darf nicht angefasst werden |
 | 27 | Contract-Prioritäten (vzAny vs. EPG-Deny) | **46 Contract-Prioritäten: alles offen, ein Paar gesperrt** | vollständig | Priorität 7 vor 17; Deny in der vzAny-Freigabe sperrt alle EPGs und scheitert |
 | 26 | IT-/OT-Segmentierung | **40 IT-/OT-Segmentierung einer Fertigungslinie** | vollständig | fünf Zonen, 18 Prüfungen, davon 10 Least-Privilege-Prüfungen inkl. lateraler Kommunikation; didaktisch, ohne Sicherheitsgarantie |
+| – | VIP nach Failover (IP Data-plane Learning) | **48 VIP nach Failover: Traffic landet beim Standby** | vollständig | EP_IP_STANDBY; Lösung in der VRF, nicht mit der PBR-Option am BD |
 
 Weitere Labs außerhalb dieses Pfads: 00 (Day 0), 08 (REST-API) und 14 bis 31 (L2Out, Routing-Varianten, AAA, In-Band, ESG, Firmware, Export/Import, Monitoring, DHCP Relay, MCP, Multi-Pod, Remote Leaf, Multi-Site).
