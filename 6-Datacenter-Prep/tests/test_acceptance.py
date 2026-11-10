@@ -909,6 +909,10 @@ class TestEventsAndPhysical(unittest.TestCase):
         bd = e.hosts['app2']['bd']
         self.assertIn('S1692', e.faults.get(bd, {}))
         self.assertEqual(e.ip_owner[('uni/tn-Shop/ctx-Prod', '10.10.20.11')], 'app2')
+        # Eine Wahrheit: CLI zeigt die IP nur am Besitzer; der Active kann nicht geroutet senden (Antwort ginge an den Standby)
+        ep = Cli(e, self.S.sim).run('leaf102', 'show endpoint ip 10.10.20.11')
+        self.assertEqual([l.split()[-1] for l in ep.split('\n') if '10.10.20.11' in l], ['eth1/8'])
+        self.assertEqual(self.tr('app1', 'web1', 'icmp', 0)['reason'], 'EP_IP_STANDBY')
         post(self.S.store, 'uni/tn-Shop/ctx-Prod', mo('fvCtx', {'ipDataPlaneLearning': 'disabled'}))
         self.S.changed()
         e = self.S.engine
@@ -917,6 +921,12 @@ class TestEventsAndPhysical(unittest.TestCase):
         self.assertEqual((r['verdict'], r['reason']), ('DROP', 'POLICY_IMPLICIT_DENY'))
         self.assertTrue([x for x in r['steps'] if x['title'].startswith('Ziel app1 gelernt')])
         self.assertNotIn('S1692', e.faults.get(bd, {}))
+        ep = Cli(e, self.S.sim).run('leaf102', 'show endpoint ip 10.10.20.11')
+        self.assertEqual([l.split()[-1] for l in ep.split('\n') if '10.10.20.11' in l], ['eth1/2'])
+        # Der Standby ist per geteilter IP nicht geroutet erreichbar; die Meldung nennt den Active, nicht "Standby"
+        r = self.tr('web1', 'app2', 'tcp', 443)
+        self.assertEqual(r['reason'], 'EP_IP_NOT_LEARNED')
+        self.assertIn('am Active app1', r['explain'])
         cep2 = e.hosts['app2']['cep']
         self.assertEqual(e.store.attrs(cep2)['ip'], '0.0.0.0')
         self.assertFalse(e.store.children(cep2, 'fvIp'))
