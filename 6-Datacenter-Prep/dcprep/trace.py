@@ -335,11 +335,34 @@ def _gw_ok(eng, t, h, hs, who):
         t.step(False, 'Gateway von %s' % who, 'Host nutzt Gateway %s, die ACI bietet im BD %s: %s'
                % (h.get('gw') or '(keins)', eng.short(hs['bd']), ', '.join(gws)))
         return False
+    if not _vip_ok(eng, t, h, hs, who):
+        return False
     if not hs['ipLearned']:
         t.step(False, 'IP-Learning fuer %s' % who, '; '.join(r for r in hs['reasons'] if 'IP' in r))
         return False
     t.step(True, 'Gateway %s (Pervasive Gateway im BD %s)' % (h['gw'], eng.short(hs['bd'])))
     return True
+
+
+def _vip_ok(eng, t, h, hs, who):
+    """Geteilte IP (Active/Standby, R-22): Geroutete Pakete an die IP gehen an den Host, an dem die Fabric sie fuehrt."""
+    ip = str(ip_of(h['ip']))
+    own = getattr(eng, 'ip_owner', {}).get((hs['vrf'], ip))
+    if not own or own == h['name']:
+        return True
+    src = who.startswith('Quelle')
+    oh = next((x for x in eng.all_hosts() if x['name'] == own), {})
+    if oh.get('standby'):
+        t.step(False, 'VIP %s am Standby %s gelernt' % (ip, own),
+               'Der Standby hat Pakete von der VIP gesendet (z. B. TCP RST); mit IP Data-plane Learning hat der Leaf die '
+               'IP an dessen Port gelernt. %s' % ('Die Antwort an %s geht an den Standby, der sie verwirft.' % h['name'] if src else
+                                                  'Geroutete Pakete an die VIP gehen an den Standby, der sie verwirft.'))
+    else:
+        t.step(False, 'IP-Learning fuer %s' % who,
+               'Die Fabric fuehrt die geteilte IP %s am Active %s (gelernt per ARP/GARP); %s ist als Standby nur mit seiner MAC '
+               'gelernt. %s' % (ip, own, h['name'], 'Die Antwort ginge an den Active.' if src else
+                                'Geroutete Pakete an die IP gehen an den Active.'))
+    return False
 
 
 def _hit(eng, s, d):
@@ -588,11 +611,7 @@ def _run(eng, sim, src, dst, proto='icmp', port=0):
             if dhs.get('silent_dst'):
                 t.step(True, 'ARP Glean', 'Die ACI fragt den stillen Host per ARP vom Pervasive Gateway aus an')
                 t.woken.append(dh['name'])
-            own = getattr(eng, 'ip_owner', {}).get((dhs['vrf'], str(D['ip'])))
-            if own and own != dh['name']:
-                t.step(False, 'VIP %s am Standby %s gelernt' % (D['ip'], own),
-                       'Der Standby hat Pakete von der VIP gesendet (z. B. TCP RST); mit IP Data-plane Learning hat der Leaf die '
-                       'IP an dessen Port gelernt. Geroutete Pakete an die VIP gehen an den Standby, der sie verwirft.')
+            if not _vip_ok(eng, t, dh, dhs, 'Ziel'):
                 return t.result()
             t.step(True, 'Routing in VRF %s' % eng.short(shs['vrf']),
                    '%s -> %s (Pervasive Route, Ziel-Leaf %s)' % (snet, net_of(dh['ip']),

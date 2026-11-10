@@ -381,6 +381,7 @@ class EndpointMixin:
                         hs['reasons'].append('VIP %s per Data Plane am Standby gelernt (z. B. TCP RST vom Standby) - '
                                              'geroutete Pakete an die VIP gehen an %s' % (ip, n))
                     continue
+                hs['ipLearned'] = False
                 self.store.delete(hs['cep'] + '/ip-[%s]' % ip)
                 a = self.store.attrs(hs['cep'])
                 if a is not None:
