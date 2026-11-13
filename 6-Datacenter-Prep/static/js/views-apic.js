@@ -593,7 +593,7 @@ Object.assign(Views, {
         + 'Die ACI lernt die Interfaces, sobald ein Service Graph sie über Cluster Interfaces und Device Selection Policy einbindet.'));
       (st.devices || []).forEach(d => {
         w.appendChild(h('div', { class: 'card' },
-          h('div', { class: 'card-h' }, h('b', null, d.name), ' · ', d.links.map(l => nodeName(l[0]) + ' ' + l[1]).join(' + '), ' · Regeln: ', d.allow.join(', '),
+          h('div', { class: 'card-h' }, h('b', null, d.name), ' · ', d.links.map(l => nodeName(l[0]) + ' ' + l[1]).join(' + '), ' · Regeln: ', d.allow.join(', '), d.down ? h('span', null, ' · ', stateBadge('down'), ' ausgefallen') : null,
             h('span', { class: 'grow' }), h('button', { class: 'btn small', onclick: () => Views.deviceDialog(d) }, 'Bearbeiten'),
             iconBtn('🗑', 'Löschen', () => confirmBox('Gerät ' + d.name + ' entfernen?', async () => { await API.sim('devices', { op: 'delete', name: d.name }); await App.refreshState(); draw(); }), 'danger')),
           table([{ l: 'Interface', f: r => r.name }, { l: 'VLAN', f: r => r.vlan ? 'vlan-' + r.vlan : 'untagged' }, { l: 'IP', f: r => r.ip }, { l: 'MAC', f: r => r.mac },
@@ -612,14 +612,15 @@ Object.assign(Views, {
     const f = buildForm([{ k: 'name', l: 'Name', req: true, ph: 'fw1' },
       { k: 'leaf', l: 'Leaf', t: 'select', o: leafOpts }, { k: 'port', l: 'Port', ph: 'eth1/20', req: true },
       { k: 'allow', l: 'Regelwerk', ph: 'tcp/8080, icmp  oder  any', help: 'Was die Firewall durchlässt' },
+      { k: 'down', l: 'Gerät ausgefallen', t: 'yesno', cl: 'antwortet nicht mehr, die Links stehen noch – Thema PBR-Tracking' },
       { k: '_ifs', l: 'Interfaces', t: 'rows', start: true, cols: [{ k: 'name', l: 'Name', ph: 'outside', req: true }, { k: 'vlan', l: 'VLAN', ph: '401', w: '70px' },
         { k: 'ip', l: 'IP/Maske', ph: '192.168.100.10/24', req: true }, { k: 'mac', l: 'MAC', ph: '00:50:56:FA:01:01', req: true }] }],
-    x ? { name: x.name, leaf: x.links[0][0], port: x.links[0][1], allow: x.allow.join(', '), _ifs: x.ifs.map(i => Object.assign({}, i, { vlan: String(i.vlan) })) }
-      : { leaf: (leafOpts[0] || [''])[0], allow: 'any', _ifs: [{ mac: randMac() }] }, {}, 'create');
+    x ? { name: x.name, leaf: x.links[0][0], port: x.links[0][1], allow: x.allow.join(', '), down: x.down ? 'yes' : 'no', _ifs: x.ifs.map(i => Object.assign({}, i, { vlan: String(i.vlan) })) }
+      : { leaf: (leafOpts[0] || [''])[0], allow: 'any', down: 'no', _ifs: [{ mac: randMac() }] }, {}, 'create');
     modal(x ? 'Gerät ' + x.name : 'L4-L7 Gerät hinzufügen', f.el, [{ l: 'Abbrechen' }, {
       l: 'Speichern', primary: true, fn: async () => {
         const v = f.get();
-        const obj = { name: v.name, links: [[v.leaf, v.port]], allow: String(v.allow || 'any').split(',').map(z => z.trim()).filter(Boolean),
+        const obj = { name: v.name, down: v.down === 'yes', links: [[v.leaf, v.port]], allow: String(v.allow || 'any').split(',').map(z => z.trim()).filter(Boolean),
           ifs: (v._ifs || []).filter(i => i.name).map(i => ({ name: i.name, vlan: Number(i.vlan || 0), ip: i.ip, mac: i.mac })) };
         await API.sim('devices', { op: 'set', obj, old: x ? x.name : null });
         toast('Gerät ' + v.name + ' gespeichert');

@@ -643,6 +643,13 @@ class TestRouteControl(Base):
         self.assertFalse(any(r['prefix'] == '192.168.50.0/24' for r in self.S.engine.routes.get(('uni/tn-Shop/ctx-Prod', 104), [])))
 
 
+def mo(cls, attrs=None, *children):
+    body = {'attributes': attrs or {}}
+    if children:
+        body['children'] = list(children)
+    return {cls: body}
+
+
 class TestServiceGraph(Base):
     def _pbr(self):
         self.S.sim['settings']['discoverySeconds'] = 0
@@ -651,6 +658,59 @@ class TestServiceGraph(Base):
             post(self.S.store, url, body)
         self.S.changed()
         return next(iter(self.S.engine.graphs.values()))
+
+    def test_pbr_tracking(self):
+        """PBR-Tracking (Klassen/Attribute nach Cisco-DevNet-Ansible-Modulen; Verhalten nach APIC L4-L7 Services
+        Deployment Guide): Tracking braucht IP SLA Monitoring Policy und Redirect Health Group. Faellt das Geraet aus,
+        geht der Traffic ohne Tracking verloren; mit Tracking greift die Threshold Down Action (permit/deny). Beide
+        Seiten muessen getrackt sein, sonst laeuft die Antwort ins ausgefallene Geraet."""
+        self._pbr()
+        tr = lambda: trace.run(self.S.engine, self.S.sim, 'web1', 'app1', 'tcp', 8080)
+        self.assertEqual(tr()['verdict'], 'ALLOW')
+        self.S.sim['devices'][0]['down'] = True
+        self.S.changed()
+        r = tr()
+        self.assertEqual((r['verdict'], r['reason']), ('DROP', 'SERVICE_NODE_DOWN'))
+        tn = 'uni/tn-Shop'
+        sla = mo('fvIPSLAMonitoringPol', {'name': 'SLA-ICMP'})
+        hg = mo('vnsRedirectHealthGroup', {'name': 'HG-FW'})
+        rs_sla = mo('vnsRsIPSLAMonitoringPol', {'tDn': tn + '/ipslaMonitoringPol-SLA-ICMP'})
+        rs_hg = mo('vnsRsRedirectHealthGroup', {'tDn': tn + '/svcCont/redirectHealthGroup-HG-FW'})
+
+        def pol(name, ip, track=True, **attrs):
+            return mo('vnsSvcRedirectPol', dict(attrs, name=name), *( [rs_sla] if track else []),
+                      mo('vnsRedirectDest', {'ip': ip}, *([rs_hg] if track else [])))
+        # IP SLA ohne Health Group: Tracking nicht aktiv (Warnung), weiter Blackhole
+        post(self.S.store, tn, mo('fvTenant', {}, sla, mo('vnsSvcCont', {}, hg, mo('vnsSvcRedirectPol', {'name': 'PBR-Ext'}, rs_sla))))
+        self.S.changed()
+        self.assertIn('S1693', self.S.engine.faults[tn + '/svcCont/svcRedirectPol-PBR-Ext'])
+        self.assertEqual(tr()['reason'], 'SERVICE_NODE_DOWN')
+        # nur der Consumer-Connector getrackt: Hinweg ohne Redirect, Antwort laeuft ins ausgefallene Geraet
+        post(self.S.store, tn, mo('fvTenant', {}, mo('vnsSvcCont', {}, pol('PBR-Ext', '192.168.100.10'))))
+        self.S.changed()
+        self.assertNotIn('S1693', self.S.engine.faults.get(tn + '/svcCont/svcRedirectPol-PBR-Ext', {}))
+        self.assertIn('S1694', self.S.engine.faults[tn + '/svcCont/svcRedirectPol-PBR-Ext'])
+        r = tr()
+        self.assertEqual((r['verdict'], r['reason']), ('DROP', 'PBR_RETURN_INVALID'))
+        # beide Seiten getrackt, Down Action permit (Default): Traffic laeuft ohne Redirect
+        post(self.S.store, tn, mo('fvTenant', {}, mo('vnsSvcCont', {}, pol('PBR-Int', '192.168.101.10'))))
+        self.S.changed()
+        r = tr()
+        self.assertEqual(r['verdict'], 'ALLOW')
+        self.assertTrue([x for x in r['steps'] if x['title'].startswith('PBR-Ziel down')])
+        self.assertFalse([x for x in r['steps'] if x['title'].startswith('Firewall')])
+        # Down Action deny: verworfen
+        post(self.S.store, tn + '/svcCont/svcRedirectPol-PBR-Ext', mo('vnsSvcRedirectPol', {'thresholdDownAction': 'deny'}))
+        self.S.changed()
+        r = tr()
+        self.assertEqual((r['verdict'], r['reason']), ('DROP', 'PBR_DEST_DOWN'))
+        # Geraet wieder da: Redirect wie vorher, kein Down-Fault
+        self.S.sim['devices'][0].pop('down')
+        self.S.changed()
+        r = tr()
+        self.assertEqual(r['verdict'], 'ALLOW')
+        self.assertTrue([x for x in r['steps'] if x['title'].startswith('Firewall')])
+        self.assertNotIn('S1694', self.S.engine.faults.get(tn + '/svcCont/svcRedirectPol-PBR-Ext', {}))
 
     def test_pbr_filters_after_first_node(self):
         """Contract Guide: Regel Service-Node -> Provider-EPG nutzt Filter default (src_dst_any(9)), mit

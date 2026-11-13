@@ -744,10 +744,21 @@ mo('vnsRsLIfCtxToLIf', 'rsLIfCtxToLIf', ('vnsLIfCtx',), {'tDn': ''}, rel=('dn', 
 mo('vnsRsLIfCtxToSvcRedirectPol', 'rsLIfCtxToSvcRedirectPol', ('vnsLIfCtx',), {'tDn': ''},
    rel=('dn', 'tDn', ('vnsSvcRedirectPol',)), label='L4-L7 Policy-Based Redirect')
 mo('vnsSvcCont', 'svcCont', ('fvTenant',), {}, label='Service Container')
+# PBR mit Tracking: Klassen/Attribute/Defaults nach Cisco-DevNet-Ansible-Modulen aci_l4l7_policy_based_redirect,
+# aci_l4l7_policy_based_redirect_destination, aci_l4l7_redirect_health_group. RN von vnsRsRedirectHealthGroup nach
+# Namenskonvention (nicht belegt). thresholdDownAction bypass ist nicht modelliert.
 mo('vnsSvcRedirectPol', 'svcRedirectPol-{name}', ('vnsSvcCont',), {'hashingAlgorithm': 'sip-dip-prototype', 'thresholdEnable': 'no',
-                                                                  'destType': 'L3', 'anycastEnabled': 'no'},
-   label='L4-L7 Policy-Based Redirect')
+                                                                  'destType': 'L3', 'AnycastEnabled': 'no',
+                                                                  'thresholdDownAction': 'permit', 'minThresholdPercent': '0',
+                                                                  'maxThresholdPercent': '0'},
+   enums={'thresholdEnable': ('yes', 'no'), 'thresholdDownAction': ('permit', 'deny')},
+   checks={'minThresholdPercent': _num, 'maxThresholdPercent': _num}, label='L4-L7 Policy-Based Redirect')
+mo('vnsRsIPSLAMonitoringPol', 'rsIPSLAMonitoringPol', ('vnsSvcRedirectPol',), {'tDn': ''},
+   rel=('dn', 'tDn', ('fvIPSLAMonitoringPol',)), label='IP SLA Monitoring Policy')
 mo('vnsRedirectDest', 'RedirectDest_ip-[{ip}]', ('vnsSvcRedirectPol',), {'mac': '', 'destName': ''}, label='Redirect Destination')
+mo('vnsRedirectHealthGroup', 'redirectHealthGroup-{name}', ('vnsSvcCont',), {}, label='L4-L7 Redirect Health Group')
+mo('vnsRsRedirectHealthGroup', 'rsRedirectHealthGroup', ('vnsRedirectDest',), {'tDn': ''},
+   rel=('dn', 'tDn', ('vnsRedirectHealthGroup',)), label='Redirect Health Group')
 mo('vnsGraphInst', 'GraphInst_C-[{ctrctDn}]-G-[{graphDn}]-S-[{scopeDn}]', ('fvTenant',),
    {'configSt': 'applied', 'descr': ''}, config=False, label='Deployed Graph Instance')
 mo('vnsEPpInfo', 'EPpInfo-{name}', ('vnsGraphInst',), {'pcTag': '', 'bdDn': '', 'encap': ''}, config=False, label='Service EPG (Shadow EPG)')
@@ -888,6 +899,22 @@ mo('mcpInstPol', 'mcpInstP-{name}', ('infraInfra',), {'adminSt': 'disabled', 'ke
 mo('mcpIfPol', 'mcpIfP-{name}', ('infraInfra',), {'adminSt': 'enabled'}, enums={'adminSt': ED}, label='MCP Interface Policy')
 mo('infraRsMcpIfPol', 'rsmcpIfPol', ('infraAccPortGrp', 'infraAccBndlGrp'), {'tnMcpIfPolName': ''},
    rel=('name', 'tnMcpIfPolName', 'mcpIfPol', 'infra'), label='MCP Policy')
+# Storm Control: Klassen/Attribute nach Cisco-DevNet-Ansible-Modul aci_interface_policy_storm_control
+mo('stormctrlIfPol', 'stormctrlifp-{name}', ('infraInfra',),
+   {'rate': '100.000000', 'ratePps': 'unspecified', 'burstRate': '100.000000', 'burstPps': 'unspecified', 'bcRate': '100.000000', 'bcRatePps': 'unspecified', 'bcBurstRate': '100.000000', 'bcBurstPps': 'unspecified', 'mcRate': '100.000000', 'mcRatePps': 'unspecified', 'mcBurstRate': '100.000000', 'mcBurstPps': 'unspecified', 'uucRate': '100.000000', 'uucRatePps': 'unspecified', 'uucBurstRate': '100.000000', 'uucBurstPps': 'unspecified', 'isUcMcBcStormPktCfgValid': 'Invalid', 'stormCtrlAction': 'drop', 'stormCtrlSoakInstCount': '3'},
+   enums={'isUcMcBcStormPktCfgValid': ('Invalid', 'Valid'), 'stormCtrlAction': ('drop', 'shutdown')},
+   checks={'stormCtrlSoakInstCount': _num}, label='Storm Control Interface Policy')
+mo('infraRsStormctrlIfPol', 'rsstormctrlIfPol', ('infraAccPortGrp', 'infraAccBndlGrp'), {'tnStormctrlIfPolName': ''},
+   rel=('name', 'tnStormctrlIfPolName', 'stormctrlIfPol', 'infra'), label='Storm Control Interface Policy')
+# End Point Retention: Klassen/Attribute/Defaults nach aci_tenant_ep_retention_policy und aci_bd (ohne Zeitverhalten)
+mo('fvEpRetPol', 'epRPol-{name}', ('fvTenant',), {'bounceAgeIntvl': '630', 'bounceTrig': 'coop', 'holdIntvl': '300',
+                                                  'localEpAgeIntvl': '900', 'remoteEpAgeIntvl': '300', 'moveFreq': '256'},
+   enums={'bounceTrig': ('coop', 'flood')},
+   checks={k: _num for k in ('bounceAgeIntvl', 'holdIntvl', 'localEpAgeIntvl', 'remoteEpAgeIntvl', 'moveFreq')},
+   label='End Point Retention Policy')
+mo('fvRsBdToEpRet', 'rsbdToEpRet', ('fvBD',), {'tnFvEpRetPolName': '', 'resolveAct': 'resolve'},
+   enums={'resolveAct': ('inherit', 'resolve')}, rel=('name', 'tnFvEpRetPolName', 'fvEpRetPol', 'tenant'),
+   label='End Point Retention Policy')
 mo('epLoopProtectP', 'epLoopProtectP-{name}', ('infraInfra',), {'adminSt': 'disabled', 'loopDetectIntvl': '60', 'loopDetectMult': '4',
                                                                'action': 'port-disable'},
    enums={'adminSt': ED}, sets={'action': ('', 'port-disable', 'bd-learn-disable')}, label='EP Loop Protection Policy')

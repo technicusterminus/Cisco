@@ -20,9 +20,11 @@ STEP_CODES = [
     ('VIP', 'EP_IP_STANDBY', 'endpoint', 'VRF-Option "IP Data-plane Learning" deaktivieren, damit die Fabric die VIP nur per ARP/GARP vom Active lernt.'),
     ('IP-Learning', 'EP_IP_NOT_LEARNED', 'endpoint', 'BD-Option "Limit IP Learning to Subnet" und das BD-Subnetz pruefen.'),
     ('Service Graph', 'SERVICE_GRAPH_NOT_APPLIED', 'policy', 'Operations > Service Graph: Rendering-Zustand und Fehlermeldungen pruefen.'),
+    ('Rueckweg per PBR', 'PBR_RETURN_INVALID', 'policy', 'PBR Policy am Provider-Connector pruefen.'),
+    ('Geraet', 'SERVICE_NODE_DOWN', 'service', 'L4-L7-Geraet pruefen; PBR-Tracking (IP SLA Monitoring Policy und Redirect Health Group) einrichten.'),
+    ('PBR-Ziel down', 'PBR_DEST_DOWN', 'policy', 'Threshold Down Action der PBR Policy pruefen (permit/deny).'),
     ('PBR', 'PBR_DEST_INVALID', 'policy', 'PBR Policy: Ziel-IP und MAC des Firewall-Interfaces pruefen.'),
     ('Firewall', 'FIREWALL_DENY', 'service', 'Regelwerk und Interfaces der simulierten Firewall pruefen.'),
-    ('Rueckweg per PBR', 'PBR_RETURN_INVALID', 'policy', 'PBR Policy am Provider-Connector pruefen.'),
     ('Remote Leaf', 'FABRIC_PATH_DOWN', 'fabric', 'Fabric > Inventory: Zustand der Switches und Links pruefen.'),
     ('Fabric', 'FABRIC_PATH_DOWN', 'fabric', 'Fabric > Inventory: Spines und Fabric-Links pruefen.'),
     ('Multi-Pod', 'FABRIC_PATH_DOWN', 'fabric', 'IPN-Adjacencies und Spine-Uplinks pruefen.'),
@@ -456,10 +458,36 @@ def _service(eng, t, g, direction, proto, port):
             t.step(False, 'PBR %s' % eng.short(first['pol']), 'Redirect-Ziel %s: MAC in der PBR Policy (%s) passt nicht zur MAC der '
                    'Firewall (%s) - die ACI schreibt die falsche Ziel-MAC um, das Paket wird verworfen' % (d['ip'], d['mac'], ep['mac'].upper()))
             return False
-        if not d['mac']:
+        if not d['mac'] and not d.get('tracked'):
             t.step(False, 'PBR %s' % eng.short(first['pol']), 'Redirect-Ziel %s hat keine MAC-Adresse (ohne IP-SLA-Tracking Pflicht)' % d['ip'])
             return False
         dev = next((x for x in eng.sim.get('devices', []) if x['name'] == ep['dev']), None)
+        if dev and dev.get('down'):
+            second = g['conns'][legs[1]]
+            if not d.get('tracked'):
+                t.step(False, 'Geraet %s antwortet nicht' % dev['name'],
+                       'Das L4-L7-Geraet ist ausgefallen (Links stehen noch). Ohne Tracking leitet die PBR Policy %s weiter zu %s '
+                       'um - die Pakete gehen verloren' % (eng.short(first['pol']), d['ip']))
+                return False
+            act = (eng.A(first['pol']) or {}).get('thresholdDownAction', 'permit')
+            if act == 'deny':
+                t.step(False, 'PBR-Ziel down %s' % d['ip'], 'Tracking hat das Redirect-Ziel als down erkannt; Threshold Down Action '
+                       'der PBR Policy %s ist deny - der Traffic wird verworfen' % eng.short(first['pol']))
+                return False
+            back = [x for x in second['dests'] if any(str(ip_of(i['ip'])) == x['ip'] for i in dev.get('ifs', []))]
+            if any(not x.get('tracked') for x in back) or not back:
+                t.step(False, 'Rueckweg per PBR', 'Hinweg: Tracking hat %s als down erkannt, der Traffic geht ohne Redirect weiter. '
+                       'Die PBR Policy %s am %s-Connector hat aber kein Tracking und leitet die Antwort weiter zum ausgefallenen '
+                       'Geraet um - beide Seiten gehoeren in dieselbe Health Group' % (d['ip'], eng.short(second['pol']), legs[1]))
+                return False
+            if (eng.A(second['pol']) or {}).get('thresholdDownAction', 'permit') == 'deny':
+                t.step(False, 'PBR-Ziel down (Rueckweg)', 'Threshold Down Action der PBR Policy %s ist deny - die Antwort wird '
+                       'verworfen' % eng.short(second['pol']))
+                return False
+            t.step(None, 'PBR-Ziel down %s' % d['ip'], 'Tracking (IP SLA + Health Group) hat das Geraet %s als down erkannt; Threshold '
+                   'Down Action permit: Der Traffic laeuft in beide Richtungen ohne Redirect direkt - an der Firewall vorbei'
+                   % dev['name'])
+            return True
         t.step(True, 'Redirect (%s -> %s)' % legs, 'PBR %s leitet zu %s (%s %s) um, Service-BD %s, vlan-%d' % (
             eng.short(first['pol']), ep['dev'], ep['devif'], d['ip'], eng.short(first['bd']), first['vlan']))
         break
