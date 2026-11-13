@@ -1361,6 +1361,48 @@ class TestConvertedLabs(unittest.TestCase):
         self.apply(*lab['solutionConfig'])
         self.assertTrue(all(self.by().values()))
 
+    def test_lab28_storm_control_and_ep_retention(self):
+        """Storm Control (Klassen/Attribute nach Cisco-DevNet-Ansible-Modul, Wirkmodell simulator-spezifisch): Action
+        shutdown bricht die Schleife (Port error-disabled), Action drop begrenzt nur den Storm. End Point Retention
+        Policy ist konfigurierbar und am BD referenzierbar (ohne Zeitverhalten)."""
+        self.S.load_lab('28-mcp-loop-qos')
+        e = self.S.engine
+        loop = next(x for x in e.loops if x['name'] == 'cat-lager')
+        pgs = sorted({pi['pg'] for pi in e.ports.values() if (pi.get('peer') or ('', ''))[:2] == ('switch', 'cat-lager')})
+        self.assertTrue(pgs and all(pgs))
+        bd = loop['bds'][0]
+
+        def bind(action, rate):
+            self.apply(('uni/infra/stormctrlifp-SC', mo('stormctrlIfPol', {'name': 'SC', 'rate': rate, 'stormCtrlAction': action})),
+                       *[(pg, mo(pg.split('/')[-1].startswith('accbundle') and 'infraAccBndlGrp' or 'infraAccPortGrp', {},
+                                 mo('infraRsStormctrlIfPol', {'tnStormctrlIfPolName': 'SC'}))) for pg in pgs])
+            return next(x for x in self.S.engine.loops if x['name'] == 'cat-lager')
+
+        # 100 % begrenzt nichts
+        loop = bind('shutdown', '100.000000')
+        self.assertFalse(loop.get('action'))
+        self.assertIn(bd, self.S.engine.storm_bds)
+        # drop: Storm begrenzt, Schleife bleibt
+        loop = bind('drop', '10.000000')
+        self.assertFalse(loop.get('action'))
+        self.assertIn('Action drop', loop['text'])
+        self.assertIn(bd, self.S.engine.storm_bds)
+        # shutdown: Port error-disabled, Schleife gebrochen
+        loop = bind('shutdown', '10.000000')
+        e = self.S.engine
+        self.assertEqual(loop['action'], 'storm')
+        self.assertEqual(e.ports[loop['victim']]['qual'], 'error-disabled')
+        self.assertEqual(e.ports[loop['victim']]['errdis'], 'storm-control')
+        self.assertNotIn(bd, e.storm_bds)
+        self.assertIn('S2537', e.faults[e._pdn(loop['victim'])])
+        # End Point Retention: Defaults laut Modul, Relation am BD loest auf
+        self.apply(('uni/tn-Shop', mo('fvTenant', {}, mo('fvEpRetPol', {'name': 'EPR'}))),
+                   (bd, mo('fvBD', {}, mo('fvRsBdToEpRet', {'tnFvEpRetPolName': 'EPR'}))))
+        a = self.S.engine.A('uni/tn-Shop/epRPol-EPR')
+        self.assertEqual((a['localEpAgeIntvl'], a['remoteEpAgeIntvl'], a['bounceAgeIntvl'], a['holdIntvl'], a['moveFreq'], a['bounceTrig']),
+                         ('900', '300', '630', '300', '256', 'coop'))
+        self.assertEqual(self.S.store.attrs(bd + '/rsbdToEpRet')['tnFvEpRetPolName'], 'EPR')
+
     def test_lab09_permit_any_to_internet_fails(self):
         lab = self.S.load_lab('09-l3out-bgp')
         self.apply(*lab['solutionConfig'])

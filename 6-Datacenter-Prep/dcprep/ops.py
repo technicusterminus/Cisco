@@ -159,6 +159,24 @@ class OpsMixin:
         pol = self.A('uni/infra/mcpIfP-%s' % (name or 'default'))
         return bool(pol) and pol['adminSt'] == 'enabled'
 
+    def _storm_if(self, leg):
+        """Storm Control Interface Policy des Ports, wenn sie den Verkehr begrenzt (Rate < 100 % oder pps gesetzt)."""
+        pg = self.ports.get(leg, {}).get('pg')
+        name = (self.A(pg + '/rsstormctrlIfPol') or {}).get('tnStormctrlIfPolName') if pg else ''
+        pol = self.A('uni/infra/stormctrlifp-%s' % name) if name else None
+        if not pol:
+            return None
+        pre = ('bc', 'mc', 'uuc') if pol.get('isUcMcBcStormPktCfgValid') == 'Valid' else ('',)
+        for x in pre:
+            r, pps = pol.get(x + 'Rate' if x else 'rate', '100'), pol.get(x + 'RatePps' if x else 'ratePps', 'unspecified')
+            try:
+                limited = float(r) < 100
+            except ValueError:
+                limited = False
+            if limited or pps not in ('unspecified', ''):
+                return dict(pol, name=name)
+        return None
+
     def _loops(self):
         """Legacy-Switches, die an mehreren Ports haengen, bilden eine Schleife, wenn sie eine VLAN-Encap
         auf zwei Ports verbinden. MCP oder Endpoint Loop Protection koennen sie brechen."""
@@ -224,6 +242,26 @@ class OpsMixin:
                 info['text'] = 'MCP ist auf den betroffenen Ports per MCP Interface Policy deaktiviert'
             else:
                 info['text'] = 'MCP ist global nicht aktiv (MCP Instance Policy default: Admin State und Key)'
+            # Storm Control (simulator-spezifisches Wirkmodell): Die Schleife erzeugt einen Broadcast-Storm ueber der
+            # Schwelle. Aktion shutdown: der Port geht nach stormCtrlSoakInstCount Intervallen error-disabled, die Schleife
+            # ist gebrochen. Aktion drop: der Storm wird begrenzt, die Schleife und das MAC-Flapping bleiben.
+            sc = [(l, self._storm_if(l)) for l in looped]
+            shut = [(l, pol) for l, pol in sc if pol and pol.get('stormCtrlAction') == 'shutdown']
+            if shut:
+                victim, pol = shut[-1]
+                self._errdisable(victim, 'storm-control')
+                info.update({'action': 'storm', 'victim': victim,
+                             'text': 'Storm Control (%s, Action shutdown) hat den Broadcast-Storm erkannt und %s %s nach %s '
+                                     'Intervallen error-disabled' % (pol['name'], self.nodes[victim[0]]['name'], victim[1],
+                                                                     pol.get('stormCtrlSoakInstCount', '3'))})
+                self.fault(self._pdn(victim), 'S2537', 'major', 'Storm control threshold exceeded on %s %s (legacy switch %s) - '
+                           'port error-disabled' % (self.nodes[victim[0]]['name'], victim[1], sw['name']),
+                           'storm-control-shutdown', domain='access')
+                continue
+            storm_drop = bool(sc) and all(pol for _, pol in sc)
+            if storm_drop:
+                info['text'] += ('. Storm Control (Action drop) begrenzt den Storm auf allen Schleifen-Ports; die Schleife '
+                                 'und das MAC-Flapping bleiben')
             if rogue:
                 # White Paper "ACI Fabric Endpoint Learning", Rogue EP Control: springende Endpoints werden pro Leaf als rogue
                 # markiert und statisch gehalten (Hold Interval), nur fuer diese Endpoints pausiert das Lernen. Ep Loop Protection

@@ -1094,6 +1094,8 @@ class Sim:
             ifs.append({'name': i['name'], 'vlan': vlan, 'ip': i['ip'], 'mac': i['mac'].upper().replace('-', ':')})
         allow = [a.strip().lower() for a in (o.get('allow') or ['any']) if a.strip()]
         clean = {'name': o['name'], 'links': [[s_, p_] for s_, p_ in links], 'ifs': ifs, 'allow': allow or ['any']}
+        if o.get('down'):
+            clean['down'] = True
         self.sim['devices'] = [d for d in devs if d['name'] != old] + [clean]
 
     def switch_op(self, b):

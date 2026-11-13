@@ -2,7 +2,7 @@
 
 from .model import CLASSES, parent_dn, tenant_of
 
-from .engine_util import (vlan_num, port_val)
+from .engine_util import (vlan_num, port_val, ip_of)
 
 
 def has_log(rfa):
@@ -313,7 +313,26 @@ class PolicyMixin:
                     if bda.get('epMoveDetectMode') != 'garp':
                         self.fault(bd, 'S1691', 'warning', 'BD %s connects an L4-L7 device with PBR: GARP based EP move detection '
                                    'should be enabled' % self.short(bd), 'pbr-bd-garp-recommended')
-                dests = [{'ip': self.A(d)['ip'], 'mac': (self.A(d)['mac'] or '').upper()} for d in self.kids(pol, 'vnsRedirectDest')] if pol else []
+                dests = [{'ip': self.A(d)['ip'], 'mac': (self.A(d)['mac'] or '').upper(),
+                          'hg': (self.A(d + '/rsRedirectHealthGroup') or {}).get('tDn', '')}
+                         for d in self.kids(pol, 'vnsRedirectDest')] if pol else []
+                # Tracking (Cisco APIC L4-L7 Services Deployment Guide): braucht IP SLA Monitoring Policy an der PBR Policy
+                # UND eine Redirect Health Group an der Destination.
+                sla = (self.A(pol + '/rsIPSLAMonitoringPol') or {}).get('tDn', '') if pol else ''
+                sla_ok = bool(sla) and self.A(sla) is not None
+                for d in dests:
+                    d['tracked'] = sla_ok and bool(d['hg']) and self.A(d['hg']) is not None
+                    dv = next((x for x in self.sim.get('devices', [])
+                               if any(str(ip_of(i['ip'])) == d['ip'] for i in x.get('ifs', []))), None)
+                    d['down'] = bool(dv and dv.get('down'))
+                    if sla_ok and not d['tracked']:
+                        self.fault(pol, 'S1693', 'warning', 'PBR policy %s: IP SLA monitoring policy is set, but destination %s has '
+                                   'no redirect health group - tracking is not active' % (self.short(pol), d['ip']),
+                                   'pbr-tracking-incomplete')
+                    if d['tracked'] and d['down']:
+                        self.fault(pol, 'S1694', 'major', 'PBR policy %s: destination %s is down (tracking), threshold down action %s'
+                                   % (self.short(pol), d['ip'], (self.A(pol) or {}).get('thresholdDownAction', 'permit')),
+                                   'pbr-destination-down')
                 if pol and not dests:
                     fail('PBR Policy %s hat keine Destination' % self.short(pol))
                     ok = False
