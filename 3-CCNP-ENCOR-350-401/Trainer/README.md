@@ -19,7 +19,7 @@ Der Lösungsweg rechnet mit den Zahlen der Aufgabe. Bei BGP geht er die Kriterie
 
 ## Ticket-Trainer
 
-Datei: [`ticket-trainer.html`](ticket-trainer.html). Die 134 Fehler-Tickets aus den Labs als Quiz: Du liest das Symptom und wählst unter vier Ursachen die richtige. Die falschen Antworten stammen aus anderen Tickets desselben Labs, sie klingen also plausibel.
+Datei: [`ticket-trainer.html`](ticket-trainer.html). Die 155 Fehler-Tickets aus den Labs 01 bis 30 und 32 bis 36 als Quiz: Du liest das Symptom und wählst unter vier Ursachen die richtige. Die falschen Antworten stammen aus anderen Tickets desselben Labs, sie klingen also plausibel.
 
 - **Hinweis zeigen** blendet ein, wie man die Ursache findet. Wer ihn nutzt, hat das Ticket noch nicht sicher gelöst.
 - Nach der Antwort siehst du Ursache, Fix und den eingebauten Fehler als Diff.
