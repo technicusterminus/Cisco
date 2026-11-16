@@ -4,17 +4,17 @@ Datei: [`encor-pruefungssimulation.html`](encor-pruefungssimulation.html). Im Br
 
 ## Was drin ist
 
-- **241 Fragen** aus den sechs Domänen des Blueprints, im Prüfungsstil: Einfachauswahl, „Wähle zwei/drei“, **43 Exhibit-Fragen** mit `show`-Ausgaben, Routing-Tabellen, ACLs, JSON, NETCONF und Python sowie **21 Fragen zum Ordnen und Zuordnen**.
+- **267 Fragen** aus den sechs Domänen des Blueprints, im Prüfungsstil: Einfachauswahl, „Wähle zwei/drei“, **53 Exhibit-Fragen** mit `show`-Ausgaben, Routing-Tabellen, ACLs, JSON, NETCONF und Python sowie **24 Fragen zum Ordnen und Zuordnen**.
 - **Jede Erklärung** nennt zuerst die richtige Antwort, dann den Grund. Wo eine falsche Antwort naheliegt, steht dabei, warum sie nicht passt.
 
 | Domäne | Fragen |
 |---|---:|
 | 1 Architektur | 29 |
 | 2 Virtualisierung | 26 |
-| 3 Infrastruktur | 77 |
-| 4 Network Assurance | 26 |
+| 3 Infrastruktur | 89 |
+| 4 Network Assurance | 35 |
 | 5 Security | 42 |
-| 6 Automation | 41 |
+| 6 Automation | 46 |
 
 ## Modi
 

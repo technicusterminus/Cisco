@@ -9,6 +9,7 @@ Die Labs 01 bis 31 liegen nur als fertige Dateien vor. Ab Lab 32 entsteht jedes 
 | `build_labs.py` | schreibt alle Labs nach `../CML-Labs` und `../EVE-NG-Labs` |
 | `live_test.py` | spielt die Labs in einer laufenden CML- oder EVE-NG-Instanz durch |
 | `update_ticket_trainer.py` | trägt die Tickets der Labs 32 bis 36 in `../Trainer/ticket-trainer.html` ein |
+| `update_simulation.py` | trägt die 26 Fragen zu den Themen der Labs 32 bis 36 in die Prüfungssimulation ein |
 | `test_live.py` | prüft den Telnet-Zugang des Live-Tests gegen eine nachgebaute Konsole |
 
 ## Labs neu erzeugen

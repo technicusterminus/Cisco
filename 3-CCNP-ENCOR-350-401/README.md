@@ -6,7 +6,7 @@ Material für die Prüfung **350-401 ENCOR v1.2** (Implementing and Operating Ci
 |---|---|
 | [Anki-Deck](Anki/) | 1.845 Karten zu allen 47 Prüfungszielen, davon 348 Befehlskarten, Version 5.4 |
 | [Anki-Deck EN](Anki/EN/) | 1.981 Karten auf Englisch mit deutschen Erklärungen, davon 429 MC im Prüfungsstil und 136 Show-Karten |
-| [Prüfungssimulation](Pruefungssimulation/) | 241 Fragen, davon 43 Exhibits und 21 zum Ordnen und Zuordnen; Prüfungsmodus mit 60 Fragen in 75 Minuten |
+| [Prüfungssimulation](Pruefungssimulation/) | 267 Fragen, davon 53 Exhibits und 24 zum Ordnen und Zuordnen; Prüfungsmodus mit 60 Fragen in 75 Minuten |
 | [Trainer](Trainer/) | Rechentrainer (BGP, STP, OSPF, EIGRP, QoS) und Ticket-Trainer mit 155 Lab-Tickets |
 | [Labs](#labs) | 33 Labs für CML, 32 davon auch für EVE-NG und 23 für Packet Tracer, mit 159 eingebauten Fehlern; dazu Python-Drills und zwei Fallstudien-Pakete |
 | [Lernplan](LERNPLAN.md) | 10 Wochen, verbindet Deck, Labs, Trainer und Simulation |
