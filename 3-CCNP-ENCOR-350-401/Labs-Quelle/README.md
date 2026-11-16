@@ -8,6 +8,7 @@ Die Labs 01 bis 31 liegen nur als fertige Dateien vor. Ab Lab 32 entsteht jedes 
 | `lablib.py` | erzeugt YAML, READMEs, Konfigurationen und Fehlerlisten, prüft Links, Adressen und Fehler |
 | `build_labs.py` | schreibt alle Labs nach `../CML-Labs` und `../EVE-NG-Labs` |
 | `live_test.py` | spielt die Labs in einer laufenden CML- oder EVE-NG-Instanz durch |
+| `update_ticket_trainer.py` | trägt die Tickets der Labs 32 bis 36 in `../Trainer/ticket-trainer.html` ein |
 | `test_live.py` | prüft den Telnet-Zugang des Live-Tests gegen eine nachgebaute Konsole |
 
 ## Labs neu erzeugen
@@ -47,6 +48,20 @@ python3 Labs-Quelle/live_test.py eve <EVE-Adresse> --lab 36 --ports R1=32769 R2=
 ```
 
 Vorher das Lab *Bauen* aus `EVE-Import.zip` öffnen und alle Nodes starten. Die Telnet-Ports zeigt EVE-NG je Node an. Hier wird ein Lab pro Aufruf getestet.
+
+### Syntaxprüfung für alle Labs, auch 01 bis 31
+
+Für die älteren Labs gibt es keine maschinenlesbaren Proben je Ticket. Prüfen lässt sich aber, ob das Image jede Konfigurationszeile annimmt. Mit `--syntax` spielt das Skript je Lab die vollständige Reparatur-Konfiguration aller Geräte ein (Basis, Lösung und eingebaute Fehler) und meldet jede abgelehnte Zeile:
+
+```bash
+python3 Labs-Quelle/live_test.py cml https://<CML-Adresse> --user <Benutzer> --insecure --syntax
+```
+
+```bash
+python3 Labs-Quelle/live_test.py eve <EVE-Adresse> --syntax --lab 05 --ports SW1=32769 SW2=32770
+```
+
+Das belegt nicht, dass ein Ticket das beschriebene Symptom zeigt. Es findet aber die häufigste Ursache für ein Lab, das „hakt“: einen Befehl, den die Image-Version nicht kennt. Die Labs 15, 16 und 19 brauchen besondere Images (LISP, NX-OSv 9000, CSR1000v).
 
 ### Ohne Geräte
 

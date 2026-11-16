@@ -16,6 +16,11 @@ CML (legt das Lab selbst an, startet es und räumt es wieder ab):
 EVE-NG (Lab „Bauen“ aus EVE-Import.zip öffnen, alle Nodes starten, Telnet-Ports aus EVE-NG ablesen):
   python3 live_test.py eve 192.168.1.50 --lab 36 --ports R1=32769 R2=32770
 
+Syntaxprüfung für ALLE Labs (auch 01 bis 31): spielt die vollständige Reparatur-Konfiguration jedes Geräts ein
+und meldet jede Zeile, die das Image ablehnt. Das belegt nicht die Symptome, aber dass jede Zeile gültig ist.
+  python3 live_test.py cml https://cml.example.net --user admin --syntax [--lab 05 12]
+  python3 live_test.py eve 192.168.1.50 --syntax --lab 05 --ports SW1=32769 SW2=32770 …
+
 Ablauf nur prüfen, ohne Geräte:
   python3 live_test.py selftest
 
@@ -120,6 +125,8 @@ class Cml:
 
     def open(self, lab):
         path = os.path.join(ROOT, "CML-Labs", lab["slug"], "topology.yaml")
+        if not os.path.exists(path):
+            raise FileNotFoundError(path)
         self.lab = self.client.import_lab_from_path(path, title=f"LIVE-TEST {lab['slug']}")
         self.lab.start()
         self.lab.wait_until_lab_converged()
@@ -225,6 +232,33 @@ def test_lab(lab, dev, wait, log, stub=False):
     return bad
 
 
+def syntax_labs(only):
+    """Alle Labs mit Reparatur-Topologie: [(Lab-Dict, {Node: Konfigurationszeilen})]."""
+    import yaml
+    out = []
+    for path in sorted(glob.glob(os.path.join(ROOT, "CML-Labs", "*", "topology-repair.yaml"))):
+        slug = os.path.basename(os.path.dirname(path))
+        if only and slug[:2] not in only:
+            continue
+        with open(path, encoding="utf-8") as f:
+            doc = yaml.safe_load(f)
+        cfg = {n["label"]: [l for l in (n.get("configuration") or "").split("\n")
+                            if l.strip() and not l.startswith(("hostname ", "!")) and l.strip() != "end"]
+               for n in doc["nodes"] if n.get("configuration")}
+        out.append(({"num": slug[:2], "slug": slug, "title": doc["lab"]["title"].replace(" (Repair)", "")}, cfg))
+    return out
+
+
+def test_syntax(lab, cfg, dev, log):
+    bad = []
+    log(f"\n== Lab {lab['num']} – Syntaxprüfung, {len(cfg)} Geräte")
+    for node, lines in cfg.items():
+        for line, msg in parser_errors(dev.config(node, lines)):
+            bad.append(("Parser", f"{node}: `{line}` → {msg}", ""))
+            log(f"   FEHLER Parser: {node}: `{line}` → {msg}")
+    return bad
+
+
 def report(results, target, path):
     lines = [f"# Live-Test ENCOR-Labs – {datetime.date.today().isoformat()}", "", f"Ziel: {target}", "",
              "| Lab | Ergebnis | Abweichungen |", "|---|---|---|"]
@@ -251,20 +285,30 @@ def main(argv=None):
     ap.add_argument("--keep", action="store_true", help="CML: Lab am Ende nicht löschen")
     ap.add_argument("--ports", nargs="*", default=[], help="EVE-NG: Node=Telnet-Port …")
     ap.add_argument("--report", default="live-test-bericht.md")
+    ap.add_argument("--syntax", action="store_true", help="nur Syntaxprüfung, dafür für alle Labs")
     a = ap.parse_args(argv)
-    labs = load_labs(a.lab)
+    if a.syntax:
+        todo = syntax_labs(a.lab)
+        labs = [l for l, _ in todo]
+        run = {l["slug"]: (lambda dev, l=l, c=c: test_syntax(l, c, dev, print)) for l, c in todo}
+    else:
+        labs = load_labs(a.lab)
+        run = {l["slug"]: (lambda dev, l=l: test_lab(l, dev, time.sleep, print)) for l in labs}
     if not labs:
         sys.exit("Keine passenden Labs gefunden")
     results = []
     if a.mode == "selftest":
         for lab in labs:
-            results.append((lab, test_lab(lab, Stub(lab), lambda s: None, print, stub=True)))
+            if a.syntax:
+                results.append((lab, run[lab["slug"]](type("Null", (), {"config": lambda self, n, l: ""})())))
+            else:
+                results.append((lab, test_lab(lab, Stub(lab), lambda s: None, print, stub=True)))
     elif a.mode == "eve":
         if len(labs) != 1:
             sys.exit("EVE-NG: genau ein Lab angeben (--lab NN), dazu die Ports seiner Nodes")
         dev = Telnet(a.target, {k: int(v) for k, v in (p.split("=") for p in a.ports)})
         try:
-            results.append((labs[0], test_lab(labs[0], dev, time.sleep, print)))
+            results.append((labs[0], run[labs[0]["slug"]](dev)))
         finally:
             dev.close()
     else:
@@ -273,7 +317,7 @@ def main(argv=None):
         for lab in labs:
             try:
                 dev.open(lab)
-                results.append((lab, test_lab(lab, dev, time.sleep, print)))
+                results.append((lab, run[lab["slug"]](dev)))
             finally:
                 dev.close()
     if a.mode != "selftest":
