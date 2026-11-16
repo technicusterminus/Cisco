@@ -2,7 +2,7 @@
 
 Diese Labs ergänzen das Anki-Kompendium (1.845 Karten). Die Karten bauen Wissen auf, in den Labs wendest du es an: **bauen, reparieren, üben**. Jedes der 47 Prüfungsziele des Kompendiums (`Ziel::…`) ist mindestens einem Lab zugeordnet.
 
-**Inhalt:** 28 CML-Labs (25 Themen-Labs und 3 Capstones, zusammen 138 eingebaute Fehler zum Reparieren), ein Python-/API-Drill-Paket mit automatischen Tests, zwei Fallstudien-Pakete für Themen, die sich nicht sinnvoll simulieren lassen.
+**Inhalt:** 33 CML-Labs (30 Themen-Labs und 3 Capstones, zusammen 159 eingebaute Fehler zum Reparieren), ein Python-/API-Drill-Paket mit automatischen Tests, zwei Fallstudien-Pakete für Themen, die sich nicht sinnvoll simulieren lassen.
 
 **Andere Plattformen:** Dieselben Labs gibt es für [Packet Tracer](../Packet-Tracer-Labs/) (soweit PT die Funktionen kann) und [EVE-NG](../EVE-NG-Labs/).
 
@@ -56,6 +56,11 @@ Diese Labs ergänzen das Anki-Kompendium (1.845 Karten). Die Karten bauen Wissen
 | [29](29-PBR-Quelle-Anwendung/) | Policy-Based Routing nach Quelle und Anwendung | 3.2.d | 6 | 5 | 75 min |
 | [30](30-Capstone-Routing-Troubleshooting/) | Capstone: Routing-Fehlersuche (OSPF, EIGRP, BGP, Redistribution) | 3.2.a, 3.2.b, 3.2.c | 5 | 8 | 150 min |
 | [31](31-MST-Regionen-PVST-Interop/) | MST vertieft: Regionen, Instanzen, Pfadkosten und PVST-Interop (nur CML) | 3.1.c | 8 | 4 | 100 min |
+| [32](32-Multicast-SSM-Bidir-MSDP/) | Multicast vertieft: IGMPv3 und SSM, Bidir-PIM, Anycast-RP mit MSDP | 3.3.d | 6 | 4 | 120 min |
+| [33](33-Diagnose-Ping-Traceroute-Debug/) | Diagnose: Ping und Traceroute lesen, Debug und Conditional Debug sicher einsetzen | 4.1 | 5 | 4 | 90 min |
+| [34](34-OSPF-Filter-Netztyp-MTU/) | OSPF: Routen filtern (ABR, ASBR, lokal) und Nachbarschaften mit Netztyp- und MTU-Fehlern | 3.2.b | 4 | 5 | 110 min |
+| [35](35-IPSLA-Tracking-Jitter/) | IP SLA vertieft: Tracking mit Floating Static, UDP-Jitter mit Responder, TCP-Connect | 4.4 | 5 | 4 | 90 min |
+| [36](36-EEM-Applets/) | EEM-Applets: Ereignisse, Aktionen und die typischen Fallen | 6.6 | 2 | 4 | 90 min |
 | [20](20-Python-REST-Drills) | Python-/API-Drills (lokal, mit Tests) | 6.1, 6.2, 6.3, 6.4, 6.5, 6.7 | – | – | – |
 | [21](21-Design-Fallstudien.md) | Fallstudien: Design, WAN, Fabric, Virtualisierung, Catalyst Center | 1.1.a, 1.1.b, 1.2.a, 1.2.b, 1.3.a, 1.3.b, 2.1.a, 2.1.b, 2.1.c, 4.5 | – | – | – |
 | [22](22-Security-Szenarien.md) | Security-Szenarien (REST, Threat Defense, Endpoint, NGFW, TrustSec/MACsec) | 5.3, 5.4.a, 5.4.b, 5.4.c, 5.4.d | – | – | – |
@@ -84,17 +89,17 @@ Pro Ziel mit direkten Links zu Aufgaben und Lösungen: **[ZIELE.md](ZIELE.md)**.
 | `3.1.b` | EtherChannel | 34 | 05, 23 |
 | `3.1.c` | RSTP, MST und Schutzfunktionen | 65 | 06, 23, 31 |
 | `3.2.a` | EIGRP und OSPF vergleichen | 45 | 01, 02, 25, 27, 30 |
-| `3.2.b` | OSPFv2 und OSPFv3 | 86 | 01, 02, 23, 24, 27, 28, 30 |
+| `3.2.b` | OSPFv2 und OSPFv3 | 86 | 01, 02, 23, 24, 27, 28, 30, 34 |
 | `3.2.c` | Direktes eBGP | 61 | 03, 24, 26, 30 |
 | `3.2.d` | Policy-based Routing | 16 | 04, 29 |
 | `3.3.a` | NTP und PTP | 32 | 08, 23 |
 | `3.3.b` | NAT und PAT | 29 | 09, 23 |
 | `3.3.c` | HSRP und VRRP | 30 | 07, 23 |
-| `3.3.d` | Multicast-Verfahren | 46 | 12 |
-| `4.1` | Diagnose, SNMP und Syslog | 40 | 08 |
+| `3.3.d` | Multicast-Verfahren | 46 | 12, 32 |
+| `4.1` | Diagnose, SNMP und Syslog | 40 | 08, 33 |
 | `4.2` | Flexible NetFlow | 24 | 18 |
 | `4.3` | SPAN, RSPAN und ERSPAN | 22 | 18 |
-| `4.4` | IP SLA | 22 | 04 |
+| `4.4` | IP SLA | 22 | 04, 35 |
 | `4.5` | Catalyst Center und KI-Workflows | 22 | 21 |
 | `4.6` | NETCONF und RESTCONF | 40 | 19 |
 | `5.1.a` | Lines und lokale Anmeldung | 27 | 11, 23 |
@@ -111,7 +116,7 @@ Pro Ziel mit direkten Links zu Aufgaben und Lösungen: **[ZIELE.md](ZIELE.md)**.
 | `6.3` | YANG | 27 | 19, 20 |
 | `6.4` | Controller-APIs | 27 | 20 |
 | `6.5` | HTTP-Codes und API-Payloads | 29 | 19, 20 |
-| `6.6` | EEM-Applets | 29 | 19 |
+| `6.6` | EEM-Applets | 29 | 19, 36 |
 | `6.7` | Agentenbasierte und agentenlose Automation | 25 | 20 |
 
 ## Empfohlene Reihenfolge
@@ -120,18 +125,19 @@ Die Reihenfolge folgt dem [Wochenplan im Lernplan](../LERNPLAN.md#wochenplan):
 
 1. **Layer 2:** 05, 06.
 2. **Gateway-Redundanz, Zeit, NAT:** 07, 08, 09.
-3. **OSPF und EIGRP:** 01, 28, 25, optional 02.
+3. **OSPF und EIGRP:** 01, 28, 34, 25, optional 02.
 4. **BGP, Redistribution, PBR:** 03, 26, 27, 29.
 5. **Virtualisierung und Overlay:** 13, 14, optional 15 und 16, dazu der Abschnitt Virtualisierung in 21.
-6. **Architektur und Multicast:** 17, 12, 21.
-7. **Assurance und Security:** 18, 04, 10, 11.
-8. **Security-Produkte und Automation:** 22, 19, 20.
+6. **Architektur und Multicast:** 17, 12, 32, 21.
+7. **Assurance und Security:** 18, 33, 04, 35, 10, 11.
+8. **Security-Produkte und Automation:** 22, 19, 36, 20.
 9. **Capstones:** 23, 24 und 30. Reine Fehlersuche im ganzen Netz, bei der ein Fehler den nächsten verdecken kann. Mach sie zuletzt und ohne Blick in die Lösungen.
 
 ## Voraussetzungen und Stand
 
 - **Images:** IOSv und IOSvL2 (15.x), CSR1000v (IOS XE) und NX-OSv 9000. Lab 15 braucht ein IOSv-Image mit LISP, Lab 16 den NX-OSv 9000 mit viel RAM, Lab 19 einen CSR1000v mit External Connector.
 - **Getestet:** Die Python-Drills (Lab 20) laufen mit den Musterlösungen grün. Bei den CML-Labs ist per Skript geprüft, dass das YAML lädt, alle Links auf vorhandene Interfaces zeigen und jeder eingebaute Fehler in der Konfiguration steckt. In einer laufenden CML-Instanz sind sie noch nicht durchgespielt.
+- **Labs 32 bis 36 und der Live-Test:** Diese Labs entstehen aus den Definitionen in [`../Labs-Quelle`](../Labs-Quelle/). Dort liegt auch [`live_test.py`](../Labs-Quelle/live_test.py): Das Skript spielt ein Lab in einer laufenden CML- oder EVE-NG-Instanz durch (Musterlösung einspielen, jede Zeile auf Parser-Fehler prüfen, jeden Fehler einzeln einbauen, Symptom messen, Fix prüfen) und schreibt einen Bericht. Wie du es startest, steht in [`../Labs-Quelle/README.md`](../Labs-Quelle/README.md). **Auch diese Labs sind bisher nicht in einer laufenden Instanz gelaufen**, der Live-Test ist das Werkzeug, um genau das nachzuholen.
 - **Wenn ein Befehl nicht durchgeht:** Image-Versionen unterscheiden sich in Details. Prüfe die Syntax in der Cisco-Dokumentation. Das ist gleich eine gute Übung. Eine Korrektur per Issue hilft allen.
 
 Alle Adressen stammen aus Privat- oder Dokumentationsbereichen, Passwörter sind reine Lab-Werte. Es stecken keine echten Netzdaten drin.

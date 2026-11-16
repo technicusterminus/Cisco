@@ -1,8 +1,8 @@
 # CCNP ENCOR 350-401 v1.2 – EVE-NG-Labs
 
-Parallelzweig zu den [CML-Labs](../CML-Labs/) für **EVE-NG**: dieselben 27 Labs mit denselben Aufgaben (Bauen, Reparieren, Üben), Fehlerlisten und Lösungen. Die Geräte (vIOS, vIOS-L2, CSRv, Nexus 9000v) tragen dieselben Interface-Namen wie in CML, deshalb gelten Aufgabentexte und Konfigurationen unverändert. Dazu kommen Node- und Kabeltabellen mit EVE-Templates, der RAM-Bedarf und Konfigurationsdateien zum Einspielen.
+Parallelzweig zu den [CML-Labs](../CML-Labs/) für **EVE-NG**: dieselben 32 Labs mit denselben Aufgaben (Bauen, Reparieren, Üben), Fehlerlisten und Lösungen. Die Geräte (vIOS, vIOS-L2, CSRv, Nexus 9000v) tragen dieselben Interface-Namen wie in CML, deshalb gelten Aufgabentexte und Konfigurationen unverändert. Dazu kommen Node- und Kabeltabellen mit EVE-Templates, der RAM-Bedarf und Konfigurationsdateien zum Einspielen.
 
-**Inhalt:** 27 Labs, 134 eingebaute Fehler. Die Python-/API-Drills und die Fallstudien-Pakete liegen im CML-Zweig und gelten für alle Plattformen: [`20-Python-REST-Drills`](../CML-Labs/20-Python-REST-Drills/), [`21-Design-Fallstudien.md`](../CML-Labs/21-Design-Fallstudien.md), [`22-Security-Szenarien.md`](../CML-Labs/22-Security-Szenarien.md).
+**Inhalt:** 32 Labs, 155 eingebaute Fehler. Die Python-/API-Drills und die Fallstudien-Pakete liegen im CML-Zweig und gelten für alle Plattformen: [`20-Python-REST-Drills`](../CML-Labs/20-Python-REST-Drills/), [`21-Design-Fallstudien.md`](../CML-Labs/21-Design-Fallstudien.md), [`22-Security-Szenarien.md`](../CML-Labs/22-Security-Szenarien.md).
 
 ## Voraussetzungen
 
@@ -74,6 +74,11 @@ Wenn du die Labs lieber selbst zusammenklickst oder das Image keine Startkonfigu
 | [28](28-OSPF-Areatypen-Summary-Auth/) | OSPF vertieft: Area-Typen, Summarisierung und Authentifizierung | 3.2.b | 4 | 6 | 2.0 GB | 100 min |
 | [29](29-PBR-Quelle-Anwendung/) | Policy-Based Routing nach Quelle und Anwendung | 3.2.d | 6 | 5 | 3.0 GB | 75 min |
 | [30](30-Capstone-Routing-Troubleshooting/) | Capstone: Routing-Fehlersuche (OSPF, EIGRP, BGP, Redistribution) | 3.2.a, 3.2.b, 3.2.c | 5 | 8 | 2.5 GB | 150 min |
+| [32](32-Multicast-SSM-Bidir-MSDP/) | Multicast vertieft: IGMPv3 und SSM, Bidir-PIM, Anycast-RP mit MSDP | 3.3.d | 6 | 4 | 3.1 GB | 120 min |
+| [33](33-Diagnose-Ping-Traceroute-Debug/) | Diagnose: Ping und Traceroute lesen, Debug und Conditional Debug sicher einsetzen | 4.1 | 5 | 4 | 2.6 GB | 90 min |
+| [34](34-OSPF-Filter-Netztyp-MTU/) | OSPF: Routen filtern (ABR, ASBR, lokal) und Nachbarschaften mit Netztyp- und MTU-Fehlern | 3.2.b | 4 | 5 | 2.0 GB | 110 min |
+| [35](35-IPSLA-Tracking-Jitter/) | IP SLA vertieft: Tracking mit Floating Static, UDP-Jitter mit Responder, TCP-Connect | 4.4 | 5 | 4 | 2.6 GB | 90 min |
+| [36](36-EEM-Applets/) | EEM-Applets: Ereignisse, Aktionen und die typischen Fallen | 6.6 | 2 | 4 | 1.0 GB | 90 min |
 
 ## Abdeckung nach Prüfungsziel
 
@@ -99,17 +104,17 @@ Pro Ziel mit Links zu Aufgaben und Lösungen: **[ZIELE.md](ZIELE.md)**.
 | `3.1.b` | EtherChannel | 34 | 05, 23 |
 | `3.1.c` | RSTP, MST und Schutzfunktionen | 65 | 06, 23 |
 | `3.2.a` | EIGRP und OSPF vergleichen | 45 | 01, 02, 25, 27, 30 |
-| `3.2.b` | OSPFv2 und OSPFv3 | 86 | 01, 02, 23, 24, 27, 28, 30 |
+| `3.2.b` | OSPFv2 und OSPFv3 | 86 | 01, 02, 23, 24, 27, 28, 30, 34 |
 | `3.2.c` | Direktes eBGP | 61 | 03, 24, 26, 30 |
 | `3.2.d` | Policy-based Routing | 16 | 04, 29 |
 | `3.3.a` | NTP und PTP | 32 | 08, 23 |
 | `3.3.b` | NAT und PAT | 29 | 09, 23 |
 | `3.3.c` | HSRP und VRRP | 30 | 07, 23 |
-| `3.3.d` | Multicast-Verfahren | 46 | 12 |
-| `4.1` | Diagnose, SNMP und Syslog | 40 | 08 |
+| `3.3.d` | Multicast-Verfahren | 46 | 12, 32 |
+| `4.1` | Diagnose, SNMP und Syslog | 40 | 08, 33 |
 | `4.2` | Flexible NetFlow | 24 | 18 |
 | `4.3` | SPAN, RSPAN und ERSPAN | 22 | 18 |
-| `4.4` | IP SLA | 22 | 04 |
+| `4.4` | IP SLA | 22 | 04, 35 |
 | `4.5` | Catalyst Center und KI-Workflows | 22 | 21 |
 | `4.6` | NETCONF und RESTCONF | 40 | 19 |
 | `5.1.a` | Lines und lokale Anmeldung | 27 | 11, 23 |
@@ -126,11 +131,12 @@ Pro Ziel mit Links zu Aufgaben und Lösungen: **[ZIELE.md](ZIELE.md)**.
 | `6.3` | YANG | 27 | 19, 20 |
 | `6.4` | Controller-APIs | 27 | 20 |
 | `6.5` | HTTP-Codes und API-Payloads | 29 | 19, 20 |
-| `6.6` | EEM-Applets | 29 | 19 |
+| `6.6` | EEM-Applets | 29 | 19, 36 |
 | `6.7` | Agentenbasierte und agentenlose Automation | 25 | 20 |
 
 ## Stand
 
+- **Labs 32 bis 36 und der Live-Test:** Diese Labs entstehen aus den Definitionen in [`../Labs-Quelle`](../Labs-Quelle/). Dort liegt auch [`live_test.py`](../Labs-Quelle/live_test.py): Das Skript spielt ein Lab in einer laufenden CML- oder EVE-NG-Instanz durch (Musterlösung einspielen, jede Zeile auf Parser-Fehler prüfen, jeden Fehler einzeln einbauen, Symptom messen, Fix prüfen) und schreibt einen Bericht. Wie du es startest, steht in [`../Labs-Quelle/README.md`](../Labs-Quelle/README.md). **Auch diese Labs sind bisher nicht in einer laufenden Instanz gelaufen**, für EVE-NG nimmst du `live_test.py eve <Adresse> --lab NN --ports …`; der Live-Test ist das Werkzeug, um genau das nachzuholen.
 - **Geprüft per Skript:** Die Labs entstehen automatisch aus den CML-Labs, mit denselben Geräten, Kabeln, Konfigurationen und Fehlern. Das Skript prüft, dass alle Links auf vorhandene Interfaces zeigen, kein Port doppelt belegt ist und jeder Fehler in der Konfiguration steckt. In einer laufenden EVE-NG-Instanz sind die Labs noch nicht durchgespielt.
 - **Templates und RAM** sind Richtwerte. Bei Nexus 9000v kann die Interface-Nummerierung je nach Image abweichen, beim CSRv heißt das erste Interface Gi1 statt Gi0/0.
 - **Das Hilfsskript** ist gegen simulierte Telnet-Konsolen getestet (Reihenfolge, NX-OS, VPCS). Klappt es bei dir nicht, füge die Dateien per Copy and Paste ein.

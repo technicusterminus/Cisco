@@ -188,6 +188,9 @@ Karten im Deck: 86 (`tag:Ziel::3.2.b`)
 - **Lab 30 – Capstone: Routing-Fehlersuche (OSPF, EIGRP, BGP, Redistribution)** (8 Fehler, 150 min)
   - Aufgaben: [Teil A Bauen](30-Capstone-Routing-Troubleshooting/README.md#teil-a--bauen) · [Teil B Reparieren](30-Capstone-Routing-Troubleshooting/README.md#teil-b--reparieren) · [Teil C Üben](30-Capstone-Routing-Troubleshooting/README.md#teil-c--üben)
   - Lösungen: [`solutions/`](30-Capstone-Routing-Troubleshooting/solutions/) · [`FAULTS.md`](30-Capstone-Routing-Troubleshooting/solutions/FAULTS.md)
+- **Lab 34 – OSPF: Routen filtern (ABR, ASBR, lokal) und Nachbarschaften mit Netztyp- und MTU-Fehlern** (5 Fehler, 110 min)
+  - Aufgaben: [Teil A Bauen](34-OSPF-Filter-Netztyp-MTU/README.md#teil-a--bauen) · [Teil B Reparieren](34-OSPF-Filter-Netztyp-MTU/README.md#teil-b--reparieren) · [Teil C Üben](34-OSPF-Filter-Netztyp-MTU/README.md#teil-c--üben)
+  - Lösungen: [`solutions/`](34-OSPF-Filter-Netztyp-MTU/solutions/) · [`FAULTS.md`](34-OSPF-Filter-Netztyp-MTU/solutions/FAULTS.md)
 
 ## 3.2.c – Direktes eBGP
 
@@ -257,6 +260,9 @@ Karten im Deck: 46 (`tag:Ziel::3.3.d`)
 - **Lab 12 – Multicast mit IGMP und PIM Sparse Mode** (4 Fehler, 90 min)
   - Aufgaben: [Teil A Bauen](12-Multicast-PIM/README.md#teil-a--bauen) · [Teil B Reparieren](12-Multicast-PIM/README.md#teil-b--reparieren) · [Teil C Üben](12-Multicast-PIM/README.md#teil-c--üben)
   - Lösungen: [`solutions/`](12-Multicast-PIM/solutions/) · [`FAULTS.md`](12-Multicast-PIM/solutions/FAULTS.md)
+- **Lab 32 – Multicast vertieft: IGMPv3 und SSM, Bidir-PIM, Anycast-RP mit MSDP** (4 Fehler, 120 min)
+  - Aufgaben: [Teil A Bauen](32-Multicast-SSM-Bidir-MSDP/README.md#teil-a--bauen) · [Teil B Reparieren](32-Multicast-SSM-Bidir-MSDP/README.md#teil-b--reparieren) · [Teil C Üben](32-Multicast-SSM-Bidir-MSDP/README.md#teil-c--üben)
+  - Lösungen: [`solutions/`](32-Multicast-SSM-Bidir-MSDP/solutions/) · [`FAULTS.md`](32-Multicast-SSM-Bidir-MSDP/solutions/FAULTS.md)
 
 ## 4.1 – Diagnose, SNMP und Syslog
 
@@ -265,6 +271,9 @@ Karten im Deck: 40 (`tag:Ziel::4.1`)
 - **Lab 08 – NTP, Syslog und SNMPv3** (4 Fehler, 75 min)
   - Aufgaben: [Teil A Bauen](08-NTP-Syslog-SNMP/README.md#teil-a--bauen) · [Teil B Reparieren](08-NTP-Syslog-SNMP/README.md#teil-b--reparieren) · [Teil C Üben](08-NTP-Syslog-SNMP/README.md#teil-c--üben)
   - Lösungen: [`solutions/`](08-NTP-Syslog-SNMP/solutions/) · [`FAULTS.md`](08-NTP-Syslog-SNMP/solutions/FAULTS.md)
+- **Lab 33 – Diagnose: Ping und Traceroute lesen, Debug und Conditional Debug sicher einsetzen** (4 Fehler, 90 min)
+  - Aufgaben: [Teil A Bauen](33-Diagnose-Ping-Traceroute-Debug/README.md#teil-a--bauen) · [Teil B Reparieren](33-Diagnose-Ping-Traceroute-Debug/README.md#teil-b--reparieren) · [Teil C Üben](33-Diagnose-Ping-Traceroute-Debug/README.md#teil-c--üben)
+  - Lösungen: [`solutions/`](33-Diagnose-Ping-Traceroute-Debug/solutions/) · [`FAULTS.md`](33-Diagnose-Ping-Traceroute-Debug/solutions/FAULTS.md)
 
 ## 4.2 – Flexible NetFlow
 
@@ -289,6 +298,9 @@ Karten im Deck: 22 (`tag:Ziel::4.4`)
 - **Lab 04 – Policy-Based Routing mit IP SLA** (4 Fehler, 75 min)
   - Aufgaben: [Teil A Bauen](04-PBR-IPSLA/README.md#teil-a--bauen) · [Teil B Reparieren](04-PBR-IPSLA/README.md#teil-b--reparieren) · [Teil C Üben](04-PBR-IPSLA/README.md#teil-c--üben)
   - Lösungen: [`solutions/`](04-PBR-IPSLA/solutions/) · [`FAULTS.md`](04-PBR-IPSLA/solutions/FAULTS.md)
+- **Lab 35 – IP SLA vertieft: Tracking mit Floating Static, UDP-Jitter mit Responder, TCP-Connect** (4 Fehler, 90 min)
+  - Aufgaben: [Teil A Bauen](35-IPSLA-Tracking-Jitter/README.md#teil-a--bauen) · [Teil B Reparieren](35-IPSLA-Tracking-Jitter/README.md#teil-b--reparieren) · [Teil C Üben](35-IPSLA-Tracking-Jitter/README.md#teil-c--üben)
+  - Lösungen: [`solutions/`](35-IPSLA-Tracking-Jitter/solutions/) · [`FAULTS.md`](35-IPSLA-Tracking-Jitter/solutions/FAULTS.md)
 
 ## 4.5 – Catalyst Center und KI-Workflows
 
@@ -415,6 +427,9 @@ Karten im Deck: 29 (`tag:Ziel::6.6`)
 - **Lab 19 – RESTCONF, NETCONF, YANG und EEM** (5 Fehler, 90 min)
   - Aufgaben: [Teil A Bauen](19-Programmierbarkeit-EEM/README.md#teil-a--bauen) · [Teil B Reparieren](19-Programmierbarkeit-EEM/README.md#teil-b--reparieren) · [Teil C Üben](19-Programmierbarkeit-EEM/README.md#teil-c--üben)
   - Lösungen: [`solutions/`](19-Programmierbarkeit-EEM/solutions/) · [`FAULTS.md`](19-Programmierbarkeit-EEM/solutions/FAULTS.md)
+- **Lab 36 – EEM-Applets: Ereignisse, Aktionen und die typischen Fallen** (4 Fehler, 90 min)
+  - Aufgaben: [Teil A Bauen](36-EEM-Applets/README.md#teil-a--bauen) · [Teil B Reparieren](36-EEM-Applets/README.md#teil-b--reparieren) · [Teil C Üben](36-EEM-Applets/README.md#teil-c--üben)
+  - Lösungen: [`solutions/`](36-EEM-Applets/solutions/) · [`FAULTS.md`](36-EEM-Applets/solutions/FAULTS.md)
 
 ## 6.7 – Agentenbasierte und agentenlose Automation
 
