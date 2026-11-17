@@ -1,0 +1,122 @@
+{
+ "cause": "ap-lobby nutzt das Default Policy Tag (Tag Source Default), und das enthält keine WLANs.",
+ "checks": [
+  {
+   "category": "function",
+   "desc": "Lobby-Laptop verbunden, VLAN 20",
+   "mac": "58bf.eaaa.0001",
+   "state": "Run",
+   "type": "client",
+   "vlan": "20"
+  },
+  {
+   "attrs": {
+    "akm": "psk"
+   },
+   "category": "security",
+   "desc": "Corp nutzt weiterhin WPA2-PSK",
+   "profile": "Corp_Profile",
+   "type": "wlan"
+  },
+  {
+   "ap": "ap-lager",
+   "category": "security",
+   "desc": "ap-lager sendet Corp nicht",
+   "tag": "default-policy-tag",
+   "type": "aptag"
+  }
+ ],
+ "duration": "15 min",
+ "fabric": "wlc1 mit ap-lobby und ap-lager",
+ "goals": [
+  "Den Weg vom WLAN-Profil zum AP nachvollziehen",
+  "Das Standardverhalten eines AP ohne eigene Zuordnung kennen",
+  "Eine Lösung wählen, die nur dort sendet, wo es nötig ist"
+ ],
+ "hints": [
+  "**Konzept:** Ein AP strahlt nur die WLANs aus, die ihm über seine Tags zugeordnet sind. Prüfe, was dem AP zugeordnet ist.",
+  "**Ebene:** Zuordnung am AP, nicht WLAN oder Policy Profile: Beide sind aktiv.",
+  "**Prüfschritte:** `show ap tag summary` zeigt je AP das Policy Tag und die Tag Source. Vergleiche mit dem Tag, das Corp enthält.",
+  "**Lösung:** Dem AP ap-lobby das Policy Tag **PT_Corp** zuweisen. ap-lager bleibt unverändert."
+ ],
+ "id": "01-ssid-nicht-sichtbar",
+ "intro": "Die Firma hat das WLAN **Corp** (WPA2-PSK, VLAN 20) eingerichtet. Die Konfiguration wirkt vollständig, trotzdem findet der Laptop in der Lobby die SSID nicht.\n\n- Controller wlc1, zwei APs: **ap-lobby** und **ap-lager**\n- Lobby-Laptop 58bf.eaaa.0001 mit dem richtigen Schlüssel\n- Im Lager soll Corp **nicht** ausgestrahlt werden.",
+ "kind": "troubleshooting",
+ "level": "Einstieg",
+ "limits": [
+  "Das Client-Modell ist didaktisch: Es erklärt, ob und warum ein Client verbunden ist, ist aber keine Abbildung der Controller-Pipeline.",
+  "Nicht modelliert: 802.1x/RADIUS, FlexConnect, RF-Profile, Roaming, Mobility."
+ ],
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [],
+ "questions": [
+  {
+   "answer": 0,
+   "explain": "Ohne Zuordnung gilt default-policy-tag. Es enthält keine WLAN-zu-Policy-Zuordnung, die SSID wird nicht ausgestrahlt.",
+   "id": "q1",
+   "options": [
+    "Das Default Policy Tag, das keine WLANs enthält",
+    "Das erste Policy Tag in der Liste",
+    "Das Tag mit den meisten WLANs",
+    "Keines, der AP sendet dann alle WLANs"
+   ],
+   "q": "Welches Policy Tag nutzt ein AP, dem du keines zuweist?"
+  },
+  {
+   "answer": 1,
+   "explain": "Least Privilege gilt auch für Funk: Eine SSID sendet nur dort, wo sie gebraucht wird.",
+   "id": "q2",
+   "options": [
+    "Weil jeder AP nur ein Tag haben darf",
+    "Weil Corp im Lager nicht gebraucht wird und sonst unnötig erreichbar wäre",
+    "Weil sonst die Lizenz nicht reicht",
+    "Weil das Lager kein WLAN unterstützt"
+   ],
+   "q": "Warum ist es besser, nur ap-lobby zu taggen statt beide APs?"
+  }
+ ],
+ "requirements": [
+  "Der Laptop in der Lobby ist mit Corp verbunden und im VLAN 20.",
+  "Corp bleibt mit WPA2-PSK geschützt.",
+  "Corp wird nur in der Lobby ausgestrahlt, nicht im Lager."
+ ],
+ "solution": "In der WebUI: Configuration > Wireless > Access Points > ap-lobby > Edit Tags > Policy Tag PT_Corp. CLI: `configure terminal`, `ap a4b2.32aa.0001`, `policy-tag PT_Corp`, `end`.",
+ "solutionCommands": [
+  "ap a4b2.32aa.0001",
+  "policy-tag PT_Corp"
+ ],
+ "startCommands": [
+  "wlan Corp_Profile 1 Corp",
+  "security wpa akm psk",
+  "security wpa psk set-key ascii 0 Sommer2026",
+  "no shutdown",
+  "exit",
+  "wireless profile policy PP_Corp",
+  "vlan 20",
+  "no shutdown",
+  "exit",
+  "wireless tag policy PT_Corp",
+  "wlan Corp_Profile policy PP_Corp",
+  "exit"
+ ],
+ "title": "01 Corp-SSID in der Lobby nicht sichtbar",
+ "tools": [
+  "WebUI: Monitoring > Wireless > Clients",
+  "WebUI: Configuration > Tags & Profiles und Wireless > Access Points",
+  "Client-Diagnose (nur im geführten Modus)",
+  "CLI: show wlan summary, show ap tag summary, show wireless client summary"
+ ],
+ "topic": "Wireless / Tags",
+ "worldClients": [
+  {
+   "ap": "ap-lobby",
+   "mac": "58bf.eaaa.0001",
+   "protocol": "11ac",
+   "psk": "Sommer2026",
+   "ssid": "Corp"
+  }
+ ]
+}

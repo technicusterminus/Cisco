@@ -2,7 +2,7 @@
 
 Simulierter **Catalyst 9800 WLC** und simuliertes **Catalyst Center** in einer gemeinsamen Welt. Python-Standardbibliothek, keine Abhängigkeiten, läuft offline. Kein echtes Gerät, keine Verbindung zu echten Controllern.
 
-> Stand: Phase 1 und 2a (siehe [`docs/UMFANG.md`](docs/UMFANG.md)). Die WLC hat eine Weboberfläche, das Catalyst Center noch nicht; Labs gibt es noch keine.
+> Stand: Phase 1, 2a und 2c (siehe [`docs/UMFANG.md`](docs/UMFANG.md)). Die WLC hat eine Weboberfläche und sechs Labs, das Catalyst Center noch keine Oberfläche.
 
 ## Starten
 
@@ -10,11 +10,16 @@ Simulierter **Catalyst 9800 WLC** und simuliertes **Catalyst Center** in einer g
 python3 start.py            # Port 8090, nur localhost; Oberfläche unter http://127.0.0.1:8090/
 python3 -m unittest discover -s tests
 node tests/gui/smoke.js     # Browser-Test (braucht Node.js und Playwright)
+python3 Labs-Quelle/build_labs.py   # labs/*.json neu erzeugen (deterministisch)
 ```
 
 ## WLC-Oberfläche
 
 `http://127.0.0.1:8090/` zeigt die WebUI des simulierten C9800: Dashboard, Monitoring (Access Points, Clients), Configuration (WLANs, Policy, Tags, AP-Tags), Administration (CLI) und die Simulations-Seite *Client-Diagnose*, die erklärt, warum ein Client nicht verbunden ist. Jeder Dialog zeigt vorab das **CLI-Äquivalent**; Änderungen laufen durch dieselbe CLI und werden atomar angewendet (bei einem Fehler bleibt alles wie vorher). Die Menüstruktur ist aus dem Wissen über die WebUI nachgebaut (siehe `docs/QUELLEN.md`).
+
+## Labs
+
+Die Seite *Labs (Simulation)* startet sechs Labs (vier Fehlersuchen, zwei Aufgaben nach Anforderungen), siehe [`docs/LAB-KATALOG.md`](docs/LAB-KATALOG.md). Ein Start setzt die Welt zurück. Bewertet wird das Verhalten (Client verbunden, VLAN, Zuordnungen), mit getrennten Prüfungen für *Funktion* und *Sicherheit / Least Privilege*; die naheliegende falsche Abkürzung besteht nie. Modi: *geführt* (vier Hinweisstufen, Lösung, Client-Diagnose) und *Prüfung* (keine Hilfe, keine Details). Verständnisfragen zählen nicht zum Bestehen.
 
 ## WLC-CLI
 

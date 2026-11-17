@@ -1,0 +1,130 @@
+{
+ "cause": "Das Policy Tag verweist für Corp auf das (deaktivierte) Gast-Profil statt auf PP_Corp.",
+ "checks": [
+  {
+   "category": "function",
+   "desc": "Lobby-Laptop verbunden, VLAN 20",
+   "mac": "58bf.eaaa.0001",
+   "state": "Run",
+   "type": "client",
+   "vlan": "20"
+  },
+  {
+   "attrs": {
+    "status": "DISABLED"
+   },
+   "category": "security",
+   "desc": "Gast-Policy-Profile bleibt deaktiviert",
+   "name": "PP_Gast",
+   "type": "policy"
+  },
+  {
+   "attrs": {
+    "akm": "psk"
+   },
+   "category": "security",
+   "desc": "Corp nutzt weiterhin WPA2-PSK",
+   "profile": "Corp_Profile",
+   "type": "wlan"
+  }
+ ],
+ "duration": "20 min",
+ "fabric": "wlc1 mit ap-lobby und ap-lager",
+ "goals": [
+  "Die Zuordnung von WLAN-Profil zu Policy Profile im Policy Tag lesen",
+  "Nicht das erstbeste deaktivierte Objekt aktivieren"
+ ],
+ "hints": [
+  "**Konzept:** Das Policy Tag entscheidet, mit welchem Policy Profile ein WLAN an einem AP betrieben wird.",
+  "**Ebene:** Zuordnung im Policy Tag. Die Objekte selbst sind in Ordnung.",
+  "**Prüfschritte:** Unter Configuration > Tags die Zuordnung von Corp_Profile ansehen: Auf welches Policy Profile zeigt sie?",
+  "**Lösung:** Im Policy Tag PT_Corp das WLAN Corp_Profile dem Policy Profile **PP_Corp** zuordnen. PP_Gast nicht aktivieren."
+ ],
+ "id": "04-falsches-policy-profile",
+ "intro": "Der Laptop in der Lobby kommt nicht ins WLAN Corp. Der Schlüssel stimmt, der AP ist zugewiesen.\n\n- Es gibt zwei Policy Profiles: **PP_Corp** (VLAN 20, aktiv) und **PP_Gast** (VLAN 99, bisher nicht aktiviert)\n- Mitarbeiter gehören ins VLAN 20, nicht ins Gästenetz.",
+ "kind": "troubleshooting",
+ "level": "Mittel",
+ "limits": [
+  "Das Client-Modell ist didaktisch: Es erklärt, ob und warum ein Client verbunden ist, ist aber keine Abbildung der Controller-Pipeline.",
+  "Nicht modelliert: 802.1x/RADIUS, FlexConnect, RF-Profile, Roaming, Mobility."
+ ],
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 01"
+ ],
+ "questions": [
+  {
+   "answer": 0,
+   "explain": "Der Client wäre verbunden, aber im falschen Netz. Genau das fängt die Prüfung auf VLAN 20 ab.",
+   "id": "q1",
+   "options": [
+    "Der Laptop verbindet sich, landet aber im VLAN 99",
+    "Nichts, das Profil wird ignoriert",
+    "Der AP startet neu",
+    "Der Laptop bekommt zwei VLANs"
+   ],
+   "q": "Was passiert, wenn du stattdessen PP_Gast aktivierst?"
+  },
+  {
+   "answer": 1,
+   "explain": "Das Policy Tag ordnet je WLAN-Profil ein Policy Profile zu.",
+   "id": "q2",
+   "options": [
+    "Im WLAN-Profil selbst",
+    "Im Policy Tag, das dem AP zugewiesen ist",
+    "Im Site Tag",
+    "Am Client"
+   ],
+   "q": "Wo wird festgelegt, welches Policy Profile für ein WLAN gilt?"
+  }
+ ],
+ "requirements": [
+  "Der Laptop in der Lobby ist mit Corp verbunden und im VLAN 20.",
+  "Das Gast-Policy-Profile bleibt deaktiviert.",
+  "Corp bleibt mit WPA2-PSK geschützt."
+ ],
+ "solution": "WebUI: Configuration > Tags & Profiles > Tags > PT_Corp > Edit: Corp_Profile → PP_Corp. CLI: `wireless tag policy PT_Corp`, `wlan Corp_Profile policy PP_Corp`.",
+ "solutionCommands": [
+  "wireless tag policy PT_Corp",
+  "wlan Corp_Profile policy PP_Corp"
+ ],
+ "startCommands": [
+  "wlan Corp_Profile 1 Corp",
+  "security wpa akm psk",
+  "security wpa psk set-key ascii 0 Sommer2026",
+  "no shutdown",
+  "exit",
+  "wireless profile policy PP_Corp",
+  "vlan 20",
+  "no shutdown",
+  "exit",
+  "wireless tag policy PT_Corp",
+  "wlan Corp_Profile policy PP_Gast",
+  "exit",
+  "wireless profile policy PP_Gast",
+  "vlan 99",
+  "exit",
+  "ap a4b2.32aa.0001",
+  "policy-tag PT_Corp"
+ ],
+ "title": "04 Richtiges WLAN, falsche Zuordnung",
+ "tools": [
+  "WebUI: Monitoring > Wireless > Clients",
+  "WebUI: Configuration > Tags & Profiles und Wireless > Access Points",
+  "Client-Diagnose (nur im geführten Modus)",
+  "CLI: show wlan summary, show ap tag summary, show wireless client summary"
+ ],
+ "topic": "Wireless / Tags",
+ "worldClients": [
+  {
+   "ap": "ap-lobby",
+   "mac": "58bf.eaaa.0001",
+   "protocol": "11ac",
+   "psk": "Sommer2026",
+   "ssid": "Corp"
+  }
+ ]
+}

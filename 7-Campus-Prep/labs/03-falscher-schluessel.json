@@ -1,0 +1,117 @@
+{
+ "cause": "Am Controller ist ein anderer Schlüssel hinterlegt (Tippfehler), die Authentifizierung scheitert.",
+ "checks": [
+  {
+   "category": "function",
+   "desc": "Lobby-Laptop verbunden, VLAN 20",
+   "mac": "58bf.eaaa.0001",
+   "state": "Run",
+   "type": "client",
+   "vlan": "20"
+  },
+  {
+   "attrs": {
+    "akm": "psk"
+   },
+   "category": "security",
+   "desc": "Corp nutzt weiterhin WPA2-PSK",
+   "profile": "Corp_Profile",
+   "type": "wlan"
+  }
+ ],
+ "duration": "15 min",
+ "fabric": "wlc1 mit ap-lobby und ap-lager",
+ "goals": [
+  "Einen Authentifizierungsfehler erkennen",
+  "Das Problem beheben, ohne die Sicherheit abzuschalten"
+ ],
+ "hints": [
+  "**Konzept:** Bei WPA2-PSK müssen der Schlüssel am Client und am Controller übereinstimmen.",
+  "**Ebene:** Sicherheit des WLAN-Profils, nicht Zuordnung oder Zustand.",
+  "**Prüfschritte:** Der Schlüssel wird nie angezeigt. Setze ihn neu und prüfe dann den Client.",
+  "**Lösung:** Am WLAN-Profil den Schlüssel auf **Sommer2026** setzen. Nicht auf Open umstellen."
+ ],
+ "id": "03-falscher-schluessel",
+ "intro": "Der Laptop in der Lobby verbindet sich nicht mit Corp. Tags, Profile und VLAN sind in Ordnung. Der Schlüssel, den die Mitarbeiter kennen, lautet **Sommer2026**.",
+ "kind": "troubleshooting",
+ "level": "Einstieg",
+ "limits": [
+  "Das Client-Modell ist didaktisch: Es erklärt, ob und warum ein Client verbunden ist, ist aber keine Abbildung der Controller-Pipeline.",
+  "Nicht modelliert: 802.1x/RADIUS, FlexConnect, RF-Profile, Roaming, Mobility."
+ ],
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 01"
+ ],
+ "questions": [
+  {
+   "answer": 0,
+   "explain": "Geheimnisse werden nicht zurückgegeben. Man setzt sie neu, statt sie nachzulesen.",
+   "id": "q1",
+   "options": [
+    "Damit er nicht ausgelesen werden kann",
+    "Weil er nicht gespeichert wird",
+    "Weil er nur für Gäste gilt",
+    "Weil das nur der Client kennen darf"
+   ],
+   "q": "Warum zeigt die WebUI den Pre-Shared Key nicht an?"
+  },
+  {
+   "answer": 1,
+   "explain": "Die Verbindung klappt, aber die Anforderung (geschütztes WLAN) ist verletzt. Das ist die Sicherheitsprüfung des Labs.",
+   "id": "q2",
+   "options": [
+    "Weil dann das VLAN fehlt",
+    "Weil Corp dann für jeden ohne Schlüssel erreichbar wäre",
+    "Weil Open nur im Lager geht",
+    "Weil der AP dann abstürzt"
+   ],
+   "q": "Das WLAN auf Open zu stellen, würde den Laptop verbinden. Warum ist das trotzdem falsch?"
+  }
+ ],
+ "requirements": [
+  "Der Laptop in der Lobby ist mit Corp verbunden und im VLAN 20.",
+  "Corp bleibt mit WPA2-PSK geschützt, ein offenes WLAN ist keine Lösung."
+ ],
+ "solution": "WebUI: WLANs > Corp_Profile > Edit: Pre-Shared Key Sommer2026. CLI: `wlan Corp_Profile 1 Corp`, `security wpa psk set-key ascii 0 Sommer2026`.",
+ "solutionCommands": [
+  "wlan Corp_Profile 1 Corp",
+  "security wpa psk set-key ascii 0 Sommer2026"
+ ],
+ "startCommands": [
+  "wlan Corp_Profile 1 Corp",
+  "security wpa akm psk",
+  "security wpa psk set-key ascii 0 Sommer2025",
+  "no shutdown",
+  "exit",
+  "wireless profile policy PP_Corp",
+  "vlan 20",
+  "no shutdown",
+  "exit",
+  "wireless tag policy PT_Corp",
+  "wlan Corp_Profile policy PP_Corp",
+  "exit",
+  "ap a4b2.32aa.0001",
+  "policy-tag PT_Corp"
+ ],
+ "title": "03 Der Schlüssel passt nicht",
+ "tools": [
+  "WebUI: Monitoring > Wireless > Clients",
+  "WebUI: Configuration > Tags & Profiles und Wireless > Access Points",
+  "Client-Diagnose (nur im geführten Modus)",
+  "CLI: show wlan summary, show ap tag summary, show wireless client summary"
+ ],
+ "topic": "Wireless / Sicherheit",
+ "worldClients": [
+  {
+   "ap": "ap-lobby",
+   "mac": "58bf.eaaa.0001",
+   "protocol": "11ac",
+   "psk": "Sommer2026",
+   "ssid": "Corp"
+  }
+ ]
+}

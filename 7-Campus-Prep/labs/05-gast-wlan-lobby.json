@@ -1,0 +1,178 @@
+{
+ "cause": "Aufgabe nach Anforderungen: Es gibt keinen einzelnen Fehler.",
+ "checks": [
+  {
+   "category": "function",
+   "desc": "Gast-Laptop in der Lobby: verbunden, VLAN 99",
+   "mac": "58bf.eaaa.0003",
+   "state": "Run",
+   "type": "client",
+   "vlan": "99"
+  },
+  {
+   "category": "function",
+   "desc": "Corp-Laptop in der Lobby: verbunden, VLAN 20",
+   "mac": "58bf.eaaa.0001",
+   "state": "Run",
+   "type": "client",
+   "vlan": "20"
+  },
+  {
+   "category": "function",
+   "desc": "Corp-Laptop im Lager: verbunden, VLAN 20",
+   "mac": "58bf.eaaa.0002",
+   "state": "Run",
+   "type": "client",
+   "vlan": "20"
+  },
+  {
+   "category": "security",
+   "desc": "Gast-Laptop im Lager: keine Verbindung",
+   "mac": "58bf.eaaa.0004",
+   "state": "Not Associated",
+   "type": "client"
+  },
+  {
+   "attrs": {
+    "akm": "psk"
+   },
+   "category": "security",
+   "desc": "Corp nutzt weiterhin WPA2-PSK",
+   "profile": "Corp_Profile",
+   "type": "wlan"
+  }
+ ],
+ "duration": "30 min",
+ "fabric": "wlc1 mit ap-lobby und ap-lager",
+ "goals": [
+  "Zwei WLANs mit unterschiedlichem Geltungsbereich planen",
+  "Mit wenigen Tags mehrere APs unterschiedlich bedienen"
+ ],
+ "hints": [
+  "**Konzept:** Welche WLANs ein AP ausstrahlt, bestimmt sein Policy Tag. APs mit unterschiedlichen WLANs brauchen unterschiedliche Tags.",
+  "**Ebene:** Design: Du brauchst neue Objekte (WLAN, Policy Profile) und eine neue Zuordnung.",
+  "**Prüfschritte:** Lege Gast als offenes WLAN mit eigenem Policy Profile (VLAN 99) an. Überlege, welcher AP welche WLANs braucht.",
+  "**Lösung:** WLAN Gast_Profile (offen) und Policy Profile PP_Gast (VLAN 99) anlegen und aktivieren, ein Policy Tag **PT_Lobby** mit Corp und Gast bilden und ap-lobby zuweisen. ap-lager behält PT_Corp."
+ ],
+ "id": "05-gast-wlan-lobby",
+ "intro": "Die Firma braucht ein Gast-WLAN. Corp läuft bereits an beiden APs (VLAN 20, WPA2-PSK).\n\n- Das Gast-WLAN heißt **Gast**, ist offen und gehört ins VLAN **99**\n- Gäste gibt es nur in der Lobby\n- Je ein Laptop als Test: Corp in Lobby und Lager, Gast in Lobby und Lager",
+ "kind": "requirements",
+ "level": "Mittel",
+ "limits": [
+  "Das Client-Modell ist didaktisch: Es erklärt, ob und warum ein Client verbunden ist, ist aber keine Abbildung der Controller-Pipeline.",
+  "Nicht modelliert: 802.1x/RADIUS, FlexConnect, RF-Profile, Roaming, Mobility."
+ ],
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 01",
+  "Lab 04"
+ ],
+ "questions": [
+  {
+   "answer": 1,
+   "explain": "Ein Tag mit Corp und Gast für die Lobby, eines nur mit Corp für das Lager.",
+   "id": "q1",
+   "options": [
+    "Eines für beide APs",
+    "Zwei, weil die APs unterschiedliche WLANs senden sollen",
+    "Eines pro WLAN",
+    "Keines"
+   ],
+   "q": "Wie viele Policy Tags brauchst du mindestens für diese Anforderung?"
+  },
+  {
+   "answer": 0,
+   "explain": "Dann sendet auch das Lager das Gast-WLAN. Die Sicherheitsprüfung für den Gast-Laptop im Lager schlägt an.",
+   "id": "q2",
+   "options": [
+    "Gast in das bestehende Tag einfügen, das beide APs nutzen",
+    "Gast als WPA2-WLAN anlegen",
+    "Ein eigenes VLAN verwenden",
+    "Das Policy Profile aktivieren"
+   ],
+   "q": "Was wäre die einfachste, aber falsche Lösung?"
+  }
+ ],
+ "requirements": [
+  "Gast-WLAN (SSID Gast): Der Gast-Laptop in der Lobby ist verbunden und im VLAN 99.",
+  "Der Gast-Laptop im Lager bekommt keine Verbindung.",
+  "Corp bleibt in Lobby und Lager unverändert erreichbar (VLAN 20).",
+  "Corp bleibt mit WPA2-PSK geschützt."
+ ],
+ "solution": "Gast_Profile (ID 2, offen) und PP_Gast (VLAN 99) anlegen und aktivieren; Policy Tag PT_Lobby mit Corp_Profile→PP_Corp und Gast_Profile→PP_Gast; ap-lobby auf PT_Lobby. Gleichwertig: Gast in PT_Corp ergänzen und für das Lager ein eigenes Tag nur mit Corp bilden.",
+ "solutionCommands": [
+  "wlan Gast_Profile 2 Gast",
+  "no shutdown",
+  "exit",
+  "wireless profile policy PP_Gast",
+  "vlan 99",
+  "no shutdown",
+  "exit",
+  "wireless tag policy PT_Lobby",
+  "wlan Corp_Profile policy PP_Corp",
+  "wlan Gast_Profile policy PP_Gast",
+  "exit",
+  "ap a4b2.32aa.0001",
+  "policy-tag PT_Lobby"
+ ],
+ "startCommands": [
+  "wlan Corp_Profile 1 Corp",
+  "security wpa akm psk",
+  "security wpa psk set-key ascii 0 Sommer2026",
+  "no shutdown",
+  "exit",
+  "wireless profile policy PP_Corp",
+  "vlan 20",
+  "no shutdown",
+  "exit",
+  "wireless tag policy PT_Corp",
+  "wlan Corp_Profile policy PP_Corp",
+  "exit",
+  "ap a4b2.32aa.0001",
+  "policy-tag PT_Corp",
+  "exit",
+  "ap a4b2.32aa.0002",
+  "policy-tag PT_Corp"
+ ],
+ "title": "05 Gast-WLAN nur in der Lobby",
+ "tools": [
+  "WebUI: Monitoring > Wireless > Clients",
+  "WebUI: Configuration > Tags & Profiles und Wireless > Access Points",
+  "Client-Diagnose (nur im geführten Modus)",
+  "CLI: show wlan summary, show ap tag summary, show wireless client summary"
+ ],
+ "topic": "Wireless / Design",
+ "worldClients": [
+  {
+   "ap": "ap-lobby",
+   "mac": "58bf.eaaa.0001",
+   "protocol": "11ac",
+   "psk": "Sommer2026",
+   "ssid": "Corp"
+  },
+  {
+   "ap": "ap-lager",
+   "mac": "58bf.eaaa.0002",
+   "protocol": "11ac",
+   "psk": "Sommer2026",
+   "ssid": "Corp"
+  },
+  {
+   "ap": "ap-lobby",
+   "mac": "58bf.eaaa.0003",
+   "protocol": "11ac",
+   "psk": "",
+   "ssid": "Gast"
+  },
+  {
+   "ap": "ap-lager",
+   "mac": "58bf.eaaa.0004",
+   "protocol": "11ac",
+   "psk": "",
+   "ssid": "Gast"
+  }
+ ]
+}
