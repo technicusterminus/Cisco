@@ -1,0 +1,288 @@
+/* Campus Prep: Oberflaeche des C9800-Simulators. Keine zweite Logik: Jedes Formular erzeugt CLI-Befehle, die der Server
+   atomar durch dieselbe CLI schickt. Die Menuestruktur ist aus dem Wissen ueber die C9800-WebUI nachgebaut (docs/QUELLEN.md). */
+'use strict';
+
+const h = (tag, attrs, ...kids) => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === 'class') e.className = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else if (v === true) e.setAttribute(k, '');
+    else if (v !== false && v != null) e.setAttribute(k, v);
+  }
+  kids.flat(Infinity).forEach(c => { if (c != null && c !== false) e.append(c.nodeType ? c : document.createTextNode(String(c))); });
+  return e;
+};
+
+const api = {
+  state: () => fetch('/wlc/api/state').then(r => r.json()),
+  apply: commands => fetch('/wlc/api/apply', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ commands }) }).then(async r => Object.assign({ http: r.status }, await r.json())),
+  cli: command => fetch('/wlc/cli', { method: 'POST', body: JSON.stringify({ command }) }).then(r => r.json()),
+};
+
+let S = null;
+const NAV = [
+  { id: 'dash', l: 'Dashboard' },
+  { g: 'Monitoring', sub: 'Wireless', items: [['aps', 'Access Points'], ['clients', 'Clients']] },
+  { g: 'Configuration', sub: 'Tags & Profiles', items: [['wlans', 'WLANs'], ['policies', 'Policy'], ['tags', 'Tags']] },
+  { g: 'Configuration', sub: 'Wireless', items: [['apcfg', 'Access Points']] },
+  { g: 'Administration', items: [['cli', 'Command Line Interface']] },
+  { g: 'Troubleshooting', items: [['diag', 'Client-Diagnose (Simulation)']] },
+];
+const TITLES = { dash: 'Dashboard', aps: 'Monitoring > Wireless > Access Points', clients: 'Monitoring > Wireless > Clients',
+  wlans: 'Configuration > Tags & Profiles > WLANs', policies: 'Configuration > Tags & Profiles > Policy',
+  tags: 'Configuration > Tags & Profiles > Tags', apcfg: 'Configuration > Wireless > Access Points',
+  cli: 'Administration > Command Line Interface', diag: 'Troubleshooting > Client-Diagnose (Simulation)' };
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('on');
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('on'), 2600);
+}
+
+const badge = (text, kind) => h('span', { class: 'badge ' + kind }, text);
+const stateBadge = s => badge(s, ['UP', 'ENABLED', 'Registered', 'Run'].includes(s) ? 'ok' : ['DOWN', 'DISABLED', 'Not joined', 'Not Associated'].includes(s) ? 'bad' : 'warn');
+
+function table(cols, rows, empty) {
+  const body = rows.length ? rows.map(r => h('tr', null, cols.map(c => h('td', { class: c.cls || null }, c.f(r)))))
+    : [h('tr', null, h('td', { class: 'empty', colspan: cols.length }, empty || 'No items have been found.'))];
+  return h('div', { class: 'tablewrap' }, h('table', null, h('thead', null, h('tr', null, cols.map(c => h('th', null, c.l)))), h('tbody', null, body)));
+}
+
+/* ---------------------------------------------------------------- Dialog */
+function field(label, input, hint) {
+  return [h('label', null, label), input, hint ? h('div', { class: 'hint' }, hint) : null];
+}
+
+function modal(title, body, cmds, onDone) {
+  const err = h('div', { class: 'err', hidden: true, role: 'alert' });
+  const pre = h('pre', { 'data-id': 'cli-preview' });
+  const upd = () => {
+    try { pre.textContent = ['configure terminal'].concat(cmds(), ['end']).join('\n'); } catch (e) { pre.textContent = '(' + e.message + ')'; }
+  };
+  body.addEventListener('input', upd); body.addEventListener('change', upd);
+  const close = () => { bg.remove(); document.removeEventListener('keydown', esc); };
+  const esc = ev => { if (ev.key === 'Escape') close(); };
+  const apply = h('button', { class: 'primary', 'data-id': 'apply', onclick: async () => {
+    err.hidden = true;
+    let list;
+    try { list = cmds(); } catch (e) { err.textContent = e.message; err.hidden = false; return; }
+    apply.disabled = true;
+    const r = await api.apply(list);
+    apply.disabled = false;
+    if (!r.ok) {
+      err.textContent = (r.error ? 'Fehler bei "' + r.error.command + '": ' + r.error.message : r.error) + ' - nichts wurde übernommen.';
+      err.hidden = false; return;
+    }
+    close(); toast('Konfiguration angewendet'); await onDone();
+  } }, 'Apply to Device');
+  const bg = h('div', { class: 'modal-bg', role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
+    h('div', { class: 'modal' }, h('h2', null, title), body,
+      h('details', { open: true }, h('summary', { class: 'muted' }, 'CLI-Äquivalent'), pre), err,
+      h('div', { class: 'btns' }, h('button', { onclick: close }, 'Cancel'), apply)));
+  document.body.append(bg); document.addEventListener('keydown', esc); upd();
+  const first = bg.querySelector('input:not([disabled]),select:not([disabled])'); if (first) first.focus();
+}
+
+const need = (cond, msg) => { if (!cond) throw new Error(msg); };
+
+/* ---------------------------------------------------------------- Ansichten */
+const VIEWS = {};
+
+VIEWS.dash = main => {
+  const up = S.aps.filter(a => a.state === 'Registered').length;
+  const run = S.clients.filter(c => c.state === 'Run').length;
+  main.append(h('div', { class: 'tiles' },
+    [[up + ' / ' + S.aps.length, 'Access Points registriert'], [run, 'Clients verbunden'],
+      [S.wlans.filter(w => w.status === 'UP').length + ' / ' + S.wlans.length, 'WLANs UP'],
+      [S.policies.filter(p => p.status === 'ENABLED').length + ' / ' + S.policies.length, 'Policy Profiles ENABLED']]
+      .map(([n, l]) => h('div', { class: 'tile' }, h('div', { class: 'n' }, n), h('div', { class: 'l' }, l)))));
+  main.append(h('h2', null, 'Controller'), h('div', { class: 'card' },
+    h('div', null, h('b', null, S.wlc.hostname), ' · ', S.wlc.platformId, ' · IOS XE ', S.wlc.version),
+    h('div', { class: 'muted' }, 'Management ', S.wlc.ip, ' · ', S.wlc.location)));
+  main.append(h('h2', null, 'Access Points'), apTable());
+};
+
+const apTable = () => table([{ l: 'AP Name', f: a => a.name }, { l: 'AP Model', f: a => a.model }, { l: 'Ethernet MAC', f: a => a.ethMac },
+  { l: 'Radio MAC', f: a => a.radioMac }, { l: 'IP Address', f: a => a.ip }, { l: 'Location', f: a => a.location },
+  { l: 'Country', f: a => a.country }, { l: 'Status', f: a => stateBadge(a.state) }], S.aps);
+
+VIEWS.aps = main => main.append(apTable());
+
+VIEWS.clients = main => {
+  const rows = S.clients.filter(c => c.state !== 'Not Associated');
+  main.append(table([{ l: 'MAC Address', f: c => c.mac }, { l: 'AP Name', f: c => c.ap }, { l: 'WLAN ID', f: c => c.wlan },
+    { l: 'SSID', f: c => c.ssid }, { l: 'State', f: c => stateBadge(c.state) }, { l: 'Protocol', f: c => c.protocol },
+    { l: 'Auth Method', f: c => c.method }], rows, 'Keine Clients verbunden.'));
+};
+
+VIEWS.wlans = main => {
+  main.append(h('div', { class: 'bar' }, h('button', { class: 'primary', 'data-id': 'add-wlan', onclick: () => wlanDialog() }, '+ Add')));
+  main.append(table([{ l: 'Status', f: w => stateBadge(w.status) }, { l: 'Profile Name', f: w => w.profile }, { l: 'ID', f: w => w.id },
+    { l: 'SSID', f: w => w.ssid }, { l: 'Security', f: w => w.security },
+    { l: '', f: w => [h('button', { class: 'small', onclick: () => wlanDialog(w) }, 'Edit'), ' ',
+      h('button', { class: 'small danger', onclick: () => remove('no wlan ' + w.profile, 'WLAN ' + w.profile) }, 'Delete')] }], S.wlans));
+};
+
+function wlanDialog(w) {
+  const prof = h('input', { 'data-id': 'wlan-profile', value: w ? w.profile : '', disabled: !!w, placeholder: 'Corp_Profile' });
+  const id = h('input', { 'data-id': 'wlan-id', type: 'number', min: 1, max: 4096, value: w ? w.id : nextWlanId(), disabled: !!w });
+  const ssid = h('input', { 'data-id': 'wlan-ssid', value: w ? w.ssid : '', disabled: !!w, placeholder: 'Corp' });
+  const sec = h('select', { 'data-id': 'wlan-sec' }, h('option', { value: 'open' }, 'Open'), h('option', { value: 'psk' }, 'WPA2 Personal (PSK)'));
+  sec.value = w ? w.akm : 'open';
+  const key = h('input', { 'data-id': 'wlan-psk', type: 'password', autocomplete: 'off', placeholder: w && w.pskSet ? '(unverändert)' : '' });
+  const en = h('input', { 'data-id': 'wlan-enabled', type: 'checkbox' }); en.checked = w ? w.status === 'UP' : false;
+  const body = h('div', null,
+    h('div', { class: 'row' }, field('Profile Name', prof), field('WLAN ID', id), field('SSID', ssid, 'Im Simulator ohne Leerzeichen.'),
+      field('Security', sec), field('Pre-Shared Key', key, 'Ohne Leerzeichen.'), field('Status Enabled', en)));
+  modal(w ? 'Edit WLAN ' + w.profile : 'Add WLAN', body, () => {
+    if (!w) {
+      need(/^[\w.-]{1,32}$/.test(prof.value), 'Profile Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
+      need(/^\S{1,32}$/.test(ssid.value), 'SSID: 1-32 Zeichen ohne Leerzeichen');
+      need(+id.value >= 1 && +id.value <= 4096, 'WLAN ID: 1-4096');
+    }
+    const c = ['wlan ' + (w ? w.profile : prof.value) + ' ' + (w ? w.id : id.value) + ' ' + (w ? w.ssid : ssid.value)];
+    if (sec.value === 'psk') {
+      c.push('security wpa akm psk');
+      if (key.value || !(w && w.pskSet)) {
+        need(/^\S{8,63}$/.test(key.value), 'Pre-Shared Key: 8-63 Zeichen ohne Leerzeichen');
+        c.push('security wpa psk set-key ascii 0 ' + key.value);
+      }
+    } else if (w && w.akm === 'psk') c.push('no security wpa akm psk');
+    c.push(en.checked ? 'no shutdown' : 'shutdown');
+    return c;
+  }, refresh);
+}
+const nextWlanId = () => Math.max(0, ...S.wlans.map(x => x.id)) + 1;
+
+VIEWS.policies = main => {
+  main.append(h('div', { class: 'bar' }, h('button', { class: 'primary', 'data-id': 'add-policy', onclick: () => policyDialog() }, '+ Add')));
+  main.append(table([{ l: 'Status', f: p => stateBadge(p.status) }, { l: 'Policy Profile Name', f: p => p.name },
+    { l: 'Description', f: p => p.description || 'Not required' }, { l: 'VLAN', f: p => p.vlan },
+    { l: '', f: p => [h('button', { class: 'small', onclick: () => policyDialog(p) }, 'Edit'), ' ',
+      h('button', { class: 'small danger', onclick: () => remove('no wireless profile policy ' + p.name, 'Policy Profile ' + p.name) }, 'Delete')] }], S.policies));
+};
+
+function policyDialog(p) {
+  const name = h('input', { 'data-id': 'policy-name', value: p ? p.name : '', disabled: !!p, placeholder: 'PP_Corp' });
+  const vlan = h('input', { 'data-id': 'policy-vlan', type: 'number', min: 1, max: 4094, value: p ? p.vlan : '1' });
+  const descr = h('input', { 'data-id': 'policy-descr', value: p ? p.description : '' });
+  const en = h('input', { 'data-id': 'policy-enabled', type: 'checkbox' }); en.checked = p ? p.status === 'ENABLED' : false;
+  const body = h('div', { class: 'row' }, field('Name', name), field('VLAN', vlan), field('Description', descr), field('Status Enabled', en));
+  modal(p ? 'Edit Policy Profile ' + p.name : 'Add Policy Profile', body, () => {
+    if (!p) need(/^[\w.-]{1,32}$/.test(name.value), 'Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
+    need(+vlan.value >= 1 && +vlan.value <= 4094, 'VLAN: 1-4094');
+    const c = ['wireless profile policy ' + (p ? p.name : name.value), 'vlan ' + vlan.value];
+    if (descr.value.trim()) c.push('description ' + descr.value.trim());
+    c.push(en.checked ? 'no shutdown' : 'shutdown');
+    return c;
+  }, refresh);
+}
+
+VIEWS.tags = main => {
+  main.append(h('div', { class: 'bar' }, h('button', { class: 'primary', 'data-id': 'add-tag', onclick: () => tagDialog() }, '+ Add'),
+    h('span', { class: 'muted' }, 'Policy Tags verbinden WLAN-Profile mit Policy Profiles. Ein AP strahlt nur die WLANs seines Policy Tags aus.')));
+  S.policyTags.forEach(t => main.append(h('div', { class: 'card', 'data-tag': t.name },
+    h('div', { class: 'bar' }, h('b', null, t.name), t.builtin ? badge('vordefiniert', 'warn') : null, h('span', { class: 'grow' }),
+      t.builtin ? null : [h('button', { class: 'small', onclick: () => tagDialog(t) }, 'Edit'),
+        h('button', { class: 'small danger', onclick: () => remove('no wireless tag policy ' + t.name, 'Policy Tag ' + t.name) }, 'Delete')]),
+    table([{ l: 'WLAN Profile', f: m => m.wlan }, { l: 'Policy Profile', f: m => m.policy }], t.maps, 'Keine WLANs zugeordnet.'))));
+};
+
+function tagDialog(t) {
+  const name = h('input', { 'data-id': 'tag-name', value: t ? t.name : '', disabled: !!t, placeholder: 'PT_Corp' });
+  const rows = h('div', { 'data-id': 'tag-rows' });
+  const opt = (list, val) => { const s = h('select', null, list.map(x => h('option', { value: x }, x))); if (val) s.value = val; return s; };
+  const addRow = (m) => {
+    const w = opt(S.wlans.map(x => x.profile), m && m.wlan), p = opt(S.policies.map(x => x.name), m && m.policy);
+    const r = h('div', { class: 'maprow' }, w, '→', p, h('button', { class: 'small', type: 'button', onclick: () => { r.remove(); rows.dispatchEvent(new Event('input', { bubbles: true })); } }, '✕'));
+    r.get = () => [w.value, p.value]; rows.append(r);
+  };
+  (t ? t.maps : []).forEach(addRow);
+  const body = h('div', null, h('div', { class: 'row' }, field('Name', name)),
+    h('h2', null, 'WLAN Profile → Policy Profile'), rows,
+    h('button', { class: 'small', 'data-id': 'add-map', type: 'button', onclick: () => { addRow(); rows.dispatchEvent(new Event('input', { bubbles: true })); } }, '+ Add Map'));
+  modal(t ? 'Edit Policy Tag ' + t.name : 'Add Policy Tag', body, () => {
+    if (!t) need(/^[\w.-]{1,32}$/.test(name.value), 'Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
+    const maps = [...rows.children].map(r => r.get()).filter(m => m[0] && m[1]);
+    need(new Set(maps.map(m => m[0])).size === maps.length, 'Jedes WLAN darf nur einmal vorkommen');
+    const c = ['wireless tag policy ' + (t ? t.name : name.value)];
+    if (t) t.maps.filter(o => !maps.some(m => m[0] === o.wlan)).forEach(o => c.push('no wlan ' + o.wlan + ' policy ' + o.policy));
+    maps.forEach(m => c.push('wlan ' + m[0] + ' policy ' + m[1]));
+    return c;
+  }, refresh);
+}
+
+VIEWS.apcfg = main => {
+  main.append(h('div', { class: 'note' }, 'Ein AP ohne eigenes Policy Tag nutzt das Default Policy Tag. Tag Source zeigt, ob das Tag zugewiesen (Static) oder der Standard ist.'));
+  main.append(table([{ l: 'AP Name', f: a => a.name }, { l: 'AP MAC', f: a => a.ethMac }, { l: 'Site Tag', f: a => a.siteTag },
+    { l: 'Policy Tag', f: a => a.policyTag }, { l: 'RF Tag', f: a => a.rfTag }, { l: 'Tag Source', f: a => a.tagSource },
+    { l: '', f: a => h('button', { class: 'small', 'data-id': 'ap-tag-' + a.name, onclick: () => apDialog(a) }, 'Edit Tags') }], S.aps));
+};
+
+function apDialog(a) {
+  const tag = h('select', { 'data-id': 'ap-policy-tag' }, S.policyTags.map(t => h('option', { value: t.name }, t.name)));
+  tag.value = a.policyTag;
+  const body = h('div', { class: 'row' }, field('AP Name', h('input', { value: a.name, disabled: true })), field('Policy Tag', tag));
+  modal('Edit Tags: ' + a.name, body, () => ['ap ' + a.ethMac, tag.value === 'default-policy-tag' ? 'no policy-tag' : 'policy-tag ' + tag.value], refresh);
+}
+
+async function remove(cmd, what) {
+  if (!confirm(what + ' löschen?')) return;
+  const r = await api.apply([cmd]);
+  if (!r.ok) { toast(r.error.message); return; }
+  toast(what + ' gelöscht'); refresh();
+}
+
+VIEWS.cli = async main => {
+  const term = h('div', { class: 'term', 'data-id': 'term', tabindex: 0, role: 'log' });
+  const first = await api.cli('');
+  let prompt = first.prompt;
+  const input = h('input', { 'data-id': 'cli-input', style: 'flex:1', autocomplete: 'off', spellcheck: 'false', 'aria-label': 'Befehl' });
+  const label = h('span', { class: 'muted' }, prompt);
+  const run = async () => {
+    const cmd = input.value; input.value = '';
+    const r = await api.cli(cmd);
+    term.append(h('div', { class: 'in' }, prompt + ' ' + cmd), r.output ? h('div', null, r.output) : null);
+    prompt = r.prompt; label.textContent = prompt; term.scrollTop = term.scrollHeight;
+    S = await api.state();
+  };
+  input.addEventListener('keydown', ev => { if (ev.key === 'Enter') run(); });
+  main.append(h('div', { class: 'note' }, 'Diese Sitzung hat einen eigenen Modus (exec/config), unabhängig von den Dialogen. Belegt sind nur die in der README genannten Show-Befehle.'),
+    term, h('div', { class: 'bar', style: 'margin-top:8px' }, label, input, h('button', { class: 'primary', onclick: run }, 'Run')));
+};
+
+VIEWS.diag = main => {
+  main.append(h('div', { class: 'note' }, 'Simulation: Diese Seite gibt es am echten Controller nicht. Sie erklärt, warum ein Client (nicht) verbunden ist. Die Begründungen sind ein didaktisches Modell.'));
+  main.append(table([{ l: 'MAC Address', f: c => c.mac }, { l: 'SSID', f: c => c.ssid }, { l: 'AP', f: c => c.ap },
+    { l: 'Ergebnis', f: c => stateBadge(c.state) }, { l: 'Begründung', cls: 'reason', f: c => c.reasons.length ? c.reasons.join(' ') : 'Verbunden' }], S.clients));
+};
+
+/* ---------------------------------------------------------------- Rahmen */
+function current() { return (location.hash.replace(/^#\//, '') || 'dash'); }
+
+function drawNav() {
+  const nav = document.getElementById('nav'); nav.textContent = '';
+  let lastG = null, lastSub = null;
+  NAV.forEach(n => {
+    if (n.id) { nav.append(link(n.id, n.l)); return; }
+    if (n.g !== lastG) { nav.append(h('div', { class: 'grp' }, n.g)); lastG = n.g; lastSub = null; }
+    if (n.sub && n.sub !== lastSub) { nav.append(h('div', { class: 'sub' }, n.sub)); lastSub = n.sub; }
+    n.items.forEach(([id, l]) => nav.append(link(id, l)));
+  });
+}
+const link = (id, l) => h('a', { href: '#/' + id, class: id === current() ? 'on' : '', 'data-view': id, 'aria-current': id === current() ? 'page' : null }, l);
+
+async function refresh() {
+  S = await api.state();
+  document.getElementById('host').textContent = S.wlc.hostname + ' · ' + S.wlc.ip;
+  drawNav();
+  const id = VIEWS[current()] ? current() : 'dash';
+  const main = document.getElementById('main'); main.textContent = '';
+  main.append(h('h1', null, TITLES[id]));
+  await VIEWS[id](main);
+}
+
+window.addEventListener('hashchange', refresh);
+refresh();

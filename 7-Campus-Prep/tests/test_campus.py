@@ -225,3 +225,89 @@ class TestDeterminismAndHttp(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestWebApi(unittest.TestCase):
+    """Zustands- und Apply-Endpunkt der Oberflaeche sowie das Ausliefern der statischen Dateien."""
+
+    def setUp(self):
+        self.srv, self.sim = serve(0)
+        self.base = 'http://127.0.0.1:%d' % self.srv.server_address[1]
+        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+
+    def tearDown(self):
+        self.srv.shutdown()
+        self.srv.server_close()
+
+    def call(self, path, method='GET', data=None, raw=False):
+        req = urllib.request.Request(self.base + path, method=method, data=json.dumps(data).encode() if data is not None else None)
+        try:
+            with urllib.request.urlopen(req) as r:
+                body = r.read()
+                return r.status, (body if raw else json.loads(body)), r.headers
+        except urllib.error.HTTPError as e:
+            body = e.read()
+            return e.code, (body if raw else json.loads(body)), e.headers
+
+    def test_static_and_path_traversal(self):
+        st, body, hd = self.call('/', raw=True)
+        self.assertEqual(st, 200)
+        self.assertIn(b'Campus Prep', body)
+        self.assertIn('text/html', hd['Content-Type'])
+        st, body, hd = self.call('/static/app.js', raw=True)
+        self.assertEqual(st, 200)
+        self.assertIn('javascript', hd['Content-Type'])
+        for bad in ('/static/../campusprep/wlc.py', '/static/%2e%2e/start.py', '/static/nix.js'):
+            self.assertEqual(self.call(bad, raw=True)[0], 404, bad)
+
+    def test_state_hides_the_key(self):
+        self.call('/wlc/api/apply', 'POST', {'commands': ['wlan P 1 Corp', 'security wpa akm psk', 'security wpa psk set-key ascii 0 GeheimGeheim']})
+        st, state, _ = self.call('/wlc/api/state')
+        self.assertEqual(st, 200)
+        self.assertEqual(state['wlans'][0]['pskSet'], True)
+        self.assertNotIn('GeheimGeheim', json.dumps(state))
+
+    def test_apply_is_atomic(self):
+        st, body, _ = self.call('/wlc/api/apply', 'POST', {'commands': ['wlan P 1 Corp', 'no shutdown', 'bogus']})
+        self.assertEqual(st, 400)
+        self.assertFalse(body['ok'])
+        self.assertEqual(body['error']['command'], 'bogus')
+        self.assertEqual(self.call('/wlc/api/state')[1]['wlans'], [])
+        st, body, _ = self.call('/wlc/api/apply', 'POST', {'commands': ['wlan P 1 Corp', 'no shutdown']})
+        self.assertEqual((st, body['ok']), (200, True))
+        self.assertEqual(self.call('/wlc/api/state')[1]['wlans'][0]['status'], 'UP')
+
+    def test_apply_input_validation(self):
+        self.assertEqual(self.call('/wlc/api/apply', 'POST', {'commands': 'x'})[0], 400)
+        self.assertEqual(self.call('/wlc/api/apply', 'POST', {})[0], 400)
+
+    def test_gui_and_cli_share_one_truth(self):
+        for line in ('configure terminal', 'wlan P 1 Corp', 'end'):
+            self.call('/wlc/cli', 'POST', {'command': line})
+        self.assertEqual(self.call('/wlc/api/state')[1]['wlans'][0]['profile'], 'P')
+        self.call('/wlc/api/apply', 'POST', {'commands': ['wlan Q 2 Gast']})
+        self.assertIn('Q', self.call('/wlc/cli', 'POST', {'command': 'show wlan summary'})[1]['output'])
+
+
+class TestDeleteAndTagCommands(unittest.TestCase):
+    def test_delete_refuses_referenced_objects(self):
+        s = configured()
+        tag_lobby(s)
+        for cmd, word in (('no wlan Corp_Profile', 'PT_Corp'), ('no wireless profile policy PP_Corp', 'PT_Corp'),
+                          ('no wireless tag policy PT_Corp', 'ap-lobby'), ('no wireless tag policy default-policy-tag', 'vordefiniert')):
+            s.cli.run('configure terminal')
+            r = s.cli.run(cmd)
+            s.cli.run('end')
+            self.assertTrue(r.startswith('% '), cmd)
+            self.assertIn(word, r)
+        self.assertEqual(len(s.wlc.wlans), 1)
+
+    def test_delete_in_the_right_order_and_unassign_ap(self):
+        s = configured()
+        tag_lobby(s)
+        for line in ('configure terminal', 'ap a4b2.32aa.0001', 'no policy-tag', 'exit', 'no wireless tag policy PT_Corp',
+                     'no wlan Corp_Profile', 'no wireless profile policy PP_Corp', 'end'):
+            out = s.cli.run(line)
+            self.assertFalse(out.startswith('% '), '%s -> %s' % (line, out))
+        self.assertEqual((s.wlc.wlans, s.wlc.policies, list(s.wlc.policy_tags)), ({}, {}, ['default-policy-tag']))
+        self.assertEqual(s.wlc.policy_tag_of(s.world['aps'][0]), 'default-policy-tag')

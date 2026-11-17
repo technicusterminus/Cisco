@@ -4,6 +4,8 @@ Belegt sind die Ausgabeformate der Show-Befehle (genieparser, siehe docs/QUELLEN
 Standardverhalten (Default Tags, administrativ down) stammen aus Wissen und sind dort als solches markiert. Die
 Begruendungen der Client-Entscheidung sind simulator-spezifisch.
 """
+import copy
+
 from .world import norm_mac
 
 DEF_POLICY_TAG, DEF_SITE_TAG, DEF_RF_TAG = 'default-policy-tag', 'default-site-tag', 'default-rf-tag'
@@ -20,6 +22,38 @@ class Wlc:
         self.policies = {}     # name -> {vlan, shutdown, descr}
         self.policy_tags = {DEF_POLICY_TAG: {}}   # name -> {wlan-profil: policy-profil}
         self.ap_cfg = {}       # ethMac -> {'policy_tag': name}
+
+    # ------------------------------------------------------------------ Snapshot und Zustand fuer die Oberflaeche
+    def snapshot(self):
+        return copy.deepcopy((self.wlans, self.policies, self.policy_tags, self.ap_cfg))
+
+    def restore(self, snap):
+        self.wlans, self.policies, self.policy_tags, self.ap_cfg = copy.deepcopy(snap)
+
+    def state(self):
+        """Alles, was die Weboberflaeche anzeigt (Schluessel werden nicht herausgegeben)."""
+        aps = []
+        for a in self.world['aps']:
+            explicit = self.ap_cfg.get(a['ethMac'], {}).get('policy_tag')
+            aps.append({'name': a['name'], 'model': a['model'], 'ethMac': a['ethMac'], 'radioMac': a['radioMac'], 'ip': a['ip'],
+                        'location': a['location'], 'country': a['country'], 'state': 'Registered' if a.get('joined') else 'Not joined',
+                        'policyTag': self.policy_tag_of(a), 'siteTag': DEF_SITE_TAG, 'rfTag': DEF_RF_TAG,
+                        'tagSource': 'Static' if explicit else 'Default'})
+        return {
+            'wlc': dict(self.world['wlc']),
+            'wlans': [{'profile': n, 'id': w['id'], 'ssid': w['ssid'], 'status': 'DOWN' if w['shutdown'] else 'UP',
+                       'akm': w['akm'], 'pskSet': bool(w['psk']),
+                       'security': '[WPA2][PSK][AES]' if w['akm'] == 'psk' else '[open]'}
+                      for n, w in sorted(self.wlans.items(), key=lambda kv: kv[1]['id'])],
+            'policies': [{'name': n, 'vlan': p['vlan'], 'description': p['descr'],
+                          'status': 'DISABLED' if p['shutdown'] else 'ENABLED'} for n, p in sorted(self.policies.items())],
+            'policyTags': [{'name': n, 'builtin': n == DEF_POLICY_TAG,
+                            'maps': [{'wlan': k, 'policy': v} for k, v in sorted(m.items())]}
+                           for n, m in sorted(self.policy_tags.items())],
+            'aps': aps,
+            'clients': [{'mac': c['mac'], 'ssid': c['ssid'], 'ap': c['ap'], 'protocol': c['protocol'], 'state': c['state'],
+                         'wlan': c['wlan'], 'method': c['method'], 'reasons': c['reasons']} for c in self.clients()],
+        }
 
     # ------------------------------------------------------------------ Zustand
     def ap_by_eth(self, eth):
@@ -212,6 +246,32 @@ class Cli:
                 c.ap_cfg.setdefault(eth, {})
                 self.mode, self.ctx = 'ap', eth
                 return ''
+            if no and w[0] == 'wlan' and len(w) == 2:
+                if w[1] not in c.wlans:
+                    raise CliError('WLAN-Profil %s existiert nicht' % w[1])
+                users = sorted(t for t, m in c.policy_tags.items() if w[1] in m)
+                if users:
+                    raise CliError('WLAN-Profil %s ist in Policy Tags eingetragen (%s) - zuerst dort entfernen' % (w[1], ', '.join(users)))
+                del c.wlans[w[1]]
+                return ''
+            if no and w[:3] == ['wireless', 'profile', 'policy'] and len(w) == 4:
+                if w[3] not in c.policies:
+                    raise CliError('Policy Profile %s existiert nicht' % w[3])
+                users = sorted(t for t, m in c.policy_tags.items() if w[3] in m.values())
+                if users:
+                    raise CliError('Policy Profile %s wird von Policy Tags verwendet (%s) - zuerst dort entfernen' % (w[3], ', '.join(users)))
+                del c.policies[w[3]]
+                return ''
+            if no and w[:3] == ['wireless', 'tag', 'policy'] and len(w) == 4:
+                if w[3] == DEF_POLICY_TAG:
+                    raise CliError('%s ist vordefiniert und kann nicht geloescht werden' % DEF_POLICY_TAG)
+                if w[3] not in c.policy_tags:
+                    raise CliError('Policy Tag %s existiert nicht' % w[3])
+                aps = sorted(a['name'] for a in c.world['aps'] if c.policy_tag_of(a) == w[3])
+                if aps:
+                    raise CliError('Policy Tag %s ist APs zugewiesen (%s) - zuerst dort entfernen' % (w[3], ', '.join(aps)))
+                del c.policy_tags[w[3]]
+                return ''
             raise CliError('Invalid input detected: "%s"' % ' '.join(w))
         if self.mode == 'wlan':
             x = c.wlans[self.ctx]
@@ -244,7 +304,7 @@ class Cli:
                 return ''
             raise CliError('Invalid input detected: "%s"' % ' '.join(w))
         if self.mode == 'ap':
-            if w[0] == 'policy-tag' and len(w) == 2:
+            if w[0] == 'policy-tag' and (len(w) == 2 or (no and len(w) == 1)):
                 if no:
                     c.ap_cfg[self.ctx].pop('policy_tag', None)
                 else:
