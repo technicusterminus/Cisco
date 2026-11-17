@@ -14,14 +14,19 @@ const h = (tag, attrs, ...kids) => {
   return e;
 };
 
+/* Transport: Im Servermodus gehen die Aufrufe per fetch an den Python-Server. In WLC-Simulator.html setzt die Seite vorher
+   window.CampusTransport (die Engine aus engine.js im Browser); die Oberflaeche merkt keinen Unterschied. */
+const call = (method, path, body) => window.CampusTransport
+  ? window.CampusTransport(method, path, body)
+  : fetch(path, { method, headers: body === undefined ? {} : { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) })
+      .then(async r => ({ status: r.status, body: await r.json() }));
+
 const api = {
-  state: () => fetch('/wlc/api/state').then(r => r.json()),
-  apply: commands => fetch('/wlc/api/apply', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ commands }) }).then(async r => Object.assign({ http: r.status }, await r.json())),
-  post: (path, body) => fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) })
-    .then(async r => Object.assign({ http: r.status }, await r.json())),
-  get: path => fetch(path).then(async r => Object.assign({ http: r.status }, await r.json())),
-  cli: command => fetch('/wlc/cli', { method: 'POST', body: JSON.stringify({ command }) }).then(r => r.json()),
+  state: () => call('GET', '/wlc/api/state').then(r => r.body),
+  apply: commands => call('POST', '/wlc/api/apply', { commands }).then(r => Object.assign({ http: r.status }, r.body)),
+  post: (path, body) => call('POST', path, body || {}).then(r => Object.assign({ http: r.status }, r.body)),
+  get: path => call('GET', path).then(r => Object.assign({ http: r.status }, r.body)),
+  cli: command => call('POST', '/wlc/cli', { command }).then(r => r.body),
 };
 
 let S = null;
@@ -376,11 +381,16 @@ VIEWS.labs = async main => {
 
 async function savesCard(main) {
   main.append(h('h2', null, 'Stände'));
-  if (!S.persistent) { main.append(h('div', { class: 'note' }, 'Der Zustand wird in dieser Sitzung nicht dauerhaft gespeichert (Start mit --ephemeral).')); return; }
+  if (!S.persistent) {
+    main.append(h('div', { class: 'note' }, S.standalone ? 'Der Browser stellt keinen lokalen Speicher bereit (z. B. im privaten Modus): Der Zustand geht beim Schließen verloren, Stände sind nicht verfügbar.'
+      : 'Der Zustand wird in dieser Sitzung nicht dauerhaft gespeichert (Start mit --ephemeral).'));
+    return;
+  }
   const sv = await api.get('/wlc/api/saves');
   const name = h('input', { 'data-id': 'save-name', placeholder: 'z. B. lab01-vor-hint', 'aria-label': 'Name des Stands', maxlength: 40 });
   main.append(h('div', { class: 'muted', style: 'margin-bottom:8px' },
-    'Der aktuelle Zustand wird automatisch gespeichert und beim Start wieder geladen. Ein Stand enthält Konfiguration, Welt und die Lab-Sitzung; der Fortschritt bleibt erhalten.'));
+    (S.standalone ? 'Der aktuelle Zustand wird automatisch im Browser gespeichert (lokaler Speicher, nur auf diesem Gerät) und beim Öffnen wieder geladen. ' : 'Der aktuelle Zustand wird automatisch gespeichert und beim Start wieder geladen. ') +
+    'Ein Stand enthält Konfiguration, Welt und die Lab-Sitzung; der Fortschritt bleibt erhalten.'));
   main.append(h('div', { class: 'bar' }, name, h('button', { 'data-id': 'save', onclick: async () => {
     const x = await api.post('/wlc/api/saves', { name: name.value.trim() });
     if (x.http !== 200) { toast(x.error); return; }
@@ -481,7 +491,7 @@ async function refresh() {
   const st = await api.state();
   if (seq !== refresh.seq) return;
   S = st;
-  document.getElementById('host').textContent = S.wlc.hostname + ' · ' + S.wlc.ip;
+  document.getElementById('host').textContent = S.wlc.hostname + ' · ' + S.wlc.ip + (S.standalone ? ' · läuft lokal im Browser' : '');
   drawNav();
   const id = VIEWS[current()] ? current() : 'dash';
   const box = h('div');                                   // erst im Hintergrund aufbauen, dann in einem Schritt einsetzen

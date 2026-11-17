@@ -84,6 +84,7 @@ class LabEngine:
         out = []
         for lab in self.labs.values():
             d = {k: lab[k] for k in ('id', 'title', 'topic', 'level', 'duration', 'kind', 'modes')}
+            d['track'] = lab.get('track')
             d['progress'] = dict(self.progress.get(lab['id']) or {'starts': 0, 'checks': 0, 'passed': False, 'guidedPassed': False,
                                                                 'examPassed': False, 'bestHints': None, 'questionsRight': 0})
             out.append(d)

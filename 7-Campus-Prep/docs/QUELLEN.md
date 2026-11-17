@@ -41,6 +41,7 @@ Cisco-Seiten (cisco.com, developer.cisco.com) waren beim Bau nicht erreichbar. B
 - Die Seite *Client-Diagnose* und das *CLI-Äquivalent* in den Dialogen gibt es am echten Gerät nicht (Lernhilfen).
 - Die Weboberfläche wendet Änderungen atomar an: Ein Fehler in einem Befehl setzt die Konfiguration auf den Stand davor zurück.
 - Gespeicherte Stände und der Lab-Fortschritt sind ein Format dieses Projekts (`kind` campusprep-state, Version 1), kein Cisco-Format. Sie enthalten die Übungsschlüssel der Labs im Klartext; das Verzeichnis `data/` gehört nicht ins Repository.
+- **Eigenständige Browser-Variante** (`WLC-Simulator.html`): Zustand und Fortschritt liegen im lokalen Speicher des Browsers (Schlüssel `campusprep:*`). Die Labs samt Hinweisen und Lösungen sind in die Datei eingebettet; der Prüfungsmodus verhindert dort nur die Anzeige, nicht das Lesen des Quelltexts. Das Catalyst Center gibt es nur mit dem Server.
 - Zugangsdaten des Simulators sind Übungswerte (`admin`/`admin`), keine echten.
 
 ## Offen (nicht umgesetzt, weil nicht belegt)

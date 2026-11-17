@@ -1,5 +1,6 @@
-/* GUI-Rauchtest der C9800-Oberflaeche: Konfiguration ueber die Dialoge, Fehlerfall, CLI-Ansicht.
-   Aufruf: node tests/gui/smoke.js   (braucht Node.js und Playwright mit Chromium; startet den Server selbst) */
+/* GUI-Rauchtest der C9800-Oberflaeche: Konfiguration ueber die Dialoge, Fehlerfall, CLI-Ansicht, Labs, Staende.
+   Aufruf: node tests/gui/smoke.js                  (braucht Node.js und Playwright mit Chromium; startet den Server selbst)
+           STANDALONE=1 node tests/gui/smoke.js     (dieselben Pruefungen gegen WLC-Simulator.html, ohne Server, per file://) */
 'use strict';
 const { spawn } = require('child_process');
 const net = require('net');
@@ -13,15 +14,23 @@ const freePort = () => new Promise(res => { const s = net.createServer(); s.list
 const fails = [];
 const check = (ok, msg) => { console.log((ok ? '  ok   ' : '  FEHLER ') + msg); if (!ok) fails.push(msg); };
 
+const STANDALONE = process.env.STANDALONE === '1';
+
 (async () => {
-  const port = await freePort();
-  const srv = spawn(process.env.PYTHON || 'python3', ['start.py', String(port), '--ephemeral'], { cwd: ROOT, stdio: 'ignore' });
-  const U = 'http://127.0.0.1:' + port + '/';
-  for (let i = 0; i < 50; i++) { try { await fetch(U + 'wlc/api/state'); break; } catch (e) { await new Promise(r => setTimeout(r, 200)); } }
+  let srv = null, U;
+  if (STANDALONE) U = 'file://' + path.join(ROOT, 'WLC-Simulator.html');
+  else {
+    const port = await freePort();
+    srv = spawn(process.env.PYTHON || 'python3', ['start.py', String(port), '--ephemeral'], { cwd: ROOT, stdio: 'ignore' });
+    U = 'http://127.0.0.1:' + port + '/';
+    for (let i = 0; i < 50; i++) { try { await fetch(U + 'wlc/api/state'); break; } catch (e) { await new Promise(r => setTimeout(r, 200)); } }
+  }
   const b = await chromium.launch();
   const errs = [];
   try {
     const p = await (await b.newContext({ viewport: { width: 1280, height: 860 } })).newPage();
+    const requests = [];
+    p.on('request', rq => requests.push(rq.url()));
     p.on('pageerror', e => errs.push('pageerror: ' + e.message));
     let rejected = 0;   // die absichtlichen Ablehnungen (HTTP 400) des Tests werden separat gezaehlt
     p.on('console', m => { if (m.type() !== 'error') return; if (/status of 400/.test(m.text())) rejected++; else errs.push('console: ' + m.text()); });
@@ -47,7 +56,9 @@ const check = (ok, msg) => { console.log((ok ? '  ok   ' : '  FEHLER ') + msg); 
     const wl = await text();
     console.log('       Tabelle: ' + wl.split('\n').filter(l => l.includes('Corp_Profile')).join(' | ').replace(/\t/g, ' ').slice(0, 120));
     check(/UP\s+Corp_Profile\s+1\s+Corp\s+\[WPA2\]\[PSK\]\[AES\]/.test(wl), 'WLAN erscheint in der Tabelle mit Status UP');
-    check(!(await p.content()).includes('Sommer2026'), 'Der Key steht nicht im DOM');
+    // gemeint ist das gerenderte DOM; Skripte (in WLC-Simulator.html die eingebetteten Lab-Daten) zaehlen nicht
+    const dom = await p.evaluate(() => { const c = document.documentElement.cloneNode(true); c.querySelectorAll('script,style').forEach(e => e.remove()); return c.outerHTML; });
+    check(!dom.includes('Sommer2026'), 'Der Key steht nicht im DOM');
 
     // Fehlerfall: doppelte ID, nichts wird uebernommen
     await p.click('[data-id="add-wlan"]');
@@ -192,11 +203,18 @@ const check = (ok, msg) => { console.log((ok ? '  ok   ' : '  FEHLER ') + msg); 
     check(/bestanden/.test(res) && !/noch nicht/.test(res) && /lokal geschaltet/.test(res), 'Lab 07 ist bestanden (Lager-Laptop lokal geschaltet)');
     await go('diag'); check(/local/.test(await text()), 'Diagnose zeigt die Switching-Art');
 
+    // Neuladen: Zustand und Lab-Sitzung bleiben erhalten (Server: im Speicher des Servers, Standalone: lokaler Speicher des Browsers)
+    await p.reload(); await p.waitForSelector('nav a'); await go('dash');
+    check(/Aktuelles Lab: 07-flexconnect-zweigstelle/.test(await text()), 'Nach dem Neuladen ist das Lab weiter aktiv');
+    await go('apcfg');
+    check(/ap-lager[\s\S]*FlexConnect/.test(await text()), 'Nach dem Neuladen ist die Konfiguration noch da');
+
     // Alle Ansichten ohne JS-Fehler
     for (const id of ['dash', 'labs', 'flex', 'sitetags', 'aps', 'clients', 'wlans', 'policies', 'tags', 'apcfg', 'cli', 'diag']) { await go(id); }
-    check(rejected === 3, 'Genau die drei absichtlichen Ablehnungen (HTTP 400) wurden ausgelöst: ' + rejected);
+    check(rejected === (STANDALONE ? 0 : 3), (STANDALONE ? 'Ohne Server gibt es keine HTTP-Fehler: ' : 'Genau die drei absichtlichen Ablehnungen (HTTP 400) wurden ausgelöst: ') + rejected);
+    if (STANDALONE) check(!requests.some(u => /^https?:/.test(u)), 'Keine Netzwerkzugriffe (läuft vollständig offline)' + (requests.some(u => /^https?:/.test(u)) ? ': ' + requests.filter(u => /^https?:/.test(u)).join(' ') : ''));
     check(errs.length === 0, 'Keine JavaScript-Fehler' + (errs.length ? ': ' + errs.join(' | ') : ''));
-  } finally { await b.close(); srv.kill(); }
+  } finally { await b.close(); if (srv) srv.kill(); }
   console.log(fails.length ? '\n' + fails.length + ' Fehler' : '\nAlle GUI-Prüfungen bestanden.');
   process.exit(fails.length ? 1 : 0);
 })();

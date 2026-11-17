@@ -231,6 +231,26 @@ FLEX = ['configure terminal', 'wireless profile flex FP1', 'native-vlan-id 1', '
         'exit', 'exit', 'wireless tag site ST1', 'no local-site', 'flex-profile FP1', 'end']
 
 
+class TestCliRobustness(unittest.TestCase):
+    def test_a_lone_no_is_an_error_not_a_crash(self):
+        s = Sim()
+        s.cli.run('configure terminal')
+        self.assertEqual(s.cli.run('no'), '% Invalid input detected: "no"')
+        s.cli.run('wlan P 1 Corp')
+        self.assertEqual(s.cli.run('no'), '% Invalid input detected: "no"')
+
+    def test_object_deleted_under_an_open_cli_mode(self):
+        s = Sim()
+        for line in ('configure terminal', 'wlan P 1 Corp'):
+            s.cli.run(line)
+        self.assertEqual(s.cli.prompt, 'wlc1(config-wlan)#')
+        ok, _, err = s.apply(['no wlan P'])        # z. B. ueber die Oberflaeche
+        self.assertTrue(ok, err)
+        self.assertEqual(s.cli.run('shutdown'), '% Das Objekt existiert nicht mehr')
+        self.assertEqual(s.cli.prompt, 'wlc1(config)#')
+        self.assertEqual(s.cli.run('wlan Q 2 Neu'), '')
+
+
 class TestFlexConnect(unittest.TestCase):
     """Befehle und Regeln aus Cisco-Dokument 213945 (ueber Websuche zitiert); Formate der Show-Befehle aus genieparser."""
 
@@ -379,6 +399,18 @@ class TestWebApi(unittest.TestCase):
         st, body, _ = self.call('/wlc/api/apply', 'POST', {'commands': ['wlan P 1 Corp', 'no shutdown']})
         self.assertEqual((st, body['ok']), (200, True))
         self.assertEqual(self.call('/wlc/api/state')[1]['wlans'][0]['status'], 'UP')
+
+    def test_cli_and_apply_reject_invalid_bodies_with_400(self):
+        cases = {'/wlc/cli': ([], 'text', 5, None, {'command': 5}), '/wlc/api/apply': ([], 'text', 5, None, {'commands': 'x'}, {'commands': [1]})}
+        for path, bodies in cases.items():
+            for body in bodies:
+                req = urllib.request.Request(self.base + path, method='POST', data=json.dumps(body).encode())
+                try:
+                    urllib.request.urlopen(req)
+                    self.fail('%s %r hätte 400 liefern müssen' % (path, body))
+                except urllib.error.HTTPError as e:
+                    e.read()
+                    self.assertEqual(e.code, 400, '%s %r' % (path, body))
 
     def test_apply_input_validation(self):
         self.assertEqual(self.call('/wlc/api/apply', 'POST', {'commands': 'x'})[0], 400)
