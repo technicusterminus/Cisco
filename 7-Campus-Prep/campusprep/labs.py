@@ -68,10 +68,24 @@ class LabEngine:
         self.sim = sim
         self.labs = load_all(directory)
         self.session = None   # {id, mode, hints, answers, checks}
+        self.progress = {}    # lab-id -> Zaehler und Bestanden-Merker (ohne Zeitstempel, deterministisch)
 
     # ------------------------------------------------------------------ Liste, Start
+    def _prog(self, lab_id):
+        return self.progress.setdefault(lab_id, {'starts': 0, 'checks': 0, 'passed': False, 'guidedPassed': False,
+                                                 'examPassed': False, 'bestHints': None, 'questionsRight': 0})
+
     def list(self):
-        return [{k: lab[k] for k in ('id', 'title', 'topic', 'level', 'duration', 'kind', 'modes')} for lab in self.labs.values()]
+        out = []
+        for lab in self.labs.values():
+            d = {k: lab[k] for k in ('id', 'title', 'topic', 'level', 'duration', 'kind', 'modes')}
+            d['progress'] = dict(self.progress.get(lab['id']) or {'starts': 0, 'checks': 0, 'passed': False, 'guidedPassed': False,
+                                                                'examPassed': False, 'bestHints': None, 'questionsRight': 0})
+            out.append(d)
+        return out
+
+    def reset_progress(self):
+        self.progress = {}
 
     def start(self, lab_id, mode='guided'):
         lab = self.labs.get(lab_id)
@@ -84,6 +98,7 @@ class LabEngine:
         if not ok:
             raise LabError('Startkonfiguration von %s fehlerhaft: %s' % (lab_id, err['message']), 500)
         self.session = {'id': lab_id, 'mode': mode, 'hints': 0, 'answers': {}, 'checks': 0}
+        self._prog(lab_id)['starts'] += 1
         return self.public()
 
     def reset(self):
@@ -92,6 +107,19 @@ class LabEngine:
 
     def stop(self):
         self.session = None
+
+    def restore_session(self, d):
+        """Lab-Sitzung aus einem gespeicherten Stand uebernehmen; unbekannte oder ungueltige Sitzungen werden verworfen."""
+        self.session = None
+        if not isinstance(d, dict) or d.get('id') not in self.labs or d.get('mode') not in MODES:
+            return
+        lab = self.labs[d['id']]
+        hints = d.get('hints') if isinstance(d.get('hints'), int) else 0
+        answers = d.get('answers') if isinstance(d.get('answers'), dict) else {}
+        qids = {q['id']: len(q['options']) for q in lab.get('questions', [])}
+        self.session = {'id': d['id'], 'mode': d['mode'], 'hints': max(0, min(hints, len(lab['hints']))),
+                        'answers': {k: v for k, v in answers.items() if k in qids and isinstance(v, int) and 0 <= v < qids[k]},
+                        'checks': d.get('checks') if isinstance(d.get('checks'), int) else 0}
 
     def _need(self):
         if self.session is None:
@@ -157,5 +185,14 @@ class LabEngine:
             cats[r['category']][0] += r['ok']
         qs = lab.get('questions', [])
         right = sum(1 for q in qs if s['answers'].get(q['id']) == q['answer'])
-        return {'passed': all(r['ok'] for r in res), 'checks': res, 'categories': {k: {'ok': v[0], 'total': v[1]} for k, v in cats.items()},
+        passed = all(r['ok'] for r in res)
+        p = self._prog(s['id'])
+        p['checks'] += 1
+        p['questionsRight'] = max(p['questionsRight'], right)
+        if passed:
+            p['passed'] = True
+            p['examPassed' if exam else 'guidedPassed'] = True
+            if not exam:
+                p['bestHints'] = s['hints'] if p['bestHints'] is None else min(p['bestHints'], s['hints'])
+        return {'passed': passed, 'checks': res, 'categories': {k: {'ok': v[0], 'total': v[1]} for k, v in cats.items()},
                 'questions': {'right': right, 'total': len(qs)}, 'hintsUsed': s['hints'], 'mode': s['mode']}

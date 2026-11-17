@@ -34,6 +34,7 @@ Cisco-Seiten (cisco.com, developer.cisco.com) waren beim Bau nicht erreichbar. B
 - Die Löschbefehle `no wlan`, `no wireless profile policy`, `no wireless tag policy` lehnen ab, solange das Objekt in einem Policy Tag oder an einem AP verwendet wird. Ob und mit welchem Text das Gerät so reagiert, ist nicht belegt; Meldungen simulator-spezifisch. `no policy-tag` ohne Argument setzt den AP auf das Default Policy Tag.
 - Die Seite *Client-Diagnose* und das *CLI-Äquivalent* in den Dialogen gibt es am echten Gerät nicht (Lernhilfen).
 - Die Weboberfläche wendet Änderungen atomar an: Ein Fehler in einem Befehl setzt die Konfiguration auf den Stand davor zurück.
+- Gespeicherte Stände und der Lab-Fortschritt sind ein Format dieses Projekts (`kind` campusprep-state, Version 1), kein Cisco-Format. Sie enthalten die Übungsschlüssel der Labs im Klartext; das Verzeichnis `data/` gehört nicht ins Repository.
 - Zugangsdaten des Simulators sind Übungswerte (`admin`/`admin`), keine echten.
 
 ## Offen (nicht umgesetzt, weil nicht belegt)

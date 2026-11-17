@@ -2,12 +2,13 @@
 
 Simulierter **Catalyst 9800 WLC** und simuliertes **Catalyst Center** in einer gemeinsamen Welt. Python-Standardbibliothek, keine Abhängigkeiten, läuft offline. Kein echtes Gerät, keine Verbindung zu echten Controllern.
 
-> Stand: Phase 1, 2a und 2c (siehe [`docs/UMFANG.md`](docs/UMFANG.md)). Die WLC hat eine Weboberfläche und sechs Labs, das Catalyst Center noch keine Oberfläche.
+> Stand: Phase 1, 2a, 2c und 2d (siehe [`docs/UMFANG.md`](docs/UMFANG.md)). Die WLC hat eine Weboberfläche und sechs Labs, das Catalyst Center noch keine Oberfläche.
 
 ## Starten
 
 ```sh
-python3 start.py            # Port 8090, nur localhost; Oberfläche unter http://127.0.0.1:8090/
+python3 start.py            # Port 8090, nur localhost; Zustand in ./data; Oberfläche unter http://127.0.0.1:8090/
+python3 start.py --ephemeral   # ohne dauerhaften Zustand (temporäres Verzeichnis, für Tests)
 python3 -m unittest discover -s tests
 node tests/gui/smoke.js     # Browser-Test (braucht Node.js und Playwright)
 python3 Labs-Quelle/build_labs.py   # labs/*.json neu erzeugen (deterministisch)
@@ -20,6 +21,12 @@ python3 Labs-Quelle/build_labs.py   # labs/*.json neu erzeugen (deterministisch)
 ## Labs
 
 Die Seite *Labs (Simulation)* startet sechs Labs (vier Fehlersuchen, zwei Aufgaben nach Anforderungen), siehe [`docs/LAB-KATALOG.md`](docs/LAB-KATALOG.md). Ein Start setzt die Welt zurück. Bewertet wird das Verhalten (Client verbunden, VLAN, Zuordnungen), mit getrennten Prüfungen für *Funktion* und *Sicherheit / Least Privilege*; die naheliegende falsche Abkürzung besteht nie. Modi: *geführt* (vier Hinweisstufen, Lösung, Client-Diagnose) und *Prüfung* (keine Hilfe, keine Details). Verständnisfragen zählen nicht zum Bestehen.
+
+## Speichern und Fortschritt
+
+Der Zustand (Konfiguration, Welt, laufende Lab-Sitzung) wird nach jeder Änderung automatisch in `./data` gespeichert und beim Start wieder geladen (`--data DIR` wählt ein anderes Verzeichnis, `--ephemeral` schaltet das ab). Auf der Seite *Labs* gibt es zusätzlich **benannte Stände** (speichern, laden, löschen; der Fortschritt bleibt dabei erhalten) und den **Lab-Fortschritt**: je Lab bestanden (geführt oder Prüfung), Starts, Prüfläufe, wenigste Hinweise, richtige Fragen.
+
+Die Dateien sind versioniert (`kind`, `version`), werden atomar geschrieben und enthalten keine Zeitstempel. Eine beschädigte oder fremde Datei wird nicht geladen, sondern als `*.bad` aufgehoben. Das Verzeichnis `data/` steht in `.gitignore`; es enthält die Übungsschlüssel der Labs im Klartext und gehört nicht ins Repository.
 
 ## WLC-CLI
 

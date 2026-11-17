@@ -243,7 +243,7 @@ SOLUTIONS['06-aufraeumen'] = ['ap %s' % L2, 'no policy-tag', 'exit', 'no wireles
                               'no wireless profile policy PP_Alt']
 
 
-def main(out=OUT):
+def main(out=OUT, verbose=True):
     os.makedirs(out, exist_ok=True)
     for f in os.listdir(out):
         if f.endswith('.json'):
@@ -254,7 +254,8 @@ def main(out=OUT):
         with open(os.path.join(out, lb['id'] + '.json'), 'w', encoding='utf-8') as fh:
             json.dump(lb, fh, ensure_ascii=False, indent=1, sort_keys=True)
             fh.write('\n')
-    print('%d Labs geschrieben nach %s' % (len(LABS), os.path.abspath(out)))
+    if verbose:
+        print('%d Labs geschrieben nach %s' % (len(LABS), os.path.abspath(out)))
 
 
 if __name__ == '__main__':

@@ -15,7 +15,7 @@ const check = (ok, msg) => { console.log((ok ? '  ok   ' : '  FEHLER ') + msg); 
 
 (async () => {
   const port = await freePort();
-  const srv = spawn(process.env.PYTHON || 'python3', ['start.py', String(port)], { cwd: ROOT, stdio: 'ignore' });
+  const srv = spawn(process.env.PYTHON || 'python3', ['start.py', String(port), '--ephemeral'], { cwd: ROOT, stdio: 'ignore' });
   const U = 'http://127.0.0.1:' + port + '/';
   for (let i = 0; i < 50; i++) { try { await fetch(U + 'wlc/api/state'); break; } catch (e) { await new Promise(r => setTimeout(r, 200)); } }
   const b = await chromium.launch();
@@ -133,6 +133,14 @@ const check = (ok, msg) => { console.log((ok ? '  ok   ' : '  FEHLER ') + msg); 
     check(/✔ richtig/.test(await p.textContent('[data-q="q1"]')), 'Verständnisfrage wird beantwortet und erklärt');
     await p.click('[data-id="lab-solution"]'); await p.waitForTimeout(250);
     check(/Edit Tags/.test(await p.textContent('[data-id="solution"]')), 'Lösung zeigen im geführten Modus');
+    // Staende und Fortschritt
+    await go('labs');
+    console.log('       Kacheln: ' + (await text()).split('\n').filter(l => /bestanden|Starts|Prüfungsmodus$|^\d+( \/ \d+)?$/.test(l)).join(' | ').slice(0, 200));
+    check(/Geführt bestanden/.test(await text()) && /1 \/ 6[\s\S]*Labs bestanden/.test(await text()), 'Fortschritt: Lab 01 ist als geführt bestanden markiert');
+    await p.fill('[data-id="save-name"]', 'lab01-geloest'); await p.click('[data-id="save"]'); await p.waitForTimeout(500);
+    check(await p.locator('[data-id="load-lab01-geloest"]').count() === 1, 'Stand wird gespeichert und aufgelistet');
+    await p.fill('[data-id="save-name"]', '../evil'); await p.click('[data-id="save"]'); await p.waitForTimeout(400);
+    check(/Name: 1-40 Zeichen/.test(await p.textContent('#toast')), 'Ungültiger Name wird abgelehnt');
     // Pruefungsmodus: Lab 02
     await p.selectOption('[data-id="lab-mode"]', 'exam'); await p.click('[data-id="start-02"]'); await p.waitForTimeout(500);
     check(/Prüfungsmodus/.test(await text()) && await p.locator('[data-id="hint"]').count() === 0 && await p.locator('[data-id="lab-solution"]').count() === 0, 'Prüfungsmodus: keine Hinweise, keine Lösung');
@@ -142,10 +150,18 @@ const check = (ok, msg) => { console.log((ok ? '  ok   ' : '  FEHLER ') + msg); 
     res = await p.textContent('[data-id="check-result"]');
     check(/noch nicht bestanden/.test(res) && !/Zustand Not Associated/.test(res), 'Prüfungsmodus: Auswertung ohne Details');
     await go('dash'); check(/Aktuelles Lab: 02-admin-down/.test(await text()), 'Dashboard zeigt das laufende Lab');
+    await go('labs'); await p.click('[data-id="load-lab01-geloest"]'); await p.waitForTimeout(600);
+    check(/01 Corp-SSID in der Lobby nicht sichtbar/.test(await p.textContent('[data-lab]')), 'Laden stellt das Lab 01 wieder her');
+    await p.click('[data-id="lab-check"]'); await p.waitForTimeout(300);
+    check(/bestanden/.test(await p.textContent('[data-id="check-result"]')) && !/noch nicht/.test(await p.textContent('[data-id="check-result"]')), 'Der geladene Stand ist weiter gelöst');
+    await p.click('[data-id="del-lab01-geloest"]'); await p.waitForTimeout(400);
+    check(await p.locator('[data-id="load-lab01-geloest"]').count() === 0, 'Stand lässt sich löschen');
+    await p.click('[data-id="reset-progress"]'); await p.waitForTimeout(400);
+    check(/0 \/ 6[\s\S]*Labs bestanden/.test(await text()) && !/Geführt bestanden/.test(await text()), 'Fortschritt zurücksetzen');
 
     // Alle Ansichten ohne JS-Fehler
     for (const id of ['dash', 'labs', 'aps', 'clients', 'wlans', 'policies', 'tags', 'apcfg', 'cli', 'diag']) { await go(id); }
-    check(rejected === 2, 'Genau die zwei absichtlichen Ablehnungen (HTTP 400) wurden ausgelöst: ' + rejected);
+    check(rejected === 3, 'Genau die drei absichtlichen Ablehnungen (HTTP 400) wurden ausgelöst: ' + rejected);
     check(errs.length === 0, 'Keine JavaScript-Fehler' + (errs.length ? ': ' + errs.join(' | ') : ''));
   } finally { await b.close(); srv.kill(); }
   console.log(fails.length ? '\n' + fails.length + ' Fehler' : '\nAlle GUI-Prüfungen bestanden.');

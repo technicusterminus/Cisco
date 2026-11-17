@@ -20,6 +20,10 @@ Jedes Lab hat Szenario, Anforderungen, Lernziele, Werkzeuge, Grenzen, vier Hinwe
 - **Das Lab verändert nie die Konfiguration von sich aus.** Ein Start setzt die Welt zurück und spielt die Startkonfiguration über dieselbe CLI ein; das Zurücksetzen stellt diesen Zustand wieder her.
 - **Der sichtbare Text verrät die Lösung nicht:** Der Test `test_structure_and_no_solution_in_visible_text` prüft Szenario, Anforderungen und Prüfungsbeschreibungen gegen eine Liste von Lösungswörtern.
 
+## Fortschritt
+
+Je Lab werden gezählt: Starts, Prüfläufe, bestanden (geführt und Prüfung getrennt), die wenigsten genutzten Hinweise bei einem geführten Bestehen und die höchste Zahl richtiger Verständnisfragen. Ein nicht bestandener Prüflauf markiert nichts als bestanden; *Fortschritt zurücksetzen* leert alles. Der Fortschritt gehört nicht zu den benannten Ständen.
+
 ## Neues Lab anlegen
 
 1. In `Labs-Quelle/build_labs.py` mit `lab(...)` anlegen und unter `SOLUTIONS[...]` eine Musterlösung eintragen.
