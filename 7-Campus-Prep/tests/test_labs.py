@@ -26,6 +26,11 @@ LEAKS = {
 }
 
 
+def _read(path):
+    with open(path, encoding='utf-8') as fh:
+        return fh.read()
+
+
 def started(lab, mode='guided'):
     s = Sim()
     s.labs.start(lab, mode)
@@ -138,10 +143,10 @@ class TestGenerated(unittest.TestCase):
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         with tempfile.TemporaryDirectory() as tmp:
-            mod.main(tmp)
-            fresh = {f: open(os.path.join(tmp, f), encoding='utf-8').read() for f in sorted(os.listdir(tmp))}
+            mod.main(tmp, False)
+            fresh = {f: _read(os.path.join(tmp, f)) for f in sorted(os.listdir(tmp))}
         labs_dir = os.path.join(here, '..', 'labs')
-        current = {f: open(os.path.join(labs_dir, f), encoding='utf-8').read() for f in sorted(os.listdir(labs_dir)) if f.endswith('.json')}
+        current = {f: _read(os.path.join(labs_dir, f)) for f in sorted(os.listdir(labs_dir)) if f.endswith('.json')}
         self.assertEqual(sorted(fresh), sorted(current))
         for f in fresh:
             self.assertEqual(fresh[f], current[f], f)

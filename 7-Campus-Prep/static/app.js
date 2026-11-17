@@ -283,11 +283,16 @@ VIEWS.labs = async main => {
   const r = await api.get('/wlc/api/labs');
   const cur = r.current;
   if (cur) main.append(labCard(cur));
+  const done = r.labs.filter(l => l.progress.passed).length, exam = r.labs.filter(l => l.progress.examPassed).length;
+  main.append(h('div', { class: 'tiles' }, [[done + ' / ' + r.labs.length, 'Labs bestanden'], [exam, 'davon im Prüfungsmodus'],
+    [r.labs.reduce((a, l) => a + l.progress.starts, 0), 'Starts insgesamt']].map(([n, l]) => h('div', { class: 'tile' }, h('div', { class: 'n' }, n), h('div', { class: 'l' }, l)))));
   main.append(h('h2', null, cur ? 'Weitere Labs' : 'Verfügbare Labs'));
   const mode = h('select', { 'data-id': 'lab-mode', 'aria-label': 'Modus' }, h('option', { value: 'guided' }, 'Geführt (Hinweise, Diagnose)'),
     h('option', { value: 'exam' }, 'Prüfung (ohne Hilfe)'));
   main.append(h('div', { class: 'bar' }, 'Modus: ', mode, h('span', { class: 'muted' }, 'Ein Lab-Start setzt die Welt auf den Ausgangszustand zurück.')));
-  main.append(table([{ l: 'Lab', f: l => h('b', null, l.title) }, { l: 'Thema', f: l => l.topic }, { l: 'Niveau', f: l => l.level },
+  main.append(table([{ l: 'Status', f: l => l.progress.examPassed ? badge('Prüfung bestanden', 'ok') : l.progress.guidedPassed ? badge('Geführt bestanden', 'ok')
+      : l.progress.starts ? badge('begonnen', 'warn') : h('span', { class: 'muted' }, 'offen') },
+    { l: 'Lab', f: l => h('b', null, l.title) }, { l: 'Thema', f: l => l.topic }, { l: 'Niveau', f: l => l.level },
     { l: 'Dauer', f: l => l.duration }, { l: 'Art', f: l => l.kind === 'troubleshooting' ? 'Fehlersuche' : 'Anforderungen' },
     { l: '', f: l => h('button', { class: 'small primary', 'data-id': 'start-' + l.id.slice(0, 2), onclick: async () => {
       if (cur && !confirm('Das laufende Lab wird ersetzt. Fortfahren?')) return;
@@ -295,7 +300,36 @@ VIEWS.labs = async main => {
       if (x.http !== 200) { toast(x.error); return; }
       toast('Gestartet: ' + l.title); refresh();
     } }, 'Start') }], r.labs));
+  await savesCard(main);
 };
+
+async function savesCard(main) {
+  main.append(h('h2', null, 'Stände'));
+  if (!S.persistent) { main.append(h('div', { class: 'note' }, 'Der Zustand wird in dieser Sitzung nicht dauerhaft gespeichert (Start mit --ephemeral).')); return; }
+  const sv = await api.get('/wlc/api/saves');
+  const name = h('input', { 'data-id': 'save-name', placeholder: 'z. B. lab01-vor-hint', 'aria-label': 'Name des Stands', maxlength: 40 });
+  main.append(h('div', { class: 'muted', style: 'margin-bottom:8px' },
+    'Der aktuelle Zustand wird automatisch gespeichert und beim Start wieder geladen. Ein Stand enthält Konfiguration, Welt und die Lab-Sitzung; der Fortschritt bleibt erhalten.'));
+  main.append(h('div', { class: 'bar' }, name, h('button', { 'data-id': 'save', onclick: async () => {
+    const x = await api.post('/wlc/api/saves', { name: name.value.trim() });
+    if (x.http !== 200) { toast(x.error); return; }
+    toast('Stand gespeichert'); refresh();
+  } }, 'Stand speichern')));
+  main.append(table([{ l: 'Name', f: x => x.name }, { l: 'Lab', f: x => x.lab || '–' }, { l: 'WLANs', f: x => x.wlans },
+    { l: '', f: x => [x.broken ? badge('nicht lesbar', 'bad') : h('button', { class: 'small', 'data-id': 'load-' + x.name, onclick: async () => {
+      if (!confirm('Den aktuellen Zustand durch den Stand "' + x.name + '" ersetzen?')) return;
+      const r = await api.post('/wlc/api/saves/load', { name: x.name });
+      if (r.http !== 200) { toast(r.error); return; }
+      toast('Stand geladen'); refresh();
+    } }, 'Laden'), ' ', h('button', { class: 'small danger', 'data-id': 'del-' + x.name, onclick: async () => {
+      if (!confirm('Stand "' + x.name + '" löschen?')) return;
+      await api.post('/wlc/api/saves/delete', { name: x.name }); refresh();
+    } }, 'Löschen')] }], sv.saves, 'Keine Stände gespeichert.'));
+  main.append(h('div', { class: 'bar', style: 'margin-top:10px' }, h('button', { class: 'danger', 'data-id': 'reset-progress', onclick: async () => {
+    if (!confirm('Den gesamten Lab-Fortschritt zurücksetzen?')) return;
+    await api.post('/wlc/api/progress/reset'); toast('Fortschritt zurückgesetzt'); refresh();
+  } }, 'Fortschritt zurücksetzen')));
+}
 
 function labCard(lab) {
   const exam = lab.mode === 'exam';
@@ -367,16 +401,24 @@ function drawNav() {
     n.items.forEach(([id, l]) => nav.append(link(id, l)));
   });
 }
-const link = (id, l) => h('a', { href: '#/' + id, class: id === current() ? 'on' : '', 'data-view': id, 'aria-current': id === current() ? 'page' : null }, l);
+const link = (id, l) => h('a', { href: '#/' + id, class: id === current() ? 'on' : '', 'data-view': id, 'aria-current': id === current() ? 'page' : null,
+  onclick: ev => { if (id === current()) { ev.preventDefault(); refresh(); } } }, l);   // Klick auf die aktuelle Seite laedt sie neu
 
 async function refresh() {
-  S = await api.state();
+  const seq = refresh.seq = (refresh.seq || 0) + 1;      // nur die letzte Aktualisierung darf die Seite aendern
+  const st = await api.state();
+  if (seq !== refresh.seq) return;
+  S = st;
   document.getElementById('host').textContent = S.wlc.hostname + ' · ' + S.wlc.ip;
   drawNav();
   const id = VIEWS[current()] ? current() : 'dash';
-  const main = document.getElementById('main'); main.textContent = '';
-  main.append(h('h1', null, TITLES[id]));
-  await VIEWS[id](main);
+  const box = h('div');                                   // erst im Hintergrund aufbauen, dann in einem Schritt einsetzen
+  box.append(h('h1', null, TITLES[id]));
+  await VIEWS[id](box);
+  if (seq !== refresh.seq) return;
+  const main = document.getElementById('main');
+  main.textContent = '';
+  main.append(...box.childNodes);
 }
 
 window.addEventListener('hashchange', refresh);

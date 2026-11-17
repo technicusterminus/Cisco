@@ -30,6 +30,15 @@ class Wlc:
     def restore(self, snap):
         self.wlans, self.policies, self.policy_tags, self.ap_cfg = copy.deepcopy(snap)
 
+    def dump(self):
+        """Konfiguration fuer die Persistenz (JSON-tauglich). Die Welt (APs, Clients) speichert die Sim."""
+        return copy.deepcopy({'wlans': self.wlans, 'policies': self.policies, 'policyTags': self.policy_tags, 'apCfg': self.ap_cfg})
+
+    def load(self, d):
+        self.wlans, self.policies = copy.deepcopy(d['wlans']), copy.deepcopy(d['policies'])
+        self.policy_tags, self.ap_cfg = copy.deepcopy(d['policyTags']), copy.deepcopy(d['apCfg'])
+        self.policy_tags.setdefault(DEF_POLICY_TAG, {})
+
     def state(self):
         """Alles, was die Weboberflaeche anzeigt (Schluessel werden nicht herausgegeben)."""
         aps = []

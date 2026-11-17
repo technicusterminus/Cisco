@@ -8,6 +8,7 @@ from urllib.parse import parse_qs, urlparse
 
 from .catc import CatalystCenter
 from .labs import LabEngine, LabError
+from .store import KIND, VERSION, Store, StoreError, validate_state
 from .wlc import Cli, Wlc, apply_commands
 from .world import new_world
 
@@ -18,10 +19,44 @@ TYPES = {'.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=u
 
 
 class Sim:
-    def __init__(self, labs_dir=None):
+    def __init__(self, labs_dir=None, data_dir=None):
         self.lock = threading.Lock()
         self.reset_world()
         self.labs = LabEngine(self, labs_dir) if labs_dir else LabEngine(self)
+        self.store = Store(data_dir) if data_dir else None
+        if self.store:
+            self.labs.progress = self.store.read_progress()
+            st = self.store.read_state()
+            if st is not None:
+                try:
+                    self.restore_all(st)
+                except StoreError:
+                    self.store._quarantine(os.path.join(self.store.dir, 'state.json'))
+
+    # ------------------------------------------------------------------ Staende
+    def snapshot_all(self):
+        return {'kind': KIND, 'version': VERSION, 'world': copy.deepcopy(self.world), 'wlc': self.wlc.dump(),
+                'lab': copy.deepcopy(self.labs.session)}
+
+    def restore_all(self, d):
+        """Zustand ersetzen. Wirft StoreError und laesst die laufende Sim unveraendert, wenn der Stand nicht passt."""
+        validate_state(d)
+        world = copy.deepcopy(d['world'])
+        wlc = Wlc(world)
+        try:
+            wlc.load(d['wlc'])
+            wlc.state()
+        except (KeyError, TypeError, ValueError, AttributeError):
+            raise StoreError('Stand ist beschaedigt')
+        self.world, self.wlc = world, wlc
+        self.cli = Cli(self.wlc)
+        self.catc = CatalystCenter(self.world)
+        self.labs.restore_session(d.get('lab'))
+
+    def persist(self):
+        if self.store:
+            self.store.write_state(self.snapshot_all())
+            self.store.write_progress(self.labs.progress)
 
     def reset_world(self, clients=None):
         """Neue Welt (Standard oder mit Lab-Clients) und unkonfigurierter Controller."""
@@ -45,6 +80,7 @@ class Sim:
                 c['reasons'] = []
         st['diagAvailable'] = not exam
         st['lab'] = {'id': sess['id'], 'mode': sess['mode']} if sess else None
+        st['persistent'] = self.store is not None
         return st
 
 
@@ -54,6 +90,8 @@ def make_handler(sim):
             pass
 
         def _send(self, status, obj):
+            if self.command == 'POST':
+                sim.persist()   # vor der Antwort: nach der Antwort darf der Client sofort neu starten
             data = json.dumps(obj).encode()
             self.send_response(status)
             self.send_header('Content-Type', 'application/json')
@@ -74,6 +112,33 @@ def make_handler(sim):
             self.send_header('Content-Length', str(len(data)))
             self.end_headers()
             self.wfile.write(data)
+
+        def _saves(self, method, path, raw):
+            if sim.store is None:
+                return self._send(409, {'error': 'Persistenz ist ausgeschaltet'})
+            try:
+                body = json.loads(raw) if raw else {}
+                assert isinstance(body, dict)
+            except (ValueError, AssertionError):
+                return self._send(400, {'error': 'JSON-Objekt erwartet'})
+            try:
+                if (method, path) == ('GET', '/wlc/api/saves'):
+                    return self._send(200, {'saves': sim.store.list_named()})
+                if (method, path) == ('POST', '/wlc/api/saves'):
+                    sim.store.save_named(body.get('name'), sim.snapshot_all())
+                    return self._send(200, {'saves': sim.store.list_named()})
+                if (method, path) == ('POST', '/wlc/api/saves/load'):
+                    sim.restore_all(sim.store.load_named(body.get('name')))
+                    return self._send(200, {'ok': True})
+                if (method, path) == ('POST', '/wlc/api/saves/delete'):
+                    sim.store.delete_named(body.get('name'))
+                    return self._send(200, {'saves': sim.store.list_named()})
+                if (method, path) == ('POST', '/wlc/api/progress/reset'):
+                    sim.labs.reset_progress()
+                    return self._send(200, {'labs': sim.labs.list()})
+            except StoreError as e:
+                return self._send(e.status, {'error': str(e)})
+            return self._send(404, {'error': 'Endpunkt nicht umgesetzt'})
 
         def _lab(self, method, path, raw):
             L = sim.labs
@@ -115,6 +180,8 @@ def make_handler(sim):
             with sim.lock:
                 if u.path == '/wlc/api/state' and method == 'GET':
                     return self._send(200, sim.ui_state())
+                if u.path.startswith('/wlc/api/saves') or u.path == '/wlc/api/progress/reset':
+                    return self._saves(method, u.path, raw)
                 if u.path.startswith('/wlc/api/lab'):
                     return self._lab(method, u.path, raw)
                 if u.path == '/wlc/api/apply' and method == 'POST':
@@ -144,8 +211,8 @@ def make_handler(sim):
     return H
 
 
-def serve(port=8090, host='127.0.0.1'):
-    sim = Sim()
+def serve(port=8090, host='127.0.0.1', data_dir=None):
+    sim = Sim(data_dir=data_dir)
     srv = ThreadingHTTPServer((host, port), make_handler(sim))
     return srv, sim
 
