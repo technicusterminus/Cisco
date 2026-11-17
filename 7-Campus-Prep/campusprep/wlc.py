@@ -52,7 +52,7 @@ class Wlc:
                            for n, m in sorted(self.policy_tags.items())],
             'aps': aps,
             'clients': [{'mac': c['mac'], 'ssid': c['ssid'], 'ap': c['ap'], 'protocol': c['protocol'], 'state': c['state'],
-                         'wlan': c['wlan'], 'method': c['method'], 'reasons': c['reasons']} for c in self.clients()],
+                         'wlan': c['wlan'], 'vlan': c['vlan'], 'method': c['method'], 'reasons': c['reasons']} for c in self.clients()],
         }
 
     # ------------------------------------------------------------------ Zustand
@@ -68,7 +68,7 @@ class Wlc:
     def decide(self, client):
         """Didaktisches Modell: Warum ist ein Client assoziiert oder nicht? Rueckgabe {state, ap, wlan, reasons}."""
         ap = self.ap_by_name(client['ap'])
-        res = {'state': 'Not Associated', 'ap': client['ap'], 'wlan': None, 'policy': None, 'method': None, 'reasons': []}
+        res = {'state': 'Not Associated', 'ap': client['ap'], 'wlan': None, 'policy': None, 'vlan': None, 'method': None, 'reasons': []}
         if not ap or not ap.get('joined'):
             res['reasons'].append('AP %s ist nicht am Controller registriert' % client['ap'])
             return res
@@ -93,7 +93,7 @@ class Wlc:
         if p['shutdown']:
             res['reasons'].append('Policy Profile %s ist administrativ down (shutdown)' % pol)
             return res
-        res.update(wlan=w['id'], policy=pol)
+        res.update(wlan=w['id'], policy=pol, vlan=p['vlan'])
         if w['akm'] == 'psk':
             res['method'] = 'PSK'
             if client.get('psk') != w['psk']:
@@ -312,3 +312,18 @@ class Cli:
                 return ''
             raise CliError('Invalid input detected: "%s"' % ' '.join(w))
         raise CliError('Invalid input detected')
+
+
+def apply_commands(wlc, commands):
+    """Befehle atomar durch die CLI anwenden: Bei einem Fehler wird die Konfiguration auf den Stand davor zurueckgesetzt.
+    Rueckgabe (ok, Ergebnisse je Zeile, Fehler oder None). Oberflaeche, Labs und Tests gehen so durch dieselbe CLI."""
+    snap = wlc.snapshot()
+    cli = Cli(wlc)
+    results = []
+    for line in ['configure terminal'] + list(commands) + ['end']:
+        out = cli.run(line)
+        results.append({'command': line, 'output': out})
+        if out.startswith('% '):
+            wlc.restore(snap)
+            return False, results, {'command': line, 'message': out[2:]}
+    return True, results, None

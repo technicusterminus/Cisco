@@ -32,7 +32,7 @@ const check = (ok, msg) => { console.log((ok ? '  ok   ' : '  FEHLER ') + msg); 
 
     await p.goto(U); await p.waitForSelector('nav a');
     check((await p.title()).includes('Campus Prep'), 'Seite lädt mit Titel');
-    check(await p.locator('nav a').count() >= 8, 'Navigation zeigt alle Ansichten');
+    check(await p.locator('nav a').count() >= 9, 'Navigation zeigt alle Ansichten');
     await go('clients');
     check((await text()).includes('Keine Clients verbunden'), 'Ohne Konfiguration ist kein Client verbunden');
 
@@ -108,8 +108,43 @@ const check = (ok, msg) => { console.log((ok ? '  ok   ' : '  FEHLER ') + msg); 
 
     await go('dash'); await p.screenshot({ path: process.env.SHOT || '/tmp/campus-dash.png' });
     check(/Clients verbunden/.test(await text()), 'Dashboard zeigt die Kacheln');
+    // Labs: gefuehrtes Lab 01 mit Hinweisen, falscher Abkuerzung und Loesung
+    await go('labs'); await p.selectOption('[data-id="lab-mode"]', 'guided'); await p.click('[data-id="start-01"]'); await p.waitForTimeout(500);
+    check(/Corp-SSID in der Lobby nicht sichtbar/.test(await text()) && /Anforderungen/.test(await text()), 'Lab 01 startet und zeigt Szenario und Anforderungen');
+    await p.click('[data-id="lab-check"]'); await p.waitForTimeout(300);
+    let res = await p.textContent('[data-id="check-result"]');
+    check(/noch nicht bestanden/.test(res) && /✖ Lobby-Laptop verbunden/.test(res), 'Prüfung: ohne Lösung nicht bestanden, Detail sichtbar');
+    await go('diag');
+    check(/default-policy-tag[\s\S]*nicht ausgestrahlt/.test(await text()), 'Geführt: Client-Diagnose erklärt die Ursache');
+    await go('labs'); await p.click('[data-id="hint"]'); await p.waitForTimeout(250);
+    check(await p.locator('[data-hint="1"]').count() === 1 && /Konzept/.test(await p.textContent('[data-hint="1"]')), 'Hinweis Stufe 1 erscheint');
+    await p.click('[data-id="hint"]'); await p.waitForTimeout(250);
+    check(await p.locator('[data-hint]').count() === 2 && /Stufe 3 von 4/.test(await p.textContent('[data-id="hints"]')), 'Hinweis Stufe 2, Knopf zeigt Stufe 3 von 4');
+    // falsche Abkuerzung: beide APs taggen
+    await go('apcfg'); await p.click('[data-id="ap-tag-ap-lobby"]'); await p.selectOption('[data-id="ap-policy-tag"]', 'PT_Corp'); await apply();
+    await p.click('[data-id="ap-tag-ap-lager"]'); await p.selectOption('[data-id="ap-policy-tag"]', 'PT_Corp'); await apply();
+    await go('labs'); await p.click('[data-id="lab-check"]'); await p.waitForTimeout(300);
+    res = await p.textContent('[data-id="check-result"]');
+    check(/noch nicht bestanden/.test(res) && /✖ ap-lager sendet Corp nicht/.test(res) && /✔ Lobby-Laptop verbunden/.test(res), 'Beide APs zu taggen verbindet den Laptop, verletzt aber die Sicherheitsprüfung');
+    await go('apcfg'); await p.click('[data-id="ap-tag-ap-lager"]'); await p.selectOption('[data-id="ap-policy-tag"]', 'default-policy-tag'); await apply();
+    await go('labs'); await p.click('[data-id="lab-check"]'); await p.waitForTimeout(300);
+    check(/bestanden/.test(await p.textContent('[data-id="check-result"]')) && !/noch nicht/.test(await p.textContent('[data-id="check-result"]')), 'Mit der richtigen Lösung ist Lab 01 bestanden');
+    await p.locator('[data-q="q1"] input').first().check(); await p.waitForTimeout(300);
+    check(/✔ richtig/.test(await p.textContent('[data-q="q1"]')), 'Verständnisfrage wird beantwortet und erklärt');
+    await p.click('[data-id="lab-solution"]'); await p.waitForTimeout(250);
+    check(/Edit Tags/.test(await p.textContent('[data-id="solution"]')), 'Lösung zeigen im geführten Modus');
+    // Pruefungsmodus: Lab 02
+    await p.selectOption('[data-id="lab-mode"]', 'exam'); await p.click('[data-id="start-02"]'); await p.waitForTimeout(500);
+    check(/Prüfungsmodus/.test(await text()) && await p.locator('[data-id="hint"]').count() === 0 && await p.locator('[data-id="lab-solution"]').count() === 0, 'Prüfungsmodus: keine Hinweise, keine Lösung');
+    await go('diag');
+    check(await p.locator('[data-id="diag-locked"]').count() === 1 && !/administrativ/.test(await text()), 'Prüfungsmodus: Client-Diagnose gesperrt, keine Begründung sichtbar');
+    await go('labs'); await p.click('[data-id="lab-check"]'); await p.waitForTimeout(300);
+    res = await p.textContent('[data-id="check-result"]');
+    check(/noch nicht bestanden/.test(res) && !/Zustand Not Associated/.test(res), 'Prüfungsmodus: Auswertung ohne Details');
+    await go('dash'); check(/Aktuelles Lab: 02-admin-down/.test(await text()), 'Dashboard zeigt das laufende Lab');
+
     // Alle Ansichten ohne JS-Fehler
-    for (const id of ['dash', 'aps', 'clients', 'wlans', 'policies', 'tags', 'apcfg', 'cli', 'diag']) { await go(id); }
+    for (const id of ['dash', 'labs', 'aps', 'clients', 'wlans', 'policies', 'tags', 'apcfg', 'cli', 'diag']) { await go(id); }
     check(rejected === 2, 'Genau die zwei absichtlichen Ablehnungen (HTTP 400) wurden ausgelöst: ' + rejected);
     check(errs.length === 0, 'Keine JavaScript-Fehler' + (errs.length ? ': ' + errs.join(' | ') : ''));
   } finally { await b.close(); srv.kill(); }

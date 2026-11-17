@@ -18,19 +18,23 @@ const api = {
   state: () => fetch('/wlc/api/state').then(r => r.json()),
   apply: commands => fetch('/wlc/api/apply', { method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ commands }) }).then(async r => Object.assign({ http: r.status }, await r.json())),
+  post: (path, body) => fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) })
+    .then(async r => Object.assign({ http: r.status }, await r.json())),
+  get: path => fetch(path).then(async r => Object.assign({ http: r.status }, await r.json())),
   cli: command => fetch('/wlc/cli', { method: 'POST', body: JSON.stringify({ command }) }).then(r => r.json()),
 };
 
 let S = null;
 const NAV = [
   { id: 'dash', l: 'Dashboard' },
+  { id: 'labs', l: 'Labs (Simulation)' },
   { g: 'Monitoring', sub: 'Wireless', items: [['aps', 'Access Points'], ['clients', 'Clients']] },
   { g: 'Configuration', sub: 'Tags & Profiles', items: [['wlans', 'WLANs'], ['policies', 'Policy'], ['tags', 'Tags']] },
   { g: 'Configuration', sub: 'Wireless', items: [['apcfg', 'Access Points']] },
   { g: 'Administration', items: [['cli', 'Command Line Interface']] },
   { g: 'Troubleshooting', items: [['diag', 'Client-Diagnose (Simulation)']] },
 ];
-const TITLES = { dash: 'Dashboard', aps: 'Monitoring > Wireless > Access Points', clients: 'Monitoring > Wireless > Clients',
+const TITLES = { dash: 'Dashboard', labs: 'Labs (Simulation)', aps: 'Monitoring > Wireless > Access Points', clients: 'Monitoring > Wireless > Clients',
   wlans: 'Configuration > Tags & Profiles > WLANs', policies: 'Configuration > Tags & Profiles > Policy',
   tags: 'Configuration > Tags & Profiles > Tags', apcfg: 'Configuration > Wireless > Access Points',
   cli: 'Administration > Command Line Interface', diag: 'Troubleshooting > Client-Diagnose (Simulation)' };
@@ -91,6 +95,8 @@ const need = (cond, msg) => { if (!cond) throw new Error(msg); };
 const VIEWS = {};
 
 VIEWS.dash = main => {
+  if (S.lab) main.append(h('div', { class: 'note' }, 'Aktuelles Lab: ', h('b', null, S.lab.id), ' (', S.lab.mode === 'exam' ? 'Prüfungsmodus' : 'geführt', ') – ',
+    h('a', { href: '#/labs' }, 'Aufgaben und Prüfung öffnen')));
   const up = S.aps.filter(a => a.state === 'Registered').length;
   const run = S.clients.filter(c => c.state === 'Run').length;
   main.append(h('div', { class: 'tiles' },
@@ -254,10 +260,99 @@ VIEWS.cli = async main => {
 };
 
 VIEWS.diag = main => {
+  if (!S.diagAvailable) { main.append(h('div', { class: 'note', 'data-id': 'diag-locked' }, 'Im Prüfungsmodus ist die Client-Diagnose nicht verfügbar. Nutze Monitoring, die Show-Befehle und die CLI.')); return; }
   main.append(h('div', { class: 'note' }, 'Simulation: Diese Seite gibt es am echten Controller nicht. Sie erklärt, warum ein Client (nicht) verbunden ist. Die Begründungen sind ein didaktisches Modell.'));
   main.append(table([{ l: 'MAC Address', f: c => c.mac }, { l: 'SSID', f: c => c.ssid }, { l: 'AP', f: c => c.ap },
     { l: 'Ergebnis', f: c => stateBadge(c.state) }, { l: 'Begründung', cls: 'reason', f: c => c.reasons.length ? c.reasons.join(' ') : 'Verbunden' }], S.clients));
 };
+
+/* ---------------------------------------------------------------- Labs */
+/* Kleines Markdown: **fett**, `code`, Zeilen mit "- " als Liste. Es wird nie HTML eingesetzt. */
+function md(text) {
+  const inline = line => line.split(/(\*\*[^*]+\*\*|`[^`]+`)/).filter(Boolean).map(t =>
+    t.startsWith('**') ? h('b', null, t.slice(2, -2)) : t.startsWith('`') ? h('code', null, t.slice(1, -1)) : t);
+  const out = []; let list = null;
+  text.split('\n').forEach(l => {
+    if (l.startsWith('- ')) { if (!list) { list = h('ul'); out.push(list); } list.append(h('li', null, inline(l.slice(2)))); return; }
+    list = null; if (l.trim()) out.push(h('p', null, inline(l)));
+  });
+  return out;
+}
+
+VIEWS.labs = async main => {
+  const r = await api.get('/wlc/api/labs');
+  const cur = r.current;
+  if (cur) main.append(labCard(cur));
+  main.append(h('h2', null, cur ? 'Weitere Labs' : 'Verfügbare Labs'));
+  const mode = h('select', { 'data-id': 'lab-mode', 'aria-label': 'Modus' }, h('option', { value: 'guided' }, 'Geführt (Hinweise, Diagnose)'),
+    h('option', { value: 'exam' }, 'Prüfung (ohne Hilfe)'));
+  main.append(h('div', { class: 'bar' }, 'Modus: ', mode, h('span', { class: 'muted' }, 'Ein Lab-Start setzt die Welt auf den Ausgangszustand zurück.')));
+  main.append(table([{ l: 'Lab', f: l => h('b', null, l.title) }, { l: 'Thema', f: l => l.topic }, { l: 'Niveau', f: l => l.level },
+    { l: 'Dauer', f: l => l.duration }, { l: 'Art', f: l => l.kind === 'troubleshooting' ? 'Fehlersuche' : 'Anforderungen' },
+    { l: '', f: l => h('button', { class: 'small primary', 'data-id': 'start-' + l.id.slice(0, 2), onclick: async () => {
+      if (cur && !confirm('Das laufende Lab wird ersetzt. Fortfahren?')) return;
+      const x = await api.post('/wlc/api/lab/start', { id: l.id, mode: mode.value });
+      if (x.http !== 200) { toast(x.error); return; }
+      toast('Gestartet: ' + l.title); refresh();
+    } }, 'Start') }], r.labs));
+};
+
+function labCard(lab) {
+  const exam = lab.mode === 'exam';
+  const result = h('div', { 'data-id': 'check-result' });
+  const sol = h('div', { 'data-id': 'solution' });
+  const card = h('div', { class: 'card', 'data-lab': lab.id },
+    h('div', { class: 'bar' }, h('b', null, lab.title), badge(exam ? 'Prüfungsmodus' : 'Geführt', exam ? 'warn' : 'ok'), h('span', { class: 'grow' }),
+      h('span', { class: 'muted' }, lab.level + ' · ' + lab.duration)),
+    md(lab.intro),
+    h('h2', null, 'Anforderungen'), h('ul', null, lab.requirements.map(x => h('li', null, x))),
+    h('details', null, h('summary', null, 'Lernziele, Werkzeuge und Grenzen dieses Szenarios'),
+      h('p', null, h('b', null, 'Lernziele')), h('ul', null, lab.goals.map(x => h('li', null, x))),
+      h('p', null, h('b', null, 'Werkzeuge')), h('ul', null, lab.tools.map(x => h('li', null, x))),
+      h('p', null, h('b', null, 'Grenzen')), h('ul', null, lab.limits.map(x => h('li', null, x)))),
+    exam ? h('div', { class: 'muted', style: 'margin:8px 0' }, 'Prüfungsmodus: keine Hinweise, keine Lösung, keine Diagnose, keine Details in der Auswertung.') : hintBox(lab),
+    lab.questions.length ? [h('h2', null, 'Verständnisfragen (zählen nicht zum Bestehen)'), lab.questions.map(q => question(lab, q))] : null,
+    h('div', { class: 'bar', style: 'margin-top:14px' },
+      h('button', { class: 'primary', 'data-id': 'lab-check', onclick: async () => { const c = await api.post('/wlc/api/lab/check'); result.textContent = ''; result.append(checkView(c)); } }, 'Lab prüfen'),
+      h('button', { 'data-id': 'lab-reset', onclick: async () => { if (!confirm('Das Lab auf den Ausgangszustand zurücksetzen?')) return; await api.post('/wlc/api/lab/reset'); toast('Zurückgesetzt'); refresh(); } }, 'Zurücksetzen'),
+      exam ? null : h('button', { 'data-id': 'lab-solution', onclick: async () => { const x = await api.get('/wlc/api/lab/solution'); sol.textContent = ''; if (x.solution) sol.append(h('div', { class: 'note' }, md(x.solution))); } }, 'Lösung zeigen'),
+      h('button', { class: 'danger', onclick: async () => { await api.post('/wlc/api/lab/stop'); refresh(); } }, 'Lab beenden')),
+    result, sol);
+  return card;
+}
+
+function hintBox(lab) {
+  const box = h('div', { 'data-id': 'hints' });
+  const draw = l => {
+    box.textContent = '';
+    l.hints.forEach((t, i) => box.append(h('div', { class: 'note', 'data-hint': i + 1 }, md(t))));
+    if (l.hintsUsed < l.hintsTotal) box.append(h('button', { 'data-id': 'hint', onclick: async () => { const x = await api.post('/wlc/api/lab/hint'); if (x.current) draw(x.current); } },
+      'Hinweis anzeigen (Stufe ' + (l.hintsUsed + 1) + ' von ' + l.hintsTotal + ')'));
+  };
+  draw(lab);
+  return box;
+}
+
+function question(lab, q) {
+  const fb = h('div', { class: 'muted' });
+  const name = 'q-' + q.id;
+  return h('div', { class: 'card', 'data-q': q.id }, h('div', null, h('b', null, q.q)),
+    q.options.map((o, i) => h('label', { style: 'display:block;margin:4px 0' }, h('input', { type: 'radio', name, onchange: async () => {
+      const x = await api.post('/wlc/api/lab/answer', { id: q.id, answer: i });
+      fb.textContent = x.correct ? '✔ richtig. ' + (x.explain || '') : '✖ nicht richtig. ' + (x.explain || '');
+    } }), ' ', o)), fb);
+}
+
+function checkView(c) {
+  if (c.error) return h('div', { class: 'err' }, c.error);
+  const cats = Object.entries(c.categories).map(([k, v]) => h('div', { class: 'tile' }, h('div', { class: 'n' }, v.ok + ' / ' + v.total),
+    h('div', { class: 'l' }, k === 'security' ? 'Sicherheit / Least Privilege' : 'Funktion')));
+  return h('div', { style: 'margin-top:12px' },
+    h('div', { class: 'bar' }, c.passed ? badge('bestanden', 'ok') : badge('noch nicht bestanden', 'bad'),
+      h('span', { class: 'muted' }, 'Hinweise genutzt: ' + c.hintsUsed + ' · Fragen richtig: ' + c.questions.right + ' / ' + c.questions.total)),
+    h('div', { class: 'tiles' }, cats),
+    h('ol', null, c.checks.map(x => h('li', null, x.ok ? '✔ ' : '✖ ', x.desc, x.detail ? h('div', { class: 'muted' }, x.detail) : null))));
+}
 
 /* ---------------------------------------------------------------- Rahmen */
 function current() { return (location.hash.replace(/^#\//, '') || 'dash'); }

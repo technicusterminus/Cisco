@@ -6,6 +6,7 @@ Ein Projekt, eine Welt: ein simulierter C9800-WLC mit Access Points und WLAN-Cli
 |---|---|---|
 | 1 | WLC-Kern: WLAN, Policy Profile, Policy Tag, AP-Tagging, Client-Assoziation mit Begründung; Show-Befehle mit belegtem Format; Catalyst Center: Token und Geräteinventar per REST | umgesetzt |
 | 2a | WLC-Weboberfläche: Dashboard, Monitoring (APs, Clients), Configuration (WLANs, Policy, Tags, AP-Tags), CLI-Ansicht, Client-Diagnose; jeder Dialog zeigt sein CLI-Äquivalent | umgesetzt |
-| 2b | Catalyst-Center-Weboberfläche, Lab-Engine wie im Datacenter Prep | offen |
+| 2b | Catalyst-Center-Weboberfläche | offen |
+| 2c | Lab-Engine (geführt/Prüfung, Hinweisstufen, Funktion und Sicherheit getrennt, Verständnisfragen) und sechs WLC-Labs | umgesetzt |
 | 3 | WLC: 802.1x/RADIUS, FlexConnect, RF-Profile, Mobility; weitere belegte Show-Befehle | offen |
 | 4 | Catalyst Center: Sites, Network Settings, Provisioning des WLC, Assurance, Templates (nur mit belegten Antwortformaten) | offen |

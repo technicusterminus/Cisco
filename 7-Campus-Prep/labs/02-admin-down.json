@@ -1,0 +1,120 @@
+{
+ "cause": "WLAN-Profil und Policy Profile sind nach dem Anlegen administrativ down.",
+ "checks": [
+  {
+   "category": "function",
+   "desc": "Lobby-Laptop verbunden, VLAN 20",
+   "mac": "58bf.eaaa.0001",
+   "state": "Run",
+   "type": "client",
+   "vlan": "20"
+  },
+  {
+   "attrs": {
+    "akm": "psk"
+   },
+   "category": "security",
+   "desc": "Corp nutzt weiterhin WPA2-PSK",
+   "profile": "Corp_Profile",
+   "type": "wlan"
+  }
+ ],
+ "duration": "15 min",
+ "fabric": "wlc1 mit ap-lobby und ap-lager",
+ "goals": [
+  "Administrativen Zustand von WLAN und Policy Profile unterscheiden",
+  "Mehrere Ursachen nacheinander finden"
+ ],
+ "hints": [
+  "**Konzept:** Neu angelegte Objekte sind nicht automatisch aktiv. Es gibt mehrere Stellen mit einem Admin-Zustand.",
+  "**Ebene:** Konfigurationszustand von WLAN und Policy Profile, die Zuordnung am AP stimmt.",
+  "**Prüfschritte:** `show wlan summary` zeigt den Status des WLAN, `show wireless profile policy summary` den des Policy Profile. Beide prüfen.",
+  "**Lösung:** Das WLAN-Profil **und** das Policy Profile aktivieren (`no shutdown`)."
+ ],
+ "id": "02-admin-down",
+ "intro": "Ein Kollege hat Corp komplett angelegt und dem AP ap-lobby zugewiesen. Der Laptop in der Lobby verbindet sich trotzdem nicht.\n\n- Corp: WPA2-PSK, VLAN 20, Zuordnung am AP ist erledigt\n- Der Kollege hat nach dem Anlegen nichts weiter konfiguriert.",
+ "kind": "troubleshooting",
+ "level": "Einstieg",
+ "limits": [
+  "Das Client-Modell ist didaktisch: Es erklärt, ob und warum ein Client verbunden ist, ist aber keine Abbildung der Controller-Pipeline.",
+  "Nicht modelliert: 802.1x/RADIUS, FlexConnect, RF-Profile, Roaming, Mobility."
+ ],
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 01"
+ ],
+ "questions": [
+  {
+   "answer": 0,
+   "explain": "Ein neues WLAN-Profil und ein neues Policy Profile müssen aktiviert werden, bevor sie wirken.",
+   "id": "q1",
+   "options": [
+    "Administrativ down",
+    "Aktiv, sobald ein AP es kennt",
+    "Aktiv, aber ohne Sicherheit",
+    "Es hängt vom AP-Modell ab"
+   ],
+   "q": "In welchem Zustand ist ein neu angelegtes WLAN-Profil?"
+  },
+  {
+   "answer": 1,
+   "explain": "Die Verbindung braucht beides: das WLAN-Profil und das Policy Profile, auf das das Policy Tag verweist.",
+   "id": "q2",
+   "options": [
+    "Ja, das Policy Profile ist optional",
+    "Nein, auch das Policy Profile muss aktiv sein",
+    "Nur wenn ein VLAN gesetzt ist",
+    "Nur bei WPA2"
+   ],
+   "q": "Reicht es, nur das WLAN-Profil zu aktivieren?"
+  }
+ ],
+ "requirements": [
+  "Der Laptop in der Lobby ist mit Corp verbunden und im VLAN 20.",
+  "Corp bleibt mit WPA2-PSK geschützt."
+ ],
+ "solution": "WebUI: Configuration > Tags & Profiles > WLANs > Corp_Profile > Edit: Status Enabled; danach unter Policy das Profil PP_Corp ebenso. CLI: `wlan Corp_Profile 1 Corp`, `no shutdown`, dann `wireless profile policy PP_Corp`, `no shutdown`.",
+ "solutionCommands": [
+  "wlan Corp_Profile 1 Corp",
+  "no shutdown",
+  "exit",
+  "wireless profile policy PP_Corp",
+  "no shutdown"
+ ],
+ "startCommands": [
+  "wlan Corp_Profile 1 Corp",
+  "security wpa akm psk",
+  "security wpa psk set-key ascii 0 Sommer2026",
+  "shutdown",
+  "exit",
+  "wireless profile policy PP_Corp",
+  "vlan 20",
+  "shutdown",
+  "exit",
+  "wireless tag policy PT_Corp",
+  "wlan Corp_Profile policy PP_Corp",
+  "exit",
+  "ap a4b2.32aa.0001",
+  "policy-tag PT_Corp"
+ ],
+ "title": "02 Alles eingerichtet, nichts funkt",
+ "tools": [
+  "WebUI: Monitoring > Wireless > Clients",
+  "WebUI: Configuration > Tags & Profiles und Wireless > Access Points",
+  "Client-Diagnose (nur im geführten Modus)",
+  "CLI: show wlan summary, show ap tag summary, show wireless client summary"
+ ],
+ "topic": "Wireless / Betriebszustand",
+ "worldClients": [
+  {
+   "ap": "ap-lobby",
+   "mac": "58bf.eaaa.0001",
+   "protocol": "11ac",
+   "psk": "Sommer2026",
+   "ssid": "Corp"
+  }
+ ]
+}

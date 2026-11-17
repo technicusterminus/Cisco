@@ -1,4 +1,5 @@
 """HTTP-Server: Catalyst-Center-API (Pfade wie im Original) und eine WLC-CLI unter /wlc/cli."""
+import copy
 import json
 import os
 import threading
@@ -6,7 +7,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 from .catc import CatalystCenter
-from .wlc import Cli, Wlc
+from .labs import LabEngine, LabError
+from .wlc import Cli, Wlc, apply_commands
 from .world import new_world
 
 
@@ -15,28 +17,35 @@ TYPES = {'.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=u
          '.svg': 'image/svg+xml'}
 
 
-def apply_commands(sim, commands):
-    """Befehle atomar anwenden: Bei einem Fehler wird die Konfiguration auf den Stand davor zurueckgesetzt.
-    Die Oberflaeche geht damit durch dieselbe CLI wie ein Benutzer (eine Wahrheit)."""
-    snap = sim.wlc.snapshot()
-    cli = Cli(sim.wlc)
-    results = []
-    for line in ['configure terminal'] + list(commands) + ['end']:
-        out = cli.run(line)
-        results.append({'command': line, 'output': out})
-        if out.startswith('% '):
-            sim.wlc.restore(snap)
-            return False, results, {'command': line, 'message': out[2:]}
-    return True, results, None
-
-
 class Sim:
-    def __init__(self):
+    def __init__(self, labs_dir=None):
+        self.lock = threading.Lock()
+        self.reset_world()
+        self.labs = LabEngine(self, labs_dir) if labs_dir else LabEngine(self)
+
+    def reset_world(self, clients=None):
+        """Neue Welt (Standard oder mit Lab-Clients) und unkonfigurierter Controller."""
         self.world = new_world()
+        if clients is not None:
+            self.world['clients'] = copy.deepcopy(clients)
         self.wlc = Wlc(self.world)
         self.cli = Cli(self.wlc)
         self.catc = CatalystCenter(self.world)
-        self.lock = threading.Lock()
+
+    def apply(self, commands):
+        return apply_commands(self.wlc, commands)
+
+    def ui_state(self):
+        """Zustand fuer die Oberflaeche. Im Pruefungsmodus gibt es keine Begruendungen der Client-Diagnose."""
+        st = self.wlc.state()
+        sess = self.labs.session
+        exam = bool(sess and sess['mode'] == 'exam')
+        if exam:
+            for c in st['clients']:
+                c['reasons'] = []
+        st['diagAvailable'] = not exam
+        st['lab'] = {'id': sess['id'], 'mode': sess['mode']} if sess else None
+        return st
 
 
 def make_handler(sim):
@@ -66,6 +75,37 @@ def make_handler(sim):
             self.end_headers()
             self.wfile.write(data)
 
+        def _lab(self, method, path, raw):
+            L = sim.labs
+            try:
+                body = json.loads(raw) if raw else {}
+                assert isinstance(body, dict)
+            except (ValueError, AssertionError):
+                return self._send(400, {'error': 'JSON-Objekt erwartet'})
+            try:
+                if (method, path) == ('GET', '/wlc/api/labs'):
+                    return self._send(200, {'labs': L.list(), 'current': L.public()})
+                if (method, path) == ('GET', '/wlc/api/lab'):
+                    return self._send(200, {'current': L.public()})
+                if (method, path) == ('POST', '/wlc/api/lab/start'):
+                    return self._send(200, {'current': L.start(body.get('id', ''), body.get('mode', 'guided'))})
+                if (method, path) == ('POST', '/wlc/api/lab/reset'):
+                    return self._send(200, {'current': L.reset()})
+                if (method, path) == ('POST', '/wlc/api/lab/stop'):
+                    L.stop()
+                    return self._send(200, {'current': None})
+                if (method, path) == ('POST', '/wlc/api/lab/hint'):
+                    return self._send(200, {'current': L.hint()})
+                if (method, path) == ('GET', '/wlc/api/lab/solution'):
+                    return self._send(200, L.solution())
+                if (method, path) == ('POST', '/wlc/api/lab/answer'):
+                    return self._send(200, L.answer(body.get('id', ''), body.get('answer')))
+                if (method, path) == ('POST', '/wlc/api/lab/check'):
+                    return self._send(200, L.check())
+            except LabError as e:
+                return self._send(e.status, {'error': str(e)})
+            return self._send(404, {'error': 'Endpunkt nicht umgesetzt'})
+
         def _go(self, method):
             u = urlparse(self.path)
             if method == 'GET' and (u.path in ('/', '') or u.path.startswith('/static/')):
@@ -74,14 +114,16 @@ def make_handler(sim):
             raw = self.rfile.read(n) if n else b''
             with sim.lock:
                 if u.path == '/wlc/api/state' and method == 'GET':
-                    return self._send(200, sim.wlc.state())
+                    return self._send(200, sim.ui_state())
+                if u.path.startswith('/wlc/api/lab'):
+                    return self._lab(method, u.path, raw)
                 if u.path == '/wlc/api/apply' and method == 'POST':
                     try:
                         cmds = json.loads(raw or b'{}').get('commands')
                         assert isinstance(cmds, list) and all(isinstance(x, str) for x in cmds)
                     except (ValueError, AssertionError):
                         return self._send(400, {'error': 'JSON erwartet: {"commands": ["..."]}'})
-                    ok, results, err = apply_commands(sim, cmds)
+                    ok, results, err = apply_commands(sim.wlc, cmds)
                     return self._send(200 if ok else 400, {'ok': ok, 'results': results, 'error': err})
                 if u.path == '/wlc/cli' and method == 'POST':
                     try:

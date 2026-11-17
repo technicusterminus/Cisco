@@ -1,0 +1,166 @@
+{
+ "cause": "Aufgabe nach Anforderungen: Die Reihenfolge ergibt sich aus den Abhängigkeiten.",
+ "checks": [
+  {
+   "category": "function",
+   "desc": "Alt_Profile ist entfernt",
+   "kind": "wlan",
+   "name": "Alt_Profile",
+   "type": "absent"
+  },
+  {
+   "category": "function",
+   "desc": "PP_Alt ist entfernt",
+   "kind": "policy",
+   "name": "PP_Alt",
+   "type": "absent"
+  },
+  {
+   "category": "function",
+   "desc": "PT_Alt ist entfernt",
+   "kind": "tag",
+   "name": "PT_Alt",
+   "type": "absent"
+  },
+  {
+   "category": "function",
+   "desc": "Lobby-Laptop weiterhin verbunden, VLAN 20",
+   "mac": "58bf.eaaa.0001",
+   "state": "Run",
+   "type": "client",
+   "vlan": "20"
+  },
+  {
+   "category": "security",
+   "desc": "Corp-Zuordnung unverändert",
+   "maps": {
+    "Corp_Profile": "PP_Corp"
+   },
+   "tag": "PT_Corp",
+   "type": "tagmap"
+  }
+ ],
+ "duration": "20 min",
+ "fabric": "wlc1 mit ap-lobby und ap-lager",
+ "goals": [
+  "Abhängigkeiten zwischen WLAN, Policy Profile, Policy Tag und AP erkennen",
+  "In der richtigen Reihenfolge abbauen"
+ ],
+ "hints": [
+  "**Konzept:** Objekte, die noch verwendet werden, lassen sich nicht löschen. Baue von außen nach innen ab.",
+  "**Ebene:** Reihenfolge der Abhängigkeiten, nicht Funktion.",
+  "**Prüfschritte:** Wer verwendet das Policy Tag, wer das WLAN, wer das Policy Profile? Die Fehlermeldung beim Löschen nennt es.",
+  "**Lösung:** Erst dem AP ap-lager das Tag wegnehmen, dann das Policy Tag PT_Alt löschen, danach das WLAN Alt_Profile und das Policy Profile PP_Alt."
+ ],
+ "id": "06-aufraeumen",
+ "intro": "Das alte WLAN **Alt** wird nicht mehr gebraucht. Es läuft im Lager und ist über eigene Objekte eingerichtet. Corp in der Lobby darf dabei nicht ausfallen.",
+ "kind": "requirements",
+ "level": "Mittel",
+ "limits": [
+  "Das Client-Modell ist didaktisch: Es erklärt, ob und warum ein Client verbunden ist, ist aber keine Abbildung der Controller-Pipeline.",
+  "Nicht modelliert: 802.1x/RADIUS, FlexConnect, RF-Profile, Roaming, Mobility.",
+  "Ob das Gerät diese Abhängigkeiten beim Löschen so erzwingt, ist nicht belegt; der Simulator erzwingt sie."
+ ],
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 01"
+ ],
+ "questions": [
+  {
+   "answer": 0,
+   "explain": "Der Simulator verlangt, dass ein Objekt nirgends mehr verwendet wird. Zuerst das Tag am AP lösen, dann das Tag löschen, dann WLAN und Policy Profile.",
+   "id": "q1",
+   "options": [
+    "Weil es in einem Policy Tag eingetragen ist",
+    "Weil es aktiv ist",
+    "Weil ein Client verbunden ist",
+    "Weil es die ID 2 hat"
+   ],
+   "q": "Warum lässt sich das WLAN-Profil zuerst nicht löschen?"
+  },
+  {
+   "answer": 0,
+   "explain": "Von dem, was andere Objekte benutzt, zu dem, was benutzt wird.",
+   "id": "q2",
+   "options": [
+    "AP-Zuordnung, Policy Tag, dann WLAN und Policy Profile",
+    "WLAN, Policy Profile, Policy Tag, AP",
+    "Policy Profile, WLAN, AP",
+    "Reihenfolge ist egal"
+   ],
+   "q": "In welcher Reihenfolge baust du ab?"
+  }
+ ],
+ "requirements": [
+  "Das WLAN-Profil Alt_Profile, das Policy Profile PP_Alt und das Policy Tag PT_Alt sind entfernt.",
+  "Corp läuft weiter: Der Laptop in der Lobby bleibt verbunden (VLAN 20).",
+  "Die Zuordnung von Corp bleibt unverändert."
+ ],
+ "solution": "WebUI: Wireless > Access Points > ap-lager: Tag auf Default; Tags > PT_Alt löschen; WLANs > Alt_Profile löschen; Policy > PP_Alt löschen. CLI: `ap a4b2.32aa.0002`, `no policy-tag`, `exit`, `no wireless tag policy PT_Alt`, `no wlan Alt_Profile`, `no wireless profile policy PP_Alt`.",
+ "solutionCommands": [
+  "ap a4b2.32aa.0002",
+  "no policy-tag",
+  "exit",
+  "no wireless tag policy PT_Alt",
+  "no wlan Alt_Profile",
+  "no wireless profile policy PP_Alt"
+ ],
+ "startCommands": [
+  "wlan Corp_Profile 1 Corp",
+  "security wpa akm psk",
+  "security wpa psk set-key ascii 0 Sommer2026",
+  "no shutdown",
+  "exit",
+  "wireless profile policy PP_Corp",
+  "vlan 20",
+  "no shutdown",
+  "exit",
+  "wireless tag policy PT_Corp",
+  "wlan Corp_Profile policy PP_Corp",
+  "exit",
+  "ap a4b2.32aa.0001",
+  "policy-tag PT_Corp",
+  "exit",
+  "wlan Alt_Profile 2 Alt",
+  "security wpa akm psk",
+  "security wpa psk set-key ascii 0 AltesPasswort",
+  "no shutdown",
+  "exit",
+  "wireless profile policy PP_Alt",
+  "vlan 30",
+  "no shutdown",
+  "exit",
+  "wireless tag policy PT_Alt",
+  "wlan Alt_Profile policy PP_Alt",
+  "exit",
+  "ap a4b2.32aa.0002",
+  "policy-tag PT_Alt"
+ ],
+ "title": "06 Altes WLAN sauber entfernen",
+ "tools": [
+  "WebUI: Monitoring > Wireless > Clients",
+  "WebUI: Configuration > Tags & Profiles und Wireless > Access Points",
+  "Client-Diagnose (nur im geführten Modus)",
+  "CLI: show wlan summary, show ap tag summary, show wireless client summary"
+ ],
+ "topic": "Wireless / Betrieb",
+ "worldClients": [
+  {
+   "ap": "ap-lobby",
+   "mac": "58bf.eaaa.0001",
+   "protocol": "11ac",
+   "psk": "Sommer2026",
+   "ssid": "Corp"
+  },
+  {
+   "ap": "ap-lager",
+   "mac": "58bf.eaaa.0005",
+   "protocol": "11ac",
+   "psk": "AltesPasswort",
+   "ssid": "Alt"
+  }
+ ]
+}
