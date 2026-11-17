@@ -2,7 +2,19 @@
 
 Simulierter **Catalyst 9800 WLC** und simuliertes **Catalyst Center** in einer gemeinsamen Welt. Python-Standardbibliothek, keine Abhängigkeiten, läuft offline. Kein echtes Gerät, keine Verbindung zu echten Controllern.
 
-> Stand: Phase 1, 2a, 2c, 2d und 3a (siehe [`docs/UMFANG.md`](docs/UMFANG.md)). Die WLC hat eine Weboberfläche und acht Labs (zwei davon für CCNP Enterprise Wireless), das Catalyst Center noch keine Oberfläche.
+> Stand: Phase 1, 2a, 2c, 2d, 2e und 3a (siehe [`docs/UMFANG.md`](docs/UMFANG.md)). Die WLC hat eine Weboberfläche und acht Labs (zwei davon für CCNP Enterprise Wireless), das Catalyst Center noch keine Oberfläche.
+
+## Ohne Python öffnen
+
+**`WLC-Simulator.html` per Doppelklick im Browser öffnen** (Chrome, Edge, Firefox): Die WLC mit Weboberfläche, CLI und allen acht Labs läuft vollständig im Browser, ohne Python, ohne Webserver und ohne Netzwerk. Der Zustand und der Lab-Fortschritt bleiben im lokalen Speicher des Browsers erhalten (pro Browser und Gerät; im privaten Modus nicht).
+
+Grenzen der Einzeldatei:
+
+- Das **Catalyst Center** ist nicht enthalten: Seine REST-API braucht einen Server (`python3 start.py`).
+- Der **Prüfungsmodus** ist hier eine Selbstverpflichtung: Hinweise und Lösungen stehen im Quelltext der Datei. Mit dem Server liefert die API sie im Prüfungsmodus nicht aus.
+- Die Datei ist **generiert** (`python3 tools/build_standalone.py`) und eingecheckt; ein Test prüft, dass sie zu den Quellen passt.
+
+Die Browser-Engine (`static/engine.js`) ist eine zweite Umsetzung derselben Regeln wie die Python-Engine. Ein Paritätstest spielt viele Szenarien (über 1000 HTTP-Schritte, alle Labs in beiden Modi, Persistenz-Randfälle) gegen beide ab und verlangt identische Antworten (`node tests/parity/parity.js`).
 
 ## Starten
 
@@ -11,6 +23,9 @@ python3 start.py            # Port 8090, nur localhost; Zustand in ./data; Oberf
 python3 start.py --ephemeral   # ohne dauerhaften Zustand (temporäres Verzeichnis, für Tests)
 python3 -m unittest discover -s tests
 node tests/gui/smoke.js     # Browser-Test (braucht Node.js und Playwright)
+STANDALONE=1 node tests/gui/smoke.js   # derselbe Test gegen WLC-Simulator.html (ohne Server, offline)
+node tests/parity/parity.js # Python-Engine und Browser-Engine müssen gleich antworten
+python3 tools/build_standalone.py   # WLC-Simulator.html neu bauen
 python3 Labs-Quelle/build_labs.py   # labs/*.json neu erzeugen (deterministisch)
 ```
 

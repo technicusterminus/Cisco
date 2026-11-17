@@ -330,6 +330,8 @@ class TestLabApi(unittest.TestCase):
     def test_flow(self):
         st, body = self.call('/wlc/api/labs')
         self.assertEqual((st, len(body['labs']), body['current']), (200, 8, None))
+        self.assertEqual([x['track'] for x in body['labs']][:1] + [x['track'] for x in body['labs']][-1:],
+                         ['Grundlagen Wireless', 'CCNP Enterprise Wireless (300-430 ENWLSI)'])
         self.assertEqual(self.call('/wlc/api/lab/check', 'POST', {})[0], 409)
         st, body = self.call('/wlc/api/lab/start', 'POST', {'id': '01-ssid-nicht-sichtbar', 'mode': 'guided'})
         self.assertEqual((st, body['current']['id']), (200, '01-ssid-nicht-sichtbar'))

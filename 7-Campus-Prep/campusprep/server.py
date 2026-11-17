@@ -81,6 +81,7 @@ class Sim:
         st['diagAvailable'] = not exam
         st['lab'] = {'id': sess['id'], 'mode': sess['mode']} if sess else None
         st['persistent'] = self.store is not None
+        st['standalone'] = False   # die eigenstaendige Browser-Variante setzt True
         return st
 
 
@@ -186,7 +187,9 @@ def make_handler(sim):
                     return self._lab(method, u.path, raw)
                 if u.path == '/wlc/api/apply' and method == 'POST':
                     try:
-                        cmds = json.loads(raw or b'{}').get('commands')
+                        body = json.loads(raw or b'{}')
+                        assert isinstance(body, dict)
+                        cmds = body.get('commands')
                         assert isinstance(cmds, list) and all(isinstance(x, str) for x in cmds)
                     except (ValueError, AssertionError):
                         return self._send(400, {'error': 'JSON erwartet: {"commands": ["..."]}'})
@@ -194,8 +197,11 @@ def make_handler(sim):
                     return self._send(200 if ok else 400, {'ok': ok, 'results': results, 'error': err})
                 if u.path == '/wlc/cli' and method == 'POST':
                     try:
-                        line = json.loads(raw or b'{}').get('command', '')
-                    except ValueError:
+                        body = json.loads(raw or b'{}')
+                        assert isinstance(body, dict)
+                        line = body.get('command', '')
+                        assert isinstance(line, str)
+                    except (ValueError, AssertionError):
                         return self._send(400, {'error': 'JSON erwartet: {"command": "..."}'})
                     out = sim.cli.run(line)
                     return self._send(200, {'output': out, 'prompt': sim.cli.prompt})

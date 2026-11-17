@@ -1,0 +1,1511 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Campus Prep – C9800 WLC-Simulator</title>
+<style>
+:root {
+  --bg: #f4f6f8; --panel: #ffffff; --ink: #1c2733; --muted: #5d6b7a; --line: #d7dde3;
+  --nav: #1f2d3a; --nav-ink: #dbe4ec; --nav-on: #0b6fa4; --accent: #0b6fa4; --accent-ink: #ffffff;
+  --ok: #1d7a46; --ok-bg: #e2f3e9; --bad: #b3261e; --bad-bg: #fbe5e3; --warn: #8a5a00; --warn-bg: #fff1d0; --code: #eef1f4;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12181e; --panel: #1b242d; --ink: #e4eaf0; --muted: #98a6b4; --line: #2e3a46;
+    --nav: #0e1419; --nav-ink: #c3cfda; --nav-on: #2f8fc4; --accent: #2f8fc4; --accent-ink: #08121a;
+    --ok: #6fd09a; --ok-bg: #173a27; --bad: #ff8d84; --bad-bg: #4a1f1c; --warn: #f1c14d; --warn-bg: #43330b; --code: #232e39;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.top { display: flex; gap: 12px; align-items: center; padding: 10px 16px; background: var(--nav); color: var(--nav-ink); }
+.top b { color: #fff; font-size: 15px; }
+.muted { color: var(--muted); } .top .muted { color: var(--nav-ink); opacity: .8; }
+.grow { flex: 1; }
+.layout { display: grid; grid-template-columns: 240px 1fr; min-height: calc(100vh - 42px); }
+nav { background: var(--nav); color: var(--nav-ink); padding: 8px 0 24px; }
+nav .grp { padding: 10px 16px 4px; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; opacity: .7; }
+nav .sub { padding: 6px 16px 2px 22px; font-size: 12px; opacity: .6; }
+nav a { display: block; padding: 7px 16px 7px 30px; color: inherit; text-decoration: none; cursor: pointer; border-left: 3px solid transparent; }
+nav a:hover { background: rgba(255,255,255,.07); }
+nav a.on { background: rgba(255,255,255,.1); border-left-color: var(--nav-on); color: #fff; }
+nav a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+main { padding: 20px 24px 40px; min-width: 0; }
+h1 { margin: 0 0 4px; font-size: 20px; } h2 { margin: 22px 0 8px; font-size: 15px; }
+.sub-h { color: var(--muted); margin: 0 0 16px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; margin: 0 0 14px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.tile { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; }
+.tile .n { font-size: 26px; font-weight: 600; } .tile .l { color: var(--muted); }
+.bar { display: flex; gap: 8px; align-items: center; margin: 0 0 10px; flex-wrap: wrap; }
+table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { background: var(--code); font-weight: 600; font-size: 12.5px; }
+tr:last-child td { border-bottom: 0; }
+td.reason { min-width: 280px; }
+td.empty { color: var(--muted); text-align: center; padding: 18px; }
+.tablewrap { overflow-x: auto; }
+button { font: inherit; padding: 6px 12px; border-radius: 4px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+button.danger { color: var(--bad); }
+button.small { padding: 3px 8px; font-size: 12.5px; }
+button:disabled { opacity: .5; cursor: default; }
+input, select, textarea { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--ink); max-width: 100%; }
+.badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+.badge.ok { background: var(--ok-bg); color: var(--ok); } .badge.bad { background: var(--bad-bg); color: var(--bad); } .badge.warn { background: var(--warn-bg); color: var(--warn); }
+.note { background: var(--warn-bg); color: var(--ink); border-left: 3px solid var(--warn); padding: 8px 12px; border-radius: 4px; margin: 0 0 12px; }
+.err { background: var(--bad-bg); color: var(--bad); border-radius: 4px; padding: 8px 12px; margin: 10px 0 0; }
+pre, code { background: var(--code); border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+pre { padding: 10px 12px; margin: 6px 0 0; overflow-x: auto; font-size: 12.5px; white-space: pre; }
+code { padding: 1px 5px; }
+.term { background: #0c1116; color: #cfe3d4; min-height: 260px; max-height: 60vh; overflow: auto; padding: 12px; border-radius: 6px; font: 12.5px/1.4 ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; }
+.term .in { color: #fff; }
+.row { display: grid; grid-template-columns: 170px 1fr; gap: 8px 12px; align-items: center; margin: 0 0 10px; }
+.row label { color: var(--muted); }
+.row .hint { grid-column: 2; color: var(--muted); font-size: 12.5px; margin-top: -4px; }
+.modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: flex; align-items: flex-start; justify-content: center; padding: 6vh 12px; overflow: auto; z-index: 10; }
+.modal { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; width: min(620px, 100%); padding: 18px 20px; }
+.modal h2 { margin: 0 0 14px; font-size: 17px; }
+.modal .btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.maprow { display: flex; gap: 8px; margin: 0 0 6px; align-items: center; }
+#toast { position: fixed; right: 16px; bottom: 16px; background: var(--nav); color: #fff; padding: 10px 14px; border-radius: 6px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+#toast.on { opacity: 1; }
+@media (max-width: 760px) {
+  .layout { grid-template-columns: 1fr; } nav { padding: 4px 0; } nav a { display: inline-block; padding: 6px 10px; border-left: 0; }
+  nav .grp, nav .sub { display: inline-block; padding: 6px 8px; } .row { grid-template-columns: 1fr; } .row .hint { grid-column: 1; }
+}
+
+</style>
+</head>
+<body>
+<!-- Generiert von tools/build_standalone.py. Nicht von Hand aendern: Quellen sind static/, labs/ und Labs-Quelle/. -->
+<header class="top"><b>Campus Prep</b><span class="muted">C9800-Simulator</span><span class="grow"></span><span id="host" class="muted"></span></header>
+<div class="layout">
+  <nav id="nav" aria-label="Navigation"></nav>
+  <main id="main" tabindex="-1"></main>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
+<script>window.CAMPUS_LABS = [{"cause": "ap-lobby nutzt das Default Policy Tag (Tag Source Default), und das enthält keine WLANs.", "checks": [{"category": "function", "desc": "Lobby-Laptop verbunden, VLAN 20", "mac": "58bf.eaaa.0001", "state": "Run", "type": "client", "vlan": "20"}, {"attrs": {"akm": "psk"}, "category": "security", "desc": "Corp nutzt weiterhin WPA2-PSK", "profile": "Corp_Profile", "type": "wlan"}, {"ap": "ap-lager", "category": "security", "desc": "ap-lager sendet Corp nicht", "tag": "default-policy-tag", "type": "aptag"}], "duration": "15 min", "fabric": "wlc1 mit ap-lobby und ap-lager", "goals": ["Den Weg vom WLAN-Profil zum AP nachvollziehen", "Das Standardverhalten eines AP ohne eigene Zuordnung kennen", "Eine Lösung wählen, die nur dort sendet, wo es nötig ist"], "hints": ["**Konzept:** Ein AP strahlt nur die WLANs aus, die ihm über seine Tags zugeordnet sind. Prüfe, was dem AP zugeordnet ist.", "**Ebene:** Zuordnung am AP, nicht WLAN oder Policy Profile: Beide sind aktiv.", "**Prüfschritte:** `show ap tag summary` zeigt je AP das Policy Tag und die Tag Source. Vergleiche mit dem Tag, das Corp enthält.", "**Lösung:** Dem AP ap-lobby das Policy Tag **PT_Corp** zuweisen. ap-lager bleibt unverändert."], "id": "01-ssid-nicht-sichtbar", "intro": "Die Firma hat das WLAN **Corp** (WPA2-PSK, VLAN 20) eingerichtet. Die Konfiguration wirkt vollständig, trotzdem findet der Laptop in der Lobby die SSID nicht.\n\n- Controller wlc1, zwei APs: **ap-lobby** und **ap-lager**\n- Lobby-Laptop 58bf.eaaa.0001 mit dem richtigen Schlüssel\n- Im Lager soll Corp **nicht** ausgestrahlt werden.", "kind": "troubleshooting", "level": "Einstieg", "limits": ["Das Client-Modell ist didaktisch: Es erklärt, ob und warum ein Client verbunden ist, ist aber keine Abbildung der Controller-Pipeline.", "Nicht modelliert: 802.1x/RADIUS, FlexConnect, RF-Profile, Roaming, Mobility."], "modes": ["guided", "exam"], "prerequisites": [], "questions": [{"answer": 0, "explain": "Ohne Zuordnung gilt default-policy-tag. Es enthält keine WLAN-zu-Policy-Zuordnung, die SSID wird nicht ausgestrahlt.", "id": "q1", "options": ["Das Default Policy Tag, das keine WLANs enthält", "Das erste Policy Tag in der Liste", "Das Tag mit den meisten WLANs", "Keines, der AP sendet dann alle WLANs"], "q": "Welches Policy Tag nutzt ein AP, dem du keines zuweist?"}, {"answer": 1, "explain": "Least Privilege gilt auch für Funk: Eine SSID sendet nur dort, wo sie gebraucht wird.", "id": "q2", "options": ["Weil jeder AP nur ein Tag haben darf", "Weil Corp im Lager nicht gebraucht wird und sonst unnötig erreichbar wäre", "Weil sonst die Lizenz nicht reicht", "Weil das Lager kein WLAN unterstützt"], "q": "Warum ist es besser, nur ap-lobby zu taggen statt beide APs?"}], "requirements": ["Der Laptop in der Lobby ist mit Corp verbunden und im VLAN 20.", "Corp bleibt mit WPA2-PSK geschützt.", "Corp wird nur in der Lobby ausgestrahlt, nicht im Lager."], "solution": "In der WebUI: Configuration > Wireless > Access Points > ap-lobby > Edit Tags > Policy Tag PT_Corp. CLI: `configure terminal`, `ap a4b2.32aa.0001`, `policy-tag PT_Corp`, `end`.", "solutionCommands": ["ap a4b2.32aa.0001", "policy-tag PT_Corp"], "startCommands": ["wlan Corp_Profile 1 Corp", "security wpa akm psk", "security wpa psk set-key ascii 0 Sommer2026", "no shutdown", "exit", "wireless profile policy PP_Corp", "vlan 20", "no shutdown", "exit", "wireless tag policy PT_Corp", "wlan Corp_Profile policy PP_Corp", "exit"], "title": "01 Corp-SSID in der Lobby nicht sichtbar", "tools": ["WebUI: Monitoring > Wireless > Clients", "WebUI: Configuration > Tags & Profiles und Wireless > Access Points", "Client-Diagnose (nur im geführten Modus)", "CLI: show wlan summary, show ap tag summary, show wireless client summary"], "topic": "Wireless / Tags", "track": "Grundlagen Wireless", "worldClients": [{"ap": "ap-lobby", "mac": "58bf.eaaa.0001", "protocol": "11ac", "psk": "Sommer2026", "ssid": "Corp"}]}, {"cause": "WLAN-Profil und Policy Profile sind nach dem Anlegen administrativ down.", "checks": [{"category": "function", "desc": "Lobby-Laptop verbunden, VLAN 20", "mac": "58bf.eaaa.0001", "state": "Run", "type": "client", "vlan": "20"}, {"attrs": {"akm": "psk"}, "category": "security", "desc": "Corp nutzt weiterhin WPA2-PSK", "profile": "Corp_Profile", "type": "wlan"}], "duration": "15 min", "fabric": "wlc1 mit ap-lobby und ap-lager", "goals": ["Administrativen Zustand von WLAN und Policy Profile unterscheiden", "Mehrere Ursachen nacheinander finden"], "hints": ["**Konzept:** Neu angelegte Objekte sind nicht automatisch aktiv. Es gibt mehrere Stellen mit einem Admin-Zustand.", "**Ebene:** Konfigurationszustand von WLAN und Policy Profile, die Zuordnung am AP stimmt.", "**Prüfschritte:** `show wlan summary` zeigt den Status des WLAN, `show wireless profile policy summary` den des Policy Profile. Beide prüfen.", "**Lösung:** Das WLAN-Profil **und** das Policy Profile aktivieren (`no shutdown`)."], "id": "02-admin-down", "intro": "Ein Kollege hat Corp komplett angelegt und dem AP ap-lobby zugewiesen. Der Laptop in der Lobby verbindet sich trotzdem nicht.\n\n- Corp: WPA2-PSK, VLAN 20, Zuordnung am AP ist erledigt\n- Der Kollege hat nach dem Anlegen nichts weiter konfiguriert.", "kind": "troubleshooting", "level": "Einstieg", "limits": ["Das Client-Modell ist didaktisch: Es erklärt, ob und warum ein Client verbunden ist, ist aber keine Abbildung der Controller-Pipeline.", "Nicht modelliert: 802.1x/RADIUS, FlexConnect, RF-Profile, Roaming, Mobility."], "modes": ["guided", "exam"], "prerequisites": ["Lab 01"], "questions": [{"answer": 0, "explain": "Ein neues WLAN-Profil und ein neues Policy Profile müssen aktiviert werden, bevor sie wirken.", "id": "q1", "options": ["Administrativ down", "Aktiv, sobald ein AP es kennt", "Aktiv, aber ohne Sicherheit", "Es hängt vom AP-Modell ab"], "q": "In welchem Zustand ist ein neu angelegtes WLAN-Profil?"}, {"answer": 1, "explain": "Die Verbindung braucht beides: das WLAN-Profil und das Policy Profile, auf das das Policy Tag verweist.", "id": "q2", "options": ["Ja, das Policy Profile ist optional", "Nein, auch das Policy Profile muss aktiv sein", "Nur wenn ein VLAN gesetzt ist", "Nur bei WPA2"], "q": "Reicht es, nur das WLAN-Profil zu aktivieren?"}], "requirements": ["Der Laptop in der Lobby ist mit Corp verbunden und im VLAN 20.", "Corp bleibt mit WPA2-PSK geschützt."], "solution": "WebUI: Configuration > Tags & Profiles > WLANs > Corp_Profile > Edit: Status Enabled; danach unter Policy das Profil PP_Corp ebenso. CLI: `wlan Corp_Profile 1 Corp`, `no shutdown`, dann `wireless profile policy PP_Corp`, `no shutdown`.", "solutionCommands": ["wlan Corp_Profile 1 Corp", "no shutdown", "exit", "wireless profile policy PP_Corp", "no shutdown"], "startCommands": ["wlan Corp_Profile 1 Corp", "security wpa akm psk", "security wpa psk set-key ascii 0 Sommer2026", "shutdown", "exit", "wireless profile policy PP_Corp", "vlan 20", "shutdown", "exit", "wireless tag policy PT_Corp", "wlan Corp_Profile policy PP_Corp", "exit", "ap a4b2.32aa.0001", "policy-tag PT_Corp"], "title": "02 Alles eingerichtet, nichts funkt", "tools": ["WebUI: Monitoring > Wireless > Clients", "WebUI: Configuration > Tags & Profiles und Wireless > Access Points", "Client-Diagnose (nur im geführten Modus)", "CLI: show wlan summary, show ap tag summary, show wireless client summary"], "topic": "Wireless / Betriebszustand", "track": "Grundlagen Wireless", "worldClients": [{"ap": "ap-lobby", "mac": "58bf.eaaa.0001", "protocol": "11ac", "psk": "Sommer2026", "ssid": "Corp"}]}, {"cause": "Am Controller ist ein anderer Schlüssel hinterlegt (Tippfehler), die Authentifizierung scheitert.", "checks": [{"category": "function", "desc": "Lobby-Laptop verbunden, VLAN 20", "mac": "58bf.eaaa.0001", "state": "Run", "type": "client", "vlan": "20"}, {"attrs": {"akm": "psk"}, "category": "security", "desc": "Corp nutzt weiterhin WPA2-PSK", "profile": "Corp_Profile", "type": "wlan"}], "duration": "15 min", "fabric": "wlc1 mit ap-lobby und ap-lager", "goals": ["Einen Authentifizierungsfehler erkennen", "Das Problem beheben, ohne die Sicherheit abzuschalten"], "hints": ["**Konzept:** Bei WPA2-PSK müssen der Schlüssel am Client und am Controller übereinstimmen.", "**Ebene:** Sicherheit des WLAN-Profils, nicht Zuordnung oder Zustand.", "**Prüfschritte:** Der Schlüssel wird nie angezeigt. Setze ihn neu und prüfe dann den Client.", "**Lösung:** Am WLAN-Profil den Schlüssel auf **Sommer2026** setzen. Nicht auf Open umstellen."], "id": "03-falscher-schluessel", "intro": "Der Laptop in der Lobby verbindet sich nicht mit Corp. Tags, Profile und VLAN sind in Ordnung. Der Schlüssel, den die Mitarbeiter kennen, lautet **Sommer2026**.", "kind": "troubleshooting", "level": "Einstieg", "limits": ["Das Client-Modell ist didaktisch: Es erklärt, ob und warum ein Client verbunden ist, ist aber keine Abbildung der Controller-Pipeline.", "Nicht modelliert: 802.1x/RADIUS, FlexConnect, RF-Profile, Roaming, Mobility."], "modes": ["guided", "exam"], "prerequisites": ["Lab 01"], "questions": [{"answer": 0, "explain": "Geheimnisse werden nicht zurückgegeben. Man setzt sie neu, statt sie nachzulesen.", "id": "q1", "options": ["Damit er nicht ausgelesen werden kann", "Weil er nicht gespeichert wird", "Weil er nur für Gäste gilt", "Weil das nur der Client kennen darf"], "q": "Warum zeigt die WebUI den Pre-Shared Key nicht an?"}, {"answer": 1, "explain": "Die Verbindung klappt, aber die Anforderung (geschütztes WLAN) ist verletzt. Das ist die Sicherheitsprüfung des Labs.", "id": "q2", "options": ["Weil dann das VLAN fehlt", "Weil Corp dann für jeden ohne Schlüssel erreichbar wäre", "Weil Open nur im Lager geht", "Weil der AP dann abstürzt"], "q": "Das WLAN auf Open zu stellen, würde den Laptop verbinden. Warum ist das trotzdem falsch?"}], "requirements": ["Der Laptop in der Lobby ist mit Corp verbunden und im VLAN 20.", "Corp bleibt mit WPA2-PSK geschützt, ein offenes WLAN ist keine Lösung."], "solution": "WebUI: WLANs > Corp_Profile > Edit: Pre-Shared Key Sommer2026. CLI: `wlan Corp_Profile 1 Corp`, `security wpa psk set-key ascii 0 Sommer2026`.", "solutionCommands": ["wlan Corp_Profile 1 Corp", "security wpa psk set-key ascii 0 Sommer2026"], "startCommands": ["wlan Corp_Profile 1 Corp", "security wpa akm psk", "security wpa psk set-key ascii 0 Sommer2025", "no shutdown", "exit", "wireless profile policy PP_Corp", "vlan 20", "no shutdown", "exit", "wireless tag policy PT_Corp", "wlan Corp_Profile policy PP_Corp", "exit", "ap a4b2.32aa.0001", "policy-tag PT_Corp"], "title": "03 Der Schlüssel passt nicht", "tools": ["WebUI: Monitoring > Wireless > Clients", "WebUI: Configuration > Tags & Profiles und Wireless > Access Points", "Client-Diagnose (nur im geführten Modus)", "CLI: show wlan summary, show ap tag summary, show wireless client summary"], "topic": "Wireless / Sicherheit", "track": "Grundlagen Wireless", "worldClients": [{"ap": "ap-lobby", "mac": "58bf.eaaa.0001", "protocol": "11ac", "psk": "Sommer2026", "ssid": "Corp"}]}, {"cause": "Das Policy Tag verweist für Corp auf das (deaktivierte) Gast-Profil statt auf PP_Corp.", "checks": [{"category": "function", "desc": "Lobby-Laptop verbunden, VLAN 20", "mac": "58bf.eaaa.0001", "state": "Run", "type": "client", "vlan": "20"}, {"attrs": {"status": "DISABLED"}, "category": "security", "desc": "Gast-Policy-Profile bleibt deaktiviert", "name": "PP_Gast", "type": "policy"}, {"attrs": {"akm": "psk"}, "category": "security", "desc": "Corp nutzt weiterhin WPA2-PSK", "profile": "Corp_Profile", "type": "wlan"}], "duration": "20 min", "fabric": "wlc1 mit ap-lobby und ap-lager", "goals": ["Die Zuordnung von WLAN-Profil zu Policy Profile im Policy Tag lesen", "Nicht das erstbeste deaktivierte Objekt aktivieren"], "hints": ["**Konzept:** Das Policy Tag entscheidet, mit welchem Policy Profile ein WLAN an einem AP betrieben wird.", "**Ebene:** Zuordnung im Policy Tag. Die Objekte selbst sind in Ordnung.", "**Prüfschritte:** Unter Configuration > Tags die Zuordnung von Corp_Profile ansehen: Auf welches Policy Profile zeigt sie?", "**Lösung:** Im Policy Tag PT_Corp das WLAN Corp_Profile dem Policy Profile **PP_Corp** zuordnen. PP_Gast nicht aktivieren."], "id": "04-falsches-policy-profile", "intro": "Der Laptop in der Lobby kommt nicht ins WLAN Corp. Der Schlüssel stimmt, der AP ist zugewiesen.\n\n- Es gibt zwei Policy Profiles: **PP_Corp** (VLAN 20, aktiv) und **PP_Gast** (VLAN 99, bisher nicht aktiviert)\n- Mitarbeiter gehören ins VLAN 20, nicht ins Gästenetz.", "kind": "troubleshooting", "level": "Mittel", "limits": ["Das Client-Modell ist didaktisch: Es erklärt, ob und warum ein Client verbunden ist, ist aber keine Abbildung der Controller-Pipeline.", "Nicht modelliert: 802.1x/RADIUS, FlexConnect, RF-Profile, Roaming, Mobility."], "modes": ["guided", "exam"], "prerequisites": ["Lab 01"], "questions": [{"answer": 0, "explain": "Der Client wäre verbunden, aber im falschen Netz. Genau das fängt die Prüfung auf VLAN 20 ab.", "id": "q1", "options": ["Der Laptop verbindet sich, landet aber im VLAN 99", "Nichts, das Profil wird ignoriert", "Der AP startet neu", "Der Laptop bekommt zwei VLANs"], "q": "Was passiert, wenn du stattdessen PP_Gast aktivierst?"}, {"answer": 1, "explain": "Das Policy Tag ordnet je WLAN-Profil ein Policy Profile zu.", "id": "q2", "options": ["Im WLAN-Profil selbst", "Im Policy Tag, das dem AP zugewiesen ist", "Im Site Tag", "Am Client"], "q": "Wo wird festgelegt, welches Policy Profile für ein WLAN gilt?"}], "requirements": ["Der Laptop in der Lobby ist mit Corp verbunden und im VLAN 20.", "Das Gast-Policy-Profile bleibt deaktiviert.", "Corp bleibt mit WPA2-PSK geschützt."], "solution": "WebUI: Configuration > Tags & Profiles > Tags > PT_Corp > Edit: Corp_Profile → PP_Corp. CLI: `wireless tag policy PT_Corp`, `wlan Corp_Profile policy PP_Corp`.", "solutionCommands": ["wireless tag policy PT_Corp", "wlan Corp_Profile policy PP_Corp"], "startCommands": ["wlan Corp_Profile 1 Corp", "security wpa akm psk", "security wpa psk set-key ascii 0 Sommer2026", "no shutdown", "exit", "wireless profile policy PP_Corp", "vlan 20", "no shutdown", "exit", "wireless tag policy PT_Corp", "wlan Corp_Profile policy PP_Gast", "exit", "wireless profile policy PP_Gast", "vlan 99", "exit", "ap a4b2.32aa.0001", "policy-tag PT_Corp"], "title": "04 Richtiges WLAN, falsche Zuordnung", "tools": ["WebUI: Monitoring > Wireless > Clients", "WebUI: Configuration > Tags & Profiles und Wireless > Access Points", "Client-Diagnose (nur im geführten Modus)", "CLI: show wlan summary, show ap tag summary, show wireless client summary"], "topic": "Wireless / Tags", "track": "Grundlagen Wireless", "worldClients": [{"ap": "ap-lobby", "mac": "58bf.eaaa.0001", "protocol": "11ac", "psk": "Sommer2026", "ssid": "Corp"}]}, {"cause": "Aufgabe nach Anforderungen: Es gibt keinen einzelnen Fehler.", "checks": [{"category": "function", "desc": "Gast-Laptop in der Lobby: verbunden, VLAN 99", "mac": "58bf.eaaa.0003", "state": "Run", "type": "client", "vlan": "99"}, {"category": "function", "desc": "Corp-Laptop in der Lobby: verbunden, VLAN 20", "mac": "58bf.eaaa.0001", "state": "Run", "type": "client", "vlan": "20"}, {"category": "function", "desc": "Corp-Laptop im Lager: verbunden, VLAN 20", "mac": "58bf.eaaa.0002", "state": "Run", "type": "client", "vlan": "20"}, {"category": "security", "desc": "Gast-Laptop im Lager: keine Verbindung", "mac": "58bf.eaaa.0004", "state": "Not Associated", "type": "client"}, {"attrs": {"akm": "psk"}, "category": "security", "desc": "Corp nutzt weiterhin WPA2-PSK", "profile": "Corp_Profile", "type": "wlan"}], "duration": "30 min", "fabric": "wlc1 mit ap-lobby und ap-lager", "goals": ["Zwei WLANs mit unterschiedlichem Geltungsbereich planen", "Mit wenigen Tags mehrere APs unterschiedlich bedienen"], "hints": ["**Konzept:** Welche WLANs ein AP ausstrahlt, bestimmt sein Policy Tag. APs mit unterschiedlichen WLANs brauchen unterschiedliche Tags.", "**Ebene:** Design: Du brauchst neue Objekte (WLAN, Policy Profile) und eine neue Zuordnung.", "**Prüfschritte:** Lege Gast als offenes WLAN mit eigenem Policy Profile (VLAN 99) an. Überlege, welcher AP welche WLANs braucht.", "**Lösung:** WLAN Gast_Profile (offen) und Policy Profile PP_Gast (VLAN 99) anlegen und aktivieren, ein Policy Tag **PT_Lobby** mit Corp und Gast bilden und ap-lobby zuweisen. ap-lager behält PT_Corp."], "id": "05-gast-wlan-lobby", "intro": "Die Firma braucht ein Gast-WLAN. Corp läuft bereits an beiden APs (VLAN 20, WPA2-PSK).\n\n- Das Gast-WLAN heißt **Gast**, ist offen und gehört ins VLAN **99**\n- Gäste gibt es nur in der Lobby\n- Je ein Laptop als Test: Corp in Lobby und Lager, Gast in Lobby und Lager", "kind": "requirements", "level": "Mittel", "limits": ["Das Client-Modell ist didaktisch: Es erklärt, ob und warum ein Client verbunden ist, ist aber keine Abbildung der Controller-Pipeline.", "Nicht modelliert: 802.1x/RADIUS, FlexConnect, RF-Profile, Roaming, Mobility."], "modes": ["guided", "exam"], "prerequisites": ["Lab 01", "Lab 04"], "questions": [{"answer": 1, "explain": "Ein Tag mit Corp und Gast für die Lobby, eines nur mit Corp für das Lager.", "id": "q1", "options": ["Eines für beide APs", "Zwei, weil die APs unterschiedliche WLANs senden sollen", "Eines pro WLAN", "Keines"], "q": "Wie viele Policy Tags brauchst du mindestens für diese Anforderung?"}, {"answer": 0, "explain": "Dann sendet auch das Lager das Gast-WLAN. Die Sicherheitsprüfung für den Gast-Laptop im Lager schlägt an.", "id": "q2", "options": ["Gast in das bestehende Tag einfügen, das beide APs nutzen", "Gast als WPA2-WLAN anlegen", "Ein eigenes VLAN verwenden", "Das Policy Profile aktivieren"], "q": "Was wäre die einfachste, aber falsche Lösung?"}], "requirements": ["Gast-WLAN (SSID Gast): Der Gast-Laptop in der Lobby ist verbunden und im VLAN 99.", "Der Gast-Laptop im Lager bekommt keine Verbindung.", "Corp bleibt in Lobby und Lager unverändert erreichbar (VLAN 20).", "Corp bleibt mit WPA2-PSK geschützt."], "solution": "Gast_Profile (ID 2, offen) und PP_Gast (VLAN 99) anlegen und aktivieren; Policy Tag PT_Lobby mit Corp_Profile→PP_Corp und Gast_Profile→PP_Gast; ap-lobby auf PT_Lobby. Gleichwertig: Gast in PT_Corp ergänzen und für das Lager ein eigenes Tag nur mit Corp bilden.", "solutionCommands": ["wlan Gast_Profile 2 Gast", "no shutdown", "exit", "wireless profile policy PP_Gast", "vlan 99", "no shutdown", "exit", "wireless tag policy PT_Lobby", "wlan Corp_Profile policy PP_Corp", "wlan Gast_Profile policy PP_Gast", "exit", "ap a4b2.32aa.0001", "policy-tag PT_Lobby"], "startCommands": ["wlan Corp_Profile 1 Corp", "security wpa akm psk", "security wpa psk set-key ascii 0 Sommer2026", "no shutdown", "exit", "wireless profile policy PP_Corp", "vlan 20", "no shutdown", "exit", "wireless tag policy PT_Corp", "wlan Corp_Profile policy PP_Corp", "exit", "ap a4b2.32aa.0001", "policy-tag PT_Corp", "exit", "ap a4b2.32aa.0002", "policy-tag PT_Corp"], "title": "05 Gast-WLAN nur in der Lobby", "tools": ["WebUI: Monitoring > Wireless > Clients", "WebUI: Configuration > Tags & Profiles und Wireless > Access Points", "Client-Diagnose (nur im geführten Modus)", "CLI: show wlan summary, show ap tag summary, show wireless client summary"], "topic": "Wireless / Design", "track": "Grundlagen Wireless", "worldClients": [{"ap": "ap-lobby", "mac": "58bf.eaaa.0001", "protocol": "11ac", "psk": "Sommer2026", "ssid": "Corp"}, {"ap": "ap-lager", "mac": "58bf.eaaa.0002", "protocol": "11ac", "psk": "Sommer2026", "ssid": "Corp"}, {"ap": "ap-lobby", "mac": "58bf.eaaa.0003", "protocol": "11ac", "psk": "", "ssid": "Gast"}, {"ap": "ap-lager", "mac": "58bf.eaaa.0004", "protocol": "11ac", "psk": "", "ssid": "Gast"}]}, {"cause": "Aufgabe nach Anforderungen: Die Reihenfolge ergibt sich aus den Abhängigkeiten.", "checks": [{"category": "function", "desc": "Alt_Profile ist entfernt", "kind": "wlan", "name": "Alt_Profile", "type": "absent"}, {"category": "function", "desc": "PP_Alt ist entfernt", "kind": "policy", "name": "PP_Alt", "type": "absent"}, {"category": "function", "desc": "PT_Alt ist entfernt", "kind": "tag", "name": "PT_Alt", "type": "absent"}, {"category": "function", "desc": "Lobby-Laptop weiterhin verbunden, VLAN 20", "mac": "58bf.eaaa.0001", "state": "Run", "type": "client", "vlan": "20"}, {"category": "security", "desc": "Corp-Zuordnung unverändert", "maps": {"Corp_Profile": "PP_Corp"}, "tag": "PT_Corp", "type": "tagmap"}], "duration": "20 min", "fabric": "wlc1 mit ap-lobby und ap-lager", "goals": ["Abhängigkeiten zwischen WLAN, Policy Profile, Policy Tag und AP erkennen", "In der richtigen Reihenfolge abbauen"], "hints": ["**Konzept:** Objekte, die noch verwendet werden, lassen sich nicht löschen. Baue von außen nach innen ab.", "**Ebene:** Reihenfolge der Abhängigkeiten, nicht Funktion.", "**Prüfschritte:** Wer verwendet das Policy Tag, wer das WLAN, wer das Policy Profile? Die Fehlermeldung beim Löschen nennt es.", "**Lösung:** Erst dem AP ap-lager das Tag wegnehmen, dann das Policy Tag PT_Alt löschen, danach das WLAN Alt_Profile und das Policy Profile PP_Alt."], "id": "06-aufraeumen", "intro": "Das alte WLAN **Alt** wird nicht mehr gebraucht. Es läuft im Lager und ist über eigene Objekte eingerichtet. Corp in der Lobby darf dabei nicht ausfallen.", "kind": "requirements", "level": "Mittel", "limits": ["Das Client-Modell ist didaktisch: Es erklärt, ob und warum ein Client verbunden ist, ist aber keine Abbildung der Controller-Pipeline.", "Nicht modelliert: 802.1x/RADIUS, FlexConnect, RF-Profile, Roaming, Mobility.", "Ob das Gerät diese Abhängigkeiten beim Löschen so erzwingt, ist nicht belegt; der Simulator erzwingt sie."], "modes": ["guided", "exam"], "prerequisites": ["Lab 01"], "questions": [{"answer": 0, "explain": "Der Simulator verlangt, dass ein Objekt nirgends mehr verwendet wird. Zuerst das Tag am AP lösen, dann das Tag löschen, dann WLAN und Policy Profile.", "id": "q1", "options": ["Weil es in einem Policy Tag eingetragen ist", "Weil es aktiv ist", "Weil ein Client verbunden ist", "Weil es die ID 2 hat"], "q": "Warum lässt sich das WLAN-Profil zuerst nicht löschen?"}, {"answer": 0, "explain": "Von dem, was andere Objekte benutzt, zu dem, was benutzt wird.", "id": "q2", "options": ["AP-Zuordnung, Policy Tag, dann WLAN und Policy Profile", "WLAN, Policy Profile, Policy Tag, AP", "Policy Profile, WLAN, AP", "Reihenfolge ist egal"], "q": "In welcher Reihenfolge baust du ab?"}], "requirements": ["Das WLAN-Profil Alt_Profile, das Policy Profile PP_Alt und das Policy Tag PT_Alt sind entfernt.", "Corp läuft weiter: Der Laptop in der Lobby bleibt verbunden (VLAN 20).", "Die Zuordnung von Corp bleibt unverändert."], "solution": "WebUI: Wireless > Access Points > ap-lager: Tag auf Default; Tags > PT_Alt löschen; WLANs > Alt_Profile löschen; Policy > PP_Alt löschen. CLI: `ap a4b2.32aa.0002`, `no policy-tag`, `exit`, `no wireless tag policy PT_Alt`, `no wlan Alt_Profile`, `no wireless profile policy PP_Alt`.", "solutionCommands": ["ap a4b2.32aa.0002", "no policy-tag", "exit", "no wireless tag policy PT_Alt", "no wlan Alt_Profile", "no wireless profile policy PP_Alt"], "startCommands": ["wlan Corp_Profile 1 Corp", "security wpa akm psk", "security wpa psk set-key ascii 0 Sommer2026", "no shutdown", "exit", "wireless profile policy PP_Corp", "vlan 20", "no shutdown", "exit", "wireless tag policy PT_Corp", "wlan Corp_Profile policy PP_Corp", "exit", "ap a4b2.32aa.0001", "policy-tag PT_Corp", "exit", "wlan Alt_Profile 2 Alt", "security wpa akm psk", "security wpa psk set-key ascii 0 AltesPasswort", "no shutdown", "exit", "wireless profile policy PP_Alt", "vlan 30", "no shutdown", "exit", "wireless tag policy PT_Alt", "wlan Alt_Profile policy PP_Alt", "exit", "ap a4b2.32aa.0002", "policy-tag PT_Alt"], "title": "06 Altes WLAN sauber entfernen", "tools": ["WebUI: Monitoring > Wireless > Clients", "WebUI: Configuration > Tags & Profiles und Wireless > Access Points", "Client-Diagnose (nur im geführten Modus)", "CLI: show wlan summary, show ap tag summary, show wireless client summary"], "topic": "Wireless / Betrieb", "track": "Grundlagen Wireless", "worldClients": [{"ap": "ap-lobby", "mac": "58bf.eaaa.0001", "protocol": "11ac", "psk": "Sommer2026", "ssid": "Corp"}, {"ap": "ap-lager", "mac": "58bf.eaaa.0005", "protocol": "11ac", "psk": "AltesPasswort", "ssid": "Alt"}]}, {"cause": "Aufgabe nach Anforderungen: Es gibt keinen einzelnen Fehler.", "checks": [{"category": "function", "desc": "Lobby-Laptop: verbunden, VLAN 20, zentral geschaltet", "mac": "58bf.eaaa.0001", "state": "Run", "switching": "central", "type": "client", "vlan": "20"}, {"category": "function", "desc": "Lager-Laptop: verbunden, VLAN 20, lokal geschaltet", "mac": "58bf.eaaa.0002", "state": "Run", "switching": "local", "type": "client", "vlan": "20"}, {"ap": "ap-lager", "category": "function", "desc": "ap-lager arbeitet im FlexConnect-Modus", "mode": "FlexConnect", "type": "apmode"}, {"ap": "ap-lobby", "category": "security", "desc": "ap-lobby bleibt im Local Mode", "mode": "Local", "type": "apmode"}, {"attrs": {"akm": "psk"}, "category": "security", "desc": "Corp nutzt weiterhin WPA2-PSK", "profile": "Corp_Profile", "type": "wlan"}], "duration": "40 min", "fabric": "wlc1 mit ap-lobby und ap-lager", "goals": ["Zentrales und lokales Switching unterscheiden", "Den Zusammenhang von Policy Profile, Flex Profile und Site Tag herstellen", "Eine Zweigstelle auf FlexConnect umstellen, ohne den Hauptstandort zu verändern"], "hints": ["**Konzept:** Ob ein AP Clientdaten selbst ins VLAN schaltet, hängt von seinem Betriebsmodus ab. Den legt nicht das WLAN fest, sondern ein Tag am AP.", "**Ebene:** Mehrere Objekte wirken zusammen: Das Policy Profile bestimmt die Switching-Art, ein Flex Profile sagt dem AP, welche VLANs er lokal kennt, und ein Site Tag bestimmt den Modus. Das Lager braucht eigene Tags.", "**Prüfschritte:** Lege zuerst das Flex Profile mit dem lokalen VLAN an. Das Policy Profile für lokales Switching verweist auf genau diesen VLAN-Namen. Dann Policy Tag, Site Tag ohne Local Site mit dem Flex Profile, und beide Tags dem AP zuweisen.", "**Lösung:** Flex Profile **FP_Lager** mit `vlan-name CORP_LOCAL` / `vlan-id 20`; Policy Profile **PP_Corp_Flex** mit `vlan CORP_LOCAL` und `no central switching`, aktiviert; Policy Tag **PT_Corp_Flex** (Corp_Profile → PP_Corp_Flex); Site Tag **ST_Lager** mit `no local-site` und `flex-profile FP_Lager`; ap-lager bekommt PT_Corp_Flex und ST_Lager."], "id": "07-flexconnect-zweigstelle", "intro": "Die Firma betreibt Corp (WPA2-PSK, VLAN 20) an beiden APs; der gesamte Verkehr läuft bisher über den Controller. Das Lager ist eine Zweigstelle hinter einer langsamen WAN-Leitung.\n\n- **ap-lobby** (Hauptstandort) soll unverändert bleiben\n- **ap-lager** soll den Corp-Verkehr selbst ins **VLAN 20** schalten, statt ihn zum Controller zu tunneln\n- Je ein Laptop als Test in Lobby und Lager", "kind": "requirements", "level": "Fortgeschritten", "limits": ["Das Client-Modell ist didaktisch: Es erklärt, ob und warum ein Client verbunden ist, ist aber keine Abbildung der Controller-Pipeline.", "Nicht modelliert: 802.1x/RADIUS, FlexConnect, RF-Profile, Roaming, Mobility.", "Nicht modelliert: Standalone-Betrieb bei WAN-Ausfall, lokale Authentifizierung am AP, Flex-ACLs, Central DHCP/Association, AAA-Override, VLAN-Gruppen.", "Durchsatz und WAN-Last werden nicht simuliert; der Simulator unterscheidet nur zentrales und lokales Switching."], "modes": ["guided", "exam"], "prerequisites": ["Lab 01", "Lab 04", "Lab 05"], "questions": [{"answer": 0, "explain": "Ein Site Tag ohne Local Site versetzt jeden AP, der es erhält, in den FlexConnect-Modus (Cisco-Dokument 213945).", "id": "q1", "options": ["Am Site Tag des APs: Local Site ist ausgeschaltet", "Am WLAN-Profil", "Am VLAN im Policy Profile", "Am AP-Modell"], "q": "Woran erkennt der Controller, dass ein AP im FlexConnect-Modus arbeitet?"}, {"answer": 1, "explain": "Das Flex Profile listet die VLANs, die der AP selbst braucht. Das VLAN für zentrales Switching steht dort nicht (Cisco-Dokument 213945).", "id": "q2", "options": ["Alle VLANs des Controllers", "Die VLANs, die der AP lokal schalten soll", "Nur das Management-VLAN", "Keine, es enthält nur Timer"], "q": "Welche VLANs gehören in das Flex Profile?"}], "requirements": ["Der Laptop in der Lobby bleibt verbunden (VLAN 20) und wird weiter zentral geschaltet.", "Der Laptop im Lager ist verbunden (VLAN 20) und wird lokal geschaltet.", "ap-lager arbeitet im FlexConnect-Modus, ap-lobby bleibt im Local Mode.", "Corp bleibt mit WPA2-PSK geschützt."], "solution": "WebUI: Tags & Profiles > Flex: FP_Lager mit VLAN CORP_LOCAL / 20; Policy: PP_Corp_Flex mit VLAN CORP_LOCAL, Central Switching aus, aktiviert; Tags: PT_Corp_Flex; Site Tags: ST_Lager mit Local Site aus und Flex Profile FP_Lager; Wireless > Access Points > ap-lager: beide Tags. CLI: `wireless profile flex FP_Lager` / `vlan-name CORP_LOCAL` / `vlan-id 20`; `wireless profile policy PP_Corp_Flex` / `vlan CORP_LOCAL` / `no central switching` / `no shutdown`; `wireless tag policy PT_Corp_Flex` / `wlan Corp_Profile policy PP_Corp_Flex`; `wireless tag site ST_Lager` / `no local-site` / `flex-profile FP_Lager`; `ap a4b2.32aa.0002` / `policy-tag PT_Corp_Flex` / `site-tag ST_Lager`.", "solutionCommands": ["wireless profile flex FP_Lager", "vlan-name CORP_LOCAL", "vlan-id 20", "exit", "exit", "wireless profile policy PP_Corp_Flex", "vlan CORP_LOCAL", "no central switching", "no shutdown", "exit", "wireless tag policy PT_Corp_Flex", "wlan Corp_Profile policy PP_Corp_Flex", "exit", "wireless tag site ST_Lager", "no local-site", "flex-profile FP_Lager", "exit", "ap a4b2.32aa.0002", "policy-tag PT_Corp_Flex", "site-tag ST_Lager"], "startCommands": ["wlan Corp_Profile 1 Corp", "security wpa akm psk", "security wpa psk set-key ascii 0 Sommer2026", "no shutdown", "exit", "wireless profile policy PP_Corp", "vlan 20", "no shutdown", "exit", "wireless tag policy PT_Corp", "wlan Corp_Profile policy PP_Corp", "exit", "ap a4b2.32aa.0001", "policy-tag PT_Corp", "exit", "ap a4b2.32aa.0002", "policy-tag PT_Corp"], "title": "07 Zweigstelle Lager: Corp lokal schalten", "tools": ["WebUI: Configuration > Tags & Profiles > Policy, Flex, Tags, Site Tags und Wireless > Access Points", "Monitoring > Wireless > Clients", "Client-Diagnose (nur im geführten Modus)", "CLI: show ap tag summary, show wireless profile flex summary, show wireless tag site summary, show wireless client summary"], "topic": "FlexConnect / Design", "track": "CCNP Enterprise Wireless (300-430 ENWLSI)", "worldClients": [{"ap": "ap-lobby", "mac": "58bf.eaaa.0001", "protocol": "11ac", "psk": "Sommer2026", "ssid": "Corp"}, {"ap": "ap-lager", "mac": "58bf.eaaa.0002", "protocol": "11ac", "psk": "Sommer2026", "ssid": "Corp"}]}, {"cause": "Der VLAN-Name im Policy Profile (CORP_LOCAL) stimmt nicht mit dem im Flex Profile (Corp_Local) überein; die Namen müssen exakt passen.", "checks": [{"category": "function", "desc": "Lager-Laptop: verbunden, VLAN 20, lokal geschaltet", "mac": "58bf.eaaa.0002", "state": "Run", "switching": "local", "type": "client", "vlan": "20"}, {"ap": "ap-lager", "category": "security", "desc": "ap-lager bleibt im FlexConnect-Modus", "mode": "FlexConnect", "type": "apmode"}, {"category": "security", "desc": "Lobby-Laptop unverändert: verbunden, VLAN 20, zentral geschaltet", "mac": "58bf.eaaa.0001", "state": "Run", "switching": "central", "type": "client", "vlan": "20"}], "duration": "25 min", "fabric": "wlc1 mit ap-lobby und ap-lager", "goals": ["Die Abhängigkeit zwischen Policy Profile und Flex Profile lesen", "Eine Fehlersuche bei lokalem Switching systematisch führen", "Nicht auf zentrales Switching ausweichen, wenn lokales Switching verlangt ist"], "hints": ["**Konzept:** Bei lokalem Switching muss der AP das VLAN des Policy Profile selbst kennen. Er vergleicht dafür den Eintrag im Policy Profile mit dem, was sein Flex Profile definiert.", "**Ebene:** Zuordnung zwischen Policy Profile und Flex Profile. Modus, Tags und Zustände sind in Ordnung.", "**Prüfschritte:** Lies das Policy Profile und das Flex Profile nebeneinander. Stehen die VLAN-Angaben dort Zeichen für Zeichen gleich?", "**Lösung:** Den VLAN-Namen im Policy Profile PP_Corp_Flex auf **Corp_Local** setzen (oder im Flex Profile den Namen auf CORP_LOCAL ändern). Auf zentrales Switching auszuweichen ist keine Lösung."], "id": "08-flexconnect-vlan-name", "intro": "Das Lager wurde auf FlexConnect umgestellt: lokales Switching ins VLAN 20, eigene Tags, Site Tag ohne Local Site. Seitdem kommt der Laptop im Lager nicht mehr ins WLAN Corp. In der Lobby läuft alles.\n\n- Schlüssel, Tags und Zustände wurden geprüft und sind in Ordnung\n- Das Lager soll bei lokalem Switching bleiben.", "kind": "troubleshooting", "level": "Fortgeschritten", "limits": ["Das Client-Modell ist didaktisch: Es erklärt, ob und warum ein Client verbunden ist, ist aber keine Abbildung der Controller-Pipeline.", "Nicht modelliert: 802.1x/RADIUS, FlexConnect, RF-Profile, Roaming, Mobility.", "Nicht modelliert: Standalone-Betrieb bei WAN-Ausfall, lokale Authentifizierung am AP, Flex-ACLs, Central DHCP/Association, AAA-Override, VLAN-Gruppen.", "Durchsatz und WAN-Last werden nicht simuliert; der Simulator unterscheidet nur zentrales und lokales Switching."], "modes": ["guided", "exam"], "prerequisites": ["Lab 07"], "questions": [{"answer": 0, "explain": "Nach Cisco-Dokument 213945 müssen die Namen exakt passen, sonst können sich Clients nicht verbinden.", "id": "q1", "options": ["Die Clients können sich nicht mit dem WLAN verbinden", "Der AP nimmt das nächstbeste VLAN", "Der Controller wechselt auf zentrales Switching", "Nichts, Namen werden ignoriert"], "q": "Was geschieht, wenn der VLAN-Name im Policy Profile nicht exakt im Flex Profile steht?"}, {"answer": 0, "explain": "Die Anforderung ist lokales Switching im Lager. Zentrales Switching würde die Prüfung auf lokale Schaltung verfehlen.", "id": "q2", "options": ["Der Lager-Verkehr würde über das WAN zum Controller laufen, obwohl er lokal bleiben soll", "FlexConnect lässt sich damit nicht mehr nutzen", "Das VLAN würde gelöscht", "Es geht nur im Local Mode"], "q": "Warum wäre zentrales Switching hier keine Lösung?"}], "requirements": ["Der Laptop im Lager ist verbunden (VLAN 20) und wird lokal geschaltet.", "ap-lager bleibt im FlexConnect-Modus.", "Die Lobby bleibt unverändert: verbunden, VLAN 20, zentral geschaltet."], "solution": "WebUI: Policy > PP_Corp_Flex > Edit: VLAN Corp_Local. CLI: `wireless profile policy PP_Corp_Flex`, `vlan Corp_Local`. Gleichwertig: Im Flex Profile FP_Lager `no vlan-name Corp_Local`, `vlan-name CORP_LOCAL`, `vlan-id 20`.", "solutionCommands": ["wireless profile policy PP_Corp_Flex", "vlan Corp_Local"], "startCommands": ["wlan Corp_Profile 1 Corp", "security wpa akm psk", "security wpa psk set-key ascii 0 Sommer2026", "no shutdown", "exit", "wireless profile policy PP_Corp", "vlan 20", "no shutdown", "exit", "wireless tag policy PT_Corp", "wlan Corp_Profile policy PP_Corp", "exit", "ap a4b2.32aa.0001", "policy-tag PT_Corp", "exit", "wireless profile flex FP_Lager", "vlan-name Corp_Local", "vlan-id 20", "exit", "exit", "wireless profile policy PP_Corp_Flex", "vlan CORP_LOCAL", "no central switching", "no shutdown", "exit", "wireless tag policy PT_Corp_Flex", "wlan Corp_Profile policy PP_Corp_Flex", "exit", "wireless tag site ST_Lager", "no local-site", "flex-profile FP_Lager", "exit", "ap a4b2.32aa.0002", "policy-tag PT_Corp_Flex", "site-tag ST_Lager"], "title": "08 Zweigstelle: Lager-Laptop ohne Verbindung", "tools": ["WebUI: Configuration > Tags & Profiles > Policy, Flex, Tags, Site Tags und Wireless > Access Points", "Monitoring > Wireless > Clients", "Client-Diagnose (nur im geführten Modus)", "CLI: show ap tag summary, show wireless profile flex summary, show wireless tag site summary, show wireless client summary"], "topic": "FlexConnect / Troubleshooting", "track": "CCNP Enterprise Wireless (300-430 ENWLSI)", "worldClients": [{"ap": "ap-lobby", "mac": "58bf.eaaa.0001", "protocol": "11ac", "psk": "Sommer2026", "ssid": "Corp"}, {"ap": "ap-lager", "mac": "58bf.eaaa.0002", "protocol": "11ac", "psk": "Sommer2026", "ssid": "Corp"}]}];</script>
+<script>
+/* Campus Prep: Simulator-Engine im Browser (Portierung von campusprep/wlc.py, labs.py, store.py und der Sim-Klasse in server.py).
+
+   Zweck: WLC-Simulator.html laeuft per Doppelklick ohne Python und ohne Webserver. Die Engine bietet dieselben Endpunkte wie der
+   Python-Server (handle(method, path, body) -> {status, body}); die Oberflaeche (app.js) merkt den Unterschied nicht.
+
+   Es gibt zwei Implementierungen derselben Regeln. Damit sie nicht auseinanderlaufen, erzeugt tests/parity/make_fixtures.py aus
+   der Python-Engine erwartete Ergebnisse (HTTP-Schritte, Zustand), und tests/parity/parity.js spielt sie gegen diese Datei ab.
+   Aenderungen an den Regeln gehoeren in beide Dateien; ohne gruenen Paritaetstest werden sie nicht uebernommen.
+
+   Hinweise zur Portierung:
+   - Woerterbuecher mit Namen aus Benutzereingaben sind Objekte ohne Prototyp (dict/clone), damit Namen wie "constructor" oder
+     "__proto__" wie in Python gewoehnliche Schluessel sind. WLAN-Profile liegen in einer Map (Einfuegereihenfolge auch bei
+     rein numerischen Namen, wie in Python).
+   - Python-Ausgaben (str() von None/True, repr() von dict) werden nachgebildet, weil sie in Detailtexten der Labs stehen.
+*/
+(function (root) {
+  'use strict';
+
+  const DEF_POLICY_TAG = 'default-policy-tag', DEF_SITE_TAG = 'default-site-tag', DEF_RF_TAG = 'default-rf-tag';
+  const DEF_FLEX_PROFILE = 'default-flex-profile';
+  const NAME_RE = /^[\p{L}\p{N}_.-]{1,32}$/u;          // wie Python \w (Unicode)
+  const STORE_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$/;
+  const KIND = 'campusprep-state', VERSION = 2, ACCEPTED = [1, 2];
+  const MODES = ['guided', 'exam'];
+  const HIDDEN = ['cause', 'solution', 'solutionCommands', 'startCommands', 'worldClients', 'checks', 'hints', 'questions'];
+
+  // ------------------------------------------------------------------ Hilfen
+  class CliError extends Error {}
+  class LabError extends Error { constructor(msg, status) { super(msg); this.status = status || 400; } }
+  class StoreError extends Error { constructor(msg, status) { super(msg); this.status = status || 400; } }
+
+  const isDict = x => x !== null && typeof x === 'object' && !Array.isArray(x);
+  const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+  const dict = () => Object.create(null);
+  function clone(x) {
+    if (Array.isArray(x)) return x.map(clone);
+    if (isDict(x)) { const o = dict(); for (const k of Object.keys(x)) o[k] = clone(x[k]); return o; }
+    return x;
+  }
+  const plain = x => JSON.parse(JSON.stringify(x));          // fuer Antworten: gewoehnliche Objekte
+  const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+  const sortedKeys = o => Object.keys(o).sort(cmp);
+  const isDigits = s => /^[0-9]+$/.test(String(s));
+  const pad = (v, n) => String(v).padEnd(n);
+  const get = (o, k) => (has(o, k) ? o[k] : undefined);
+  const setdefault = (o, k, v) => { if (!has(o, k)) o[k] = v; return o[k]; };
+
+  function pyStr(v) { return v === null || v === undefined ? 'None' : v === true ? 'True' : v === false ? 'False' : String(v); }
+  function pyRepr(v) {
+    if (v === null || v === undefined) return 'None';
+    if (v === true) return 'True';
+    if (v === false) return 'False';
+    if (typeof v === 'number') return String(v);
+    if (typeof v === 'string') {
+      const q = v.includes("'") && !v.includes('"') ? '"' : "'";
+      let out = '';
+      for (const ch of v) {
+        if (ch === '\\') out += '\\\\';
+        else if (ch === q) out += '\\' + q;
+        else if (ch === '\n') out += '\\n';
+        else if (ch === '\r') out += '\\r';
+        else if (ch === '\t') out += '\\t';
+        else out += ch;
+      }
+      return q + out + q;
+    }
+    if (Array.isArray(v)) return '[' + v.map(pyRepr).join(', ') + ']';
+    return '{' + Object.keys(v).map(k => pyRepr(k) + ': ' + pyRepr(v[k])).join(', ') + '}';
+  }
+  const deepEqual = (a, b) => JSON.stringify(canon(a)) === JSON.stringify(canon(b));
+  function canon(x) {
+    if (Array.isArray(x)) return x.map(canon);
+    if (isDict(x)) { const o = {}; for (const k of sortedKeys(x)) o[k] = canon(x[k]); return o; }
+    return x;
+  }
+  const stableStringify = x => JSON.stringify(canon(x), null, 1) + '\n';
+
+  function normMac(m) {
+    const h = Array.from(String(m).toLowerCase()).filter(c => '0123456789abcdef'.includes(c)).join('');
+    if (h.length !== 12) throw new Error('MAC-Adresse ungueltig: ' + m);
+    return h.slice(0, 4) + '.' + h.slice(4, 8) + '.' + h.slice(8, 12);
+  }
+
+  function newWorld() {
+    return clone({
+      wlc: { hostname: 'wlc1', platformId: 'C9800-CL-K9', ip: '10.10.0.10', mac: 'aabb.cc00.0100', serial: 'SIM9800CL001',
+             version: '17.9.4a', location: 'Rechenzentrum', uptimeSeconds: 864000 },
+      aps: [
+        { name: 'ap-lobby', model: '9130AXI', ethMac: 'a4b2.32aa.0001', radioMac: '2c57.41aa.0001', ip: '10.10.20.11',
+          location: 'default location', country: 'DE', serial: 'SIMAP0000001', joined: true },
+        { name: 'ap-lager', model: '9130AXI', ethMac: 'a4b2.32aa.0002', radioMac: '2c57.41aa.0002', ip: '10.10.20.12',
+          location: 'default location', country: 'DE', serial: 'SIMAP0000002', joined: true },
+      ],
+      clients: [
+        { mac: '58bf.eaaa.0001', ssid: 'Corp', psk: 'Sommer2026', ap: 'ap-lobby', protocol: '11ac' },
+        { mac: '58bf.eaaa.0002', ssid: 'Corp', psk: 'falsch', ap: 'ap-lobby', protocol: '11ax' },
+      ],
+    });
+  }
+
+  // ------------------------------------------------------------------ WLC
+  const newFlex = () => ({ native: null, vlans: dict(), descr: '' });
+  const newSite = () => ({ local: true, flex: null, descr: '' });
+
+  class Wlc {
+    constructor(world) {
+      this.world = world;
+      this.wlans = new Map();                   // profil -> {id, ssid, shutdown, akm, psk}
+      this.policies = dict();                   // name -> {vlan, shutdown, descr, central}
+      this.policyTags = dict(); this.policyTags[DEF_POLICY_TAG] = dict();
+      this.apCfg = dict();                      // ethMac -> {policy_tag, site_tag}
+      this.flexProfiles = dict(); this.flexProfiles[DEF_FLEX_PROFILE] = newFlex();
+      this.siteTags = dict(); this.siteTags[DEF_SITE_TAG] = newSite();
+    }
+
+    snapshot() {
+      return clone({ wlans: this.dumpWlans(), policies: this.policies, policyTags: this.policyTags, apCfg: this.apCfg,
+                     flexProfiles: this.flexProfiles, siteTags: this.siteTags });
+    }
+    restore(s) {
+      this.loadWlans(s.wlans);
+      this.policies = clone(s.policies); this.policyTags = clone(s.policyTags); this.apCfg = clone(s.apCfg);
+      this.flexProfiles = clone(s.flexProfiles); this.siteTags = clone(s.siteTags);
+    }
+    dumpWlans() { const o = dict(); for (const [k, v] of this.wlans) o[k] = clone(v); return o; }
+    loadWlans(o) { this.wlans = new Map(); for (const k of Object.keys(o)) this.wlans.set(k, clone(o[k])); }
+    dump() { return this.snapshot(); }
+    load(d) {
+      // Pflichtfelder wie in Python: Ein Stand mit fehlenden Feldern ist beschaedigt
+      const need = (o, keys) => { for (const k of keys) if (!has(o, k)) throw new Error('Feld fehlt: ' + k); };
+      for (const k of Object.keys(d.wlans)) need(d.wlans[k], ['id', 'ssid', 'shutdown', 'akm', 'psk']);
+      for (const k of Object.keys(d.policies)) need(d.policies[k], ['vlan', 'descr', 'shutdown']);
+      const fps = d.flexProfiles || {}, sts = d.siteTags || {};
+      for (const k of Object.keys(fps)) need(fps[k], ['descr', 'native', 'vlans']);
+      for (const k of Object.keys(sts)) { need(sts[k], ['descr', 'local']); if (!sts[k].local) need(sts[k], ['flex']); }
+      this.loadWlans(d.wlans);
+      this.policies = clone(d.policies); this.policyTags = clone(d.policyTags); this.apCfg = clone(d.apCfg);
+      setdefault(this.policyTags, DEF_POLICY_TAG, dict());
+      // Staende der Version 1 kennen weder Flex Profiles noch Site Tags: Standardobjekte verwenden
+      this.flexProfiles = clone(Object.keys(fps).length ? fps : {});
+      setdefault(this.flexProfiles, DEF_FLEX_PROFILE, newFlex());
+      this.siteTags = clone(Object.keys(sts).length ? sts : {});
+      setdefault(this.siteTags, DEF_SITE_TAG, newSite());
+    }
+
+    // ---- Zustand fuer die Oberflaeche
+    state() {
+      const aps = this.world.aps.map(a => {
+        const cfg = get(this.apCfg, a.ethMac) || {};
+        const explicit = cfg.policy_tag || cfg.site_tag;
+        return { name: a.name, model: a.model, ethMac: a.ethMac, radioMac: a.radioMac, ip: a.ip, location: a.location,
+                 country: a.country, state: a.joined ? 'Registered' : 'Not joined', policyTag: this.policyTagOf(a),
+                 siteTag: this.siteTagOf(a), rfTag: DEF_RF_TAG, mode: this.apMode(a), tagSource: explicit ? 'Static' : 'Default' };
+      });
+      const wl = [...this.wlans.entries()].sort((x, y) => x[1].id - y[1].id);
+      return {
+        wlc: Object.assign({}, this.world.wlc),
+        wlans: wl.map(([n, w]) => ({ profile: n, id: w.id, ssid: w.ssid, status: w.shutdown ? 'DOWN' : 'UP', akm: w.akm,
+                                     pskSet: !!w.psk, security: w.akm === 'psk' ? '[WPA2][PSK][AES]' : '[open]' })),
+        policies: sortedKeys(this.policies).map(n => { const p = this.policies[n];
+          return { name: n, vlan: p.vlan, description: p.descr, central: has(p, 'central') ? p.central : true,
+                   status: p.shutdown ? 'DISABLED' : 'ENABLED' }; }),
+        flexProfiles: sortedKeys(this.flexProfiles).map(n => { const f = this.flexProfiles[n];
+          return { name: n, builtin: n === DEF_FLEX_PROFILE, description: f.descr, native: f.native,
+                   vlans: sortedKeys(f.vlans).map(k => ({ name: k, id: f.vlans[k] })) }; }),
+        siteTags: sortedKeys(this.siteTags).map(n => { const t = this.siteTags[n];
+          return { name: n, builtin: n === DEF_SITE_TAG, description: t.descr, local: t.local,
+                   flexProfile: t.local ? null : (t.flex || DEF_FLEX_PROFILE) }; }),
+        policyTags: sortedKeys(this.policyTags).map(n => ({ name: n, builtin: n === DEF_POLICY_TAG,
+          maps: sortedKeys(this.policyTags[n]).map(k => ({ wlan: k, policy: this.policyTags[n][k] })) })),
+        aps,
+        clients: this.clients().map(c => ({ mac: c.mac, ssid: c.ssid, ap: c.ap, protocol: c.protocol, state: c.state, wlan: c.wlan,
+                                            vlan: c.vlan, method: c.method, switching: c.switching, mode: c.mode, reasons: c.reasons })),
+      };
+    }
+
+    apByName(name) { return this.world.aps.find(a => a.name === name) || null; }
+    policyTagOf(ap) { return (get(this.apCfg, ap.ethMac) || {}).policy_tag || DEF_POLICY_TAG; }
+    siteTagOf(ap) { return (get(this.apCfg, ap.ethMac) || {}).site_tag || DEF_SITE_TAG; }
+    apMode(ap) { const st = get(this.siteTags, this.siteTagOf(ap)); return !st || st.local ? 'Local' : 'FlexConnect'; }
+    flexOf(ap) { const st = get(this.siteTags, this.siteTagOf(ap)); return !st || st.local ? null : (st.flex || DEF_FLEX_PROFILE); }
+
+    static flexVlan(fp, v) {
+      /* VLAN-ID, die der AP fuer den Wert aus dem Policy Profile kennt, sonst null. Namen muessen exakt passen (belegt);
+         eine numerische ID passt auf eine VLAN-ID des Flex Profile oder seine Native VLAN (Annahme). */
+      if (!fp) return null;
+      if (isDigits(v)) {
+        const i = parseInt(v, 10);
+        const ids = Object.keys(fp.vlans).map(k => fp.vlans[k]).filter(x => x !== null);
+        return ids.includes(i) || fp.native === i ? i : null;
+      }
+      const r = get(fp.vlans, v);
+      return r === undefined ? null : r;
+    }
+
+    decide(client) {
+      const ap = this.apByName(client.ap);
+      const res = { state: 'Not Associated', ap: client.ap, wlan: null, policy: null, vlan: null, method: null,
+                    switching: null, mode: null, reasons: [] };
+      if (!ap || !ap.joined) { res.reasons.push('AP ' + client.ap + ' ist nicht am Controller registriert'); return res; }
+      let wl = null;
+      for (const [n, w] of this.wlans) if (w.ssid === client.ssid) { wl = n; break; }
+      if (wl === null) { res.reasons.push('Kein WLAN-Profil mit SSID ' + client.ssid + ' konfiguriert'); return res; }
+      const w = this.wlans.get(wl);
+      const tag = this.policyTagOf(ap);
+      const pol = get(get(this.policyTags, tag) || dict(), wl);
+      if (pol === undefined) {
+        res.reasons.push('Das Policy Tag ' + tag + ' von ' + ap.name + ' enthaelt das WLAN ' + wl + ' nicht - die SSID wird an diesem AP nicht ausgestrahlt');
+        return res;
+      }
+      if (w.shutdown) { res.reasons.push('WLAN-Profil ' + wl + ' ist administrativ down (shutdown)'); return res; }
+      const p = get(this.policies, pol);
+      if (p === undefined) { res.reasons.push('Policy Profile ' + pol + ' im Policy Tag ' + tag + ' existiert nicht'); return res; }
+      if (p.shutdown) { res.reasons.push('Policy Profile ' + pol + ' ist administrativ down (shutdown)'); return res; }
+      const central = has(p, 'central') ? p.central : true;
+      res.wlan = w.id; res.policy = pol; res.switching = central ? 'central' : 'local'; res.mode = this.apMode(ap);
+      if (central) {
+        if (!isDigits(p.vlan)) {
+          res.reasons.push('VLAN ' + p.vlan + ' ist am Controller nicht definiert (der Simulator kennt fuer zentrales Switching nur numerische VLAN-IDs)');
+          return res;
+        }
+        res.vlan = String(p.vlan);
+      } else {
+        if (res.mode !== 'FlexConnect') {
+          res.reasons.push('Policy Profile ' + pol + ' schaltet lokal (no central switching), der AP ' + ap.name + ' arbeitet aber im Local Mode - ' +
+                           'lokales Switching setzt den FlexConnect-Modus voraus (Site Tag ohne Local Site)');
+          return res;
+        }
+        const fname = this.flexOf(ap);
+        const vid = Wlc.flexVlan(get(this.flexProfiles, fname), p.vlan);
+        if (vid === null) {
+          res.reasons.push('Das VLAN ' + p.vlan + ' des Policy Profile ' + pol + ' ist im Flex Profile ' + fname +
+                           ' nicht definiert (der Name muss exakt passen) - die Clients koennen sich nicht verbinden');
+          return res;
+        }
+        res.vlan = String(vid);
+      }
+      if (w.akm === 'psk') {
+        res.method = 'PSK';
+        if (client.psk !== w.psk) { res.reasons.push('Pre-Shared Key stimmt nicht - die Authentifizierung scheitert'); return res; }
+      } else res.method = 'None';
+      res.state = 'Run';
+      return res;
+    }
+
+    clients() { return this.world.clients.map(c => Object.assign({}, c, this.decide(c))); }
+
+    // ---- Show-Ausgaben (Format belegt, siehe docs/QUELLEN.md)
+    showWlanSummary() {
+      const rows = [...this.wlans.entries()].sort((x, y) => x[1].id - y[1].id);
+      const out = ['Number of WLANs: ' + rows.length, '',
+        'ID   Profile Name                     SSID                             Status Security', '-'.repeat(154)];
+      for (const [n, w] of rows) {
+        out.push(pad(w.id, 4) + ' ' + pad(n, 32) + ' ' + pad(w.ssid, 32) + ' ' + pad(w.shutdown ? 'DOWN' : 'UP', 6) + ' ' +
+                 (w.akm === 'psk' ? '[WPA2][PSK][AES]' : '[open]'));
+      }
+      return out.join('\n');
+    }
+    showApSummary() {
+      const aps = this.world.aps.filter(a => a.joined);
+      const out = ['Number of APs: ' + aps.length, '',
+        'AP Name                            Slots    AP Model  Ethernet MAC    Radio MAC       Location' +
+        '                          Country     IP Address                                 State', '-'.repeat(163)];
+      for (const a of aps) {
+        out.push([pad(a.name, 34), pad(2, 8), pad(a.model, 9), pad(a.ethMac, 15), pad(a.radioMac, 15), pad(a.location, 33),
+                  pad(a.country, 11), pad(a.ip, 42), 'Registered'].join(' '));
+      }
+      return out.join('\n');
+    }
+    showApTagSummary() {
+      const aps = this.world.aps.filter(a => a.joined);
+      const out = ['Number of APs: ' + aps.length, '',
+        'AP Name                 AP Mac           Site Tag Name                     Policy Tag Name' +
+        '                   RF Tag Name                       Misconfigured    Tag Source', '-'.repeat(172)];
+      for (const a of aps) {
+        const cfg = get(this.apCfg, a.ethMac) || {};
+        out.push([pad(a.name, 23), pad(a.ethMac, 16), pad(this.siteTagOf(a), 33), pad(this.policyTagOf(a), 33), pad(DEF_RF_TAG, 33),
+                  pad('No', 16), (cfg.policy_tag || cfg.site_tag) ? 'Static' : 'Default'].join(' '));
+      }
+      return out.join('\n');
+    }
+    showWirelessClientSummary() {
+      const cl = this.clients().filter(c => c.state !== 'Not Associated');
+      const out = ['Number of Clients: ' + cl.length, '',
+        'MAC Address    AP Name                                        Type ID   State             Protocol Method     Role', '-'.repeat(121)];
+      for (const c of cl) {
+        out.push([pad(c.mac, 14), pad(c.ap, 46), pad('WLAN', 4), pad(c.wlan, 4), pad(c.state, 17), pad(c.protocol, 8), pad(c.method, 10), 'Local'].join(' '));
+      }
+      return out.join('\n');
+    }
+    nameDescTable(title, header, rows) {
+      const out = ['Number of ' + title + ': ' + rows.length, '', pad(header, 33) + ' Description', '-'.repeat(72)];
+      for (const [n, d] of rows) out.push((pad(n, 33) + ' ' + d).replace(/\s+$/, ''));
+      return out.join('\n');
+    }
+    showFlexSummary() { return this.nameDescTable('Flex Profiles', 'Flex Profile Name', sortedKeys(this.flexProfiles).map(n => [n, this.flexProfiles[n].descr])); }
+    showSiteTagSummary() { return this.nameDescTable('Site Tags', 'Site Tag Name', sortedKeys(this.siteTags).map(n => [n, this.siteTags[n].descr])); }
+    showPolicySummary() {
+      const names = sortedKeys(this.policies);
+      const out = ['Number of Policy Profiles: ' + names.length, '',
+        'Policy Profile Name               Description                             Status', '-'.repeat(89)];
+      for (const n of names) {
+        const p = this.policies[n];
+        out.push(pad(n, 33) + ' ' + pad(p.descr || 'Not required', 39) + ' ' + (p.shutdown ? 'DISABLED' : 'ENABLED'));
+      }
+      return out.join('\n');
+    }
+  }
+
+  // ------------------------------------------------------------------ CLI
+  const PROMPTS = { exec: '#', config: '(config)#', wlan: '(config-wlan)#', policy: '(config-wireless-policy)#', ptag: '(config-policy-tag)#',
+                    ap: '(config-ap)#', flex: '(config-wireless-flex-profile)#', flexvlan: '(config-wireless-flex-profile-vlan)#', stag: '(config-site-tag)#' };
+  const eq = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+  const startsWith = (w, p) => w.length >= p.length && p.every((x, i) => w[i] === x);
+
+  class Cli {
+    constructor(wlc) { this.wlc = wlc; this.mode = 'exec'; this.ctx = null; this.ctx2 = null; }
+    get prompt() { return this.wlc.world.wlc.hostname + PROMPTS[this.mode]; }
+
+    run(line) {
+      try { return this._run(line.trim()); } catch (e) { if (e instanceof CliError) return '% ' + e.message; throw e; }
+    }
+
+    _run(line) {
+      if (!line) return '';
+      const w = line.split(/\s+/);
+      if (w[0] === 'end') { this.mode = 'exec'; this.ctx = null; this.ctx2 = null; return ''; }
+      if (w[0] === 'exit') {
+        if (this.mode === 'flexvlan') { this.mode = 'flex'; this.ctx2 = null; return ''; }
+        this.mode = this.mode !== 'exec' && this.mode !== 'config' ? 'config' : 'exec';
+        this.ctx = null; this.ctx2 = null;
+        return '';
+      }
+      if (w[0] === 'show' || (w[0] === 'do' && w.length > 1 && w[1] === 'show')) return this._show((w[0] === 'show' ? w.slice(1) : w.slice(2)).join(' '));
+      if (this.mode === 'exec') {
+        if (['configure terminal', 'conf t', 'configure t'].includes(line)) { this.mode = 'config'; return 'Enter configuration commands, one per line.  End with CNTL/Z.'; }
+        throw new CliError('Invalid input detected: "' + line + '"');
+      }
+      return this._config(w);
+    }
+
+    _show(cmd) {
+      const c = this.wlc;
+      const m = { 'wlan summary': () => c.showWlanSummary(), 'ap summary': () => c.showApSummary(), 'ap tag summary': () => c.showApTagSummary(),
+                  'wireless client summary': () => c.showWirelessClientSummary(), 'wireless profile policy summary': () => c.showPolicySummary(),
+                  'wireless profile flex summary': () => c.showFlexSummary(), 'wireless tag site summary': () => c.showSiteTagSummary() };
+      if (!has(m, cmd)) throw new CliError('Der Befehl "show ' + cmd + '" ist in diesem Simulator (noch) nicht belegt/umgesetzt');
+      return m[cmd]();
+    }
+
+    _flex(w, no) {
+      const fp = this.wlc.flexProfiles[this.ctx];
+      const bad = () => new CliError('Invalid input detected: "' + w.join(' ') + '"');
+      if (w[0] === 'vlan-id' && this.mode === 'flexvlan' && (w.length === 2 || (no && w.length === 1))) {
+        if (no) { fp.vlans[this.ctx2] = null; return ''; }
+        if (!isDigits(w[1]) || !(parseInt(w[1], 10) >= 1 && parseInt(w[1], 10) <= 4094)) throw new CliError('VLAN-ID muss 1-4094 sein');
+        fp.vlans[this.ctx2] = parseInt(w[1], 10);
+        return '';
+      }
+      if (w[0] === 'native-vlan-id' && (w.length === 2 || (no && w.length === 1))) {
+        if (no) fp.native = null;
+        else if (isDigits(w[1]) && parseInt(w[1], 10) >= 1 && parseInt(w[1], 10) <= 4094) fp.native = parseInt(w[1], 10);
+        else throw new CliError('VLAN-ID muss 1-4094 sein');
+        this.mode = 'flex'; this.ctx2 = null;
+        return '';
+      }
+      if (w[0] === 'vlan-name' && w.length === 2) {
+        if (no) {
+          if (!has(fp.vlans, w[1])) throw new CliError('VLAN-Name ' + w[1] + ' existiert im Flex Profile nicht');
+          delete fp.vlans[w[1]];
+          this.mode = 'flex'; this.ctx2 = null;
+          return '';
+        }
+        if (!has(fp.vlans, w[1]) && !NAME_RE.test(w[1])) throw new CliError('VLAN-Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
+        setdefault(fp.vlans, w[1], null);
+        this.mode = 'flexvlan'; this.ctx2 = w[1];
+        return '';
+      }
+      if (w[0] === 'description' && w.length > 1 && !no) { fp.descr = w.slice(1).join(' '); return ''; }
+      throw bad();
+    }
+
+    _config(w) {
+      const c = this.wlc;
+      const no = w[0] === 'no';
+      if (no) w = w.slice(1);
+      if (!w.length) throw new CliError('Invalid input detected: "no"');
+      const inv = () => new CliError('Invalid input detected: "' + w.join(' ') + '"');
+      // Das Objekt des aktuellen Untermodus kann inzwischen (z. B. ueber die Oberflaeche) geloescht worden sein
+      const store = { wlan: null, policy: c.policies, ptag: c.policyTags, flex: c.flexProfiles, flexvlan: c.flexProfiles, stag: c.siteTags };
+      if (this.mode === 'wlan' ? !c.wlans.has(this.ctx) : (has(store, this.mode) && store[this.mode] && !has(store[this.mode], this.ctx))) {
+        this.mode = 'config'; this.ctx = null; this.ctx2 = null;
+        throw new CliError('Das Objekt existiert nicht mehr');
+      }
+      if (this.mode === 'config') {
+        if (w[0] === 'wlan' && w.length === 4 && !no) {
+          if (!isDigits(w[2]) || !(parseInt(w[2], 10) >= 1 && parseInt(w[2], 10) <= 4096)) throw new CliError('WLAN-ID muss 1-4096 sein');
+          const id = parseInt(w[2], 10);
+          for (const [n, x] of c.wlans) if (n !== w[1] && x.id === id) throw new CliError('WLAN-ID ' + w[2] + ' ist bereits vergeben');
+          if (!c.wlans.has(w[1])) c.wlans.set(w[1], { id, ssid: w[3], shutdown: true, akm: 'open', psk: '' });
+          this.mode = 'wlan'; this.ctx = w[1];
+          return '';
+        }
+        if (startsWith(w, ['wireless', 'profile', 'policy']) && w.length === 4 && !no) {
+          setdefault(c.policies, w[3], { vlan: '1', shutdown: true, descr: '' });
+          this.mode = 'policy'; this.ctx = w[3];
+          return '';
+        }
+        if (startsWith(w, ['wireless', 'tag', 'policy']) && w.length === 4 && !no) {
+          setdefault(c.policyTags, w[3], dict());
+          this.mode = 'ptag'; this.ctx = w[3];
+          return '';
+        }
+        if (w[0] === 'ap' && w.length === 2 && !no) {
+          let eth;
+          try { eth = normMac(w[1]); } catch (e) { throw new CliError(e.message); }
+          setdefault(c.apCfg, eth, dict());
+          this.mode = 'ap'; this.ctx = eth;
+          return '';
+        }
+        if (startsWith(w, ['wireless', 'profile', 'flex']) && w.length === 4 && !no) {
+          if (!has(c.flexProfiles, w[3]) && !NAME_RE.test(w[3])) throw new CliError('Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
+          setdefault(c.flexProfiles, w[3], newFlex());
+          this.mode = 'flex'; this.ctx = w[3];
+          return '';
+        }
+        if (startsWith(w, ['wireless', 'tag', 'site']) && w.length === 4 && !no) {
+          if (!has(c.siteTags, w[3]) && !NAME_RE.test(w[3])) throw new CliError('Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
+          setdefault(c.siteTags, w[3], newSite());
+          this.mode = 'stag'; this.ctx = w[3];
+          return '';
+        }
+        if (no && startsWith(w, ['wireless', 'profile', 'flex']) && w.length === 4) {
+          if (w[3] === DEF_FLEX_PROFILE) throw new CliError(DEF_FLEX_PROFILE + ' ist vordefiniert und kann nicht geloescht werden');
+          if (!has(c.flexProfiles, w[3])) throw new CliError('Flex Profile ' + w[3] + ' existiert nicht');
+          const users = sortedKeys(c.siteTags).filter(n => c.siteTags[n].flex === w[3]);
+          if (users.length) throw new CliError('Flex Profile ' + w[3] + ' wird von Site Tags verwendet (' + users.join(', ') + ') - zuerst dort entfernen');
+          delete c.flexProfiles[w[3]];
+          return '';
+        }
+        if (no && startsWith(w, ['wireless', 'tag', 'site']) && w.length === 4) {
+          if (w[3] === DEF_SITE_TAG) throw new CliError(DEF_SITE_TAG + ' ist vordefiniert und kann nicht geloescht werden');
+          if (!has(c.siteTags, w[3])) throw new CliError('Site Tag ' + w[3] + ' existiert nicht');
+          const aps = c.world.aps.filter(a => c.siteTagOf(a) === w[3]).map(a => a.name).sort(cmp);
+          if (aps.length) throw new CliError('Site Tag ' + w[3] + ' ist APs zugewiesen (' + aps.join(', ') + ') - zuerst dort entfernen');
+          delete c.siteTags[w[3]];
+          return '';
+        }
+        if (no && w[0] === 'wlan' && w.length === 2) {
+          if (!c.wlans.has(w[1])) throw new CliError('WLAN-Profil ' + w[1] + ' existiert nicht');
+          const users = sortedKeys(c.policyTags).filter(t => has(c.policyTags[t], w[1]));
+          if (users.length) throw new CliError('WLAN-Profil ' + w[1] + ' ist in Policy Tags eingetragen (' + users.join(', ') + ') - zuerst dort entfernen');
+          c.wlans.delete(w[1]);
+          return '';
+        }
+        if (no && startsWith(w, ['wireless', 'profile', 'policy']) && w.length === 4) {
+          if (!has(c.policies, w[3])) throw new CliError('Policy Profile ' + w[3] + ' existiert nicht');
+          const users = sortedKeys(c.policyTags).filter(t => Object.keys(c.policyTags[t]).some(k => c.policyTags[t][k] === w[3]));
+          if (users.length) throw new CliError('Policy Profile ' + w[3] + ' wird von Policy Tags verwendet (' + users.join(', ') + ') - zuerst dort entfernen');
+          delete c.policies[w[3]];
+          return '';
+        }
+        if (no && startsWith(w, ['wireless', 'tag', 'policy']) && w.length === 4) {
+          if (w[3] === DEF_POLICY_TAG) throw new CliError(DEF_POLICY_TAG + ' ist vordefiniert und kann nicht geloescht werden');
+          if (!has(c.policyTags, w[3])) throw new CliError('Policy Tag ' + w[3] + ' existiert nicht');
+          const aps = c.world.aps.filter(a => c.policyTagOf(a) === w[3]).map(a => a.name).sort(cmp);
+          if (aps.length) throw new CliError('Policy Tag ' + w[3] + ' ist APs zugewiesen (' + aps.join(', ') + ') - zuerst dort entfernen');
+          delete c.policyTags[w[3]];
+          return '';
+        }
+        throw inv();
+      }
+      if (this.mode === 'wlan') {
+        const x = c.wlans.get(this.ctx);
+        if (w[0] === 'shutdown') x.shutdown = !no;
+        else if (startsWith(w, ['security', 'wpa', 'psk', 'set-key']) && w.length === 7 && w[4] === 'ascii') x.psk = w[6];
+        else if (startsWith(w, ['security', 'wpa', 'akm']) && w.length === 4 && w[3] === 'psk') x.akm = no ? 'open' : 'psk';
+        else throw inv();
+        return '';
+      }
+      if (this.mode === 'policy') {
+        const x = c.policies[this.ctx];
+        if (w[0] === 'shutdown') x.shutdown = !no;
+        else if (w[0] === 'vlan' && w.length === 2 && NAME_RE.test(w[1])) x.vlan = w[1];
+        else if (eq(w, ['central', 'switching'])) x.central = !no;
+        else if (w[0] === 'description' && w.length > 1) x.descr = w.slice(1).join(' ');
+        else throw inv();
+        return '';
+      }
+      if (this.mode === 'ptag') {
+        if (w[0] === 'wlan' && w.length === 4 && w[2] === 'policy') {
+          if (no) delete c.policyTags[this.ctx][w[1]]; else c.policyTags[this.ctx][w[1]] = w[3];
+          return '';
+        }
+        throw inv();
+      }
+      if (this.mode === 'flex' || this.mode === 'flexvlan') return this._flex(w, no);
+      if (this.mode === 'stag') {
+        const st = c.siteTags[this.ctx];
+        if (w[0] === 'flex-profile' && (w.length === 2 || (no && w.length === 1))) {
+          if (no) { st.flex = null; return ''; }
+          if (st.local) throw new CliError('Das Flex Profile steht nur zur Verfuegung, wenn Local Site deaktiviert ist (no local-site)');
+          if (!has(c.flexProfiles, w[1])) throw new CliError('Flex Profile ' + w[1] + ' existiert nicht');
+          st.flex = w[1];
+        } else if (eq(w, ['local-site'])) {
+          st.local = !no;
+          if (st.local) st.flex = null;
+        } else if (w[0] === 'description' && w.length > 1 && !no) st.descr = w.slice(1).join(' ');
+        else throw inv();
+        return '';
+      }
+      if (this.mode === 'ap') {
+        if (w[0] === 'site-tag' && (w.length === 2 || (no && w.length === 1))) {
+          if (no) delete c.apCfg[this.ctx].site_tag;
+          else {
+            if (!has(c.siteTags, w[1])) throw new CliError('Site Tag ' + w[1] + ' existiert nicht');
+            c.apCfg[this.ctx].site_tag = w[1];
+          }
+          return '';
+        }
+        if (w[0] === 'policy-tag' && (w.length === 2 || (no && w.length === 1))) {
+          if (no) delete c.apCfg[this.ctx].policy_tag; else c.apCfg[this.ctx].policy_tag = w[1];
+          return '';
+        }
+        throw inv();
+      }
+      throw new CliError('Invalid input detected');
+    }
+  }
+
+  function applyCommands(wlc, commands) {
+    /* Atomar: Bei einem Fehler wird die Konfiguration auf den Stand davor zurueckgesetzt. */
+    const snap = wlc.snapshot();
+    const cli = new Cli(wlc);
+    const results = [];
+    for (const line of ['configure terminal'].concat(commands, ['end'])) {
+      const out = cli.run(line);
+      results.push({ command: line, output: out });
+      if (out.startsWith('% ')) { wlc.restore(snap); return [false, results, { command: line, message: out.slice(2) }]; }
+    }
+    return [true, results, null];
+  }
+
+  // ------------------------------------------------------------------ Persistenz
+  function validateState(d) {
+    if (!isDict(d) || d.kind !== KIND) throw new StoreError('Kein Campus-Prep-Stand');
+    if (!ACCEPTED.includes(d.version)) throw new StoreError('Stand hat Version ' + pyStr(d.version) + ', erwartet wird ' + ACCEPTED.join(' oder '));
+    const w = d.world, c = d.wlc;
+    if (!isDict(w) || !isDict(w.wlc) || !Array.isArray(w.aps) || !Array.isArray(w.clients) || !isDict(c)) throw new StoreError('Stand ist unvollstaendig');
+    for (const a of w.aps) {
+      if (!isDict(a) || !['name', 'ethMac', 'radioMac', 'ip', 'model', 'joined'].every(k => has(a, k))) throw new StoreError('Stand: AP-Eintrag unvollstaendig');
+    }
+    for (const cl of w.clients) {
+      if (!isDict(cl) || !['mac', 'ssid', 'ap', 'protocol'].every(k => has(cl, k))) throw new StoreError('Stand: Client-Eintrag unvollstaendig');
+    }
+    for (const k of ['wlans', 'policies', 'policyTags', 'apCfg']) if (!isDict(c[k])) throw new StoreError('Stand: ' + k + ' fehlt');
+    return d;
+  }
+  function checkName(name) {
+    if (typeof name !== 'string' || !STORE_NAME_RE.test(name)) throw new StoreError('Name: 1-40 Zeichen (Buchstaben, Ziffern, . _ -), beginnt mit Buchstabe oder Ziffer');
+    return name;
+  }
+
+  class Store {
+    /* storage: {get(key), set(key, text), remove(key), keys()} (Text-Speicher, z. B. localStorage). */
+    constructor(storage) { this.s = storage; this.last = {}; this.P = 'campusprep:'; }
+    write(key, obj) {
+      const text = stableStringify(obj);
+      if (this.last[key] === text) return;
+      this.s.set(key, text); this.last[key] = text;
+    }
+    read(key) { const t = this.s.get(key); return t === null || t === undefined ? undefined : JSON.parse(t); }
+    quarantine(key) { const t = this.s.get(key); if (t !== null && t !== undefined) this.s.set(key + '.bad', t); this.s.remove(key); delete this.last[key]; }
+
+    writeState(d) { this.write(this.P + 'state', d); }
+    readState() {
+      const key = this.P + 'state';
+      if (this.s.get(key) === null || this.s.get(key) === undefined) return null;
+      try { return validateState(this.read(key)); } catch (e) { this.quarantine(key); return null; }
+    }
+    writeProgress(p) { this.write(this.P + 'progress', { kind: 'campusprep-progress', version: VERSION, labs: p }); }
+    readProgress() {
+      const key = this.P + 'progress';
+      if (this.s.get(key) === null || this.s.get(key) === undefined) return {};
+      try {
+        const d = this.read(key);
+        if (!(isDict(d) && d.kind === 'campusprep-progress' && ACCEPTED.includes(d.version) && isDict(d.labs))) throw new Error('Format');
+        return d.labs;
+      } catch (e) { this.quarantine(key); return {}; }
+    }
+    savePath(name) { return this.P + 'saves:' + checkName(name); }
+    saveNamed(name, d) { this.write(this.savePath(name), d); }
+    loadNamed(name) {
+      const key = this.savePath(name);
+      if (this.s.get(key) === null || this.s.get(key) === undefined) throw new StoreError('Stand ' + name + ' gibt es nicht', 404);
+      let d;
+      try { d = this.read(key); } catch (e) { throw new StoreError('Stand ' + name + ' ist nicht lesbar'); }
+      return validateState(d);
+    }
+    deleteNamed(name) {
+      const key = this.savePath(name);
+      if (this.s.get(key) === null || this.s.get(key) === undefined) throw new StoreError('Stand ' + name + ' gibt es nicht', 404);
+      this.s.remove(key); delete this.last[key];
+    }
+    listNamed() {
+      const pre = this.P + 'saves:';
+      const names = this.s.keys().filter(k => k.startsWith(pre)).map(k => k.slice(pre.length)).sort((a, b) => cmp(a + '.json', b + '.json'));
+      return names.map(name => {
+        try {
+          const d = validateState(this.read(pre + name));
+          return { name, lab: (d.lab || {}).id === undefined ? null : d.lab.id, wlans: Object.keys(d.wlc.wlans).length };
+        } catch (e) { return { name, lab: null, wlans: 0, broken: true }; }
+      });
+    }
+  }
+
+  // ------------------------------------------------------------------ Labs
+  function runCheck(chk, st) {
+    const t = chk.type;
+    const diff = (obj, attrs) => {
+      const bad = {};
+      for (const k of Object.keys(attrs)) if (obj[k] !== attrs[k] && !(obj[k] === undefined && attrs[k] === null)) bad[k] = obj[k] === undefined ? null : obj[k];
+      return bad;
+    };
+    const fmtBad = bad => 'abweichend: ' + sortedKeys(bad).map(k => k + '=' + pyStr(bad[k])).join(', ');
+    if (t === 'client') {
+      const c = st.clients.find(x => x.mac === chk.mac);
+      if (!c) return [false, 'Client ' + chk.mac + ' unbekannt'];
+      const ok = c.state === chk.state && (chk.vlan === undefined || chk.vlan === null || String(c.vlan) === String(chk.vlan)) &&
+                 (chk.switching === undefined || chk.switching === null || c.switching === chk.switching);
+      return [ok, 'Zustand ' + c.state + (c.vlan ? ', VLAN ' + c.vlan : '') + (c.state === 'Run' && c.switching ? ', ' + c.switching + ' geschaltet' : '')];
+    }
+    if (t === 'wlan') {
+      const w = st.wlans.find(x => x.profile === chk.profile);
+      if (!w) return [false, 'WLAN-Profil ' + chk.profile + ' fehlt'];
+      const bad = diff(w, chk.attrs);
+      return [!Object.keys(bad).length, Object.keys(bad).length ? fmtBad(bad) : 'passt'];
+    }
+    if (t === 'policy') {
+      const p = st.policies.find(x => x.name === chk.name);
+      if (!p) return [false, 'Policy Profile ' + chk.name + ' fehlt'];
+      const bad = diff(p, chk.attrs);
+      return [!Object.keys(bad).length, Object.keys(bad).length ? fmtBad(bad) : 'passt'];
+    }
+    if (t === 'aptag') {
+      const a = st.aps.find(x => x.name === chk.ap);
+      return [!!a && a.policyTag === chk.tag, 'Policy Tag ' + (a ? a.policyTag : '?')];
+    }
+    if (t === 'apmode') {
+      const a = st.aps.find(x => x.name === chk.ap);
+      return [!!a && a.mode === chk.mode, 'Modus ' + (a ? a.mode : '?')];
+    }
+    if (t === 'tagmap') {
+      const tg = st.policyTags.find(x => x.name === chk.tag);
+      const got = tg ? Object.fromEntries(tg.maps.map(m => [m.wlan, m.policy])) : null;
+      return [got !== null && deepEqual(got, chk.maps), 'Zuordnung ' + (got !== null ? pyRepr(got) : 'Tag fehlt')];
+    }
+    if (t === 'absent') {
+      const key = { wlan: ['wlans', 'profile'], policy: ['policies', 'name'], tag: ['policyTags', 'name'] }[chk.kind];
+      const there = st[key[0]].some(x => x[key[1]] === chk.name);
+      return [!there, there ? 'vorhanden' : 'entfernt'];
+    }
+    throw new Error('Pruefungstyp unbekannt: ' + t);
+  }
+
+  const emptyProgress = () => ({ starts: 0, checks: 0, passed: false, guidedPassed: false, examPassed: false, bestHints: null, questionsRight: 0 });
+
+  class LabEngine {
+    constructor(sim, labs) {
+      this.sim = sim;
+      this.labs = dict();
+      for (const l of labs) this.labs[l.id] = l;
+      this.session = null;
+      this.progress = {};
+    }
+    prog(id) { return setdefault(this.progress, id, emptyProgress()); }
+    list() {
+      return Object.keys(this.labs).map(id => {
+        const lab = this.labs[id];
+        const d = {};
+        for (const k of ['id', 'title', 'topic', 'level', 'duration', 'kind', 'modes']) d[k] = lab[k];
+        d.track = lab.track;
+        d.progress = Object.assign({}, has(this.progress, id) ? this.progress[id] : emptyProgress());
+        return d;
+      });
+    }
+    resetProgress() { this.progress = {}; }
+    start(id, mode) {
+      mode = mode === undefined ? 'guided' : mode;
+      const lab = get(this.labs, id);
+      if (!lab) throw new LabError('Lab ' + id + ' gibt es nicht', 404);
+      if (!lab.modes.includes(mode)) throw new LabError('Modus ' + pyStr(mode) + ' ist fuer dieses Lab nicht vorgesehen');
+      this.sim.resetWorld(lab.worldClients);
+      const [ok, , err] = this.sim.apply(lab.startCommands || []);
+      if (!ok) throw new LabError('Startkonfiguration von ' + id + ' fehlerhaft: ' + err.message, 500);
+      this.session = { id, mode, hints: 0, answers: {}, checks: 0 };
+      this.prog(id).starts += 1;
+      return this.pub();
+    }
+    reset() { const s = this.need(); return this.start(s.id, s.mode); }
+    stop() { this.session = null; }
+    restoreSession(d) {
+      this.session = null;
+      if (!isDict(d) || !has(this.labs, d.id) || !MODES.includes(d.mode)) return;
+      const lab = this.labs[d.id];
+      const hints = Number.isInteger(d.hints) ? d.hints : 0;
+      const answers = isDict(d.answers) ? d.answers : {};
+      const qids = {};
+      for (const q of lab.questions || []) qids[q.id] = q.options.length;
+      const ans = {};
+      for (const k of Object.keys(answers)) if (has(qids, k) && Number.isInteger(answers[k]) && answers[k] >= 0 && answers[k] < qids[k]) ans[k] = answers[k];
+      this.session = { id: d.id, mode: d.mode, hints: Math.max(0, Math.min(hints, lab.hints.length)), answers: ans,
+                       checks: Number.isInteger(d.checks) ? d.checks : 0 };
+    }
+    need() { if (this.session === null) throw new LabError('Es laeuft kein Lab', 409); return this.session; }
+    pub() {
+      if (this.session === null) return null;
+      const s = this.session, lab = this.labs[s.id];
+      const out = {};
+      for (const k of Object.keys(lab)) if (!HIDDEN.includes(k)) out[k] = lab[k];
+      const exam = s.mode === 'exam';
+      return Object.assign(out, {
+        mode: s.mode, hintsTotal: exam ? 0 : lab.hints.length, hintsUsed: s.hints, hints: exam ? [] : lab.hints.slice(0, s.hints), checksRun: s.checks,
+        questions: (lab.questions || []).map(q => { const o = {}; for (const k of Object.keys(q)) if (k !== 'answer' && k !== 'explain') o[k] = q[k]; return o; }),
+        answers: Object.assign({}, s.answers),
+      });
+    }
+    hint() {
+      const s = this.need(), lab = this.labs[s.id];
+      if (s.mode === 'exam') throw new LabError('Im Prüfungsmodus gibt es keine Hinweise', 403);
+      if (s.hints >= lab.hints.length) throw new LabError('Alle Hinweise sind bereits freigeschaltet', 409);
+      s.hints += 1;
+      return this.pub();
+    }
+    solution() {
+      const s = this.need();
+      if (s.mode === 'exam') throw new LabError('Im Prüfungsmodus gibt es keine Lösung', 403);
+      return { solution: this.labs[s.id].solution };
+    }
+    answer(qid, idx) {
+      const s = this.need();
+      const q = (this.labs[s.id].questions || []).find(x => x.id === qid);
+      if (!q || !Number.isInteger(idx) || !(idx >= 0 && idx < q.options.length)) throw new LabError('Frage oder Antwort ungueltig');
+      s.answers[qid] = idx;
+      return { correct: idx === q.answer, explain: s.mode === 'exam' ? null : q.explain };
+    }
+    check() {
+      const s = this.need(), lab = this.labs[s.id];
+      s.checks += 1;
+      const st = this.sim.wlc.state();
+      const exam = s.mode === 'exam';
+      const res = [];
+      for (const c of lab.checks) {
+        const [ok, detail] = runCheck(c, st);
+        const r = { desc: c.desc, ok, category: c.category || 'function' };
+        if (!exam) r.detail = detail;
+        res.push(r);
+      }
+      const cats = {};
+      for (const r of res) { const e = setdefault(cats, r.category, [0, 0]); e[1] += 1; e[0] += r.ok ? 1 : 0; }
+      const qs = lab.questions || [];
+      const right = qs.filter(q => s.answers[q.id] === q.answer).length;
+      const passed = res.every(r => r.ok);
+      const p = this.prog(s.id);
+      p.checks += 1;
+      p.questionsRight = Math.max(p.questionsRight, right);
+      if (passed) {
+        p.passed = true;
+        p[exam ? 'examPassed' : 'guidedPassed'] = true;
+        if (!exam) p.bestHints = p.bestHints === null ? s.hints : Math.min(p.bestHints, s.hints);
+      }
+      const categories = {};
+      for (const k of Object.keys(cats)) categories[k] = { ok: cats[k][0], total: cats[k][1] };
+      return { passed, checks: res, categories, questions: { right, total: qs.length }, hintsUsed: s.hints, mode: s.mode };
+    }
+  }
+
+  // ------------------------------------------------------------------ Sim (Gegenstueck zu Sim und HTTP-Handler in server.py)
+  class Sim {
+    constructor(opts) {
+      opts = opts || {};
+      this.standalone = opts.standalone !== undefined ? opts.standalone : true;
+      this.resetWorld();
+      this.labs = new LabEngine(this, opts.labs || []);
+      this.store = opts.storage ? new Store(opts.storage) : null;
+      if (this.store) {
+        this.labs.progress = this.store.readProgress();
+        const st = this.store.readState();
+        if (st !== null) { try { this.restoreAll(st); } catch (e) { if (e instanceof StoreError) this.store.quarantine(this.store.P + 'state'); else throw e; } }
+      }
+    }
+    resetWorld(clients) {
+      this.world = newWorld();
+      if (clients !== undefined && clients !== null) this.world.clients = clone(clients);
+      this.wlc = new Wlc(this.world);
+      this.cli = new Cli(this.wlc);
+    }
+    apply(commands) { return applyCommands(this.wlc, commands); }
+    uiState() {
+      const st = this.wlc.state();
+      const sess = this.labs.session;
+      const exam = !!(sess && sess.mode === 'exam');
+      if (exam) for (const c of st.clients) c.reasons = [];
+      st.diagAvailable = !exam;
+      st.lab = sess ? { id: sess.id, mode: sess.mode } : null;
+      st.persistent = this.store !== null;
+      st.standalone = this.standalone;
+      return st;
+    }
+    snapshotAll() {
+      return plain({ kind: KIND, version: VERSION, world: this.world, wlc: this.wlc.dump(), lab: this.labs.session });
+    }
+    restoreAll(d) {
+      validateState(d);
+      const world = clone(d.world);
+      const wlc = new Wlc(world);
+      try { wlc.load(d.wlc); wlc.state(); } catch (e) { throw new StoreError('Stand ist beschaedigt'); }
+      this.world = world; this.wlc = wlc; this.cli = new Cli(wlc);
+      this.labs.restoreSession(d.lab);
+    }
+    persist() {
+      if (this.store) { this.store.writeState(this.snapshotAll()); this.store.writeProgress(this.labs.progress); }
+    }
+
+    /* handle(method, path, body) -> {status, body}: dieselben Endpunkte wie der Python-Server. */
+    handle(method, path, body) {
+      const r = this._route(method, path, body);
+      if (method === 'POST') this.persist();      // vor der Antwort, wie im Server
+      return { status: r[0], body: plain(r[1]) };
+    }
+    _route(method, path, body) {
+      if (method === 'GET' && path === '/wlc/api/state') return [200, this.uiState()];
+      if (path.startsWith('/wlc/api/saves') || path === '/wlc/api/progress/reset') return this._saves(method, path, body);
+      if (path.startsWith('/wlc/api/lab')) return this._lab(method, path, body);
+      if (method === 'POST' && path === '/wlc/api/apply') {
+        const b = body === undefined ? {} : body;       // kein Body = {} wie im Server; ein JSON-null ist ungueltig
+        const cmds = isDict(b) ? b.commands : undefined;
+        if (!isDict(b) || !Array.isArray(cmds) || !cmds.every(x => typeof x === 'string')) return [400, { error: 'JSON erwartet: {"commands": ["..."]}' }];
+        const [ok, results, err] = this.apply(cmds);
+        return [ok ? 200 : 400, { ok, results, error: err }];
+      }
+      if (method === 'POST' && path === '/wlc/cli') {
+        const b = body === undefined ? {} : body;
+        if (!isDict(b) || (b.command !== undefined && typeof b.command !== 'string')) return [400, { error: 'JSON erwartet: {"command": "..."}' }];
+        const out = this.cli.run(b.command || '');
+        return [200, { output: out, prompt: this.cli.prompt }];
+      }
+      return [404, { error: 'nicht gefunden' }];
+    }
+    _saves(method, path, body) {
+      if (this.store === null) return [409, { error: 'Persistenz ist ausgeschaltet' }];
+      if (body !== undefined && !isDict(body)) return [400, { error: 'JSON-Objekt erwartet' }];
+      body = body || {};
+      try {
+        if (method === 'GET' && path === '/wlc/api/saves') return [200, { saves: this.store.listNamed() }];
+        if (method === 'POST' && path === '/wlc/api/saves') { this.store.saveNamed(body.name, this.snapshotAll()); return [200, { saves: this.store.listNamed() }]; }
+        if (method === 'POST' && path === '/wlc/api/saves/load') { this.restoreAll(this.store.loadNamed(body.name)); return [200, { ok: true }]; }
+        if (method === 'POST' && path === '/wlc/api/saves/delete') { this.store.deleteNamed(body.name); return [200, { saves: this.store.listNamed() }]; }
+        if (method === 'POST' && path === '/wlc/api/progress/reset') { this.labs.resetProgress(); return [200, { labs: this.labs.list() }]; }
+      } catch (e) { if (e instanceof StoreError) return [e.status, { error: e.message }]; throw e; }
+      return [404, { error: 'Endpunkt nicht umgesetzt' }];
+    }
+    _lab(method, path, body) {
+      const L = this.labs;
+      if (body !== undefined && !isDict(body)) return [400, { error: 'JSON-Objekt erwartet' }];
+      body = body || {};
+      const is = (m, p) => method === m && path === p;
+      try {
+        if (is('GET', '/wlc/api/labs')) return [200, { labs: L.list(), current: L.pub() }];
+        if (is('GET', '/wlc/api/lab')) return [200, { current: L.pub() }];
+        if (is('POST', '/wlc/api/lab/start')) return [200, { current: L.start(body.id === undefined ? '' : body.id, body.mode === undefined ? 'guided' : body.mode) }];
+        if (is('POST', '/wlc/api/lab/reset')) return [200, { current: L.reset() }];
+        if (is('POST', '/wlc/api/lab/stop')) { L.stop(); return [200, { current: null }]; }
+        if (is('POST', '/wlc/api/lab/hint')) return [200, { current: L.hint() }];
+        if (is('GET', '/wlc/api/lab/solution')) return [200, L.solution()];
+        if (is('POST', '/wlc/api/lab/answer')) return [200, L.answer(body.id === undefined ? '' : body.id, body.answer)];
+        if (is('POST', '/wlc/api/lab/check')) return [200, L.check()];
+      } catch (e) { if (e instanceof LabError) return [e.status, { error: e.message }]; throw e; }
+      return [404, { error: 'Endpunkt nicht umgesetzt' }];
+    }
+  }
+
+  /* Text-Speicher auf Basis von localStorage; null, wenn er nicht nutzbar ist (z. B. gesperrt). */
+  function browserStorage() {
+    try {
+      const ls = root.localStorage;
+      const probe = 'campusprep:probe';
+      ls.setItem(probe, '1'); ls.removeItem(probe);
+      return { get: k => ls.getItem(k), set: (k, v) => ls.setItem(k, v), remove: k => ls.removeItem(k),
+               keys: () => { const out = []; for (let i = 0; i < ls.length; i++) out.push(ls.key(i)); return out; } };
+    } catch (e) { return null; }
+  }
+  function memoryStorage() {
+    const m = new Map();
+    return { get: k => (m.has(k) ? m.get(k) : null), set: (k, v) => { m.set(k, v); }, remove: k => { m.delete(k); }, keys: () => [...m.keys()] };
+  }
+
+  const api = { createSim: opts => new Sim(opts), browserStorage, memoryStorage, Sim, Wlc, Cli, StoreError, LabError, validateState, applyCommands };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else root.CampusEngine = api;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+(function () {
+  var sim = CampusEngine.createSim({ labs: window.CAMPUS_LABS, storage: CampusEngine.browserStorage(), standalone: true });
+  window.CampusTransport = function (method, path, body) { return Promise.resolve(sim.handle(method, path, body)); };
+})();
+</script>
+<script>
+/* Campus Prep: Oberflaeche des C9800-Simulators. Keine zweite Logik: Jedes Formular erzeugt CLI-Befehle, die der Server
+   atomar durch dieselbe CLI schickt. Die Menuestruktur ist aus dem Wissen ueber die C9800-WebUI nachgebaut (docs/QUELLEN.md). */
+'use strict';
+
+const h = (tag, attrs, ...kids) => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === 'class') e.className = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else if (v === true) e.setAttribute(k, '');
+    else if (v !== false && v != null) e.setAttribute(k, v);
+  }
+  kids.flat(Infinity).forEach(c => { if (c != null && c !== false) e.append(c.nodeType ? c : document.createTextNode(String(c))); });
+  return e;
+};
+
+/* Transport: Im Servermodus gehen die Aufrufe per fetch an den Python-Server. In WLC-Simulator.html setzt die Seite vorher
+   window.CampusTransport (die Engine aus engine.js im Browser); die Oberflaeche merkt keinen Unterschied. */
+const call = (method, path, body) => window.CampusTransport
+  ? window.CampusTransport(method, path, body)
+  : fetch(path, { method, headers: body === undefined ? {} : { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) })
+      .then(async r => ({ status: r.status, body: await r.json() }));
+
+const api = {
+  state: () => call('GET', '/wlc/api/state').then(r => r.body),
+  apply: commands => call('POST', '/wlc/api/apply', { commands }).then(r => Object.assign({ http: r.status }, r.body)),
+  post: (path, body) => call('POST', path, body || {}).then(r => Object.assign({ http: r.status }, r.body)),
+  get: path => call('GET', path).then(r => Object.assign({ http: r.status }, r.body)),
+  cli: command => call('POST', '/wlc/cli', { command }).then(r => r.body),
+};
+
+let S = null;
+const NAV = [
+  { id: 'dash', l: 'Dashboard' },
+  { id: 'labs', l: 'Labs (Simulation)' },
+  { g: 'Monitoring', sub: 'Wireless', items: [['aps', 'Access Points'], ['clients', 'Clients']] },
+  { g: 'Configuration', sub: 'Tags & Profiles', items: [['wlans', 'WLANs'], ['policies', 'Policy'], ['flex', 'Flex'], ['tags', 'Tags (Policy)'], ['sitetags', 'Tags (Site)']] },
+  { g: 'Configuration', sub: 'Wireless', items: [['apcfg', 'Access Points']] },
+  { g: 'Administration', items: [['cli', 'Command Line Interface']] },
+  { g: 'Troubleshooting', items: [['diag', 'Client-Diagnose (Simulation)']] },
+];
+const TITLES = { dash: 'Dashboard', labs: 'Labs (Simulation)', aps: 'Monitoring > Wireless > Access Points', clients: 'Monitoring > Wireless > Clients',
+  wlans: 'Configuration > Tags & Profiles > WLANs', policies: 'Configuration > Tags & Profiles > Policy',
+  flex: 'Configuration > Tags & Profiles > Flex', sitetags: 'Configuration > Tags & Profiles > Tags > Site',
+  tags: 'Configuration > Tags & Profiles > Tags > Policy', apcfg: 'Configuration > Wireless > Access Points',
+  cli: 'Administration > Command Line Interface', diag: 'Troubleshooting > Client-Diagnose (Simulation)' };
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('on');
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('on'), 2600);
+}
+
+const badge = (text, kind) => h('span', { class: 'badge ' + kind }, text);
+const stateBadge = s => badge(s, ['UP', 'ENABLED', 'Registered', 'Run'].includes(s) ? 'ok' : ['DOWN', 'DISABLED', 'Not joined', 'Not Associated'].includes(s) ? 'bad' : 'warn');
+
+function table(cols, rows, empty) {
+  const body = rows.length ? rows.map(r => h('tr', null, cols.map(c => h('td', { class: c.cls || null }, c.f(r)))))
+    : [h('tr', null, h('td', { class: 'empty', colspan: cols.length }, empty || 'No items have been found.'))];
+  return h('div', { class: 'tablewrap' }, h('table', null, h('thead', null, h('tr', null, cols.map(c => h('th', null, c.l)))), h('tbody', null, body)));
+}
+
+/* ---------------------------------------------------------------- Dialog */
+function field(label, input, hint) {
+  return [h('label', null, label), input, hint ? h('div', { class: 'hint' }, hint) : null];
+}
+
+function modal(title, body, cmds, onDone) {
+  const err = h('div', { class: 'err', hidden: true, role: 'alert' });
+  const pre = h('pre', { 'data-id': 'cli-preview' });
+  const upd = () => {
+    try { pre.textContent = ['configure terminal'].concat(cmds(), ['end']).join('\n'); } catch (e) { pre.textContent = '(' + e.message + ')'; }
+  };
+  body.addEventListener('input', upd); body.addEventListener('change', upd);
+  const close = () => { bg.remove(); document.removeEventListener('keydown', esc); };
+  const esc = ev => { if (ev.key === 'Escape') close(); };
+  const apply = h('button', { class: 'primary', 'data-id': 'apply', onclick: async () => {
+    err.hidden = true;
+    let list;
+    try { list = cmds(); } catch (e) { err.textContent = e.message; err.hidden = false; return; }
+    apply.disabled = true;
+    const r = await api.apply(list);
+    apply.disabled = false;
+    if (!r.ok) {
+      err.textContent = (r.error ? 'Fehler bei "' + r.error.command + '": ' + r.error.message : r.error) + ' - nichts wurde übernommen.';
+      err.hidden = false; return;
+    }
+    close(); toast('Konfiguration angewendet'); await onDone();
+  } }, 'Apply to Device');
+  const bg = h('div', { class: 'modal-bg', role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
+    h('div', { class: 'modal' }, h('h2', null, title), body,
+      h('details', { open: true }, h('summary', { class: 'muted' }, 'CLI-Äquivalent'), pre), err,
+      h('div', { class: 'btns' }, h('button', { onclick: close }, 'Cancel'), apply)));
+  document.body.append(bg); document.addEventListener('keydown', esc); upd();
+  const first = bg.querySelector('input:not([disabled]),select:not([disabled])'); if (first) first.focus();
+}
+
+const need = (cond, msg) => { if (!cond) throw new Error(msg); };
+
+/* ---------------------------------------------------------------- Ansichten */
+const VIEWS = {};
+
+VIEWS.dash = main => {
+  if (S.lab) main.append(h('div', { class: 'note' }, 'Aktuelles Lab: ', h('b', null, S.lab.id), ' (', S.lab.mode === 'exam' ? 'Prüfungsmodus' : 'geführt', ') – ',
+    h('a', { href: '#/labs' }, 'Aufgaben und Prüfung öffnen')));
+  const up = S.aps.filter(a => a.state === 'Registered').length;
+  const run = S.clients.filter(c => c.state === 'Run').length;
+  main.append(h('div', { class: 'tiles' },
+    [[up + ' / ' + S.aps.length, 'Access Points registriert'], [run, 'Clients verbunden'],
+      [S.wlans.filter(w => w.status === 'UP').length + ' / ' + S.wlans.length, 'WLANs UP'],
+      [S.policies.filter(p => p.status === 'ENABLED').length + ' / ' + S.policies.length, 'Policy Profiles ENABLED']]
+      .map(([n, l]) => h('div', { class: 'tile' }, h('div', { class: 'n' }, n), h('div', { class: 'l' }, l)))));
+  main.append(h('h2', null, 'Controller'), h('div', { class: 'card' },
+    h('div', null, h('b', null, S.wlc.hostname), ' · ', S.wlc.platformId, ' · IOS XE ', S.wlc.version),
+    h('div', { class: 'muted' }, 'Management ', S.wlc.ip, ' · ', S.wlc.location)));
+  main.append(h('h2', null, 'Access Points'), apTable());
+};
+
+const apTable = () => table([{ l: 'AP Name', f: a => a.name }, { l: 'AP Model', f: a => a.model }, { l: 'Ethernet MAC', f: a => a.ethMac },
+  { l: 'Radio MAC', f: a => a.radioMac }, { l: 'IP Address', f: a => a.ip }, { l: 'Location', f: a => a.location },
+  { l: 'Country', f: a => a.country }, { l: 'Status', f: a => stateBadge(a.state) }, { l: 'AP Mode', f: a => a.mode }], S.aps);
+
+VIEWS.aps = main => main.append(apTable());
+
+VIEWS.clients = main => {
+  const rows = S.clients.filter(c => c.state !== 'Not Associated');
+  main.append(table([{ l: 'MAC Address', f: c => c.mac }, { l: 'AP Name', f: c => c.ap }, { l: 'WLAN ID', f: c => c.wlan },
+    { l: 'SSID', f: c => c.ssid }, { l: 'State', f: c => stateBadge(c.state) }, { l: 'Protocol', f: c => c.protocol },
+    { l: 'Auth Method', f: c => c.method }], rows, 'Keine Clients verbunden.'));
+};
+
+VIEWS.wlans = main => {
+  main.append(h('div', { class: 'bar' }, h('button', { class: 'primary', 'data-id': 'add-wlan', onclick: () => wlanDialog() }, '+ Add')));
+  main.append(table([{ l: 'Status', f: w => stateBadge(w.status) }, { l: 'Profile Name', f: w => w.profile }, { l: 'ID', f: w => w.id },
+    { l: 'SSID', f: w => w.ssid }, { l: 'Security', f: w => w.security },
+    { l: '', f: w => [h('button', { class: 'small', onclick: () => wlanDialog(w) }, 'Edit'), ' ',
+      h('button', { class: 'small danger', onclick: () => remove('no wlan ' + w.profile, 'WLAN ' + w.profile) }, 'Delete')] }], S.wlans));
+};
+
+function wlanDialog(w) {
+  const prof = h('input', { 'data-id': 'wlan-profile', value: w ? w.profile : '', disabled: !!w, placeholder: 'Corp_Profile' });
+  const id = h('input', { 'data-id': 'wlan-id', type: 'number', min: 1, max: 4096, value: w ? w.id : nextWlanId(), disabled: !!w });
+  const ssid = h('input', { 'data-id': 'wlan-ssid', value: w ? w.ssid : '', disabled: !!w, placeholder: 'Corp' });
+  const sec = h('select', { 'data-id': 'wlan-sec' }, h('option', { value: 'open' }, 'Open'), h('option', { value: 'psk' }, 'WPA2 Personal (PSK)'));
+  sec.value = w ? w.akm : 'open';
+  const key = h('input', { 'data-id': 'wlan-psk', type: 'password', autocomplete: 'off', placeholder: w && w.pskSet ? '(unverändert)' : '' });
+  const en = h('input', { 'data-id': 'wlan-enabled', type: 'checkbox' }); en.checked = w ? w.status === 'UP' : false;
+  const body = h('div', null,
+    h('div', { class: 'row' }, field('Profile Name', prof), field('WLAN ID', id), field('SSID', ssid, 'Im Simulator ohne Leerzeichen.'),
+      field('Security', sec), field('Pre-Shared Key', key, 'Ohne Leerzeichen.'), field('Status Enabled', en)));
+  modal(w ? 'Edit WLAN ' + w.profile : 'Add WLAN', body, () => {
+    if (!w) {
+      need(/^[\w.-]{1,32}$/.test(prof.value), 'Profile Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
+      need(/^\S{1,32}$/.test(ssid.value), 'SSID: 1-32 Zeichen ohne Leerzeichen');
+      need(+id.value >= 1 && +id.value <= 4096, 'WLAN ID: 1-4096');
+    }
+    const c = ['wlan ' + (w ? w.profile : prof.value) + ' ' + (w ? w.id : id.value) + ' ' + (w ? w.ssid : ssid.value)];
+    if (sec.value === 'psk') {
+      c.push('security wpa akm psk');
+      if (key.value || !(w && w.pskSet)) {
+        need(/^\S{8,63}$/.test(key.value), 'Pre-Shared Key: 8-63 Zeichen ohne Leerzeichen');
+        c.push('security wpa psk set-key ascii 0 ' + key.value);
+      }
+    } else if (w && w.akm === 'psk') c.push('no security wpa akm psk');
+    c.push(en.checked ? 'no shutdown' : 'shutdown');
+    return c;
+  }, refresh);
+}
+const nextWlanId = () => Math.max(0, ...S.wlans.map(x => x.id)) + 1;
+
+VIEWS.policies = main => {
+  main.append(h('div', { class: 'bar' }, h('button', { class: 'primary', 'data-id': 'add-policy', onclick: () => policyDialog() }, '+ Add')));
+  main.append(table([{ l: 'Status', f: p => stateBadge(p.status) }, { l: 'Policy Profile Name', f: p => p.name },
+    { l: 'Description', f: p => p.description || 'Not required' }, { l: 'VLAN', f: p => p.vlan }, { l: 'Switching', f: p => p.central ? 'Central' : 'Local' },
+    { l: '', f: p => [h('button', { class: 'small', onclick: () => policyDialog(p) }, 'Edit'), ' ',
+      h('button', { class: 'small danger', onclick: () => remove('no wireless profile policy ' + p.name, 'Policy Profile ' + p.name) }, 'Delete')] }], S.policies));
+};
+
+function policyDialog(p) {
+  const name = h('input', { 'data-id': 'policy-name', value: p ? p.name : '', disabled: !!p, placeholder: 'PP_Corp' });
+  const vlan = h('input', { 'data-id': 'policy-vlan', value: p ? p.vlan : '1', placeholder: 'ID oder Name' });
+  const central = h('input', { 'data-id': 'policy-central', type: 'checkbox' }); central.checked = p ? p.central : true;
+  const descr = h('input', { 'data-id': 'policy-descr', value: p ? p.description : '' });
+  const en = h('input', { 'data-id': 'policy-enabled', type: 'checkbox' }); en.checked = p ? p.status === 'ENABLED' : false;
+  const body = h('div', { class: 'row' }, field('Name', name), field('VLAN', vlan, 'ID (zentral) oder Name (bei lokalem Switching: Name aus dem Flex Profile).'),
+    field('Central Switching', central, 'Ausgeschaltet: lokales Switching (nur für FlexConnect-APs).'), field('Description', descr), field('Status Enabled', en));
+  modal(p ? 'Edit Policy Profile ' + p.name : 'Add Policy Profile', body, () => {
+    if (!p) need(/^[\w.-]{1,32}$/.test(name.value), 'Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
+    need(/^[\w.-]{1,32}$/.test(vlan.value), 'VLAN: ID oder Name (1-32 Zeichen, Buchstaben, Ziffern, . _ -)');
+    const c = ['wireless profile policy ' + (p ? p.name : name.value), 'vlan ' + vlan.value, central.checked ? 'central switching' : 'no central switching'];
+    if (descr.value.trim()) c.push('description ' + descr.value.trim());
+    c.push(en.checked ? 'no shutdown' : 'shutdown');
+    return c;
+  }, refresh);
+}
+
+VIEWS.flex = main => {
+  main.append(h('div', { class: 'bar' }, h('button', { class: 'primary', 'data-id': 'add-flex', onclick: () => flexDialog() }, '+ Add'),
+    h('span', { class: 'muted' }, 'Ein Flex Profile listet die VLANs, die ein FlexConnect-AP lokal schaltet.')));
+  main.append(table([{ l: 'Flex Profile Name', f: f => f.name }, { l: 'Native VLAN', f: f => f.native || '–' },
+    { l: 'VLANs (Name, ID)', f: f => f.vlans.length ? f.vlans.map(v => v.name + ' (' + (v.id == null ? '?' : v.id) + ')').join(', ') : '–' },
+    { l: '', f: f => f.builtin ? [h('button', { class: 'small', onclick: () => flexDialog(f) }, 'Edit'), ' ', badge('vordefiniert', 'warn')] :
+      [h('button', { class: 'small', onclick: () => flexDialog(f) }, 'Edit'), ' ',
+        h('button', { class: 'small danger', onclick: () => remove('no wireless profile flex ' + f.name, 'Flex Profile ' + f.name) }, 'Delete')] }], S.flexProfiles));
+};
+
+function flexDialog(f) {
+  const name = h('input', { 'data-id': 'flex-name', value: f ? f.name : '', disabled: !!f, placeholder: 'FP_Lager' });
+  const native = h('input', { 'data-id': 'flex-native', type: 'number', min: 1, max: 4094, value: f && f.native ? f.native : '', placeholder: 'optional' });
+  const rows = h('div', { 'data-id': 'flex-rows' });
+  const addRow = v => {
+    const n = h('input', { placeholder: 'VLAN-Name', value: v ? v.name : '', disabled: !!v, 'aria-label': 'VLAN-Name' });
+    const i = h('input', { type: 'number', min: 1, max: 4094, placeholder: 'ID', value: v && v.id != null ? v.id : '', style: 'width:90px', 'aria-label': 'VLAN-ID' });
+    const r = h('div', { class: 'maprow' }, n, i, h('button', { class: 'small', type: 'button', onclick: () => { r.remove(); rows.dispatchEvent(new Event('input', { bubbles: true })); } }, '✕'));
+    r.get = () => ({ name: n.value.trim(), id: i.value.trim() }); rows.append(r);
+  };
+  (f ? f.vlans : []).forEach(addRow);
+  const body = h('div', null, h('div', { class: 'row' }, field('Name', name), field('Native VLAN ID', native)),
+    h('h2', null, 'VLAN-Name → VLAN-ID'), rows,
+    h('button', { class: 'small', 'data-id': 'flex-add-vlan', type: 'button', onclick: () => { addRow(); rows.dispatchEvent(new Event('input', { bubbles: true })); } }, '+ Add VLAN'));
+  modal(f ? 'Edit Flex Profile ' + f.name : 'Add Flex Profile', body, () => {
+    if (!f) need(/^[\w.-]{1,32}$/.test(name.value), 'Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
+    need(native.value === '' || (+native.value >= 1 && +native.value <= 4094), 'Native VLAN: 1-4094');
+    const list = [...rows.children].map(r => r.get());
+    list.forEach(v => { need(/^[\w.-]{1,32}$/.test(v.name), 'VLAN-Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)'); need(+v.id >= 1 && +v.id <= 4094, 'VLAN-ID: 1-4094'); });
+    need(new Set(list.map(v => v.name)).size === list.length, 'Jeder VLAN-Name darf nur einmal vorkommen');
+    const c = ['wireless profile flex ' + (f ? f.name : name.value)];
+    if (native.value !== '') c.push('native-vlan-id ' + native.value); else if (f && f.native) c.push('no native-vlan-id');
+    if (f) f.vlans.filter(o => !list.some(v => v.name === o.name)).forEach(o => c.push('no vlan-name ' + o.name));
+    list.forEach(v => c.push('vlan-name ' + v.name, 'vlan-id ' + v.id));
+    return c;
+  }, refresh);
+}
+
+VIEWS.sitetags = main => {
+  main.append(h('div', { class: 'bar' }, h('button', { class: 'primary', 'data-id': 'add-site', onclick: () => siteDialog() }, '+ Add'),
+    h('span', { class: 'muted' }, 'Ein Site Tag ohne Local Site versetzt die APs, die es erhalten, in den FlexConnect-Modus.')));
+  main.append(table([{ l: 'Site Tag Name', f: t => t.name }, { l: 'Local Site', f: t => t.local ? 'Yes' : 'No' },
+    { l: 'Flex Profile', f: t => t.flexProfile || '–' },
+    { l: '', f: t => t.builtin ? [h('button', { class: 'small', onclick: () => siteDialog(t) }, 'Edit'), ' ', badge('vordefiniert', 'warn')] :
+      [h('button', { class: 'small', onclick: () => siteDialog(t) }, 'Edit'), ' ',
+        h('button', { class: 'small danger', onclick: () => remove('no wireless tag site ' + t.name, 'Site Tag ' + t.name) }, 'Delete')] }], S.siteTags));
+};
+
+function siteDialog(t) {
+  const name = h('input', { 'data-id': 'site-name', value: t ? t.name : '', disabled: !!t, placeholder: 'ST_Lager' });
+  const local = h('input', { 'data-id': 'site-local', type: 'checkbox' }); local.checked = t ? t.local : true;
+  const flex = h('select', { 'data-id': 'site-flex' }, S.flexProfiles.map(x => h('option', { value: x.name }, x.name)));
+  if (t && t.flexProfile) flex.value = t.flexProfile;
+  const sync = () => { flex.disabled = local.checked; };
+  local.addEventListener('change', sync); sync();
+  const body = h('div', { class: 'row' }, field('Name', name), field('Enable Local Site', local, 'Ausgeschaltet: AP im FlexConnect-Modus.'),
+    field('Flex Profile', flex, 'Nur wählbar, wenn Local Site ausgeschaltet ist.'));
+  modal(t ? 'Edit Site Tag ' + t.name : 'Add Site Tag', body, () => {
+    if (!t) need(/^[\w.-]{1,32}$/.test(name.value), 'Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
+    const c = ['wireless tag site ' + (t ? t.name : name.value), local.checked ? 'local-site' : 'no local-site'];
+    if (!local.checked) c.push('flex-profile ' + flex.value);
+    return c;
+  }, refresh);
+}
+
+VIEWS.tags = main => {
+  main.append(h('div', { class: 'bar' }, h('button', { class: 'primary', 'data-id': 'add-tag', onclick: () => tagDialog() }, '+ Add'),
+    h('span', { class: 'muted' }, 'Policy Tags verbinden WLAN-Profile mit Policy Profiles. Ein AP strahlt nur die WLANs seines Policy Tags aus.')));
+  S.policyTags.forEach(t => main.append(h('div', { class: 'card', 'data-tag': t.name },
+    h('div', { class: 'bar' }, h('b', null, t.name), t.builtin ? badge('vordefiniert', 'warn') : null, h('span', { class: 'grow' }),
+      t.builtin ? null : [h('button', { class: 'small', onclick: () => tagDialog(t) }, 'Edit'),
+        h('button', { class: 'small danger', onclick: () => remove('no wireless tag policy ' + t.name, 'Policy Tag ' + t.name) }, 'Delete')]),
+    table([{ l: 'WLAN Profile', f: m => m.wlan }, { l: 'Policy Profile', f: m => m.policy }], t.maps, 'Keine WLANs zugeordnet.'))));
+};
+
+function tagDialog(t) {
+  const name = h('input', { 'data-id': 'tag-name', value: t ? t.name : '', disabled: !!t, placeholder: 'PT_Corp' });
+  const rows = h('div', { 'data-id': 'tag-rows' });
+  const opt = (list, val) => { const s = h('select', null, list.map(x => h('option', { value: x }, x))); if (val) s.value = val; return s; };
+  const addRow = (m) => {
+    const w = opt(S.wlans.map(x => x.profile), m && m.wlan), p = opt(S.policies.map(x => x.name), m && m.policy);
+    const r = h('div', { class: 'maprow' }, w, '→', p, h('button', { class: 'small', type: 'button', onclick: () => { r.remove(); rows.dispatchEvent(new Event('input', { bubbles: true })); } }, '✕'));
+    r.get = () => [w.value, p.value]; rows.append(r);
+  };
+  (t ? t.maps : []).forEach(addRow);
+  const body = h('div', null, h('div', { class: 'row' }, field('Name', name)),
+    h('h2', null, 'WLAN Profile → Policy Profile'), rows,
+    h('button', { class: 'small', 'data-id': 'add-map', type: 'button', onclick: () => { addRow(); rows.dispatchEvent(new Event('input', { bubbles: true })); } }, '+ Add Map'));
+  modal(t ? 'Edit Policy Tag ' + t.name : 'Add Policy Tag', body, () => {
+    if (!t) need(/^[\w.-]{1,32}$/.test(name.value), 'Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
+    const maps = [...rows.children].map(r => r.get()).filter(m => m[0] && m[1]);
+    need(new Set(maps.map(m => m[0])).size === maps.length, 'Jedes WLAN darf nur einmal vorkommen');
+    const c = ['wireless tag policy ' + (t ? t.name : name.value)];
+    if (t) t.maps.filter(o => !maps.some(m => m[0] === o.wlan)).forEach(o => c.push('no wlan ' + o.wlan + ' policy ' + o.policy));
+    maps.forEach(m => c.push('wlan ' + m[0] + ' policy ' + m[1]));
+    return c;
+  }, refresh);
+}
+
+VIEWS.apcfg = main => {
+  main.append(h('div', { class: 'note' }, 'Ein AP ohne eigenes Tag nutzt die Default Tags. Tag Source zeigt, ob ein Tag zugewiesen (Static) oder der Standard ist. Der AP-Modus kommt vom Site Tag.'));
+  main.append(table([{ l: 'AP Name', f: a => a.name }, { l: 'AP MAC', f: a => a.ethMac }, { l: 'Site Tag', f: a => a.siteTag },
+    { l: 'Policy Tag', f: a => a.policyTag }, { l: 'RF Tag', f: a => a.rfTag }, { l: 'AP Mode', f: a => a.mode }, { l: 'Tag Source', f: a => a.tagSource },
+    { l: '', f: a => h('button', { class: 'small', 'data-id': 'ap-tag-' + a.name, onclick: () => apDialog(a) }, 'Edit Tags') }], S.aps));
+};
+
+function apDialog(a) {
+  const tag = h('select', { 'data-id': 'ap-policy-tag' }, S.policyTags.map(t => h('option', { value: t.name }, t.name)));
+  tag.value = a.policyTag;
+  const site = h('select', { 'data-id': 'ap-site-tag' }, S.siteTags.map(t => h('option', { value: t.name }, t.name)));
+  site.value = a.siteTag;
+  const body = h('div', { class: 'row' }, field('AP Name', h('input', { value: a.name, disabled: true })), field('Policy Tag', tag), field('Site Tag', site, 'Ein Site Tag ohne Local Site versetzt den AP in den FlexConnect-Modus.'));
+  modal('Edit Tags: ' + a.name, body, () => ['ap ' + a.ethMac, tag.value === 'default-policy-tag' ? 'no policy-tag' : 'policy-tag ' + tag.value,
+    site.value === 'default-site-tag' ? 'no site-tag' : 'site-tag ' + site.value], refresh);
+}
+
+async function remove(cmd, what) {
+  if (!confirm(what + ' löschen?')) return;
+  const r = await api.apply([cmd]);
+  if (!r.ok) { toast(r.error.message); return; }
+  toast(what + ' gelöscht'); refresh();
+}
+
+VIEWS.cli = async main => {
+  const term = h('div', { class: 'term', 'data-id': 'term', tabindex: 0, role: 'log' });
+  const first = await api.cli('');
+  let prompt = first.prompt;
+  const input = h('input', { 'data-id': 'cli-input', style: 'flex:1', autocomplete: 'off', spellcheck: 'false', 'aria-label': 'Befehl' });
+  const label = h('span', { class: 'muted' }, prompt);
+  const run = async () => {
+    const cmd = input.value; input.value = '';
+    const r = await api.cli(cmd);
+    term.append(h('div', { class: 'in' }, prompt + ' ' + cmd), r.output ? h('div', null, r.output) : null);
+    prompt = r.prompt; label.textContent = prompt; term.scrollTop = term.scrollHeight;
+    S = await api.state();
+  };
+  input.addEventListener('keydown', ev => { if (ev.key === 'Enter') run(); });
+  main.append(h('div', { class: 'note' }, 'Diese Sitzung hat einen eigenen Modus (exec/config), unabhängig von den Dialogen. Belegt sind nur die in der README genannten Show-Befehle.'),
+    term, h('div', { class: 'bar', style: 'margin-top:8px' }, label, input, h('button', { class: 'primary', onclick: run }, 'Run')));
+};
+
+VIEWS.diag = main => {
+  if (!S.diagAvailable) { main.append(h('div', { class: 'note', 'data-id': 'diag-locked' }, 'Im Prüfungsmodus ist die Client-Diagnose nicht verfügbar. Nutze Monitoring, die Show-Befehle und die CLI.')); return; }
+  main.append(h('div', { class: 'note' }, 'Simulation: Diese Seite gibt es am echten Controller nicht. Sie erklärt, warum ein Client (nicht) verbunden ist. Die Begründungen sind ein didaktisches Modell.'));
+  main.append(table([{ l: 'MAC Address', f: c => c.mac }, { l: 'SSID', f: c => c.ssid }, { l: 'AP', f: c => c.ap },
+    { l: 'Ergebnis', f: c => stateBadge(c.state) }, { l: 'Switching', f: c => c.switching || '–' }, { l: 'Begründung', cls: 'reason', f: c => c.reasons.length ? c.reasons.join(' ') : 'Verbunden' }], S.clients));
+};
+
+/* ---------------------------------------------------------------- Labs */
+/* Kleines Markdown: **fett**, `code`, Zeilen mit "- " als Liste. Es wird nie HTML eingesetzt. */
+function md(text) {
+  const inline = line => line.split(/(\*\*[^*]+\*\*|`[^`]+`)/).filter(Boolean).map(t =>
+    t.startsWith('**') ? h('b', null, t.slice(2, -2)) : t.startsWith('`') ? h('code', null, t.slice(1, -1)) : t);
+  const out = []; let list = null;
+  text.split('\n').forEach(l => {
+    if (l.startsWith('- ')) { if (!list) { list = h('ul'); out.push(list); } list.append(h('li', null, inline(l.slice(2)))); return; }
+    list = null; if (l.trim()) out.push(h('p', null, inline(l)));
+  });
+  return out;
+}
+
+VIEWS.labs = async main => {
+  const r = await api.get('/wlc/api/labs');
+  const cur = r.current;
+  if (cur) main.append(labCard(cur));
+  const done = r.labs.filter(l => l.progress.passed).length, exam = r.labs.filter(l => l.progress.examPassed).length;
+  main.append(h('div', { class: 'tiles' }, [[done + ' / ' + r.labs.length, 'Labs bestanden'], [exam, 'davon im Prüfungsmodus'],
+    [r.labs.reduce((a, l) => a + l.progress.starts, 0), 'Starts insgesamt']].map(([n, l]) => h('div', { class: 'tile' }, h('div', { class: 'n' }, n), h('div', { class: 'l' }, l)))));
+  main.append(h('h2', null, cur ? 'Weitere Labs' : 'Verfügbare Labs'));
+  const mode = h('select', { 'data-id': 'lab-mode', 'aria-label': 'Modus' }, h('option', { value: 'guided' }, 'Geführt (Hinweise, Diagnose)'),
+    h('option', { value: 'exam' }, 'Prüfung (ohne Hilfe)'));
+  main.append(h('div', { class: 'bar' }, 'Modus: ', mode, h('span', { class: 'muted' }, 'Ein Lab-Start setzt die Welt auf den Ausgangszustand zurück.')));
+  main.append(table([{ l: 'Status', f: l => l.progress.examPassed ? badge('Prüfung bestanden', 'ok') : l.progress.guidedPassed ? badge('Geführt bestanden', 'ok')
+      : l.progress.starts ? badge('begonnen', 'warn') : h('span', { class: 'muted' }, 'offen') },
+    { l: 'Lab', f: l => h('b', null, l.title) }, { l: 'Track', f: l => l.track }, { l: 'Thema', f: l => l.topic }, { l: 'Niveau', f: l => l.level },
+    { l: 'Dauer', f: l => l.duration }, { l: 'Art', f: l => l.kind === 'troubleshooting' ? 'Fehlersuche' : 'Anforderungen' },
+    { l: '', f: l => h('button', { class: 'small primary', 'data-id': 'start-' + l.id.slice(0, 2), onclick: async () => {
+      if (cur && !confirm('Das laufende Lab wird ersetzt. Fortfahren?')) return;
+      const x = await api.post('/wlc/api/lab/start', { id: l.id, mode: mode.value });
+      if (x.http !== 200) { toast(x.error); return; }
+      toast('Gestartet: ' + l.title); refresh();
+    } }, 'Start') }], r.labs));
+  await savesCard(main);
+};
+
+async function savesCard(main) {
+  main.append(h('h2', null, 'Stände'));
+  if (!S.persistent) {
+    main.append(h('div', { class: 'note' }, S.standalone ? 'Der Browser stellt keinen lokalen Speicher bereit (z. B. im privaten Modus): Der Zustand geht beim Schließen verloren, Stände sind nicht verfügbar.'
+      : 'Der Zustand wird in dieser Sitzung nicht dauerhaft gespeichert (Start mit --ephemeral).'));
+    return;
+  }
+  const sv = await api.get('/wlc/api/saves');
+  const name = h('input', { 'data-id': 'save-name', placeholder: 'z. B. lab01-vor-hint', 'aria-label': 'Name des Stands', maxlength: 40 });
+  main.append(h('div', { class: 'muted', style: 'margin-bottom:8px' },
+    (S.standalone ? 'Der aktuelle Zustand wird automatisch im Browser gespeichert (lokaler Speicher, nur auf diesem Gerät) und beim Öffnen wieder geladen. ' : 'Der aktuelle Zustand wird automatisch gespeichert und beim Start wieder geladen. ') +
+    'Ein Stand enthält Konfiguration, Welt und die Lab-Sitzung; der Fortschritt bleibt erhalten.'));
+  main.append(h('div', { class: 'bar' }, name, h('button', { 'data-id': 'save', onclick: async () => {
+    const x = await api.post('/wlc/api/saves', { name: name.value.trim() });
+    if (x.http !== 200) { toast(x.error); return; }
+    toast('Stand gespeichert'); refresh();
+  } }, 'Stand speichern')));
+  main.append(table([{ l: 'Name', f: x => x.name }, { l: 'Lab', f: x => x.lab || '–' }, { l: 'WLANs', f: x => x.wlans },
+    { l: '', f: x => [x.broken ? badge('nicht lesbar', 'bad') : h('button', { class: 'small', 'data-id': 'load-' + x.name, onclick: async () => {
+      if (!confirm('Den aktuellen Zustand durch den Stand "' + x.name + '" ersetzen?')) return;
+      const r = await api.post('/wlc/api/saves/load', { name: x.name });
+      if (r.http !== 200) { toast(r.error); return; }
+      toast('Stand geladen'); refresh();
+    } }, 'Laden'), ' ', h('button', { class: 'small danger', 'data-id': 'del-' + x.name, onclick: async () => {
+      if (!confirm('Stand "' + x.name + '" löschen?')) return;
+      await api.post('/wlc/api/saves/delete', { name: x.name }); refresh();
+    } }, 'Löschen')] }], sv.saves, 'Keine Stände gespeichert.'));
+  main.append(h('div', { class: 'bar', style: 'margin-top:10px' }, h('button', { class: 'danger', 'data-id': 'reset-progress', onclick: async () => {
+    if (!confirm('Den gesamten Lab-Fortschritt zurücksetzen?')) return;
+    await api.post('/wlc/api/progress/reset'); toast('Fortschritt zurückgesetzt'); refresh();
+  } }, 'Fortschritt zurücksetzen')));
+}
+
+function labCard(lab) {
+  const exam = lab.mode === 'exam';
+  const result = h('div', { 'data-id': 'check-result' });
+  const sol = h('div', { 'data-id': 'solution' });
+  const card = h('div', { class: 'card', 'data-lab': lab.id },
+    h('div', { class: 'bar' }, h('b', null, lab.title), badge(exam ? 'Prüfungsmodus' : 'Geführt', exam ? 'warn' : 'ok'), h('span', { class: 'grow' }),
+      h('span', { class: 'muted' }, lab.level + ' · ' + lab.duration)),
+    h('div', { class: 'muted', 'data-id': 'lab-track' }, lab.track),
+    md(lab.intro),
+    h('h2', null, 'Anforderungen'), h('ul', null, lab.requirements.map(x => h('li', null, x))),
+    h('details', null, h('summary', null, 'Lernziele, Werkzeuge und Grenzen dieses Szenarios'),
+      h('p', null, h('b', null, 'Lernziele')), h('ul', null, lab.goals.map(x => h('li', null, x))),
+      h('p', null, h('b', null, 'Werkzeuge')), h('ul', null, lab.tools.map(x => h('li', null, x))),
+      h('p', null, h('b', null, 'Grenzen')), h('ul', null, lab.limits.map(x => h('li', null, x)))),
+    exam ? h('div', { class: 'muted', style: 'margin:8px 0' }, 'Prüfungsmodus: keine Hinweise, keine Lösung, keine Diagnose, keine Details in der Auswertung.') : hintBox(lab),
+    lab.questions.length ? [h('h2', null, 'Verständnisfragen (zählen nicht zum Bestehen)'), lab.questions.map(q => question(lab, q))] : null,
+    h('div', { class: 'bar', style: 'margin-top:14px' },
+      h('button', { class: 'primary', 'data-id': 'lab-check', onclick: async () => { const c = await api.post('/wlc/api/lab/check'); result.textContent = ''; result.append(checkView(c)); } }, 'Lab prüfen'),
+      h('button', { 'data-id': 'lab-reset', onclick: async () => { if (!confirm('Das Lab auf den Ausgangszustand zurücksetzen?')) return; await api.post('/wlc/api/lab/reset'); toast('Zurückgesetzt'); refresh(); } }, 'Zurücksetzen'),
+      exam ? null : h('button', { 'data-id': 'lab-solution', onclick: async () => { const x = await api.get('/wlc/api/lab/solution'); sol.textContent = ''; if (x.solution) sol.append(h('div', { class: 'note' }, md(x.solution))); } }, 'Lösung zeigen'),
+      h('button', { class: 'danger', onclick: async () => { await api.post('/wlc/api/lab/stop'); refresh(); } }, 'Lab beenden')),
+    result, sol);
+  return card;
+}
+
+function hintBox(lab) {
+  const box = h('div', { 'data-id': 'hints' });
+  const draw = l => {
+    box.textContent = '';
+    l.hints.forEach((t, i) => box.append(h('div', { class: 'note', 'data-hint': i + 1 }, md(t))));
+    if (l.hintsUsed < l.hintsTotal) box.append(h('button', { 'data-id': 'hint', onclick: async () => { const x = await api.post('/wlc/api/lab/hint'); if (x.current) draw(x.current); } },
+      'Hinweis anzeigen (Stufe ' + (l.hintsUsed + 1) + ' von ' + l.hintsTotal + ')'));
+  };
+  draw(lab);
+  return box;
+}
+
+function question(lab, q) {
+  const fb = h('div', { class: 'muted' });
+  const name = 'q-' + q.id;
+  return h('div', { class: 'card', 'data-q': q.id }, h('div', null, h('b', null, q.q)),
+    q.options.map((o, i) => h('label', { style: 'display:block;margin:4px 0' }, h('input', { type: 'radio', name, onchange: async () => {
+      const x = await api.post('/wlc/api/lab/answer', { id: q.id, answer: i });
+      fb.textContent = x.correct ? '✔ richtig. ' + (x.explain || '') : '✖ nicht richtig. ' + (x.explain || '');
+    } }), ' ', o)), fb);
+}
+
+function checkView(c) {
+  if (c.error) return h('div', { class: 'err' }, c.error);
+  const cats = Object.entries(c.categories).map(([k, v]) => h('div', { class: 'tile' }, h('div', { class: 'n' }, v.ok + ' / ' + v.total),
+    h('div', { class: 'l' }, k === 'security' ? 'Sicherheit / Least Privilege' : 'Funktion')));
+  return h('div', { style: 'margin-top:12px' },
+    h('div', { class: 'bar' }, c.passed ? badge('bestanden', 'ok') : badge('noch nicht bestanden', 'bad'),
+      h('span', { class: 'muted' }, 'Hinweise genutzt: ' + c.hintsUsed + ' · Fragen richtig: ' + c.questions.right + ' / ' + c.questions.total)),
+    h('div', { class: 'tiles' }, cats),
+    h('ol', null, c.checks.map(x => h('li', null, x.ok ? '✔ ' : '✖ ', x.desc, x.detail ? h('div', { class: 'muted' }, x.detail) : null))));
+}
+
+/* ---------------------------------------------------------------- Rahmen */
+function current() { return (location.hash.replace(/^#\//, '') || 'dash'); }
+
+function drawNav() {
+  const nav = document.getElementById('nav'); nav.textContent = '';
+  let lastG = null, lastSub = null;
+  NAV.forEach(n => {
+    if (n.id) { nav.append(link(n.id, n.l)); return; }
+    if (n.g !== lastG) { nav.append(h('div', { class: 'grp' }, n.g)); lastG = n.g; lastSub = null; }
+    if (n.sub && n.sub !== lastSub) { nav.append(h('div', { class: 'sub' }, n.sub)); lastSub = n.sub; }
+    n.items.forEach(([id, l]) => nav.append(link(id, l)));
+  });
+}
+const link = (id, l) => h('a', { href: '#/' + id, class: id === current() ? 'on' : '', 'data-view': id, 'aria-current': id === current() ? 'page' : null,
+  onclick: ev => { if (id === current()) { ev.preventDefault(); refresh(); } } }, l);   // Klick auf die aktuelle Seite laedt sie neu
+
+async function refresh() {
+  const seq = refresh.seq = (refresh.seq || 0) + 1;      // nur die letzte Aktualisierung darf die Seite aendern
+  const st = await api.state();
+  if (seq !== refresh.seq) return;
+  S = st;
+  document.getElementById('host').textContent = S.wlc.hostname + ' · ' + S.wlc.ip + (S.standalone ? ' · läuft lokal im Browser' : '');
+  drawNav();
+  const id = VIEWS[current()] ? current() : 'dash';
+  const box = h('div');                                   // erst im Hintergrund aufbauen, dann in einem Schritt einsetzen
+  box.append(h('h1', null, TITLES[id]));
+  await VIEWS[id](box);
+  if (seq !== refresh.seq) return;
+  const main = document.getElementById('main');
+  main.textContent = '';
+  main.append(...box.childNodes);
+}
+
+window.addEventListener('hashchange', refresh);
+refresh();
+
+</script>
+</body>
+</html>

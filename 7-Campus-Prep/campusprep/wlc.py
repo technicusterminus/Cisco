@@ -344,6 +344,14 @@ class Cli:
         no = w[0] == 'no'
         if no:
             w = w[1:]
+        if not w:
+            raise CliError('Invalid input detected: "no"')
+        # Das Objekt des aktuellen Untermodus kann inzwischen (z. B. ueber die Oberflaeche) geloescht worden sein
+        store = {'wlan': c.wlans, 'policy': c.policies, 'ptag': c.policy_tags, 'flex': c.flex_profiles, 'flexvlan': c.flex_profiles,
+                 'stag': c.site_tags}.get(self.mode)
+        if store is not None and self.ctx not in store:
+            self.mode, self.ctx, self.ctx2 = 'config', None, None
+            raise CliError('Das Objekt existiert nicht mehr')
         if self.mode == 'config':
             if w[0] == 'wlan' and len(w) == 4 and not no:
                 if not w[2].isdigit() or not 1 <= int(w[2]) <= 4096:
