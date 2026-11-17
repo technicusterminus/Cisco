@@ -1,0 +1,158 @@
+{
+ "cause": "Der VLAN-Name im Policy Profile (CORP_LOCAL) stimmt nicht mit dem im Flex Profile (Corp_Local) überein; die Namen müssen exakt passen.",
+ "checks": [
+  {
+   "category": "function",
+   "desc": "Lager-Laptop: verbunden, VLAN 20, lokal geschaltet",
+   "mac": "58bf.eaaa.0002",
+   "state": "Run",
+   "switching": "local",
+   "type": "client",
+   "vlan": "20"
+  },
+  {
+   "ap": "ap-lager",
+   "category": "security",
+   "desc": "ap-lager bleibt im FlexConnect-Modus",
+   "mode": "FlexConnect",
+   "type": "apmode"
+  },
+  {
+   "category": "security",
+   "desc": "Lobby-Laptop unverändert: verbunden, VLAN 20, zentral geschaltet",
+   "mac": "58bf.eaaa.0001",
+   "state": "Run",
+   "switching": "central",
+   "type": "client",
+   "vlan": "20"
+  }
+ ],
+ "duration": "25 min",
+ "fabric": "wlc1 mit ap-lobby und ap-lager",
+ "goals": [
+  "Die Abhängigkeit zwischen Policy Profile und Flex Profile lesen",
+  "Eine Fehlersuche bei lokalem Switching systematisch führen",
+  "Nicht auf zentrales Switching ausweichen, wenn lokales Switching verlangt ist"
+ ],
+ "hints": [
+  "**Konzept:** Bei lokalem Switching muss der AP das VLAN des Policy Profile selbst kennen. Er vergleicht dafür den Eintrag im Policy Profile mit dem, was sein Flex Profile definiert.",
+  "**Ebene:** Zuordnung zwischen Policy Profile und Flex Profile. Modus, Tags und Zustände sind in Ordnung.",
+  "**Prüfschritte:** Lies das Policy Profile und das Flex Profile nebeneinander. Stehen die VLAN-Angaben dort Zeichen für Zeichen gleich?",
+  "**Lösung:** Den VLAN-Namen im Policy Profile PP_Corp_Flex auf **Corp_Local** setzen (oder im Flex Profile den Namen auf CORP_LOCAL ändern). Auf zentrales Switching auszuweichen ist keine Lösung."
+ ],
+ "id": "08-flexconnect-vlan-name",
+ "intro": "Das Lager wurde auf FlexConnect umgestellt: lokales Switching ins VLAN 20, eigene Tags, Site Tag ohne Local Site. Seitdem kommt der Laptop im Lager nicht mehr ins WLAN Corp. In der Lobby läuft alles.\n\n- Schlüssel, Tags und Zustände wurden geprüft und sind in Ordnung\n- Das Lager soll bei lokalem Switching bleiben.",
+ "kind": "troubleshooting",
+ "level": "Fortgeschritten",
+ "limits": [
+  "Das Client-Modell ist didaktisch: Es erklärt, ob und warum ein Client verbunden ist, ist aber keine Abbildung der Controller-Pipeline.",
+  "Nicht modelliert: 802.1x/RADIUS, FlexConnect, RF-Profile, Roaming, Mobility.",
+  "Nicht modelliert: Standalone-Betrieb bei WAN-Ausfall, lokale Authentifizierung am AP, Flex-ACLs, Central DHCP/Association, AAA-Override, VLAN-Gruppen.",
+  "Durchsatz und WAN-Last werden nicht simuliert; der Simulator unterscheidet nur zentrales und lokales Switching."
+ ],
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 07"
+ ],
+ "questions": [
+  {
+   "answer": 0,
+   "explain": "Nach Cisco-Dokument 213945 müssen die Namen exakt passen, sonst können sich Clients nicht verbinden.",
+   "id": "q1",
+   "options": [
+    "Die Clients können sich nicht mit dem WLAN verbinden",
+    "Der AP nimmt das nächstbeste VLAN",
+    "Der Controller wechselt auf zentrales Switching",
+    "Nichts, Namen werden ignoriert"
+   ],
+   "q": "Was geschieht, wenn der VLAN-Name im Policy Profile nicht exakt im Flex Profile steht?"
+  },
+  {
+   "answer": 0,
+   "explain": "Die Anforderung ist lokales Switching im Lager. Zentrales Switching würde die Prüfung auf lokale Schaltung verfehlen.",
+   "id": "q2",
+   "options": [
+    "Der Lager-Verkehr würde über das WAN zum Controller laufen, obwohl er lokal bleiben soll",
+    "FlexConnect lässt sich damit nicht mehr nutzen",
+    "Das VLAN würde gelöscht",
+    "Es geht nur im Local Mode"
+   ],
+   "q": "Warum wäre zentrales Switching hier keine Lösung?"
+  }
+ ],
+ "requirements": [
+  "Der Laptop im Lager ist verbunden (VLAN 20) und wird lokal geschaltet.",
+  "ap-lager bleibt im FlexConnect-Modus.",
+  "Die Lobby bleibt unverändert: verbunden, VLAN 20, zentral geschaltet."
+ ],
+ "solution": "WebUI: Policy > PP_Corp_Flex > Edit: VLAN Corp_Local. CLI: `wireless profile policy PP_Corp_Flex`, `vlan Corp_Local`. Gleichwertig: Im Flex Profile FP_Lager `no vlan-name Corp_Local`, `vlan-name CORP_LOCAL`, `vlan-id 20`.",
+ "solutionCommands": [
+  "wireless profile policy PP_Corp_Flex",
+  "vlan Corp_Local"
+ ],
+ "startCommands": [
+  "wlan Corp_Profile 1 Corp",
+  "security wpa akm psk",
+  "security wpa psk set-key ascii 0 Sommer2026",
+  "no shutdown",
+  "exit",
+  "wireless profile policy PP_Corp",
+  "vlan 20",
+  "no shutdown",
+  "exit",
+  "wireless tag policy PT_Corp",
+  "wlan Corp_Profile policy PP_Corp",
+  "exit",
+  "ap a4b2.32aa.0001",
+  "policy-tag PT_Corp",
+  "exit",
+  "wireless profile flex FP_Lager",
+  "vlan-name Corp_Local",
+  "vlan-id 20",
+  "exit",
+  "exit",
+  "wireless profile policy PP_Corp_Flex",
+  "vlan CORP_LOCAL",
+  "no central switching",
+  "no shutdown",
+  "exit",
+  "wireless tag policy PT_Corp_Flex",
+  "wlan Corp_Profile policy PP_Corp_Flex",
+  "exit",
+  "wireless tag site ST_Lager",
+  "no local-site",
+  "flex-profile FP_Lager",
+  "exit",
+  "ap a4b2.32aa.0002",
+  "policy-tag PT_Corp_Flex",
+  "site-tag ST_Lager"
+ ],
+ "title": "08 Zweigstelle: Lager-Laptop ohne Verbindung",
+ "tools": [
+  "WebUI: Configuration > Tags & Profiles > Policy, Flex, Tags, Site Tags und Wireless > Access Points",
+  "Monitoring > Wireless > Clients",
+  "Client-Diagnose (nur im geführten Modus)",
+  "CLI: show ap tag summary, show wireless profile flex summary, show wireless tag site summary, show wireless client summary"
+ ],
+ "topic": "FlexConnect / Troubleshooting",
+ "track": "CCNP Enterprise Wireless (300-430 ENWLSI)",
+ "worldClients": [
+  {
+   "ap": "ap-lobby",
+   "mac": "58bf.eaaa.0001",
+   "protocol": "11ac",
+   "psk": "Sommer2026",
+   "ssid": "Corp"
+  },
+  {
+   "ap": "ap-lager",
+   "mac": "58bf.eaaa.0002",
+   "protocol": "11ac",
+   "psk": "Sommer2026",
+   "ssid": "Corp"
+  }
+ ]
+}

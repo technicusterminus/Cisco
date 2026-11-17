@@ -136,7 +136,7 @@ const check = (ok, msg) => { console.log((ok ? '  ok   ' : '  FEHLER ') + msg); 
     // Staende und Fortschritt
     await go('labs');
     console.log('       Kacheln: ' + (await text()).split('\n').filter(l => /bestanden|Starts|Prüfungsmodus$|^\d+( \/ \d+)?$/.test(l)).join(' | ').slice(0, 200));
-    check(/Geführt bestanden/.test(await text()) && /1 \/ 6[\s\S]*Labs bestanden/.test(await text()), 'Fortschritt: Lab 01 ist als geführt bestanden markiert');
+    check(/Geführt bestanden/.test(await text()) && /1 \/ 8[\s\S]*Labs bestanden/.test(await text()), 'Fortschritt: Lab 01 ist als geführt bestanden markiert');
     await p.fill('[data-id="save-name"]', 'lab01-geloest'); await p.click('[data-id="save"]'); await p.waitForTimeout(500);
     check(await p.locator('[data-id="load-lab01-geloest"]').count() === 1, 'Stand wird gespeichert und aufgelistet');
     await p.fill('[data-id="save-name"]', '../evil'); await p.click('[data-id="save"]'); await p.waitForTimeout(400);
@@ -157,10 +157,43 @@ const check = (ok, msg) => { console.log((ok ? '  ok   ' : '  FEHLER ') + msg); 
     await p.click('[data-id="del-lab01-geloest"]'); await p.waitForTimeout(400);
     check(await p.locator('[data-id="load-lab01-geloest"]').count() === 0, 'Stand lässt sich löschen');
     await p.click('[data-id="reset-progress"]'); await p.waitForTimeout(400);
-    check(/0 \/ 6[\s\S]*Labs bestanden/.test(await text()) && !/Geführt bestanden/.test(await text()), 'Fortschritt zurücksetzen');
+    check(/0 \/ 8[\s\S]*Labs bestanden/.test(await text()) && !/Geführt bestanden/.test(await text()), 'Fortschritt zurücksetzen');
+
+    // CCNP Enterprise Wireless: FlexConnect-Lab 07, komplett ueber die Dialoge
+    await go('labs'); await p.selectOption('[data-id="lab-mode"]', 'guided'); await p.click('[data-id="start-07"]'); await p.waitForTimeout(600);
+    check(/CCNP Enterprise Wireless/.test(await p.textContent('[data-id="lab-track"]')) && /Zweigstelle Lager/.test(await text()), 'Lab 07 startet mit dem Track CCNP Enterprise Wireless');
+    await p.click('[data-id="lab-check"]'); await p.waitForTimeout(300);
+    check(/noch nicht bestanden/.test(await p.textContent('[data-id="check-result"]')), 'Lab 07: ohne Lösung nicht bestanden');
+    await go('flex'); await p.click('[data-id="add-flex"]'); await p.fill('[data-id="flex-name"]', 'FP_Lager'); await p.click('[data-id="flex-add-vlan"]');
+    await p.fill('[data-id="flex-rows"] input[placeholder="VLAN-Name"]', 'CORP_LOCAL'); await p.fill('[data-id="flex-rows"] input[placeholder="ID"]', '20');
+    check(/wireless profile flex FP_Lager[\s\S]*vlan-name CORP_LOCAL[\s\S]*vlan-id 20/.test(await p.textContent('[data-id="cli-preview"]')), 'Flex-Dialog zeigt das CLI-Äquivalent');
+    await apply();
+    check(/FP_Lager[\s\S]*CORP_LOCAL \(20\)/.test(await text()), 'Flex Profile mit VLAN-Name und ID angelegt');
+    await go('policies'); await p.click('[data-id="add-policy"]'); await p.fill('[data-id="policy-name"]', 'PP_Corp_Flex'); await p.fill('[data-id="policy-vlan"]', 'CORP_LOCAL');
+    await p.uncheck('[data-id="policy-central"]'); await p.check('[data-id="policy-enabled"]');
+    check(/vlan CORP_LOCAL[\s\S]*no central switching/.test(await p.textContent('[data-id="cli-preview"]')), 'Policy-Dialog: Central Switching aus ergibt no central switching');
+    await apply();
+    check(/PP_Corp_Flex[\s\S]*CORP_LOCAL[\s\S]*Local/.test(await text()), 'Policy Profile mit lokalem Switching angelegt');
+    await go('tags'); await p.click('[data-id="add-tag"]'); await p.fill('[data-id="tag-name"]', 'PT_Corp_Flex'); await p.click('[data-id="add-map"]');
+    await p.selectOption('[data-id="tag-rows"] select >> nth=1', 'PP_Corp_Flex'); await apply();
+    check(await p.locator('[data-tag="PT_Corp_Flex"]').count() === 1, 'Policy Tag für das Lager angelegt');
+    await go('sitetags'); await p.click('[data-id="add-site"]'); await p.fill('[data-id="site-name"]', 'ST_Lager');
+    check(await p.locator('[data-id="site-flex"]').isDisabled(), 'Flex Profile ist bei eingeschalteter Local Site nicht wählbar');
+    await p.uncheck('[data-id="site-local"]'); await p.selectOption('[data-id="site-flex"]', 'FP_Lager');
+    check(/no local-site[\s\S]*flex-profile FP_Lager/.test(await p.textContent('[data-id="cli-preview"]')), 'Site-Tag-Dialog zeigt no local-site und flex-profile');
+    await apply();
+    check(/ST_Lager[\s\S]*No[\s\S]*FP_Lager/.test(await text()), 'Site Tag ohne Local Site mit Flex Profile angelegt');
+    await go('apcfg'); await p.click('[data-id="ap-tag-ap-lager"]'); await p.selectOption('[data-id="ap-policy-tag"]', 'PT_Corp_Flex'); await p.selectOption('[data-id="ap-site-tag"]', 'ST_Lager');
+    check(/policy-tag PT_Corp_Flex[\s\S]*site-tag ST_Lager/.test(await p.textContent('[data-id="cli-preview"]')), 'AP-Dialog zeigt policy-tag und site-tag');
+    await apply();
+    check(/ap-lager[\s\S]*FlexConnect/.test(await text()), 'ap-lager arbeitet im FlexConnect-Modus');
+    await go('labs'); await p.click('[data-id="lab-check"]'); await p.waitForTimeout(300);
+    res = await p.textContent('[data-id="check-result"]');
+    check(/bestanden/.test(res) && !/noch nicht/.test(res) && /lokal geschaltet/.test(res), 'Lab 07 ist bestanden (Lager-Laptop lokal geschaltet)');
+    await go('diag'); check(/local/.test(await text()), 'Diagnose zeigt die Switching-Art');
 
     // Alle Ansichten ohne JS-Fehler
-    for (const id of ['dash', 'labs', 'aps', 'clients', 'wlans', 'policies', 'tags', 'apcfg', 'cli', 'diag']) { await go(id); }
+    for (const id of ['dash', 'labs', 'flex', 'sitetags', 'aps', 'clients', 'wlans', 'policies', 'tags', 'apcfg', 'cli', 'diag']) { await go(id); }
     check(rejected === 3, 'Genau die drei absichtlichen Ablehnungen (HTTP 400) wurden ausgelöst: ' + rejected);
     check(errs.length === 0, 'Keine JavaScript-Fehler' + (errs.length ? ': ' + errs.join(' | ') : ''));
   } finally { await b.close(); srv.kill(); }

@@ -9,7 +9,8 @@ import os
 import re
 
 KIND = 'campusprep-state'
-VERSION = 1
+VERSION = 2          # 2: Flex Profiles und Site Tags (optionale Felder)
+ACCEPTED = (1, 2)    # Staende der Version 1 bleiben ladbar; fehlende Felder werden mit Standardwerten gefuellt
 NAME_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$')
 
 
@@ -29,8 +30,8 @@ def validate_state(d):
     """Pruefen, ob ein Zustand dieser Version vorliegt und die Pflichtfelder hat. Wirft StoreError."""
     if not isinstance(d, dict) or d.get('kind') != KIND:
         raise StoreError('Kein Campus-Prep-Stand')
-    if d.get('version') != VERSION:
-        raise StoreError('Stand hat Version %s, erwartet wird %s' % (d.get('version'), VERSION))
+    if d.get('version') not in ACCEPTED:
+        raise StoreError('Stand hat Version %s, erwartet wird %s' % (d.get('version'), ' oder '.join(map(str, ACCEPTED))))
     w, c = d.get('world'), d.get('wlc')
     if not isinstance(w, dict) or not isinstance(w.get('wlc'), dict) or not isinstance(w.get('aps'), list) \
             or not isinstance(w.get('clients'), list) or not isinstance(c, dict):
@@ -99,7 +100,7 @@ class Store:
             return {}
         try:
             d = self._read(path)
-            assert d.get('kind') == 'campusprep-progress' and d.get('version') == VERSION and isinstance(d.get('labs'), dict)
+            assert d.get('kind') == 'campusprep-progress' and d.get('version') in ACCEPTED and isinstance(d.get('labs'), dict)
             return d['labs']
         except (ValueError, AssertionError, OSError, AttributeError):
             self._quarantine(path)

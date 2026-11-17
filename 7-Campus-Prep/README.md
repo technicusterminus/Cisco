@@ -2,7 +2,7 @@
 
 Simulierter **Catalyst 9800 WLC** und simuliertes **Catalyst Center** in einer gemeinsamen Welt. Python-Standardbibliothek, keine Abhängigkeiten, läuft offline. Kein echtes Gerät, keine Verbindung zu echten Controllern.
 
-> Stand: Phase 1, 2a, 2c und 2d (siehe [`docs/UMFANG.md`](docs/UMFANG.md)). Die WLC hat eine Weboberfläche und sechs Labs, das Catalyst Center noch keine Oberfläche.
+> Stand: Phase 1, 2a, 2c, 2d und 3a (siehe [`docs/UMFANG.md`](docs/UMFANG.md)). Die WLC hat eine Weboberfläche und acht Labs (zwei davon für CCNP Enterprise Wireless), das Catalyst Center noch keine Oberfläche.
 
 ## Starten
 
@@ -20,7 +20,7 @@ python3 Labs-Quelle/build_labs.py   # labs/*.json neu erzeugen (deterministisch)
 
 ## Labs
 
-Die Seite *Labs (Simulation)* startet sechs Labs (vier Fehlersuchen, zwei Aufgaben nach Anforderungen), siehe [`docs/LAB-KATALOG.md`](docs/LAB-KATALOG.md). Ein Start setzt die Welt zurück. Bewertet wird das Verhalten (Client verbunden, VLAN, Zuordnungen), mit getrennten Prüfungen für *Funktion* und *Sicherheit / Least Privilege*; die naheliegende falsche Abkürzung besteht nie. Modi: *geführt* (vier Hinweisstufen, Lösung, Client-Diagnose) und *Prüfung* (keine Hilfe, keine Details). Verständnisfragen zählen nicht zum Bestehen.
+Die Seite *Labs (Simulation)* startet acht Labs (fünf Fehlersuchen, drei Aufgaben nach Anforderungen), siehe [`docs/LAB-KATALOG.md`](docs/LAB-KATALOG.md). Die Labs 07 und 08 gehören zum Track *CCNP Enterprise Wireless (300-430 ENWLSI)* und üben FlexConnect. Ein Start setzt die Welt zurück. Bewertet wird das Verhalten (Client verbunden, VLAN, Zuordnungen), mit getrennten Prüfungen für *Funktion* und *Sicherheit / Least Privilege*; die naheliegende falsche Abkürzung besteht nie. Modi: *geführt* (vier Hinweisstufen, Lösung, Client-Diagnose) und *Prüfung* (keine Hilfe, keine Details). Verständnisfragen zählen nicht zum Bestehen.
 
 ## Speichern und Fortschritt
 
@@ -42,7 +42,8 @@ Umgesetzt:
 | Bereich | Befehle |
 |---|---|
 | Konfiguration | `wlan <profil> <id> <ssid>` mit `security wpa akm psk`, `security wpa psk set-key ascii 0 <key>`, `shutdown`; `wireless profile policy <name>` mit `vlan`, `description`, `shutdown`; `wireless tag policy <name>` mit `wlan <profil> policy <policy>`; `ap <ethernet-mac>` mit `policy-tag <name>` oder `no policy-tag`; Löschen mit `no wlan`, `no wireless profile policy`, `no wireless tag policy` |
-| Show (Format belegt) | `show wlan summary`, `show ap summary`, `show ap tag summary`, `show wireless client summary`, `show wireless profile policy summary` |
+| FlexConnect | `wireless profile flex <name>` mit `native-vlan-id` und `vlan-name`/`vlan-id`; `wireless tag site <name>` mit `no local-site` und `flex-profile`; im Policy Profile `no central switching`; am AP `site-tag`. Ein Site Tag ohne Local Site versetzt den AP in den FlexConnect-Modus |
+| Show (Format belegt) | `show wlan summary`, `show ap summary`, `show ap tag summary`, `show wireless client summary`, `show wireless profile policy summary`, `show wireless profile flex summary`, `show wireless tag site summary` |
 
 Die Welt hat zwei APs und zwei Clients. Das Lernmoment: Ein AP ohne eigenes Policy Tag nutzt `default-policy-tag`, das kein WLAN enthält. Die SSID wird nicht ausgestrahlt, und `show wireless client summary` bleibt leer, bis dem AP ein Policy Tag mit dem WLAN zugewiesen ist. WLAN und Policy Profile sind nach dem Anlegen administrativ down.
 

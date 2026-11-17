@@ -118,6 +118,7 @@
   "CLI: show wlan summary, show ap tag summary, show wireless client summary"
  ],
  "topic": "Wireless / Tags",
+ "track": "Grundlagen Wireless",
  "worldClients": [
   {
    "ap": "ap-lobby",

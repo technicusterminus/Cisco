@@ -14,7 +14,7 @@ from campusprep.server import Sim, serve  # noqa: E402
 
 L1, L2 = 'a4b2.32aa.0001', 'a4b2.32aa.0002'
 ALL = ['01-ssid-nicht-sichtbar', '02-admin-down', '03-falscher-schluessel', '04-falsches-policy-profile',
-       '05-gast-wlan-lobby', '06-aufraeumen']
+       '05-gast-wlan-lobby', '06-aufraeumen', '07-flexconnect-zweigstelle', '08-flexconnect-vlan-name']
 # Woerter, die im sichtbaren Text vor dem Bestehen (Intro, Anforderungen, Pruefungsbeschreibungen) nicht stehen duerfen
 LEAKS = {
     '01-ssid-nicht-sichtbar': ['policy-tag', 'Policy Tag', 'Tag Source', 'PT_Corp'],
@@ -23,6 +23,8 @@ LEAKS = {
     '04-falsches-policy-profile': ['Policy Tag', 'PT_Corp', 'zuordnen'],
     '05-gast-wlan-lobby': ['PT_Lobby', 'PT_Lager', 'Policy Tag'],
     '06-aufraeumen': ['no policy-tag', 'no wlan', 'zuerst', 'Reihenfolge'],
+    '07-flexconnect-zweigstelle': ['Flex Profile', 'Site Tag', 'Policy Tag', 'no central switching', 'no local-site', 'flex-profile', 'site-tag', 'CORP_LOCAL'],
+    '08-flexconnect-vlan-name': ['Groß', 'Kleinschreibung', 'exakt', 'CORP_LOCAL', 'Corp_Local', 'Zeichen für Zeichen'],
 }
 
 
@@ -133,6 +135,81 @@ class TestLabs(unittest.TestCase):
                 'no wireless profile policy PP_Alt', 'wireless tag policy PT_Corp', 'no wlan Corp_Profile policy PP_Corp']
         s = fixed('06-aufraeumen', cmds)
         self.assertEqual(sorted(failed(s)), ['Corp-Zuordnung unverändert', 'Lobby-Laptop weiterhin verbunden, VLAN 20'])
+
+
+class TestFlexLabs(unittest.TestCase):
+    """CCNP Enterprise Wireless (300-430 ENWLSI): FlexConnect. Jede naheliegende falsche Abkuerzung besteht nicht."""
+
+    def test_track_and_blueprint_topic(self):
+        labs = Sim().labs.labs
+        self.assertEqual({labs[i]['track'] for i in ('07-flexconnect-zweigstelle', '08-flexconnect-vlan-name')},
+                         {'CCNP Enterprise Wireless (300-430 ENWLSI)'})
+        self.assertEqual(labs['01-ssid-nicht-sichtbar']['track'], 'Grundlagen Wireless')
+
+    def test_lab07_starts_with_central_switching_everywhere(self):
+        s = started('07-flexconnect-zweigstelle')
+        st = s.wlc.state()
+        self.assertEqual({c['mac']: c['switching'] for c in st['clients']}, {'58bf.eaaa.0001': 'central', '58bf.eaaa.0002': 'central'})
+        self.assertEqual({a['name']: a['mode'] for a in st['aps']}, {'ap-lobby': 'Local', 'ap-lager': 'Local'})
+
+    def test_lab07_flexconnect_on_both_aps_breaks_the_main_site(self):
+        s = fixed('07-flexconnect-zweigstelle', s_cmds(started('07-flexconnect-zweigstelle')) + ['exit', 'ap %s' % L1, 'policy-tag PT_Corp_Flex', 'site-tag ST_Lager'])
+        # Die Lobby im FlexConnect-Modus schaltet auch ihren Laptop lokal: beide Pruefungen schlagen zu Recht an
+        self.assertEqual(failed(s), ['Lobby-Laptop: verbunden, VLAN 20, zentral geschaltet', 'ap-lobby bleibt im Local Mode'])
+
+    def test_lab07_local_switching_for_everyone_fails_on_local_mode_aps(self):
+        s = fixed('07-flexconnect-zweigstelle', ['wireless profile policy PP_Corp', 'no central switching'])
+        self.assertFalse(s.labs.check()['passed'])
+        self.assertIn('Local Mode', ' '.join(' '.join(c['reasons']) for c in s.wlc.clients()))
+
+    def test_lab07_local_site_must_be_off_before_a_flex_profile_can_be_chosen(self):
+        s = started('07-flexconnect-zweigstelle')
+        ok, _, err = s.apply(['wireless profile flex FP_Lager', 'vlan-name CORP_LOCAL', 'vlan-id 20', 'exit', 'exit',
+                              'wireless tag site ST_Lager', 'flex-profile FP_Lager'])
+        self.assertFalse(ok)
+        self.assertIn('Local Site', err['message'])
+        self.assertNotIn('ST_Lager', s.wlc.site_tags, 'atomar zurueckgesetzt')
+
+    def test_lab07_flex_profile_without_the_vlan_leaves_the_client_out(self):
+        cmds = ['wireless profile flex FP_Lager', 'exit',
+                'wireless profile policy PP_Corp_Flex', 'vlan CORP_LOCAL', 'no central switching', 'no shutdown', 'exit',
+                'wireless tag policy PT_Corp_Flex', 'wlan Corp_Profile policy PP_Corp_Flex', 'exit',
+                'wireless tag site ST_Lager', 'no local-site', 'flex-profile FP_Lager', 'exit',
+                'ap %s' % L2, 'policy-tag PT_Corp_Flex', 'site-tag ST_Lager']
+        s = fixed('07-flexconnect-zweigstelle', cmds)
+        self.assertFalse(s.labs.check()['passed'])
+        self.assertIn('Flex Profile FP_Lager nicht definiert', ' '.join(' '.join(c['reasons']) for c in s.wlc.clients()))
+
+    def test_lab08_name_mismatch_is_the_cause(self):
+        s = started('08-flexconnect-vlan-name')
+        lager = next(c for c in s.wlc.clients() if c['mac'] == '58bf.eaaa.0002')
+        self.assertEqual(lager['state'], 'Not Associated')
+        self.assertIn('Flex Profile FP_Lager', ' '.join(lager['reasons']))
+        self.assertIn('exakt', ' '.join(lager['reasons']))
+        self.assertEqual(failed(s), ['Lager-Laptop: verbunden, VLAN 20, lokal geschaltet'])
+
+    def test_lab08_central_switching_is_not_a_fix(self):
+        s = fixed('08-flexconnect-vlan-name', ['wireless profile policy PP_Corp_Flex', 'central switching'])
+        self.assertFalse(s.labs.check()['passed'])
+
+    def test_lab08_back_to_local_mode_is_not_a_fix(self):
+        s = fixed('08-flexconnect-vlan-name', ['ap %s' % L2, 'no site-tag', 'exit', 'wireless profile policy PP_Corp_Flex', 'vlan 20', 'central switching'])
+        r = s.labs.check()
+        self.assertFalse(r['passed'])
+        self.assertIn('ap-lager bleibt im FlexConnect-Modus', failed(s))
+
+    def test_lab08_equivalent_fix_in_the_flex_profile_passes(self):
+        s = fixed('08-flexconnect-vlan-name', ['wireless profile flex FP_Lager', 'no vlan-name Corp_Local', 'vlan-name CORP_LOCAL', 'vlan-id 20'])
+        self.assertTrue(s.labs.check()['passed'], failed(s))
+
+    def test_lab08_a_numeric_policy_vlan_matches_by_id_assumption(self):
+        """Annahme (docs/QUELLEN.md): Eine numerische ID im Policy Profile passt auf die VLAN-ID im Flex Profile."""
+        s = fixed('08-flexconnect-vlan-name', ['wireless profile policy PP_Corp_Flex', 'vlan 20'])
+        self.assertTrue(s.labs.check()['passed'], failed(s))
+
+
+def s_cmds(s):
+    return s.labs.labs['07-flexconnect-zweigstelle']['solutionCommands']
 
 
 class TestGenerated(unittest.TestCase):
@@ -252,7 +329,7 @@ class TestLabApi(unittest.TestCase):
 
     def test_flow(self):
         st, body = self.call('/wlc/api/labs')
-        self.assertEqual((st, len(body['labs']), body['current']), (200, 6, None))
+        self.assertEqual((st, len(body['labs']), body['current']), (200, 8, None))
         self.assertEqual(self.call('/wlc/api/lab/check', 'POST', {})[0], 409)
         st, body = self.call('/wlc/api/lab/start', 'POST', {'id': '01-ssid-nicht-sichtbar', 'mode': 'guided'})
         self.assertEqual((st, body['current']['id']), (200, '01-ssid-nicht-sichtbar'))

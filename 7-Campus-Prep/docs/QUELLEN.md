@@ -12,6 +12,10 @@ Cisco-Seiten (cisco.com, developer.cisco.com) waren beim Bau nicht erreichbar. B
 | Catalyst-Center-API-Pfade | Python-SDK `dnacentersdk` 2.11.4 (Pfade aus dem Quelltext gelesen, nicht ausgeführt) | `POST /dna/system/api/v1/auth/token` (HTTP Basic, Antwort liefert das Token), Header `X-Auth-Token`, `GET /dna/intent/api/v1/network-device`, `…/network-device/count`, `…/network-device/{id}`-Familie, Filter-Parameter von `get_device_list` |
 | Catalyst-Center-Felder eines Geräts | Ansible-Collection `cisco.dnac`, `network_device_info` (RETURN-Beispiel) | Feldnamen von `network-device`: `hostname`, `managementIpAddress`, `macAddress`, `serialNumber`, `platformId`, `softwareType`, `softwareVersion`, `family`, `type`, `role`, `reachabilityStatus`, `managementState`, `upTime`, `uptimeSeconds`, `associatedWlcIp`, `apManagerInterfaceIp` und weitere; Hülle `{"response": …, "version": …}` |
 
+| FlexConnect auf dem C9800 | Cisco-Dokumente 213945 *Understand FlexConnect on 9800 Wireless* und 213924 *FlexConnect WLAN with 802.1x AAA Override*. cisco.com war nicht direkt abrufbar; die Aussagen stammen aus den Treffern der Websuche | `wireless profile flex <name>` mit `native-vlan-id` und `vlan-name <name>` / `vlan-id <id>`; `wireless tag site <name>` mit `flex-profile <name>` und `no local-site`; `ap <ethernet-mac>` mit `site-tag <name>`; ein Site Tag ohne Local Site versetzt die APs in den FlexConnect-Modus, `flex-profile` ist nur bei ausgeschalteter Local Site wählbar; das VLAN für zentrales Switching gehört nicht ins Flex Profile; bei VLAN-Namen im Policy Profile müssen die Namen im Flex Profile exakt passen, sonst können sich Clients nicht verbinden |
+| Ausgabeformate FlexConnect | genieparser, `show_wireless.py` (Parser für `show wireless profile flex summary` und `show wireless tag site summary`) | Kopfzeilen `Number of Flex Profiles:` / `Number of Site Tags:`, `Flex Profile Name` / `Site Tag Name` und `Description`, Trennlinie, eine Zeile je Eintrag |
+| CCNP Enterprise Wireless | Cisco-Prüfungsübersicht 300-430 ENWLSI (PDF *300-430-ENWLSI-v1.1-9-2025*, nur als Suchtreffer gesehen, nicht gelesen) und Sekundärquellen | FlexConnect ist ein Prüfungsthema der 300-430. Die Gewichtung der Themen stammt aus Sekundärquellen und ist nicht belegt. Ein Treffer eines Drittanbieters nennt für 2026 die Bezeichnung 300-120 WLSI; das ist nicht belegt, den aktuellen Prüfungsplan bei Cisco prüfen |
+
 ## Wissen (nicht in der Sitzung geprüft)
 
 | Thema | Annahme |
@@ -19,6 +23,7 @@ Cisco-Seiten (cisco.com, developer.cisco.com) waren beim Bau nicht erreichbar. B
 | C9800 Konfigurationsbefehle | `wlan <profil> <id> <ssid>`, `security wpa psk set-key ascii 0 <key>`, `no shutdown`; `wireless profile policy <name>` mit `vlan`, `no shutdown`; `wireless tag policy <name>` mit `wlan <profil> policy <policy>`; `ap <ethernet-mac>` mit `policy-tag <name>`. Prompts `(config-wlan)#`, `(config-wireless-policy)#`, `(config-policy-tag)#`, `(config-ap)#` |
 | C9800 Standardverhalten | WLAN und Policy Profile sind nach dem Anlegen administrativ down; ein AP ohne eigenes Tag nutzt `default-policy-tag`, `default-site-tag`, `default-rf-tag`; das Default Policy Tag enthält keine WLANs, die SSID wird dann nicht ausgestrahlt |
 | Catalyst Center Token | Antwort von `auth/token` ist `{"Token": "<token>"}` (das SDK reicht das Objekt ungetypt durch, der Schlüssel ist nicht im Quelltext zu sehen) |
+| FlexConnect-Details | Das Policy Profile schaltet lokal mit `no central switching`. Es gibt ein vordefiniertes `default-flex-profile`, das ein Site Tag ohne Local Site verwendet, wenn kein eigenes Flex Profile gewählt ist. Prompts `(config-wireless-flex-profile)#`, `(config-wireless-flex-profile-vlan)#` und `(config-site-tag)#`. Ein `vlan-name` direkt im Untermodus `vlan-id` ist zulässig (der IOS-XE-Parser fällt auf den Elternmodus zurück; das Cisco-Beispiel reiht die Befehle so) |
 | Gerätewerte | `family` "Wireless Controller" bzw. "Unified AP", `softwareType` "IOS-XE", `reachabilityStatus` "Reachable", `managementState` "Managed" sind übliche Werte, nicht belegt |
 
 | C9800-WebUI | Menüstruktur (Dashboard, Monitoring > Wireless, Configuration > Tags & Profiles und Wireless, Administration > Command Line Interface, Troubleshooting) und Spaltennamen sind aus dem Wissen über die WebUI nachgebaut, nicht gegen Screenshots geprüft |
@@ -26,6 +31,7 @@ Cisco-Seiten (cisco.com, developer.cisco.com) waren beim Bau nicht erreichbar. B
 ## Simulator-Festlegungen
 
 - Die Sicherheitsspalte von `show wlan summary` für PSK (`[WPA2][PSK][AES]`) ist aus den belegten 802.1x-Zeilen abgeleitet; ein PSK-Beispiel gab es in den Quellen nicht.
+- FlexConnect-Modell (simulator-spezifisch): Ein Policy Profile mit lokalem Switching setzt einen AP im FlexConnect-Modus voraus; an einem AP im Local Mode verbindet sich der Client im Simulator nicht (das Verhalten des Geräts in diesem Fall ist nicht belegt). Eine numerische VLAN-ID im Policy Profile passt im Simulator auf eine VLAN-ID oder die Native VLAN des Flex Profile (nicht belegt). Zentrales Switching kennt nur numerische VLAN-IDs, weil der Simulator keine VLAN-Datenbank des Controllers hat. Die Begründungen sind didaktisch.
 - Die Spalte *Method* heißt für PSK `PSK`; belegt sind nur `Dot1x` und `MAB`.
 - Die Spalte *Tag Source* von `show ap tag summary` zeigt `Default`, wenn der AP kein eigenes Tag hat; belegt ist nur `Static`.
 - Fehlermeldungen der CLI (`% Invalid input detected: "…"`) sind vereinfacht; das Gerät nennt den Fehlerort mit einer `^`-Markierung. Die Meldung für nicht umgesetzte Show-Befehle ist simulator-spezifisch.
@@ -39,6 +45,7 @@ Cisco-Seiten (cisco.com, developer.cisco.com) waren beim Bau nicht erreichbar. B
 
 ## Offen (nicht umgesetzt, weil nicht belegt)
 
+- FlexConnect: Standalone-Betrieb bei WAN-Ausfall, lokale Authentifizierung am AP, Flex-ACLs, Central DHCP/Association, AAA-Override und VLAN-Gruppen.
 - Ausgabeformate aller weiteren `show wireless …`-Befehle, `show wlan all`, `show ap name … config general`.
 - Antwortformate von Site-, Health-, Client- und Wireless-Endpunkten des Catalyst Center (GET-Antworten sind im SDK ungetypt).
 - RESTCONF/NETCONF-Modelle des C9800.

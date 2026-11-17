@@ -15,6 +15,7 @@ L1, L2 = 'a4b2.32aa.0001', 'a4b2.32aa.0002'     # Ethernet-MACs von ap-lobby und
 LIMITS = ['Das Client-Modell ist didaktisch: Es erklärt, ob und warum ein Client verbunden ist, ist aber keine Abbildung der '
           'Controller-Pipeline.',
           'Nicht modelliert: 802.1x/RADIUS, FlexConnect, RF-Profile, Roaming, Mobility.']
+TRACK_WIFI = 'CCNP Enterprise Wireless (300-430 ENWLSI)'
 TOOLS = ['WebUI: Monitoring > Wireless > Clients', 'WebUI: Configuration > Tags & Profiles und Wireless > Access Points',
          'Client-Diagnose (nur im geführten Modus)', 'CLI: show wlan summary, show ap tag summary, show wireless client summary']
 
@@ -52,6 +53,7 @@ def lab(**kw):
     kw.setdefault('limits', LIMITS)
     kw.setdefault('tools', TOOLS)
     kw.setdefault('fabric', 'wlc1 mit ap-lobby und ap-lager')
+    kw.setdefault('track', 'Grundlagen Wireless')
     assert len(kw['hints']) == 4, kw['id']
     LABS.append(kw)
 
@@ -241,6 +243,96 @@ lab(id='06-aufraeumen', title='06 Altes WLAN sauber entfernen', topic='Wireless 
              'CLI: `ap a4b2.32aa.0002`, `no policy-tag`, `exit`, `no wireless tag policy PT_Alt`, `no wlan Alt_Profile`, `no wireless profile policy PP_Alt`.')
 SOLUTIONS['06-aufraeumen'] = ['ap %s' % L2, 'no policy-tag', 'exit', 'no wireless tag policy PT_Alt', 'no wlan Alt_Profile',
                               'no wireless profile policy PP_Alt']
+
+# ---------------------------------------------------------------------------------------------------------------
+# CCNP Enterprise Wireless (ENWLSI): FlexConnect. Befehle: Cisco-Dokumente 213945/213924 (siehe docs/QUELLEN.md)
+LOB_C, LAG_C = '58bf.eaaa.0001', '58bf.eaaa.0002'
+FLEX_TOOLS = ['WebUI: Configuration > Tags & Profiles > Policy, Flex, Tags, Site Tags und Wireless > Access Points',
+              'Monitoring > Wireless > Clients', 'Client-Diagnose (nur im geführten Modus)',
+              'CLI: show ap tag summary, show wireless profile flex summary, show wireless tag site summary, show wireless client summary']
+FLEX_LIMITS = LIMITS + ['Nicht modelliert: Standalone-Betrieb bei WAN-Ausfall, lokale Authentifizierung am AP, Flex-ACLs, Central DHCP/Association, '
+                        'AAA-Override, VLAN-Gruppen.',
+                        'Durchsatz und WAN-Last werden nicht simuliert; der Simulator unterscheidet nur zentrales und lokales Switching.']
+
+lab(id='07-flexconnect-zweigstelle', title='07 Zweigstelle Lager: Corp lokal schalten', topic='FlexConnect / Design',
+    level='Fortgeschritten', duration='40 min', kind='requirements', track=TRACK_WIFI, prerequisites=['Lab 01', 'Lab 04', 'Lab 05'],
+    tools=FLEX_TOOLS, limits=FLEX_LIMITS,
+    goals=['Zentrales und lokales Switching unterscheiden', 'Den Zusammenhang von Policy Profile, Flex Profile und Site Tag herstellen',
+           'Eine Zweigstelle auf FlexConnect umstellen, ohne den Hauptstandort zu verändern'],
+    intro='Die Firma betreibt Corp (WPA2-PSK, VLAN 20) an beiden APs; der gesamte Verkehr läuft bisher über den Controller. '
+          'Das Lager ist eine Zweigstelle hinter einer langsamen WAN-Leitung.\n\n- **ap-lobby** (Hauptstandort) soll unverändert bleiben\n'
+          '- **ap-lager** soll den Corp-Verkehr selbst ins **VLAN 20** schalten, statt ihn zum Controller zu tunneln\n'
+          '- Je ein Laptop als Test in Lobby und Lager',
+    requirements=['Der Laptop in der Lobby bleibt verbunden (VLAN 20) und wird weiter zentral geschaltet.',
+                  'Der Laptop im Lager ist verbunden (VLAN 20) und wird lokal geschaltet.',
+                  'ap-lager arbeitet im FlexConnect-Modus, ap-lobby bleibt im Local Mode.',
+                  'Corp bleibt mit WPA2-PSK geschützt.'],
+    hints=['**Konzept:** Ob ein AP Clientdaten selbst ins VLAN schaltet, hängt von seinem Betriebsmodus ab. Den legt nicht das WLAN fest, sondern ein Tag am AP.',
+           '**Ebene:** Mehrere Objekte wirken zusammen: Das Policy Profile bestimmt die Switching-Art, ein Flex Profile sagt dem AP, welche VLANs er lokal kennt, und ein Site Tag bestimmt den Modus. Das Lager braucht eigene Tags.',
+           '**Prüfschritte:** Lege zuerst das Flex Profile mit dem lokalen VLAN an. Das Policy Profile für lokales Switching verweist auf genau diesen VLAN-Namen. Dann Policy Tag, Site Tag ohne Local Site mit dem Flex Profile, und beide Tags dem AP zuweisen.',
+           '**Lösung:** Flex Profile **FP_Lager** mit `vlan-name CORP_LOCAL` / `vlan-id 20`; Policy Profile **PP_Corp_Flex** mit `vlan CORP_LOCAL` und `no central switching`, aktiviert; Policy Tag **PT_Corp_Flex** (Corp_Profile → PP_Corp_Flex); Site Tag **ST_Lager** mit `no local-site` und `flex-profile FP_Lager`; ap-lager bekommt PT_Corp_Flex und ST_Lager.'],
+    cause='Aufgabe nach Anforderungen: Es gibt keinen einzelnen Fehler.',
+    startCommands=corp() + ['ap %s' % L1, 'policy-tag PT_Corp', 'exit', 'ap %s' % L2, 'policy-tag PT_Corp'],
+    worldClients=[client(LOB_C, 'Corp', 'Sommer2026', 'ap-lobby'), client(LAG_C, 'Corp', 'Sommer2026', 'ap-lager')],
+    checks=[chk('Lobby-Laptop: verbunden, VLAN 20, zentral geschaltet', 'client', mac=LOB_C, state='Run', vlan='20', switching='central'),
+            chk('Lager-Laptop: verbunden, VLAN 20, lokal geschaltet', 'client', mac=LAG_C, state='Run', vlan='20', switching='local'),
+            chk('ap-lager arbeitet im FlexConnect-Modus', 'apmode', ap='ap-lager', mode='FlexConnect'),
+            chk('ap-lobby bleibt im Local Mode', 'apmode', 'security', ap='ap-lobby', mode='Local'),
+            chk('Corp nutzt weiterhin WPA2-PSK', 'wlan', 'security', profile='Corp_Profile', attrs={'akm': 'psk'})],
+    questions=[q('q1', 'Woran erkennt der Controller, dass ein AP im FlexConnect-Modus arbeitet?',
+                 ['Am Site Tag des APs: Local Site ist ausgeschaltet', 'Am WLAN-Profil', 'Am VLAN im Policy Profile', 'Am AP-Modell'], 0,
+                 'Ein Site Tag ohne Local Site versetzt jeden AP, der es erhält, in den FlexConnect-Modus (Cisco-Dokument 213945).'),
+               q('q2', 'Welche VLANs gehören in das Flex Profile?',
+                 ['Alle VLANs des Controllers', 'Die VLANs, die der AP lokal schalten soll', 'Nur das Management-VLAN', 'Keine, es enthält nur Timer'], 1,
+                 'Das Flex Profile listet die VLANs, die der AP selbst braucht. Das VLAN für zentrales Switching steht dort nicht (Cisco-Dokument 213945).')],
+    solution='WebUI: Tags & Profiles > Flex: FP_Lager mit VLAN CORP_LOCAL / 20; Policy: PP_Corp_Flex mit VLAN CORP_LOCAL, Central Switching aus, aktiviert; '
+             'Tags: PT_Corp_Flex; Site Tags: ST_Lager mit Local Site aus und Flex Profile FP_Lager; Wireless > Access Points > ap-lager: beide Tags. '
+             'CLI: `wireless profile flex FP_Lager` / `vlan-name CORP_LOCAL` / `vlan-id 20`; `wireless profile policy PP_Corp_Flex` / `vlan CORP_LOCAL` / `no central switching` / `no shutdown`; '
+             '`wireless tag policy PT_Corp_Flex` / `wlan Corp_Profile policy PP_Corp_Flex`; `wireless tag site ST_Lager` / `no local-site` / `flex-profile FP_Lager`; '
+             '`ap a4b2.32aa.0002` / `policy-tag PT_Corp_Flex` / `site-tag ST_Lager`.')
+SOL07 = ['wireless profile flex FP_Lager', 'vlan-name CORP_LOCAL', 'vlan-id 20', 'exit', 'exit',
+         'wireless profile policy PP_Corp_Flex', 'vlan CORP_LOCAL', 'no central switching', 'no shutdown', 'exit',
+         'wireless tag policy PT_Corp_Flex', 'wlan Corp_Profile policy PP_Corp_Flex', 'exit',
+         'wireless tag site ST_Lager', 'no local-site', 'flex-profile FP_Lager', 'exit',
+         'ap %s' % L2, 'policy-tag PT_Corp_Flex', 'site-tag ST_Lager']
+SOLUTIONS['07-flexconnect-zweigstelle'] = SOL07
+
+# ---------------------------------------------------------------------------------------------------------------
+lab(id='08-flexconnect-vlan-name', title='08 Zweigstelle: Lager-Laptop ohne Verbindung', topic='FlexConnect / Troubleshooting',
+    level='Fortgeschritten', duration='25 min', kind='troubleshooting', track=TRACK_WIFI, prerequisites=['Lab 07'],
+    tools=FLEX_TOOLS, limits=FLEX_LIMITS,
+    goals=['Die Abhängigkeit zwischen Policy Profile und Flex Profile lesen', 'Eine Fehlersuche bei lokalem Switching systematisch führen',
+           'Nicht auf zentrales Switching ausweichen, wenn lokales Switching verlangt ist'],
+    intro='Das Lager wurde auf FlexConnect umgestellt: lokales Switching ins VLAN 20, eigene Tags, Site Tag ohne Local Site. '
+          'Seitdem kommt der Laptop im Lager nicht mehr ins WLAN Corp. In der Lobby läuft alles.\n\n'
+          '- Schlüssel, Tags und Zustände wurden geprüft und sind in Ordnung\n- Das Lager soll bei lokalem Switching bleiben.',
+    requirements=['Der Laptop im Lager ist verbunden (VLAN 20) und wird lokal geschaltet.',
+                  'ap-lager bleibt im FlexConnect-Modus.',
+                  'Die Lobby bleibt unverändert: verbunden, VLAN 20, zentral geschaltet.'],
+    hints=['**Konzept:** Bei lokalem Switching muss der AP das VLAN des Policy Profile selbst kennen. Er vergleicht dafür den Eintrag im Policy Profile mit dem, was sein Flex Profile definiert.',
+           '**Ebene:** Zuordnung zwischen Policy Profile und Flex Profile. Modus, Tags und Zustände sind in Ordnung.',
+           '**Prüfschritte:** Lies das Policy Profile und das Flex Profile nebeneinander. Stehen die VLAN-Angaben dort Zeichen für Zeichen gleich?',
+           '**Lösung:** Den VLAN-Namen im Policy Profile PP_Corp_Flex auf **Corp_Local** setzen (oder im Flex Profile den Namen auf CORP_LOCAL ändern). Auf zentrales Switching auszuweichen ist keine Lösung.'],
+    cause='Der VLAN-Name im Policy Profile (CORP_LOCAL) stimmt nicht mit dem im Flex Profile (Corp_Local) überein; die Namen müssen exakt passen.',
+    startCommands=corp() + ['ap %s' % L1, 'policy-tag PT_Corp', 'exit',
+                            'wireless profile flex FP_Lager', 'vlan-name Corp_Local', 'vlan-id 20', 'exit', 'exit',
+                            'wireless profile policy PP_Corp_Flex', 'vlan CORP_LOCAL', 'no central switching', 'no shutdown', 'exit',
+                            'wireless tag policy PT_Corp_Flex', 'wlan Corp_Profile policy PP_Corp_Flex', 'exit',
+                            'wireless tag site ST_Lager', 'no local-site', 'flex-profile FP_Lager', 'exit',
+                            'ap %s' % L2, 'policy-tag PT_Corp_Flex', 'site-tag ST_Lager'],
+    worldClients=[client(LOB_C, 'Corp', 'Sommer2026', 'ap-lobby'), client(LAG_C, 'Corp', 'Sommer2026', 'ap-lager')],
+    checks=[chk('Lager-Laptop: verbunden, VLAN 20, lokal geschaltet', 'client', mac=LAG_C, state='Run', vlan='20', switching='local'),
+            chk('ap-lager bleibt im FlexConnect-Modus', 'apmode', 'security', ap='ap-lager', mode='FlexConnect'),
+            chk('Lobby-Laptop unverändert: verbunden, VLAN 20, zentral geschaltet', 'client', 'security', mac=LOB_C, state='Run', vlan='20', switching='central')],
+    questions=[q('q1', 'Was geschieht, wenn der VLAN-Name im Policy Profile nicht exakt im Flex Profile steht?',
+                 ['Die Clients können sich nicht mit dem WLAN verbinden', 'Der AP nimmt das nächstbeste VLAN', 'Der Controller wechselt auf zentrales Switching', 'Nichts, Namen werden ignoriert'], 0,
+                 'Nach Cisco-Dokument 213945 müssen die Namen exakt passen, sonst können sich Clients nicht verbinden.'),
+               q('q2', 'Warum wäre zentrales Switching hier keine Lösung?',
+                 ['Der Lager-Verkehr würde über das WAN zum Controller laufen, obwohl er lokal bleiben soll', 'FlexConnect lässt sich damit nicht mehr nutzen', 'Das VLAN würde gelöscht', 'Es geht nur im Local Mode'], 0,
+                 'Die Anforderung ist lokales Switching im Lager. Zentrales Switching würde die Prüfung auf lokale Schaltung verfehlen.')],
+    solution='WebUI: Policy > PP_Corp_Flex > Edit: VLAN Corp_Local. CLI: `wireless profile policy PP_Corp_Flex`, `vlan Corp_Local`. '
+             'Gleichwertig: Im Flex Profile FP_Lager `no vlan-name Corp_Local`, `vlan-name CORP_LOCAL`, `vlan-id 20`.')
+SOLUTIONS['08-flexconnect-vlan-name'] = ['wireless profile policy PP_Corp_Flex', 'vlan Corp_Local']
 
 
 def main(out=OUT, verbose=True):

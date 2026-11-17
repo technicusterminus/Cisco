@@ -11,6 +11,17 @@ Alle Labs sind Eigenentwicklungen für den Simulator (keine Vorlagen von Cisco o
 | 05 Gast-WLAN nur in der Lobby | Anforderungen | Design | Zwei WLANs mit unterschiedlichem Geltungsbereich brauchen zwei Policy Tags | Gast in das gemeinsame Tag einfügen: Das Lager sendet dann auch Gast |
 | 06 Altes WLAN sauber entfernen | Anforderungen | Betrieb | Abhängigkeiten zwischen AP, Policy Tag, WLAN und Policy Profile; Abbau von außen nach innen | Corp-Zuordnung mit entfernen: Der Laptop in der Lobby fällt aus |
 
+## CCNP Enterprise Wireless (300-430 ENWLSI)
+
+Die Labs 07 und 08 tragen den Track *CCNP Enterprise Wireless* und behandeln FlexConnect, ein Prüfungsthema der 300-430 (Quellen und Vorbehalte in `docs/QUELLEN.md`). Die Labs 01 bis 06 sind Grundlagen.
+
+| Lab | Art | Lernmoment | Falsche Abkürzung, die die Prüfung abfängt |
+|---|---|---|---|
+| 07 Zweigstelle Lager: Corp lokal schalten | Anforderungen | Policy Profile (lokales Switching), Flex Profile (lokale VLANs), Site Tag (Modus) und zwei Policy Tags greifen ineinander | Beide APs auf FlexConnect stellen: Die Lobby verliert den Local Mode und schaltet lokal. Lokales Switching für alle: Die APs im Local Mode lassen den Client nicht zu. Flex Profile ohne das VLAN: Der Client bleibt draußen |
+| 08 Zweigstelle: Lager-Laptop ohne Verbindung | Fehlersuche | Der VLAN-Name im Policy Profile muss exakt dem im Flex Profile entsprechen | Zentrales Switching einschalten oder den AP zurück in den Local Mode: Die Prüfung verlangt lokale Schaltung im FlexConnect-Modus |
+
+Gleichwertig bei Lab 08: den Namen im Policy Profile anpassen oder im Flex Profile umbenennen.
+
 ## Aufbau eines Labs
 
 Jedes Lab hat Szenario, Anforderungen, Lernziele, Werkzeuge, Grenzen, vier Hinweisstufen (Konzept, Ebene, Prüfschritte, Lösung), Prüfungen mit Kategorie (`function` oder `security`), zwei Verständnisfragen, die nicht zum Bestehen zählen, eine Musterlösung als CLI-Befehle und einen Text zur Lösung.

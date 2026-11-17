@@ -227,6 +227,109 @@ if __name__ == '__main__':
     unittest.main()
 
 
+FLEX = ['configure terminal', 'wireless profile flex FP1', 'native-vlan-id 1', 'vlan-name CORP_LOCAL', 'vlan-id 20', 'vlan-name GAST', 'vlan-id 99',
+        'exit', 'exit', 'wireless tag site ST1', 'no local-site', 'flex-profile FP1', 'end']
+
+
+class TestFlexConnect(unittest.TestCase):
+    """Befehle und Regeln aus Cisco-Dokument 213945 (ueber Websuche zitiert); Formate der Show-Befehle aus genieparser."""
+
+    def run_all(self, lines):
+        s = Sim()
+        for line in lines:
+            out = s.cli.run(line)
+            self.assertFalse(out.startswith('% '), '%s -> %s' % (line, out))
+        return s
+
+    def test_show_formats(self):
+        s = self.run_all(FLEX)
+        flex = s.cli.run('show wireless profile flex summary').split('\n')
+        self.assertRegex(flex[0], r'^Number\s+of\s+Flex\s+Profiles:\s+2$')
+        self.assertRegex(flex[2], r'^Flex\s+Profile\s+Name\s+Description$')
+        self.assertRegex(flex[3], r'^-+$')
+        self.assertEqual([x.strip() for x in flex[4:]], ['FP1', 'default-flex-profile'])
+        site = s.cli.run('show wireless tag site summary').split('\n')
+        self.assertRegex(site[0], r'^Number\s+of\s+Site\s+Tags:\s+2$')
+        self.assertRegex(site[2], r'^Site\s+Tag\s+Name\s+Description$')
+        self.assertEqual([x.strip() for x in site[4:]], ['ST1', 'default-site-tag'])
+
+    def test_flex_profile_is_only_offered_without_local_site(self):
+        s = self.run_all(['configure terminal', 'wireless profile flex FP1', 'exit', 'wireless tag site ST1'])
+        r = s.cli.run('flex-profile FP1')
+        self.assertTrue(r.startswith('% ') and 'Local Site' in r, r)
+        self.assertEqual(s.cli.run('no local-site'), '')
+        self.assertEqual(s.cli.run('flex-profile FP1'), '')
+        self.assertTrue(s.cli.run('flex-profile gibtsnicht').startswith('% '))
+
+    def test_prompts_and_vlan_submode_falls_back_to_the_parent_mode(self):
+        s = self.run_all(['configure terminal', 'wireless profile flex FP1'])
+        self.assertEqual(s.cli.prompt, 'wlc1(config-wireless-flex-profile)#')
+        s.cli.run('vlan-name A')
+        self.assertEqual(s.cli.prompt, 'wlc1(config-wireless-flex-profile-vlan)#')
+        self.assertEqual(s.cli.run('vlan-name B'), '', 'weiterer vlan-name direkt im Untermodus (Beispiel im Cisco-Dokument)')
+        s.cli.run('vlan-id 30')
+        self.assertEqual(s.wlc.flex_profiles['FP1']['vlans'], {'A': None, 'B': 30})
+        self.assertTrue(s.cli.run('vlan-id 5000').startswith('% '))
+        s.cli.run('exit')
+        self.assertEqual(s.cli.prompt, 'wlc1(config-wireless-flex-profile)#')
+        self.assertTrue(s.cli.run('vlan-id 10').startswith('% '), 'vlan-id nur nach vlan-name')
+
+    def test_site_tag_makes_the_ap_flexconnect_and_shows_in_the_tag_summary(self):
+        s = self.run_all(FLEX + ['configure terminal', 'ap a4b2.32aa.0002', 'site-tag ST1', 'end'])
+        st = s.wlc.state()
+        self.assertEqual({a['name']: (a['mode'], a['siteTag']) for a in st['aps']},
+                         {'ap-lobby': ('Local', 'default-site-tag'), 'ap-lager': ('FlexConnect', 'ST1')})
+        self.assertRegex(s.cli.run('show ap tag summary'), r'ap-lager\s+a4b2\.32aa\.0002\s+ST1\s+default-policy-tag\s+default-rf-tag\s+No\s+Static')
+        self.assertTrue(s.cli.run('configure terminal') and s.cli.run('ap a4b2.32aa.0002') == '')
+        self.assertTrue(s.cli.run('site-tag gibtsnicht').startswith('% '))
+        s.cli.run('no site-tag')
+        self.assertEqual(s.wlc.ap_mode(s.world['aps'][1]), 'Local')
+
+    def test_site_tag_without_flex_profile_uses_the_default_profile(self):
+        s = self.run_all(['configure terminal', 'wireless tag site ST2', 'no local-site', 'exit', 'ap a4b2.32aa.0001', 'site-tag ST2'])
+        self.assertEqual(s.wlc.flex_of(s.world['aps'][0]), 'default-flex-profile')
+
+    def test_delete_rules_for_flex_profiles_and_site_tags(self):
+        s = self.run_all(FLEX + ['configure terminal', 'ap a4b2.32aa.0002', 'site-tag ST1', 'exit'])
+        for cmd, word in (('no wireless profile flex FP1', 'ST1'), ('no wireless tag site ST1', 'ap-lager'),
+                          ('no wireless profile flex default-flex-profile', 'vordefiniert'), ('no wireless tag site default-site-tag', 'vordefiniert')):
+            self.assertIn(word, s.cli.run(cmd), cmd)
+        for line in ('ap a4b2.32aa.0002', 'no site-tag', 'exit', 'no wireless tag site ST1', 'no wireless profile flex FP1'):
+            self.assertEqual(s.cli.run(line), '', line)
+        self.assertEqual((list(s.wlc.flex_profiles), list(s.wlc.site_tags)), (['default-flex-profile'], ['default-site-tag']))
+
+    def _client(self, lines):
+        s = self.run_all(['configure terminal', 'wlan P 1 Corp', 'no shutdown', 'exit', 'wireless profile policy PP', 'vlan 20', 'no shutdown'] + lines)
+        return s, s.wlc.clients()[0]
+
+    def tags(self, site=True, vlan='CORP_LOCAL', central=False):
+        pol = ['exit', 'wireless profile policy PP', 'vlan %s' % vlan, ('central switching' if central else 'no central switching')]
+        out = pol + ['exit', 'wireless tag policy PT', 'wlan P policy PP', 'exit', 'wireless profile flex FP1', 'vlan-name CORP_LOCAL', 'vlan-id 20',
+                     'exit', 'exit', 'wireless tag site ST1', 'no local-site', 'flex-profile FP1', 'exit', 'ap a4b2.32aa.0001', 'policy-tag PT']
+        return out + (['site-tag ST1'] if site else [])
+
+    def test_decision_central_local_and_the_failure_reasons(self):
+        s, c = self._client(self.tags())
+        self.assertEqual((c['state'], c['vlan'], c['switching'], c['mode']), ('Run', '20', 'local', 'FlexConnect'))
+        s, c = self._client(self.tags(site=False))
+        self.assertEqual(c['state'], 'Not Associated')
+        self.assertIn('Local Mode', c['reasons'][0])
+        s, c = self._client(self.tags(vlan='Corp_Local'))
+        self.assertEqual(c['state'], 'Not Associated')
+        self.assertIn('exakt', c['reasons'][0])
+        s, c = self._client(self.tags(central=True))
+        self.assertEqual(c['state'], 'Not Associated')
+        self.assertIn('numerische', c['reasons'][0])
+        s, c = self._client(self.tags(vlan='20', central=True))
+        self.assertEqual((c['state'], c['vlan'], c['switching']), ('Run', '20', 'central'))
+
+    def test_names_are_case_sensitive_and_numeric_ids_match_by_vlan_id(self):
+        fp = {'native': 7, 'vlans': {'CORP_LOCAL': 20, 'leer': None}}
+        f = Sim().wlc.flex_vlan
+        self.assertEqual((f(fp, 'CORP_LOCAL'), f(fp, 'corp_local'), f(fp, 'leer'), f(fp, 'x')), (20, None, None, None))
+        self.assertEqual((f(fp, '20'), f(fp, '7'), f(fp, '8'), f(None, '20')), (20, 7, None, None))
+
+
 class TestWebApi(unittest.TestCase):
     """Zustands- und Apply-Endpunkt der Oberflaeche sowie das Ausliefern der statischen Dateien."""
 

@@ -29,14 +29,15 @@ const NAV = [
   { id: 'dash', l: 'Dashboard' },
   { id: 'labs', l: 'Labs (Simulation)' },
   { g: 'Monitoring', sub: 'Wireless', items: [['aps', 'Access Points'], ['clients', 'Clients']] },
-  { g: 'Configuration', sub: 'Tags & Profiles', items: [['wlans', 'WLANs'], ['policies', 'Policy'], ['tags', 'Tags']] },
+  { g: 'Configuration', sub: 'Tags & Profiles', items: [['wlans', 'WLANs'], ['policies', 'Policy'], ['flex', 'Flex'], ['tags', 'Tags (Policy)'], ['sitetags', 'Tags (Site)']] },
   { g: 'Configuration', sub: 'Wireless', items: [['apcfg', 'Access Points']] },
   { g: 'Administration', items: [['cli', 'Command Line Interface']] },
   { g: 'Troubleshooting', items: [['diag', 'Client-Diagnose (Simulation)']] },
 ];
 const TITLES = { dash: 'Dashboard', labs: 'Labs (Simulation)', aps: 'Monitoring > Wireless > Access Points', clients: 'Monitoring > Wireless > Clients',
   wlans: 'Configuration > Tags & Profiles > WLANs', policies: 'Configuration > Tags & Profiles > Policy',
-  tags: 'Configuration > Tags & Profiles > Tags', apcfg: 'Configuration > Wireless > Access Points',
+  flex: 'Configuration > Tags & Profiles > Flex', sitetags: 'Configuration > Tags & Profiles > Tags > Site',
+  tags: 'Configuration > Tags & Profiles > Tags > Policy', apcfg: 'Configuration > Wireless > Access Points',
   cli: 'Administration > Command Line Interface', diag: 'Troubleshooting > Client-Diagnose (Simulation)' };
 
 function toast(msg) {
@@ -112,7 +113,7 @@ VIEWS.dash = main => {
 
 const apTable = () => table([{ l: 'AP Name', f: a => a.name }, { l: 'AP Model', f: a => a.model }, { l: 'Ethernet MAC', f: a => a.ethMac },
   { l: 'Radio MAC', f: a => a.radioMac }, { l: 'IP Address', f: a => a.ip }, { l: 'Location', f: a => a.location },
-  { l: 'Country', f: a => a.country }, { l: 'Status', f: a => stateBadge(a.state) }], S.aps);
+  { l: 'Country', f: a => a.country }, { l: 'Status', f: a => stateBadge(a.state) }, { l: 'AP Mode', f: a => a.mode }], S.aps);
 
 VIEWS.aps = main => main.append(apTable());
 
@@ -165,23 +166,90 @@ const nextWlanId = () => Math.max(0, ...S.wlans.map(x => x.id)) + 1;
 VIEWS.policies = main => {
   main.append(h('div', { class: 'bar' }, h('button', { class: 'primary', 'data-id': 'add-policy', onclick: () => policyDialog() }, '+ Add')));
   main.append(table([{ l: 'Status', f: p => stateBadge(p.status) }, { l: 'Policy Profile Name', f: p => p.name },
-    { l: 'Description', f: p => p.description || 'Not required' }, { l: 'VLAN', f: p => p.vlan },
+    { l: 'Description', f: p => p.description || 'Not required' }, { l: 'VLAN', f: p => p.vlan }, { l: 'Switching', f: p => p.central ? 'Central' : 'Local' },
     { l: '', f: p => [h('button', { class: 'small', onclick: () => policyDialog(p) }, 'Edit'), ' ',
       h('button', { class: 'small danger', onclick: () => remove('no wireless profile policy ' + p.name, 'Policy Profile ' + p.name) }, 'Delete')] }], S.policies));
 };
 
 function policyDialog(p) {
   const name = h('input', { 'data-id': 'policy-name', value: p ? p.name : '', disabled: !!p, placeholder: 'PP_Corp' });
-  const vlan = h('input', { 'data-id': 'policy-vlan', type: 'number', min: 1, max: 4094, value: p ? p.vlan : '1' });
+  const vlan = h('input', { 'data-id': 'policy-vlan', value: p ? p.vlan : '1', placeholder: 'ID oder Name' });
+  const central = h('input', { 'data-id': 'policy-central', type: 'checkbox' }); central.checked = p ? p.central : true;
   const descr = h('input', { 'data-id': 'policy-descr', value: p ? p.description : '' });
   const en = h('input', { 'data-id': 'policy-enabled', type: 'checkbox' }); en.checked = p ? p.status === 'ENABLED' : false;
-  const body = h('div', { class: 'row' }, field('Name', name), field('VLAN', vlan), field('Description', descr), field('Status Enabled', en));
+  const body = h('div', { class: 'row' }, field('Name', name), field('VLAN', vlan, 'ID (zentral) oder Name (bei lokalem Switching: Name aus dem Flex Profile).'),
+    field('Central Switching', central, 'Ausgeschaltet: lokales Switching (nur für FlexConnect-APs).'), field('Description', descr), field('Status Enabled', en));
   modal(p ? 'Edit Policy Profile ' + p.name : 'Add Policy Profile', body, () => {
     if (!p) need(/^[\w.-]{1,32}$/.test(name.value), 'Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
-    need(+vlan.value >= 1 && +vlan.value <= 4094, 'VLAN: 1-4094');
-    const c = ['wireless profile policy ' + (p ? p.name : name.value), 'vlan ' + vlan.value];
+    need(/^[\w.-]{1,32}$/.test(vlan.value), 'VLAN: ID oder Name (1-32 Zeichen, Buchstaben, Ziffern, . _ -)');
+    const c = ['wireless profile policy ' + (p ? p.name : name.value), 'vlan ' + vlan.value, central.checked ? 'central switching' : 'no central switching'];
     if (descr.value.trim()) c.push('description ' + descr.value.trim());
     c.push(en.checked ? 'no shutdown' : 'shutdown');
+    return c;
+  }, refresh);
+}
+
+VIEWS.flex = main => {
+  main.append(h('div', { class: 'bar' }, h('button', { class: 'primary', 'data-id': 'add-flex', onclick: () => flexDialog() }, '+ Add'),
+    h('span', { class: 'muted' }, 'Ein Flex Profile listet die VLANs, die ein FlexConnect-AP lokal schaltet.')));
+  main.append(table([{ l: 'Flex Profile Name', f: f => f.name }, { l: 'Native VLAN', f: f => f.native || '–' },
+    { l: 'VLANs (Name, ID)', f: f => f.vlans.length ? f.vlans.map(v => v.name + ' (' + (v.id == null ? '?' : v.id) + ')').join(', ') : '–' },
+    { l: '', f: f => f.builtin ? [h('button', { class: 'small', onclick: () => flexDialog(f) }, 'Edit'), ' ', badge('vordefiniert', 'warn')] :
+      [h('button', { class: 'small', onclick: () => flexDialog(f) }, 'Edit'), ' ',
+        h('button', { class: 'small danger', onclick: () => remove('no wireless profile flex ' + f.name, 'Flex Profile ' + f.name) }, 'Delete')] }], S.flexProfiles));
+};
+
+function flexDialog(f) {
+  const name = h('input', { 'data-id': 'flex-name', value: f ? f.name : '', disabled: !!f, placeholder: 'FP_Lager' });
+  const native = h('input', { 'data-id': 'flex-native', type: 'number', min: 1, max: 4094, value: f && f.native ? f.native : '', placeholder: 'optional' });
+  const rows = h('div', { 'data-id': 'flex-rows' });
+  const addRow = v => {
+    const n = h('input', { placeholder: 'VLAN-Name', value: v ? v.name : '', disabled: !!v, 'aria-label': 'VLAN-Name' });
+    const i = h('input', { type: 'number', min: 1, max: 4094, placeholder: 'ID', value: v && v.id != null ? v.id : '', style: 'width:90px', 'aria-label': 'VLAN-ID' });
+    const r = h('div', { class: 'maprow' }, n, i, h('button', { class: 'small', type: 'button', onclick: () => { r.remove(); rows.dispatchEvent(new Event('input', { bubbles: true })); } }, '✕'));
+    r.get = () => ({ name: n.value.trim(), id: i.value.trim() }); rows.append(r);
+  };
+  (f ? f.vlans : []).forEach(addRow);
+  const body = h('div', null, h('div', { class: 'row' }, field('Name', name), field('Native VLAN ID', native)),
+    h('h2', null, 'VLAN-Name → VLAN-ID'), rows,
+    h('button', { class: 'small', 'data-id': 'flex-add-vlan', type: 'button', onclick: () => { addRow(); rows.dispatchEvent(new Event('input', { bubbles: true })); } }, '+ Add VLAN'));
+  modal(f ? 'Edit Flex Profile ' + f.name : 'Add Flex Profile', body, () => {
+    if (!f) need(/^[\w.-]{1,32}$/.test(name.value), 'Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
+    need(native.value === '' || (+native.value >= 1 && +native.value <= 4094), 'Native VLAN: 1-4094');
+    const list = [...rows.children].map(r => r.get());
+    list.forEach(v => { need(/^[\w.-]{1,32}$/.test(v.name), 'VLAN-Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)'); need(+v.id >= 1 && +v.id <= 4094, 'VLAN-ID: 1-4094'); });
+    need(new Set(list.map(v => v.name)).size === list.length, 'Jeder VLAN-Name darf nur einmal vorkommen');
+    const c = ['wireless profile flex ' + (f ? f.name : name.value)];
+    if (native.value !== '') c.push('native-vlan-id ' + native.value); else if (f && f.native) c.push('no native-vlan-id');
+    if (f) f.vlans.filter(o => !list.some(v => v.name === o.name)).forEach(o => c.push('no vlan-name ' + o.name));
+    list.forEach(v => c.push('vlan-name ' + v.name, 'vlan-id ' + v.id));
+    return c;
+  }, refresh);
+}
+
+VIEWS.sitetags = main => {
+  main.append(h('div', { class: 'bar' }, h('button', { class: 'primary', 'data-id': 'add-site', onclick: () => siteDialog() }, '+ Add'),
+    h('span', { class: 'muted' }, 'Ein Site Tag ohne Local Site versetzt die APs, die es erhalten, in den FlexConnect-Modus.')));
+  main.append(table([{ l: 'Site Tag Name', f: t => t.name }, { l: 'Local Site', f: t => t.local ? 'Yes' : 'No' },
+    { l: 'Flex Profile', f: t => t.flexProfile || '–' },
+    { l: '', f: t => t.builtin ? [h('button', { class: 'small', onclick: () => siteDialog(t) }, 'Edit'), ' ', badge('vordefiniert', 'warn')] :
+      [h('button', { class: 'small', onclick: () => siteDialog(t) }, 'Edit'), ' ',
+        h('button', { class: 'small danger', onclick: () => remove('no wireless tag site ' + t.name, 'Site Tag ' + t.name) }, 'Delete')] }], S.siteTags));
+};
+
+function siteDialog(t) {
+  const name = h('input', { 'data-id': 'site-name', value: t ? t.name : '', disabled: !!t, placeholder: 'ST_Lager' });
+  const local = h('input', { 'data-id': 'site-local', type: 'checkbox' }); local.checked = t ? t.local : true;
+  const flex = h('select', { 'data-id': 'site-flex' }, S.flexProfiles.map(x => h('option', { value: x.name }, x.name)));
+  if (t && t.flexProfile) flex.value = t.flexProfile;
+  const sync = () => { flex.disabled = local.checked; };
+  local.addEventListener('change', sync); sync();
+  const body = h('div', { class: 'row' }, field('Name', name), field('Enable Local Site', local, 'Ausgeschaltet: AP im FlexConnect-Modus.'),
+    field('Flex Profile', flex, 'Nur wählbar, wenn Local Site ausgeschaltet ist.'));
+  modal(t ? 'Edit Site Tag ' + t.name : 'Add Site Tag', body, () => {
+    if (!t) need(/^[\w.-]{1,32}$/.test(name.value), 'Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
+    const c = ['wireless tag site ' + (t ? t.name : name.value), local.checked ? 'local-site' : 'no local-site'];
+    if (!local.checked) c.push('flex-profile ' + flex.value);
     return c;
   }, refresh);
 }
@@ -221,17 +289,20 @@ function tagDialog(t) {
 }
 
 VIEWS.apcfg = main => {
-  main.append(h('div', { class: 'note' }, 'Ein AP ohne eigenes Policy Tag nutzt das Default Policy Tag. Tag Source zeigt, ob das Tag zugewiesen (Static) oder der Standard ist.'));
+  main.append(h('div', { class: 'note' }, 'Ein AP ohne eigenes Tag nutzt die Default Tags. Tag Source zeigt, ob ein Tag zugewiesen (Static) oder der Standard ist. Der AP-Modus kommt vom Site Tag.'));
   main.append(table([{ l: 'AP Name', f: a => a.name }, { l: 'AP MAC', f: a => a.ethMac }, { l: 'Site Tag', f: a => a.siteTag },
-    { l: 'Policy Tag', f: a => a.policyTag }, { l: 'RF Tag', f: a => a.rfTag }, { l: 'Tag Source', f: a => a.tagSource },
+    { l: 'Policy Tag', f: a => a.policyTag }, { l: 'RF Tag', f: a => a.rfTag }, { l: 'AP Mode', f: a => a.mode }, { l: 'Tag Source', f: a => a.tagSource },
     { l: '', f: a => h('button', { class: 'small', 'data-id': 'ap-tag-' + a.name, onclick: () => apDialog(a) }, 'Edit Tags') }], S.aps));
 };
 
 function apDialog(a) {
   const tag = h('select', { 'data-id': 'ap-policy-tag' }, S.policyTags.map(t => h('option', { value: t.name }, t.name)));
   tag.value = a.policyTag;
-  const body = h('div', { class: 'row' }, field('AP Name', h('input', { value: a.name, disabled: true })), field('Policy Tag', tag));
-  modal('Edit Tags: ' + a.name, body, () => ['ap ' + a.ethMac, tag.value === 'default-policy-tag' ? 'no policy-tag' : 'policy-tag ' + tag.value], refresh);
+  const site = h('select', { 'data-id': 'ap-site-tag' }, S.siteTags.map(t => h('option', { value: t.name }, t.name)));
+  site.value = a.siteTag;
+  const body = h('div', { class: 'row' }, field('AP Name', h('input', { value: a.name, disabled: true })), field('Policy Tag', tag), field('Site Tag', site, 'Ein Site Tag ohne Local Site versetzt den AP in den FlexConnect-Modus.'));
+  modal('Edit Tags: ' + a.name, body, () => ['ap ' + a.ethMac, tag.value === 'default-policy-tag' ? 'no policy-tag' : 'policy-tag ' + tag.value,
+    site.value === 'default-site-tag' ? 'no site-tag' : 'site-tag ' + site.value], refresh);
 }
 
 async function remove(cmd, what) {
@@ -263,7 +334,7 @@ VIEWS.diag = main => {
   if (!S.diagAvailable) { main.append(h('div', { class: 'note', 'data-id': 'diag-locked' }, 'Im Prüfungsmodus ist die Client-Diagnose nicht verfügbar. Nutze Monitoring, die Show-Befehle und die CLI.')); return; }
   main.append(h('div', { class: 'note' }, 'Simulation: Diese Seite gibt es am echten Controller nicht. Sie erklärt, warum ein Client (nicht) verbunden ist. Die Begründungen sind ein didaktisches Modell.'));
   main.append(table([{ l: 'MAC Address', f: c => c.mac }, { l: 'SSID', f: c => c.ssid }, { l: 'AP', f: c => c.ap },
-    { l: 'Ergebnis', f: c => stateBadge(c.state) }, { l: 'Begründung', cls: 'reason', f: c => c.reasons.length ? c.reasons.join(' ') : 'Verbunden' }], S.clients));
+    { l: 'Ergebnis', f: c => stateBadge(c.state) }, { l: 'Switching', f: c => c.switching || '–' }, { l: 'Begründung', cls: 'reason', f: c => c.reasons.length ? c.reasons.join(' ') : 'Verbunden' }], S.clients));
 };
 
 /* ---------------------------------------------------------------- Labs */
@@ -292,7 +363,7 @@ VIEWS.labs = async main => {
   main.append(h('div', { class: 'bar' }, 'Modus: ', mode, h('span', { class: 'muted' }, 'Ein Lab-Start setzt die Welt auf den Ausgangszustand zurück.')));
   main.append(table([{ l: 'Status', f: l => l.progress.examPassed ? badge('Prüfung bestanden', 'ok') : l.progress.guidedPassed ? badge('Geführt bestanden', 'ok')
       : l.progress.starts ? badge('begonnen', 'warn') : h('span', { class: 'muted' }, 'offen') },
-    { l: 'Lab', f: l => h('b', null, l.title) }, { l: 'Thema', f: l => l.topic }, { l: 'Niveau', f: l => l.level },
+    { l: 'Lab', f: l => h('b', null, l.title) }, { l: 'Track', f: l => l.track }, { l: 'Thema', f: l => l.topic }, { l: 'Niveau', f: l => l.level },
     { l: 'Dauer', f: l => l.duration }, { l: 'Art', f: l => l.kind === 'troubleshooting' ? 'Fehlersuche' : 'Anforderungen' },
     { l: '', f: l => h('button', { class: 'small primary', 'data-id': 'start-' + l.id.slice(0, 2), onclick: async () => {
       if (cur && !confirm('Das laufende Lab wird ersetzt. Fortfahren?')) return;
@@ -338,6 +409,7 @@ function labCard(lab) {
   const card = h('div', { class: 'card', 'data-lab': lab.id },
     h('div', { class: 'bar' }, h('b', null, lab.title), badge(exam ? 'Prüfungsmodus' : 'Geführt', exam ? 'warn' : 'ok'), h('span', { class: 'grow' }),
       h('span', { class: 'muted' }, lab.level + ' · ' + lab.duration)),
+    h('div', { class: 'muted', 'data-id': 'lab-track' }, lab.track),
     md(lab.intro),
     h('h2', null, 'Anforderungen'), h('ul', null, lab.requirements.map(x => h('li', null, x))),
     h('details', null, h('summary', null, 'Lernziele, Werkzeuge und Grenzen dieses Szenarios'),
