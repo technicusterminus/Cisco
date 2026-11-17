@@ -21,6 +21,8 @@ Cisco-Seiten (cisco.com, developer.cisco.com) waren beim Bau nicht erreichbar. B
 | Catalyst Center Token | Antwort von `auth/token` ist `{"Token": "<token>"}` (das SDK reicht das Objekt ungetypt durch, der Schlüssel ist nicht im Quelltext zu sehen) |
 | Gerätewerte | `family` "Wireless Controller" bzw. "Unified AP", `softwareType` "IOS-XE", `reachabilityStatus` "Reachable", `managementState` "Managed" sind übliche Werte, nicht belegt |
 
+| C9800-WebUI | Menüstruktur (Dashboard, Monitoring > Wireless, Configuration > Tags & Profiles und Wireless, Administration > Command Line Interface, Troubleshooting) und Spaltennamen sind aus dem Wissen über die WebUI nachgebaut, nicht gegen Screenshots geprüft |
+
 ## Simulator-Festlegungen
 
 - Die Sicherheitsspalte von `show wlan summary` für PSK (`[WPA2][PSK][AES]`) ist aus den belegten 802.1x-Zeilen abgeleitet; ein PSK-Beispiel gab es in den Quellen nicht.
@@ -29,6 +31,9 @@ Cisco-Seiten (cisco.com, developer.cisco.com) waren beim Bau nicht erreichbar. B
 - Fehlermeldungen der CLI (`% Invalid input detected: "…"`) sind vereinfacht; das Gerät nennt den Fehlerort mit einer `^`-Markierung. Die Meldung für nicht umgesetzte Show-Befehle ist simulator-spezifisch.
 - Die Client-Entscheidung (assoziiert oder nicht, mit Begründung) ist ein didaktisches Modell, keine Controller-Pipeline. Die Begründungen sind simulator-spezifisch.
 - Fehler- und 401-Antworten des simulierten Catalyst Center sind vereinfacht.
+- Die Löschbefehle `no wlan`, `no wireless profile policy`, `no wireless tag policy` lehnen ab, solange das Objekt in einem Policy Tag oder an einem AP verwendet wird. Ob und mit welchem Text das Gerät so reagiert, ist nicht belegt; Meldungen simulator-spezifisch. `no policy-tag` ohne Argument setzt den AP auf das Default Policy Tag.
+- Die Seite *Client-Diagnose* und das *CLI-Äquivalent* in den Dialogen gibt es am echten Gerät nicht (Lernhilfen).
+- Die Weboberfläche wendet Änderungen atomar an: Ein Fehler in einem Befehl setzt die Konfiguration auf den Stand davor zurück.
 - Zugangsdaten des Simulators sind Übungswerte (`admin`/`admin`), keine echten.
 
 ## Offen (nicht umgesetzt, weil nicht belegt)

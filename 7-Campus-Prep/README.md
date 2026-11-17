@@ -2,14 +2,19 @@
 
 Simulierter **Catalyst 9800 WLC** und simuliertes **Catalyst Center** in einer gemeinsamen Welt. Python-Standardbibliothek, keine Abhängigkeiten, läuft offline. Kein echtes Gerät, keine Verbindung zu echten Controllern.
 
-> Stand: Phase 1 (siehe [`docs/UMFANG.md`](docs/UMFANG.md)). Es gibt noch keine Weboberfläche und keine Labs.
+> Stand: Phase 1 und 2a (siehe [`docs/UMFANG.md`](docs/UMFANG.md)). Die WLC hat eine Weboberfläche, das Catalyst Center noch nicht; Labs gibt es noch keine.
 
 ## Starten
 
 ```sh
-python3 start.py            # Port 8090, nur localhost
+python3 start.py            # Port 8090, nur localhost; Oberfläche unter http://127.0.0.1:8090/
 python3 -m unittest discover -s tests
+node tests/gui/smoke.js     # Browser-Test (braucht Node.js und Playwright)
 ```
+
+## WLC-Oberfläche
+
+`http://127.0.0.1:8090/` zeigt die WebUI des simulierten C9800: Dashboard, Monitoring (Access Points, Clients), Configuration (WLANs, Policy, Tags, AP-Tags), Administration (CLI) und die Simulations-Seite *Client-Diagnose*, die erklärt, warum ein Client nicht verbunden ist. Jeder Dialog zeigt vorab das **CLI-Äquivalent**; Änderungen laufen durch dieselbe CLI und werden atomar angewendet (bei einem Fehler bleibt alles wie vorher). Die Menüstruktur ist aus dem Wissen über die WebUI nachgebaut (siehe `docs/QUELLEN.md`).
 
 ## WLC-CLI
 
@@ -24,7 +29,7 @@ Umgesetzt:
 
 | Bereich | Befehle |
 |---|---|
-| Konfiguration | `wlan <profil> <id> <ssid>` mit `security wpa akm psk`, `security wpa psk set-key ascii 0 <key>`, `shutdown`; `wireless profile policy <name>` mit `vlan`, `description`, `shutdown`; `wireless tag policy <name>` mit `wlan <profil> policy <policy>`; `ap <ethernet-mac>` mit `policy-tag <name>` |
+| Konfiguration | `wlan <profil> <id> <ssid>` mit `security wpa akm psk`, `security wpa psk set-key ascii 0 <key>`, `shutdown`; `wireless profile policy <name>` mit `vlan`, `description`, `shutdown`; `wireless tag policy <name>` mit `wlan <profil> policy <policy>`; `ap <ethernet-mac>` mit `policy-tag <name>` oder `no policy-tag`; Löschen mit `no wlan`, `no wireless profile policy`, `no wireless tag policy` |
 | Show (Format belegt) | `show wlan summary`, `show ap summary`, `show ap tag summary`, `show wireless client summary`, `show wireless profile policy summary` |
 
 Die Welt hat zwei APs und zwei Clients. Das Lernmoment: Ein AP ohne eigenes Policy Tag nutzt `default-policy-tag`, das kein WLAN enthält. Die SSID wird nicht ausgestrahlt, und `show wireless client summary` bleibt leer, bis dem AP ein Policy Tag mit dem WLAN zugewiesen ist. WLAN und Policy Profile sind nach dem Anlegen administrativ down.

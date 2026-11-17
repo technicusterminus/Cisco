@@ -1,5 +1,6 @@
 """HTTP-Server: Catalyst-Center-API (Pfade wie im Original) und eine WLC-CLI unter /wlc/cli."""
 import json
+import os
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
@@ -7,6 +8,26 @@ from urllib.parse import parse_qs, urlparse
 from .catc import CatalystCenter
 from .wlc import Cli, Wlc
 from .world import new_world
+
+
+STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'static')
+TYPES = {'.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
+         '.svg': 'image/svg+xml'}
+
+
+def apply_commands(sim, commands):
+    """Befehle atomar anwenden: Bei einem Fehler wird die Konfiguration auf den Stand davor zurueckgesetzt.
+    Die Oberflaeche geht damit durch dieselbe CLI wie ein Benutzer (eine Wahrheit)."""
+    snap = sim.wlc.snapshot()
+    cli = Cli(sim.wlc)
+    results = []
+    for line in ['configure terminal'] + list(commands) + ['end']:
+        out = cli.run(line)
+        results.append({'command': line, 'output': out})
+        if out.startswith('% '):
+            sim.wlc.restore(snap)
+            return False, results, {'command': line, 'message': out[2:]}
+    return True, results, None
 
 
 class Sim:
@@ -31,11 +52,37 @@ def make_handler(sim):
             self.end_headers()
             self.wfile.write(data)
 
+        def _static(self, path):
+            rel = 'index.html' if path in ('/', '') else path[len('/static/'):] if path.startswith('/static/') else None
+            full = os.path.realpath(os.path.join(STATIC, rel)) if rel else None
+            root = os.path.realpath(STATIC)
+            if not full or not full.startswith(root + os.sep) or not os.path.isfile(full):
+                return self._send(404, {'error': 'nicht gefunden'})
+            with open(full, 'rb') as fh:
+                data = fh.read()
+            self.send_response(200)
+            self.send_header('Content-Type', TYPES.get(os.path.splitext(full)[1], 'application/octet-stream'))
+            self.send_header('Content-Length', str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
         def _go(self, method):
             u = urlparse(self.path)
+            if method == 'GET' and (u.path in ('/', '') or u.path.startswith('/static/')):
+                return self._static(u.path)
             n = int(self.headers.get('Content-Length') or 0)
             raw = self.rfile.read(n) if n else b''
             with sim.lock:
+                if u.path == '/wlc/api/state' and method == 'GET':
+                    return self._send(200, sim.wlc.state())
+                if u.path == '/wlc/api/apply' and method == 'POST':
+                    try:
+                        cmds = json.loads(raw or b'{}').get('commands')
+                        assert isinstance(cmds, list) and all(isinstance(x, str) for x in cmds)
+                    except (ValueError, AssertionError):
+                        return self._send(400, {'error': 'JSON erwartet: {"commands": ["..."]}'})
+                    ok, results, err = apply_commands(sim, cmds)
+                    return self._send(200 if ok else 400, {'ok': ok, 'results': results, 'error': err})
                 if u.path == '/wlc/cli' and method == 'POST':
                     try:
                         line = json.loads(raw or b'{}').get('command', '')
