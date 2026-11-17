@@ -57,7 +57,7 @@ class TestState(Base):
         self.assertEqual(read(os.path.join(self.dir, 'state.json')), first)
         self.assertEqual([f for f in os.listdir(self.dir) if f.endswith('.tmp')], [])
         d = json.loads(first)
-        self.assertEqual((d['kind'], d['version']), ('campusprep-state', 1))
+        self.assertEqual((d['kind'], d['version']), ('campusprep-state', 2))
         # Determinismus: ein zweiter, unabhaengiger Lauf mit denselben Aktionen schreibt dieselben Bytes (keine Zeitstempel)
         with tempfile.TemporaryDirectory() as other:
             s2 = Sim(data_dir=other)
@@ -112,6 +112,37 @@ class TestState(Base):
         d['lab'] = {'id': '99-unbekannt', 'mode': 'guided'}
         s.restore_all(d)
         self.assertIsNone(s.labs.session)
+
+
+class TestMigration(Base):
+    def test_version_1_state_and_progress_still_load(self):
+        s = Sim(data_dir=self.dir)
+        s.labs.start('01-ssid-nicht-sichtbar')
+        s.apply(s.labs.labs['01-ssid-nicht-sichtbar']['solutionCommands'])
+        s.labs.check()
+        st = s.snapshot_all()
+        st['version'] = 1
+        del st['wlc']['flexProfiles'], st['wlc']['siteTags']
+        with open(os.path.join(self.dir, 'state.json'), 'w', encoding='utf-8') as fh:
+            json.dump(st, fh)
+        with open(os.path.join(self.dir, 'progress.json'), 'w', encoding='utf-8') as fh:
+            json.dump({'kind': 'campusprep-progress', 'version': 1, 'labs': s.labs.progress}, fh)
+        s2 = Sim(data_dir=self.dir)
+        self.assertEqual(s2.wlc.state()['wlans'], s.wlc.state()['wlans'])
+        self.assertEqual([t['name'] for t in s2.wlc.state()['siteTags']], ['default-site-tag'])
+        self.assertEqual([f['name'] for f in s2.wlc.state()['flexProfiles']], ['default-flex-profile'])
+        self.assertTrue(s2.labs.check()['passed'])
+        self.assertTrue(s2.labs.progress['01-ssid-nicht-sichtbar']['guidedPassed'])
+        self.assertFalse(os.path.exists(os.path.join(self.dir, 'state.json.bad')))
+
+    def test_flex_config_roundtrips(self):
+        s = Sim(data_dir=self.dir)
+        s.labs.start('07-flexconnect-zweigstelle')
+        s.apply(s.labs.labs['07-flexconnect-zweigstelle']['solutionCommands'])
+        s.persist()
+        s2 = Sim(data_dir=self.dir)
+        self.assertEqual(s2.wlc.state(), s.wlc.state())
+        self.assertTrue(s2.labs.check()['passed'])
 
 
 class TestNamedSaves(Base):

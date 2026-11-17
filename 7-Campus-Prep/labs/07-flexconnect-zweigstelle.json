@@ -1,0 +1,177 @@
+{
+ "cause": "Aufgabe nach Anforderungen: Es gibt keinen einzelnen Fehler.",
+ "checks": [
+  {
+   "category": "function",
+   "desc": "Lobby-Laptop: verbunden, VLAN 20, zentral geschaltet",
+   "mac": "58bf.eaaa.0001",
+   "state": "Run",
+   "switching": "central",
+   "type": "client",
+   "vlan": "20"
+  },
+  {
+   "category": "function",
+   "desc": "Lager-Laptop: verbunden, VLAN 20, lokal geschaltet",
+   "mac": "58bf.eaaa.0002",
+   "state": "Run",
+   "switching": "local",
+   "type": "client",
+   "vlan": "20"
+  },
+  {
+   "ap": "ap-lager",
+   "category": "function",
+   "desc": "ap-lager arbeitet im FlexConnect-Modus",
+   "mode": "FlexConnect",
+   "type": "apmode"
+  },
+  {
+   "ap": "ap-lobby",
+   "category": "security",
+   "desc": "ap-lobby bleibt im Local Mode",
+   "mode": "Local",
+   "type": "apmode"
+  },
+  {
+   "attrs": {
+    "akm": "psk"
+   },
+   "category": "security",
+   "desc": "Corp nutzt weiterhin WPA2-PSK",
+   "profile": "Corp_Profile",
+   "type": "wlan"
+  }
+ ],
+ "duration": "40 min",
+ "fabric": "wlc1 mit ap-lobby und ap-lager",
+ "goals": [
+  "Zentrales und lokales Switching unterscheiden",
+  "Den Zusammenhang von Policy Profile, Flex Profile und Site Tag herstellen",
+  "Eine Zweigstelle auf FlexConnect umstellen, ohne den Hauptstandort zu verändern"
+ ],
+ "hints": [
+  "**Konzept:** Ob ein AP Clientdaten selbst ins VLAN schaltet, hängt von seinem Betriebsmodus ab. Den legt nicht das WLAN fest, sondern ein Tag am AP.",
+  "**Ebene:** Mehrere Objekte wirken zusammen: Das Policy Profile bestimmt die Switching-Art, ein Flex Profile sagt dem AP, welche VLANs er lokal kennt, und ein Site Tag bestimmt den Modus. Das Lager braucht eigene Tags.",
+  "**Prüfschritte:** Lege zuerst das Flex Profile mit dem lokalen VLAN an. Das Policy Profile für lokales Switching verweist auf genau diesen VLAN-Namen. Dann Policy Tag, Site Tag ohne Local Site mit dem Flex Profile, und beide Tags dem AP zuweisen.",
+  "**Lösung:** Flex Profile **FP_Lager** mit `vlan-name CORP_LOCAL` / `vlan-id 20`; Policy Profile **PP_Corp_Flex** mit `vlan CORP_LOCAL` und `no central switching`, aktiviert; Policy Tag **PT_Corp_Flex** (Corp_Profile → PP_Corp_Flex); Site Tag **ST_Lager** mit `no local-site` und `flex-profile FP_Lager`; ap-lager bekommt PT_Corp_Flex und ST_Lager."
+ ],
+ "id": "07-flexconnect-zweigstelle",
+ "intro": "Die Firma betreibt Corp (WPA2-PSK, VLAN 20) an beiden APs; der gesamte Verkehr läuft bisher über den Controller. Das Lager ist eine Zweigstelle hinter einer langsamen WAN-Leitung.\n\n- **ap-lobby** (Hauptstandort) soll unverändert bleiben\n- **ap-lager** soll den Corp-Verkehr selbst ins **VLAN 20** schalten, statt ihn zum Controller zu tunneln\n- Je ein Laptop als Test in Lobby und Lager",
+ "kind": "requirements",
+ "level": "Fortgeschritten",
+ "limits": [
+  "Das Client-Modell ist didaktisch: Es erklärt, ob und warum ein Client verbunden ist, ist aber keine Abbildung der Controller-Pipeline.",
+  "Nicht modelliert: 802.1x/RADIUS, FlexConnect, RF-Profile, Roaming, Mobility.",
+  "Nicht modelliert: Standalone-Betrieb bei WAN-Ausfall, lokale Authentifizierung am AP, Flex-ACLs, Central DHCP/Association, AAA-Override, VLAN-Gruppen.",
+  "Durchsatz und WAN-Last werden nicht simuliert; der Simulator unterscheidet nur zentrales und lokales Switching."
+ ],
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 01",
+  "Lab 04",
+  "Lab 05"
+ ],
+ "questions": [
+  {
+   "answer": 0,
+   "explain": "Ein Site Tag ohne Local Site versetzt jeden AP, der es erhält, in den FlexConnect-Modus (Cisco-Dokument 213945).",
+   "id": "q1",
+   "options": [
+    "Am Site Tag des APs: Local Site ist ausgeschaltet",
+    "Am WLAN-Profil",
+    "Am VLAN im Policy Profile",
+    "Am AP-Modell"
+   ],
+   "q": "Woran erkennt der Controller, dass ein AP im FlexConnect-Modus arbeitet?"
+  },
+  {
+   "answer": 1,
+   "explain": "Das Flex Profile listet die VLANs, die der AP selbst braucht. Das VLAN für zentrales Switching steht dort nicht (Cisco-Dokument 213945).",
+   "id": "q2",
+   "options": [
+    "Alle VLANs des Controllers",
+    "Die VLANs, die der AP lokal schalten soll",
+    "Nur das Management-VLAN",
+    "Keine, es enthält nur Timer"
+   ],
+   "q": "Welche VLANs gehören in das Flex Profile?"
+  }
+ ],
+ "requirements": [
+  "Der Laptop in der Lobby bleibt verbunden (VLAN 20) und wird weiter zentral geschaltet.",
+  "Der Laptop im Lager ist verbunden (VLAN 20) und wird lokal geschaltet.",
+  "ap-lager arbeitet im FlexConnect-Modus, ap-lobby bleibt im Local Mode.",
+  "Corp bleibt mit WPA2-PSK geschützt."
+ ],
+ "solution": "WebUI: Tags & Profiles > Flex: FP_Lager mit VLAN CORP_LOCAL / 20; Policy: PP_Corp_Flex mit VLAN CORP_LOCAL, Central Switching aus, aktiviert; Tags: PT_Corp_Flex; Site Tags: ST_Lager mit Local Site aus und Flex Profile FP_Lager; Wireless > Access Points > ap-lager: beide Tags. CLI: `wireless profile flex FP_Lager` / `vlan-name CORP_LOCAL` / `vlan-id 20`; `wireless profile policy PP_Corp_Flex` / `vlan CORP_LOCAL` / `no central switching` / `no shutdown`; `wireless tag policy PT_Corp_Flex` / `wlan Corp_Profile policy PP_Corp_Flex`; `wireless tag site ST_Lager` / `no local-site` / `flex-profile FP_Lager`; `ap a4b2.32aa.0002` / `policy-tag PT_Corp_Flex` / `site-tag ST_Lager`.",
+ "solutionCommands": [
+  "wireless profile flex FP_Lager",
+  "vlan-name CORP_LOCAL",
+  "vlan-id 20",
+  "exit",
+  "exit",
+  "wireless profile policy PP_Corp_Flex",
+  "vlan CORP_LOCAL",
+  "no central switching",
+  "no shutdown",
+  "exit",
+  "wireless tag policy PT_Corp_Flex",
+  "wlan Corp_Profile policy PP_Corp_Flex",
+  "exit",
+  "wireless tag site ST_Lager",
+  "no local-site",
+  "flex-profile FP_Lager",
+  "exit",
+  "ap a4b2.32aa.0002",
+  "policy-tag PT_Corp_Flex",
+  "site-tag ST_Lager"
+ ],
+ "startCommands": [
+  "wlan Corp_Profile 1 Corp",
+  "security wpa akm psk",
+  "security wpa psk set-key ascii 0 Sommer2026",
+  "no shutdown",
+  "exit",
+  "wireless profile policy PP_Corp",
+  "vlan 20",
+  "no shutdown",
+  "exit",
+  "wireless tag policy PT_Corp",
+  "wlan Corp_Profile policy PP_Corp",
+  "exit",
+  "ap a4b2.32aa.0001",
+  "policy-tag PT_Corp",
+  "exit",
+  "ap a4b2.32aa.0002",
+  "policy-tag PT_Corp"
+ ],
+ "title": "07 Zweigstelle Lager: Corp lokal schalten",
+ "tools": [
+  "WebUI: Configuration > Tags & Profiles > Policy, Flex, Tags, Site Tags und Wireless > Access Points",
+  "Monitoring > Wireless > Clients",
+  "Client-Diagnose (nur im geführten Modus)",
+  "CLI: show ap tag summary, show wireless profile flex summary, show wireless tag site summary, show wireless client summary"
+ ],
+ "topic": "FlexConnect / Design",
+ "track": "CCNP Enterprise Wireless (300-430 ENWLSI)",
+ "worldClients": [
+  {
+   "ap": "ap-lobby",
+   "mac": "58bf.eaaa.0001",
+   "protocol": "11ac",
+   "psk": "Sommer2026",
+   "ssid": "Corp"
+  },
+  {
+   "ap": "ap-lager",
+   "mac": "58bf.eaaa.0002",
+   "protocol": "11ac",
+   "psk": "Sommer2026",
+   "ssid": "Corp"
+  }
+ ]
+}

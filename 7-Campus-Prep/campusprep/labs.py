@@ -35,8 +35,10 @@ def run_check(chk, st):
         c = next((x for x in st['clients'] if x['mac'] == chk['mac']), None)
         if c is None:
             return False, 'Client %s unbekannt' % chk['mac']
-        ok = c['state'] == chk['state'] and (chk.get('vlan') is None or str(c['vlan']) == str(chk['vlan']))
-        return ok, 'Zustand %s%s' % (c['state'], ', VLAN %s' % c['vlan'] if c['vlan'] else '')
+        ok = (c['state'] == chk['state'] and (chk.get('vlan') is None or str(c['vlan']) == str(chk['vlan']))
+              and (chk.get('switching') is None or c.get('switching') == chk['switching']))
+        return ok, 'Zustand %s%s%s' % (c['state'], ', VLAN %s' % c['vlan'] if c['vlan'] else '',
+                                       ', %s geschaltet' % c['switching'] if c['state'] == 'Run' and c.get('switching') else '')
     if t == 'wlan':
         w = next((x for x in st['wlans'] if x['profile'] == chk['profile']), None)
         if w is None:
@@ -52,6 +54,9 @@ def run_check(chk, st):
     if t == 'aptag':
         a = next((x for x in st['aps'] if x['name'] == chk['ap']), None)
         return (a is not None and a['policyTag'] == chk['tag']), 'Policy Tag %s' % (a['policyTag'] if a else '?')
+    if t == 'apmode':
+        a = next((x for x in st['aps'] if x['name'] == chk['ap']), None)
+        return (a is not None and a['mode'] == chk['mode']), 'Modus %s' % (a['mode'] if a else '?')
     if t == 'tagmap':
         tg = next((x for x in st['policyTags'] if x['name'] == chk['tag']), None)
         got = {m['wlan']: m['policy'] for m in tg['maps']} if tg else None
