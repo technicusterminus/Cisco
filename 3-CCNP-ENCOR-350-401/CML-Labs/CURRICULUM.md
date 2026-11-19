@@ -69,6 +69,20 @@ Nach 01, 03 und 35 folgt als zusätzliche CML-Praxis die [Routing-Assurance-Stre
 
 Die Zeitboxen in den Aufgaben beginnen nach dem Boot. Für die Capstones gelten 100 Minuten (24), 90 Minuten (30) und 110 Minuten (23). Pro Ticket Ursache, Änderung, Prüfergebnis und verbleibende Unsicherheit notieren. Bei Zeitablauf den aktuellen Stand dokumentieren. Die Zeiten sind Trainingswerte.
 
+## Vom Einzelthema zum Betriebsfall
+
+Benutze diese Strecke, wenn du Paketweiterleitung, Routing, Security und Assurance zusammenhängend üben möchtest. Wiederkehrender Fall ist ein Arbeitsplatz, der einen Dienst erreichen soll. In jedem Schritt wird die Erklärung aus dem vorherigen Lab für eine neue Entscheidung benötigt. Die Topologien werden getrennt importiert.
+
+| Etappe | Vorwissen und Auftrag | Übergang in die nächste Etappe |
+|---|---|---|
+| 1 · Weiterleitung in 05 und 01 | Zeichne einen Weg innerhalb eines VLAN und einen Weg zum entfernten Präfix. Markiere, wann der Host die MAC seines Gateways braucht. Zeige Trunk-Zulassung, OSPF-Nachbar und gewählten Next Hop am passenden Gerät. | Sage für den entfernten Dienst Ein- und Ausgangsinterface am Router voraus. Bei unklarer VLAN-Zuordnung zuerst in 05 den tatsächlichen Access-Port prüfen. |
+| 2 · Policy in der [ACL-Werkstatt](10-ACL-CoPP/ACL-Werkstatt/README.md) | Nutze dieselbe Wegbeschreibung für eine Regelentscheidung. Beginne mit einer Quellgruppe, ergänze Dienst und Richtung, repariere anschließend zwei unterscheidbare Fehler. | Erkläre, wie auf demselben Weg ein erlaubter HTTP-Aufbau und ein gesperrter Ping zustande kommen. Belege beide Fälle mit Zählerdifferenzen. |
+| 3 · Ankündigung in 03 | Wähle ein konkretes Präfix. Verfolge seine Ankündigung vom Ursprung zum Nachbarn und prüfe seine Installation. Ordne eine BGP-Prefix-List dem Austausch von Routen zu. | Erkläre, an welcher Beobachtung du einen fehlenden Routeneintrag von einer ACL-Ablehnung an einem funktionierenden Pfad unterscheiden würdest. |
+| 4 · Messung in der [Routing-Assurance-Strecke](Routing-Assurance/README.md) | Erfasse Dienst und Kontrollziel von derselben Quelle. Vergleiche RIB, FIB und IP SLA erst im Normalbetrieb und dann während einer Störung. | Formuliere zwei Ursachen für einen Timeout und benenne für jede genau einen Test, der sie ausschließt. |
+| 5 · Transfer in 23 | Öffne das Campus-Abschlusslab. Wähle den Fluss von H20 zu H10. Bestimme den aktuellen HSRP-Forwarder und prüfe den VLAN- und Gateway-Pfad, bevor du aus ACL-Zählern auf eine Ursache schließt. | Gib einem Kollegen Quelle, Ziel, erste abweichende Beobachtung, minimale Änderung und Gegenprobe. Falls ein vorgelagerter Defekt den Test verdeckt, dokumentiere den Zwischenstand und wiederhole den Fluss nach dessen Behebung. |
+
+**Wiederholung ohne Vorlage.** Am Folgetag bearbeitest du nur den Änderungsauftrag der ACL-Werkstatt. Eine Woche später beginnst du mit dem Störungsfall der Routing-Assurance-Strecke und einer leeren Skizze. Notiere getrennt, was du vorhergesagt hast, welche Messung deine Annahme bestätigt oder widerlegt hat und welchen Hinweis du benötigt hast. Eine richtige Vorhersage bei veränderter Quelle oder geändertem Ziel ist der Nachweis für den Transfer. Wer die Lösung erst nach einem Hinweis findet, wiederholt genau diesen Teil mit einer anderen Quelle.
+
 ## Abdeckungsmatrix zum Blueprint
 
 **S** = selbstständiger Auftrag mit Abnahmekriterium. **G** = geführt oder teilweise trainiert. **T** = Theorie/Fallstudie zum verlangten Erklärverb. **X** = Live-Übung im vorhandenen Setup nicht verfügbar. **N** = der genannte Teilschritt fehlt. Statuswerte beziehen sich auf das Curriculum. Technische Laufzeit und persönliche Nachweise stehen darunter.

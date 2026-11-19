@@ -1,5 +1,7 @@
 # Lab 10 – ACLs und Control-Plane Policing
 
+Für den ersten Durchgang beginne mit der [ACL-Werkstatt](ACL-Werkstatt/README.md). Dort übst du Quellfilter, Port und Richtung, Reihenfolge sowie gezielte Änderungen in zwei eigenen CML-Startständen. Nutze anschließend hier Teil A für VTY-Schutz, Rückverkehr und CoPP.
+
 **Dauer:** 90 min · **Niveau:** mittel · **Nodes:** 1× unmanaged_switch, 5× iosv
 
 Layer-3/4-Filter mit Standard-, Extended- und benannten ACLs, `established`, Logging und vty-Schutz, dazu CoPP (MQC auf der Control-Plane) zur Begrenzung von ICMP und Management-Verkehr.

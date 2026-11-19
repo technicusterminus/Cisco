@@ -1,5 +1,7 @@
 # ENCOR – Aufgaben ohne Befehlsliste
 
+Für Ziel 5.2.a gibt es die [ACL-Werkstatt mit Dienstmatrix und Transferauftrag](10-ACL-CoPP/ACL-Werkstatt/README.md).
+
 Die [Zusatzaufgaben zur Routing Assurance](Routing-Assurance/README.md) verbinden OSPF-Pfadwechsel, eBGP und aktives Dienstmonitoring in zwei CML-Startständen.
 
 Wähle die Bau- oder Reparaturvariante nach Lernstufe. Die Angaben sind Trainingszeiten ab betriebsbereiter Topologie. Prüfkriterien gelten unabhängig vom Lösungsweg. Hinweise, konkrete Nachweise und Lösungspfade stehen in [NACHWEISE.md](NACHWEISE.md).

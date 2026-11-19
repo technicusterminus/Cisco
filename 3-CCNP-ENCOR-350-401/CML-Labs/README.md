@@ -8,6 +8,8 @@ Diese Labs ergänzen das Anki-Kompendium (1.845 Karten). Die Karten bauen Wissen
 
 ## Trainingscurriculum
 
+Zum gezielten Üben der Access Lists führt die [ACL-Werkstatt](10-ACL-CoPP/ACL-Werkstatt/README.md) vom ersten Paketweg bis zur eigenständigen Änderung einer laufenden Policy. Im [Lernpfad](CURRICULUM.md#vom-einzelthema-zum-betriebsfall) siehst du, wie die Aufgabe später bei Routing, Assurance und im Campus-Abschlusslab wiederkehrt.
+
 [Curriculum und Blueprint-Matrix](CURRICULUM.md) · [Aufgaben ohne Befehlsliste](AUFGABEN.md) · [Hinweise, Nachweise und Lösungen](NACHWEISE.md)
 
 Zusätzlich zu den 33 nummerierten CML-Labs verbindet die [Praxisstrecke Routing Assurance](Routing-Assurance/README.md) OSPF, direktes eBGP und IP SLA auf drei IOSv-Routern. Zwei importierbare Startstände trainieren Pfadwechsel und die Diagnose eines einzelnen ausgefallenen Dienstes.
