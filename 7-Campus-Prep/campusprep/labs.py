@@ -8,7 +8,7 @@ import os
 
 LABS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'labs')
 MODES = ('guided', 'exam')
-HIDDEN = ('cause', 'solution', 'solutionCommands', 'startCommands', 'worldClients', 'checks', 'hints', 'questions')
+HIDDEN = ('cause', 'solution', 'solutionCommands', 'startCommands', 'worldClients', 'worldRadius', 'checks', 'hints', 'questions')
 
 
 class LabError(Exception):
@@ -57,6 +57,9 @@ def run_check(chk, st):
     if t == 'apmode':
         a = next((x for x in st['aps'] if x['name'] == chk['ap']), None)
         return (a is not None and a['mode'] == chk['mode']), 'Modus %s' % (a['mode'] if a else '?')
+    if t == 'wlanservers':
+        got = st['_wlan_servers'].get(chk['profile']) or []
+        return all(ip in got for ip in chk['servers']), 'Server in der Kette: %s' % (', '.join(got) if got else 'keine')
     if t == 'tagmap':
         tg = next((x for x in st['policyTags'] if x['name'] == chk['tag']), None)
         got = {m['wlan']: m['policy'] for m in tg['maps']} if tg else None
@@ -99,7 +102,7 @@ class LabEngine:
             raise LabError('Lab %s gibt es nicht' % lab_id, 404)
         if mode not in lab['modes']:
             raise LabError('Modus %s ist fuer dieses Lab nicht vorgesehen' % mode)
-        self.sim.reset_world(lab.get('worldClients'))
+        self.sim.reset_world(lab.get('worldClients'), lab.get('worldRadius'))
         ok, _, err = self.sim.apply(lab.get('startCommands', []))
         if not ok:
             raise LabError('Startkonfiguration von %s fehlerhaft: %s' % (lab_id, err['message']), 500)
@@ -176,6 +179,7 @@ class LabEngine:
         lab = self.labs[s['id']]
         s['checks'] += 1
         st = self.sim.wlc.state()
+        st['_wlan_servers'] = {n: self.sim.wlc.wlan_servers(w) for n, w in self.sim.wlc.wlans.items()}
         exam = s['mode'] == 'exam'
         res = []
         for c in lab['checks']:

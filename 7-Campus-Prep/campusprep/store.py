@@ -9,8 +9,8 @@ import os
 import re
 
 KIND = 'campusprep-state'
-VERSION = 2          # 2: Flex Profiles und Site Tags (optionale Felder)
-ACCEPTED = (1, 2)    # Staende der Version 1 bleiben ladbar; fehlende Felder werden mit Standardwerten gefuellt
+VERSION = 3          # 2: Flex Profiles und Site Tags, 3: AAA-Objekte und RADIUS-Gegenseite in der Welt (optionale Felder)
+ACCEPTED = (1, 2, 3) # Staende der Version 1 bleiben ladbar; fehlende Felder werden mit Standardwerten gefuellt
 NAME_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$')
 
 

@@ -147,7 +147,7 @@ const STANDALONE = process.env.STANDALONE === '1';
     // Staende und Fortschritt
     await go('labs');
     console.log('       Kacheln: ' + (await text()).split('\n').filter(l => /bestanden|Starts|Prüfungsmodus$|^\d+( \/ \d+)?$/.test(l)).join(' | ').slice(0, 200));
-    check(/Geführt bestanden/.test(await text()) && /1 \/ 8[\s\S]*Labs bestanden/.test(await text()), 'Fortschritt: Lab 01 ist als geführt bestanden markiert');
+    check(/Geführt bestanden/.test(await text()) && /1 \/ 11[\s\S]*Labs bestanden/.test(await text()), 'Fortschritt: Lab 01 ist als geführt bestanden markiert');
     await p.fill('[data-id="save-name"]', 'lab01-geloest'); await p.click('[data-id="save"]'); await p.waitForTimeout(500);
     check(await p.locator('[data-id="load-lab01-geloest"]').count() === 1, 'Stand wird gespeichert und aufgelistet');
     await p.fill('[data-id="save-name"]', '../evil'); await p.click('[data-id="save"]'); await p.waitForTimeout(400);
@@ -168,7 +168,57 @@ const STANDALONE = process.env.STANDALONE === '1';
     await p.click('[data-id="del-lab01-geloest"]'); await p.waitForTimeout(400);
     check(await p.locator('[data-id="load-lab01-geloest"]').count() === 0, 'Stand lässt sich löschen');
     await p.click('[data-id="reset-progress"]'); await p.waitForTimeout(400);
-    check(/0 \/ 8[\s\S]*Labs bestanden/.test(await text()) && !/Geführt bestanden/.test(await text()), 'Fortschritt zurücksetzen');
+    check(/0 \/ 11[\s\S]*Labs bestanden/.test(await text()) && !/Geführt bestanden/.test(await text()), 'Fortschritt zurücksetzen');
+
+    // 802.1X: AAA-Kette im Standardzustand ueber die Dialoge aufbauen, dann ein WLAN mit WPA2 Enterprise
+    await go('aaa'); await p.click('[data-id="add-radius"]');
+    await p.fill('[data-id="radius-name"]', 'RS1'); await p.fill('[data-id="radius-ip"]', '10.10.0.50'); await p.fill('[data-id="radius-key"]', 'RadiusKey1');
+    check(/radius server RS1[\s\S]*address ipv4 10\.10\.0\.50 auth-port 1812 acct-port 1813[\s\S]*key RadiusKey1/.test(await p.textContent('[data-id="cli-preview"]')), 'RADIUS-Dialog zeigt das CLI-Äquivalent');
+    await apply();
+    check(/RS1[\s\S]*10\.10\.0\.50[\s\S]*1812 \/ 1813[\s\S]*gesetzt/.test(await text()), 'RADIUS-Server angelegt');
+    check(!(await text()).includes('RadiusKey1'), 'Der RADIUS-Key wird nicht angezeigt');
+    await p.click('[data-id="add-group"]'); await p.fill('[data-id="group-name"]', 'RG1'); await p.click('[data-id="group-add-server"]'); await apply();
+    check(/RG1[\s\S]*RS1/.test(await text()), 'Server Group angelegt');
+    await p.click('[data-id="add-list"]'); await p.fill('[data-id="list-name"]', 'DOT1X_LIST'); await apply();
+    check(/DOT1X_LIST[\s\S]*dot1x[\s\S]*RG1/.test(await text()), 'Authentication List angelegt');
+    await go('wlans'); await p.click('[data-id="add-wlan"]');
+    await p.fill('[data-id="wlan-profile"]', 'Corp_1X'); await p.fill('[data-id="wlan-ssid"]', 'CorpDot1x'); await p.fill('[data-id="wlan-id"]', '5');
+    await p.selectOption('[data-id="wlan-sec"]', 'dot1x');
+    check(await p.locator('[data-id="wlan-psk"]').isHidden() && await p.locator('[data-id="wlan-authlist"]').isVisible(), 'Bei 802.1X ist die Authentication List sichtbar, der PSK nicht');
+    check(/security wpa akm dot1x[\s\S]*security dot1x authentication-list DOT1X_LIST/.test(await p.textContent('[data-id="cli-preview"]')), 'WLAN-Dialog zeigt akm dot1x und authentication-list');
+    await apply();
+    check(/Corp_1X[\s\S]*\[WPA2\]\[802\.1x\]\[AES\]/.test(await text()), 'WLAN mit WPA2 Enterprise angelegt (Security wie im belegten Format)');
+    await go('policies'); await p.click('button:has-text("Edit") >> nth=0'); await p.check('[data-id="policy-aaa"]');
+    check(/aaa-override/.test(await p.textContent('[data-id="cli-preview"]')) && !/no aaa-override/.test(await p.textContent('[data-id="cli-preview"]')), 'Policy-Dialog: AAA Override ein ergibt aaa-override');
+    await p.click('.modal-bg button:has-text("Cancel")'); await p.waitForTimeout(150);
+
+    // 802.1X-Labs: 09 (Key), 10 (AAA Override), 11 (zweiter RADIUS-Server), jeweils ueber die Dialoge geloest
+    const labCheck = async () => { await go('labs'); await p.click('[data-id="lab-check"]'); await p.waitForTimeout(300); return p.textContent('[data-id="check-result"]'); };
+    const solved = r => /bestanden/.test(r) && !/noch nicht/.test(r);
+    await go('labs'); await p.selectOption('[data-id="lab-mode"]', 'guided'); await p.click('[data-id="start-09"]'); await p.waitForTimeout(600);
+    check(!solved(await labCheck()), 'Lab 09: ohne Lösung nicht bestanden');
+    await go('diag');
+    check(/anna[\s\S]*Shared Secret stimmt nicht/.test(await text()), 'Lab 09: Diagnose nennt das Shared Secret');
+    await go('aaa');
+    check(/RS1[\s\S]*DOWN/.test(await text()), 'Lab 09: der Server steht auf DOWN (DEAD)');
+    await p.click('button:has-text("Edit") >> nth=0'); await p.fill('[data-id="radius-key"]', 'RadiusKey1'); await apply();
+    check(/RS1[\s\S]*UP/.test(await text()), 'Lab 09: nach dem Key ist der Server UP');
+    check(solved(await labCheck()), 'Lab 09: mit dem richtigen Key bestanden');
+    await go('labs'); await p.click('[data-id="start-10"]'); await p.waitForTimeout(600);
+    check(!solved(await labCheck()), 'Lab 10: ohne Lösung nicht bestanden');
+    await go('policies'); await p.click('button:has-text("Edit") >> nth=0'); await p.check('[data-id="policy-aaa"]'); await apply();
+    check(/Yes/.test(await text()), 'Lab 10: AAA Override ist an');
+    check(solved(await labCheck()), 'Lab 10: mit AAA Override bestanden');
+    await go('labs'); await p.click('[data-id="start-11"]'); await p.waitForTimeout(600);
+    check(!solved(await labCheck()), 'Lab 11: ohne Lösung nicht bestanden');
+    await go('aaa'); await p.click('[data-id="add-radius"]'); await p.fill('[data-id="radius-name"]', 'RS2'); await p.fill('[data-id="radius-ip"]', '10.10.0.51');
+    await p.fill('[data-id="radius-key"]', 'RadiusKey1'); await apply();
+    await p.locator('button:has-text("Edit")').nth(2).click(); await p.click('[data-id="group-add-server"]');
+    await p.locator('[data-id="group-rows"] select').nth(1).selectOption('RS2');
+    check(/server name RS1[\s\S]*server name RS2/.test(await p.textContent('[data-id="cli-preview"]').then(t => t.replace(/no server name \S+\n/g, ''))), 'Group-Dialog zeigt die Server in ihrer Reihenfolge');
+    await apply();
+    check(/RG1[\s\S]*RS1 → RS2/.test(await text()), 'Lab 11: RS2 steht hinter RS1 in der Group');
+    check(solved(await labCheck()), 'Lab 11: mit zwei Servern in der Kette bestanden');
 
     // CCNP Enterprise Wireless: FlexConnect-Lab 07, komplett ueber die Dialoge
     await go('labs'); await p.selectOption('[data-id="lab-mode"]', 'guided'); await p.click('[data-id="start-07"]'); await p.waitForTimeout(600);
@@ -210,7 +260,7 @@ const STANDALONE = process.env.STANDALONE === '1';
     check(/ap-lager[\s\S]*FlexConnect/.test(await text()), 'Nach dem Neuladen ist die Konfiguration noch da');
 
     // Alle Ansichten ohne JS-Fehler
-    for (const id of ['dash', 'labs', 'flex', 'sitetags', 'aps', 'clients', 'wlans', 'policies', 'tags', 'apcfg', 'cli', 'diag']) { await go(id); }
+    for (const id of ['dash', 'labs', 'aaa', 'flex', 'sitetags', 'aps', 'clients', 'wlans', 'policies', 'tags', 'apcfg', 'cli', 'diag']) { await go(id); }
     check(rejected === (STANDALONE ? 0 : 3), (STANDALONE ? 'Ohne Server gibt es keine HTTP-Fehler: ' : 'Genau die drei absichtlichen Ablehnungen (HTTP 400) wurden ausgelöst: ') + rejected);
     if (STANDALONE) check(!requests.some(u => /^https?:/.test(u)), 'Keine Netzwerkzugriffe (läuft vollständig offline)' + (requests.some(u => /^https?:/.test(u)) ? ': ' + requests.filter(u => /^https?:/.test(u)).join(' ') : ''));
     check(errs.length === 0, 'Keine JavaScript-Fehler' + (errs.length ? ': ' + errs.join(' | ') : ''));

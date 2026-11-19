@@ -36,12 +36,13 @@ const NAV = [
   { g: 'Monitoring', sub: 'Wireless', items: [['aps', 'Access Points'], ['clients', 'Clients']] },
   { g: 'Configuration', sub: 'Tags & Profiles', items: [['wlans', 'WLANs'], ['policies', 'Policy'], ['flex', 'Flex'], ['tags', 'Tags (Policy)'], ['sitetags', 'Tags (Site)']] },
   { g: 'Configuration', sub: 'Wireless', items: [['apcfg', 'Access Points']] },
+  { g: 'Configuration', sub: 'Security', items: [['aaa', 'AAA']] },
   { g: 'Administration', items: [['cli', 'Command Line Interface']] },
   { g: 'Troubleshooting', items: [['diag', 'Client-Diagnose (Simulation)']] },
 ];
 const TITLES = { dash: 'Dashboard', labs: 'Labs (Simulation)', aps: 'Monitoring > Wireless > Access Points', clients: 'Monitoring > Wireless > Clients',
   wlans: 'Configuration > Tags & Profiles > WLANs', policies: 'Configuration > Tags & Profiles > Policy',
-  flex: 'Configuration > Tags & Profiles > Flex', sitetags: 'Configuration > Tags & Profiles > Tags > Site',
+  aaa: 'Configuration > Security > AAA', flex: 'Configuration > Tags & Profiles > Flex', sitetags: 'Configuration > Tags & Profiles > Tags > Site',
   tags: 'Configuration > Tags & Profiles > Tags > Policy', apcfg: 'Configuration > Wireless > Access Points',
   cli: 'Administration > Command Line Interface', diag: 'Troubleshooting > Client-Diagnose (Simulation)' };
 
@@ -141,13 +142,23 @@ function wlanDialog(w) {
   const prof = h('input', { 'data-id': 'wlan-profile', value: w ? w.profile : '', disabled: !!w, placeholder: 'Corp_Profile' });
   const id = h('input', { 'data-id': 'wlan-id', type: 'number', min: 1, max: 4096, value: w ? w.id : nextWlanId(), disabled: !!w });
   const ssid = h('input', { 'data-id': 'wlan-ssid', value: w ? w.ssid : '', disabled: !!w, placeholder: 'Corp' });
-  const sec = h('select', { 'data-id': 'wlan-sec' }, h('option', { value: 'open' }, 'Open'), h('option', { value: 'psk' }, 'WPA2 Personal (PSK)'));
+  const sec = h('select', { 'data-id': 'wlan-sec' }, h('option', { value: 'open' }, 'Open'), h('option', { value: 'psk' }, 'WPA2 Personal (PSK)'),
+    h('option', { value: 'dot1x' }, 'WPA2 Enterprise (802.1X)'));
   sec.value = w ? w.akm : 'open';
   const key = h('input', { 'data-id': 'wlan-psk', type: 'password', autocomplete: 'off', placeholder: w && w.pskSet ? '(unverändert)' : '' });
+  const names = S.aaaLists.map(l => l.name);
+  if (w && w.authList && !names.includes(w.authList)) names.push(w.authList);
+  const authSel = h('select', { 'data-id': 'wlan-authlist' }, names.length ? names.map(n => h('option', { value: n }, S.aaaLists.some(l => l.name === n) ? n : n + ' (nicht definiert)'))
+    : [h('option', { value: '' }, '(keine Authentication List vorhanden)')]);
+  if (w && w.authList) authSel.value = w.authList;
+  const keyRows = field('Pre-Shared Key', key, 'Ohne Leerzeichen.'), authRows = field('Authentication List', authSel, 'Unter Configuration > Security > AAA anlegen.');
+  const syncSec = () => { keyRows.forEach(e => { e.style.display = sec.value === 'psk' ? '' : 'none'; }); authRows.forEach(e => { e.style.display = sec.value === 'dot1x' ? '' : 'none'; }); };
+  sec.addEventListener('change', syncSec);
   const en = h('input', { 'data-id': 'wlan-enabled', type: 'checkbox' }); en.checked = w ? w.status === 'UP' : false;
   const body = h('div', null,
     h('div', { class: 'row' }, field('Profile Name', prof), field('WLAN ID', id), field('SSID', ssid, 'Im Simulator ohne Leerzeichen.'),
-      field('Security', sec), field('Pre-Shared Key', key, 'Ohne Leerzeichen.'), field('Status Enabled', en)));
+      field('Security', sec), keyRows, authRows, field('Status Enabled', en)));
+  syncSec();
   modal(w ? 'Edit WLAN ' + w.profile : 'Add WLAN', body, () => {
     if (!w) {
       need(/^[\w.-]{1,32}$/.test(prof.value), 'Profile Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
@@ -161,7 +172,11 @@ function wlanDialog(w) {
         need(/^\S{8,63}$/.test(key.value), 'Pre-Shared Key: 8-63 Zeichen ohne Leerzeichen');
         c.push('security wpa psk set-key ascii 0 ' + key.value);
       }
+    } else if (sec.value === 'dot1x') {
+      need(authSel.value, 'Authentication List wählen (zuerst unter Security > AAA anlegen)');
+      c.push('security wpa akm dot1x', 'security dot1x authentication-list ' + authSel.value);
     } else if (w && w.akm === 'psk') c.push('no security wpa akm psk');
+    else if (w && w.akm === 'dot1x') c.push('no security wpa akm dot1x');
     c.push(en.checked ? 'no shutdown' : 'shutdown');
     return c;
   }, refresh);
@@ -171,7 +186,7 @@ const nextWlanId = () => Math.max(0, ...S.wlans.map(x => x.id)) + 1;
 VIEWS.policies = main => {
   main.append(h('div', { class: 'bar' }, h('button', { class: 'primary', 'data-id': 'add-policy', onclick: () => policyDialog() }, '+ Add')));
   main.append(table([{ l: 'Status', f: p => stateBadge(p.status) }, { l: 'Policy Profile Name', f: p => p.name },
-    { l: 'Description', f: p => p.description || 'Not required' }, { l: 'VLAN', f: p => p.vlan }, { l: 'Switching', f: p => p.central ? 'Central' : 'Local' },
+    { l: 'Description', f: p => p.description || 'Not required' }, { l: 'VLAN', f: p => p.vlan }, { l: 'Switching', f: p => p.central ? 'Central' : 'Local' }, { l: 'AAA Override', f: p => p.aaaOverride ? 'Yes' : 'No' },
     { l: '', f: p => [h('button', { class: 'small', onclick: () => policyDialog(p) }, 'Edit'), ' ',
       h('button', { class: 'small danger', onclick: () => remove('no wireless profile policy ' + p.name, 'Policy Profile ' + p.name) }, 'Delete')] }], S.policies));
 };
@@ -180,17 +195,94 @@ function policyDialog(p) {
   const name = h('input', { 'data-id': 'policy-name', value: p ? p.name : '', disabled: !!p, placeholder: 'PP_Corp' });
   const vlan = h('input', { 'data-id': 'policy-vlan', value: p ? p.vlan : '1', placeholder: 'ID oder Name' });
   const central = h('input', { 'data-id': 'policy-central', type: 'checkbox' }); central.checked = p ? p.central : true;
+  const aaa = h('input', { 'data-id': 'policy-aaa', type: 'checkbox' }); aaa.checked = p ? p.aaaOverride : false;
   const descr = h('input', { 'data-id': 'policy-descr', value: p ? p.description : '' });
   const en = h('input', { 'data-id': 'policy-enabled', type: 'checkbox' }); en.checked = p ? p.status === 'ENABLED' : false;
   const body = h('div', { class: 'row' }, field('Name', name), field('VLAN', vlan, 'ID (zentral) oder Name (bei lokalem Switching: Name aus dem Flex Profile).'),
-    field('Central Switching', central, 'Ausgeschaltet: lokales Switching (nur für FlexConnect-APs).'), field('Description', descr), field('Status Enabled', en));
+    field('Central Switching', central, 'Ausgeschaltet: lokales Switching (nur für FlexConnect-APs).'),
+    field('AAA Override', aaa, 'Übernimmt Attribute aus RADIUS, z. B. das VLAN des Benutzers.'), field('Description', descr), field('Status Enabled', en));
   modal(p ? 'Edit Policy Profile ' + p.name : 'Add Policy Profile', body, () => {
     if (!p) need(/^[\w.-]{1,32}$/.test(name.value), 'Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
     need(/^[\w.-]{1,32}$/.test(vlan.value), 'VLAN: ID oder Name (1-32 Zeichen, Buchstaben, Ziffern, . _ -)');
-    const c = ['wireless profile policy ' + (p ? p.name : name.value), 'vlan ' + vlan.value, central.checked ? 'central switching' : 'no central switching'];
+    const c = ['wireless profile policy ' + (p ? p.name : name.value), 'vlan ' + vlan.value, central.checked ? 'central switching' : 'no central switching',
+      aaa.checked ? 'aaa-override' : 'no aaa-override'];
     if (descr.value.trim()) c.push('description ' + descr.value.trim());
     c.push(en.checked ? 'no shutdown' : 'shutdown');
     return c;
+  }, refresh);
+}
+
+VIEWS.aaa = main => {
+  main.append(h('div', { class: 'note' }, 'Die Kette für 802.1X: RADIUS-Server → Server Group → Authentication List (Methodenliste) → WLAN. Der RADIUS-Server selbst ist eine simulierte Gegenseite.'));
+  main.append(h('h2', null, 'RADIUS-Server'), h('div', { class: 'bar' }, h('button', { class: 'primary', 'data-id': 'add-radius', onclick: () => radiusDialog() }, '+ Add')));
+  main.append(table([{ l: 'Name', f: r => r.name }, { l: 'Server Address', f: r => r.ip || '–' }, { l: 'Auth / Acct Port', f: r => r.authPort + ' / ' + r.acctPort },
+    { l: 'Key', f: r => r.keySet ? 'gesetzt' : 'fehlt' }, { l: 'Zustand', f: r => stateBadge(r.state === 'UP' ? 'UP' : 'DOWN') },
+    { l: '', f: r => [h('button', { class: 'small', onclick: () => radiusDialog(r) }, 'Edit'), ' ',
+      h('button', { class: 'small danger', onclick: () => remove('no radius server ' + r.name, 'RADIUS-Server ' + r.name) }, 'Delete')] }], S.radiusServers, 'Keine RADIUS-Server.'));
+  main.append(h('h2', null, 'Server Groups'), h('div', { class: 'bar' }, h('button', { class: 'primary', 'data-id': 'add-group', onclick: () => groupDialog() }, '+ Add')));
+  main.append(table([{ l: 'Name', f: g => g.name }, { l: 'Server (Reihenfolge der Versuche)', f: g => g.servers.length ? g.servers.join(' → ') : '–' },
+    { l: '', f: g => [h('button', { class: 'small', onclick: () => groupDialog(g) }, 'Edit'), ' ',
+      h('button', { class: 'small danger', onclick: () => remove('no aaa group server radius ' + g.name, 'Server Group ' + g.name) }, 'Delete')] }], S.aaaGroups, 'Keine Server Groups.'));
+  main.append(h('h2', null, 'AAA Method List: Authentication (dot1x)'), h('div', { class: 'bar' }, h('button', { class: 'primary', 'data-id': 'add-list', onclick: () => listDialog() }, '+ Add')));
+  main.append(table([{ l: 'Name', f: l => l.name }, { l: 'Type', f: () => 'dot1x' }, { l: 'Group Type', f: () => 'group' }, { l: 'Group', f: l => l.group },
+    { l: '', f: l => [h('button', { class: 'small', onclick: () => listDialog(l) }, 'Edit'), ' ',
+      h('button', { class: 'small danger', onclick: () => remove('no aaa authentication dot1x ' + l.name, 'Authentication List ' + l.name) }, 'Delete')] }], S.aaaLists, 'Keine Authentication Lists.'));
+};
+
+function radiusDialog(r) {
+  const name = h('input', { 'data-id': 'radius-name', value: r ? r.name : '', disabled: !!r, placeholder: 'RS1' });
+  const ip = h('input', { 'data-id': 'radius-ip', value: r ? r.ip : '', placeholder: '10.10.0.50' });
+  const auth = h('input', { 'data-id': 'radius-auth', type: 'number', min: 1, max: 65535, value: r ? r.authPort : 1812 });
+  const acct = h('input', { 'data-id': 'radius-acct', type: 'number', min: 1, max: 65535, value: r ? r.acctPort : 1813 });
+  const key = h('input', { 'data-id': 'radius-key', type: 'password', autocomplete: 'off', placeholder: r && r.keySet ? '(unverändert)' : '' });
+  const timeout = h('input', { 'data-id': 'radius-timeout', type: 'number', min: 1, max: 1000, value: r ? r.timeout : 5 });
+  const retr = h('input', { 'data-id': 'radius-retransmit', type: 'number', min: 0, max: 100, value: r ? r.retransmit : 3 });
+  const body = h('div', { class: 'row' }, field('Name', name), field('Server Address (IPv4)', ip), field('Auth Port', auth), field('Acct Port', acct),
+    field('Key', key, 'Das gemeinsame Geheimnis mit dem RADIUS-Server, ohne Leerzeichen.'), field('Timeout (s)', timeout), field('Retransmit', retr));
+  modal(r ? 'Edit RADIUS-Server ' + r.name : 'Add RADIUS-Server', body, () => {
+    if (!r) need(/^[\w.-]{1,32}$/.test(name.value), 'Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
+    need(/^(\d{1,3})(\.\d{1,3}){3}$/.test(ip.value) && ip.value.split('.').every(x => +x <= 255), 'Server Address: gültige IPv4-Adresse');
+    need(+auth.value >= 1 && +auth.value <= 65535 && +acct.value >= 1 && +acct.value <= 65535, 'Ports: 1-65535');
+    need(+timeout.value >= 1 && +timeout.value <= 1000, 'Timeout: 1-1000'); need(+retr.value >= 0 && +retr.value <= 100, 'Retransmit: 0-100');
+    const c = ['radius server ' + (r ? r.name : name.value), 'address ipv4 ' + ip.value + ' auth-port ' + auth.value + ' acct-port ' + acct.value];
+    if (key.value || !(r && r.keySet)) { need(/^\S{1,64}$/.test(key.value), 'Key: 1-64 Zeichen ohne Leerzeichen'); c.push('key ' + key.value); }
+    c.push('timeout ' + timeout.value, 'retransmit ' + retr.value);
+    return c;
+  }, refresh);
+}
+
+function groupDialog(g) {
+  const name = h('input', { 'data-id': 'group-name', value: g ? g.name : '', disabled: !!g, placeholder: 'RG1' });
+  const rows = h('div', { 'data-id': 'group-rows' });
+  const addRow = v => {
+    const sel = h('select', { 'aria-label': 'RADIUS-Server' }, S.radiusServers.map(x => h('option', { value: x.name }, x.name)));
+    if (v) sel.value = v;
+    const r = h('div', { class: 'maprow' }, sel, h('button', { class: 'small', type: 'button', onclick: () => { r.remove(); rows.dispatchEvent(new Event('input', { bubbles: true })); } }, '✕'));
+    r.get = () => sel.value; rows.append(r);
+  };
+  (g ? g.servers : []).forEach(addRow);
+  const body = h('div', null, h('div', { class: 'row' }, field('Name', name)), h('h2', null, 'RADIUS-Server (Reihenfolge der Versuche)'), rows,
+    h('button', { class: 'small', 'data-id': 'group-add-server', type: 'button', onclick: () => { addRow(); rows.dispatchEvent(new Event('input', { bubbles: true })); } }, '+ Add Server'));
+  modal(g ? 'Edit Server Group ' + g.name : 'Add Server Group', body, () => {
+    if (!g) need(/^[\w.-]{1,32}$/.test(name.value), 'Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
+    const list = [...rows.children].map(r => r.get()).filter(Boolean);
+    need(new Set(list).size === list.length, 'Jeder Server darf nur einmal vorkommen');
+    const c = ['aaa group server radius ' + (g ? g.name : name.value)];
+    if (g) g.servers.forEach(o => c.push('no server name ' + o));
+    list.forEach(n => c.push('server name ' + n));
+    return c;
+  }, refresh);
+}
+
+function listDialog(l) {
+  const name = h('input', { 'data-id': 'list-name', value: l ? l.name : '', disabled: !!l, placeholder: 'DOT1X_LIST' });
+  const grp = h('select', { 'data-id': 'list-group' }, S.aaaGroups.map(x => h('option', { value: x.name }, x.name)));
+  if (l) grp.value = l.group;
+  const body = h('div', { class: 'row' }, field('Name', name), field('Type', h('input', { value: 'dot1x', disabled: true })), field('Group', grp, 'Die Server Group, an die die Anfragen gehen.'));
+  modal(l ? 'Edit Authentication List ' + l.name : 'Add Authentication List', body, () => {
+    if (!l) need(/^[\w.-]{1,32}$/.test(name.value), 'Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
+    need(grp.value, 'Server Group wählen (zuerst eine anlegen)');
+    return ['aaa authentication dot1x ' + (l ? l.name : name.value) + ' group ' + grp.value];
   }, refresh);
 }
 
@@ -338,7 +430,7 @@ VIEWS.cli = async main => {
 VIEWS.diag = main => {
   if (!S.diagAvailable) { main.append(h('div', { class: 'note', 'data-id': 'diag-locked' }, 'Im Prüfungsmodus ist die Client-Diagnose nicht verfügbar. Nutze Monitoring, die Show-Befehle und die CLI.')); return; }
   main.append(h('div', { class: 'note' }, 'Simulation: Diese Seite gibt es am echten Controller nicht. Sie erklärt, warum ein Client (nicht) verbunden ist. Die Begründungen sind ein didaktisches Modell.'));
-  main.append(table([{ l: 'MAC Address', f: c => c.mac }, { l: 'SSID', f: c => c.ssid }, { l: 'AP', f: c => c.ap },
+  main.append(table([{ l: 'MAC Address', f: c => c.mac }, { l: 'Benutzer', f: c => c.user || '–' }, { l: 'SSID', f: c => c.ssid }, { l: 'AP', f: c => c.ap },
     { l: 'Ergebnis', f: c => stateBadge(c.state) }, { l: 'Switching', f: c => c.switching || '–' }, { l: 'Begründung', cls: 'reason', f: c => c.reasons.length ? c.reasons.join(' ') : 'Verbunden' }], S.clients));
 };
 

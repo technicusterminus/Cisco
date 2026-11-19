@@ -20,9 +20,9 @@
   const DEF_FLEX_PROFILE = 'default-flex-profile';
   const NAME_RE = /^[\p{L}\p{N}_.-]{1,32}$/u;          // wie Python \w (Unicode)
   const STORE_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$/;
-  const KIND = 'campusprep-state', VERSION = 2, ACCEPTED = [1, 2];
+  const KIND = 'campusprep-state', VERSION = 3, ACCEPTED = [1, 2, 3];
   const MODES = ['guided', 'exam'];
-  const HIDDEN = ['cause', 'solution', 'solutionCommands', 'startCommands', 'worldClients', 'checks', 'hints', 'questions'];
+  const HIDDEN = ['cause', 'solution', 'solutionCommands', 'startCommands', 'worldClients', 'worldRadius', 'checks', 'hints', 'questions'];
 
   // ------------------------------------------------------------------ Hilfen
   class CliError extends Error {}
@@ -81,6 +81,11 @@
     return h.slice(0, 4) + '.' + h.slice(4, 8) + '.' + h.slice(8, 12);
   }
 
+  /* Der simulierte RADIUS-Server hinter dem Controller (Gegenseite, nicht konfigurierbar). */
+  const defaultRadius = () => clone({ servers: [{ ip: '10.10.0.50', auth_port: 1812, secret: 'RadiusKey1', up: true, nas: ['10.10.0.10'],
+    users: [{ name: 'anna', password: 'Passw0rt!', vlan: '30' }, { name: 'bernd', password: 'Geheim#2', vlan: '40' },
+            { name: 'carla', password: 'Sommer#3', vlan: null }] }] });
+
   function newWorld() {
     return clone({
       wlc: { hostname: 'wlc1', platformId: 'C9800-CL-K9', ip: '10.10.0.10', mac: 'aabb.cc00.0100', serial: 'SIM9800CL001',
@@ -95,6 +100,7 @@
         { mac: '58bf.eaaa.0001', ssid: 'Corp', psk: 'Sommer2026', ap: 'ap-lobby', protocol: '11ac' },
         { mac: '58bf.eaaa.0002', ssid: 'Corp', psk: 'falsch', ap: 'ap-lobby', protocol: '11ax' },
       ],
+      radius: defaultRadius(),
     });
   }
 
@@ -111,16 +117,21 @@
       this.apCfg = dict();                      // ethMac -> {policy_tag, site_tag}
       this.flexProfiles = dict(); this.flexProfiles[DEF_FLEX_PROFILE] = newFlex();
       this.siteTags = dict(); this.siteTags[DEF_SITE_TAG] = newSite();
+      this.radiusServers = dict();              // name -> {ip, auth_port, acct_port, key, timeout, retransmit}
+      this.aaaGroups = dict();                  // name -> {servers: [radius-server-name]} (Reihenfolge = Reihenfolge der Versuche)
+      this.aaaLists = dict();                   // dot1x-Methodenliste name -> {group}
     }
 
     snapshot() {
       return clone({ wlans: this.dumpWlans(), policies: this.policies, policyTags: this.policyTags, apCfg: this.apCfg,
-                     flexProfiles: this.flexProfiles, siteTags: this.siteTags });
+                     flexProfiles: this.flexProfiles, siteTags: this.siteTags, radiusServers: this.radiusServers,
+                     aaaGroups: this.aaaGroups, aaaLists: this.aaaLists });
     }
     restore(s) {
       this.loadWlans(s.wlans);
       this.policies = clone(s.policies); this.policyTags = clone(s.policyTags); this.apCfg = clone(s.apCfg);
       this.flexProfiles = clone(s.flexProfiles); this.siteTags = clone(s.siteTags);
+      this.radiusServers = clone(s.radiusServers); this.aaaGroups = clone(s.aaaGroups); this.aaaLists = clone(s.aaaLists);
     }
     dumpWlans() { const o = dict(); for (const [k, v] of this.wlans) o[k] = clone(v); return o; }
     loadWlans(o) { this.wlans = new Map(); for (const k of Object.keys(o)) this.wlans.set(k, clone(o[k])); }
@@ -141,6 +152,10 @@
       setdefault(this.flexProfiles, DEF_FLEX_PROFILE, newFlex());
       this.siteTags = clone(Object.keys(sts).length ? sts : {});
       setdefault(this.siteTags, DEF_SITE_TAG, newSite());
+      // Staende vor Version 3 kennen keine AAA-Objekte
+      this.radiusServers = clone(d.radiusServers && Object.keys(d.radiusServers).length ? d.radiusServers : {});
+      this.aaaGroups = clone(d.aaaGroups && Object.keys(d.aaaGroups).length ? d.aaaGroups : {});
+      this.aaaLists = clone(d.aaaLists && Object.keys(d.aaaLists).length ? d.aaaLists : {});
     }
 
     // ---- Zustand fuer die Oberflaeche
@@ -156,10 +171,15 @@
       return {
         wlc: Object.assign({}, this.world.wlc),
         wlans: wl.map(([n, w]) => ({ profile: n, id: w.id, ssid: w.ssid, status: w.shutdown ? 'DOWN' : 'UP', akm: w.akm,
-                                     pskSet: !!w.psk, security: w.akm === 'psk' ? '[WPA2][PSK][AES]' : '[open]' })),
+                                     pskSet: !!w.psk, authList: w.authlist || '', security: Wlc.securityOf(w) })),
         policies: sortedKeys(this.policies).map(n => { const p = this.policies[n];
           return { name: n, vlan: p.vlan, description: p.descr, central: has(p, 'central') ? p.central : true,
-                   status: p.shutdown ? 'DISABLED' : 'ENABLED' }; }),
+                   aaaOverride: has(p, 'aaa_override') ? p.aaa_override : false, status: p.shutdown ? 'DISABLED' : 'ENABLED' }; }),
+        radiusServers: sortedKeys(this.radiusServers).map(n => { const r = this.radiusServers[n];
+          return { name: n, ip: r.ip, authPort: r.auth_port, acctPort: r.acct_port, keySet: !!r.key, timeout: r.timeout, retransmit: r.retransmit,
+                   state: this.radiusReply(n)[0] ? 'UP' : 'DEAD' }; }),
+        aaaGroups: sortedKeys(this.aaaGroups).map(n => ({ name: n, servers: this.aaaGroups[n].servers.slice() })),
+        aaaLists: sortedKeys(this.aaaLists).map(n => ({ name: n, group: this.aaaLists[n].group })),
         flexProfiles: sortedKeys(this.flexProfiles).map(n => { const f = this.flexProfiles[n];
           return { name: n, builtin: n === DEF_FLEX_PROFILE, description: f.descr, native: f.native,
                    vlans: sortedKeys(f.vlans).map(k => ({ name: k, id: f.vlans[k] })) }; }),
@@ -170,7 +190,8 @@
           maps: sortedKeys(this.policyTags[n]).map(k => ({ wlan: k, policy: this.policyTags[n][k] })) })),
         aps,
         clients: this.clients().map(c => ({ mac: c.mac, ssid: c.ssid, ap: c.ap, protocol: c.protocol, state: c.state, wlan: c.wlan,
-                                            vlan: c.vlan, method: c.method, switching: c.switching, mode: c.mode, reasons: c.reasons })),
+                                            vlan: c.vlan, method: c.method, switching: c.switching, mode: c.mode,
+                                            user: c.eap && c.eap.user !== undefined ? c.eap.user : null, reasons: c.reasons })),
       };
     }
 
@@ -191,6 +212,55 @@
       }
       const r = get(fp.vlans, v);
       return r === undefined ? null : r;
+    }
+
+    static securityOf(w) {
+      /* Spalte Security von show wlan summary: [WPA2][802.1x][AES] und [open] sind belegt, [PSK] ist abgeleitet. */
+      return w.akm === 'psk' ? '[WPA2][PSK][AES]' : w.akm === 'dot1x' ? '[WPA2][802.1x][AES]' : '[open]';
+    }
+
+    radiusReply(name) {
+      /* Antwortet der RADIUS-Server hinter dem konfigurierten Eintrag? [ok, Grund]. Ohne Antwort verwirft der Controller den Versuch und
+         nimmt den naechsten Server der Group; der Server gilt dann als DEAD (Simulator-Modell). */
+      const srv = get(this.radiusServers, name);
+      if (!srv) return [false, 'RADIUS-Server ' + name + ' ist nicht definiert'];
+      if (!srv.ip) return [false, 'RADIUS-Server ' + name + ' hat keine Adresse (address ipv4 fehlt)'];
+      const ws = (((this.world.radius || {}).servers) || []).find(x => x.ip === srv.ip);
+      if (!ws || !ws.up) return [false, 'RADIUS-Server ' + name + ' (' + srv.ip + ') antwortet nicht'];
+      if (srv.auth_port !== (has(ws, 'auth_port') ? ws.auth_port : 1812)) return [false, 'RADIUS-Server ' + name + ' (' + srv.ip + ') antwortet nicht: Auth-Port ' + srv.auth_port + ' stimmt nicht'];
+      if (!ws.nas.includes(this.world.wlc.ip)) return [false, 'RADIUS-Server ' + name + ' verwirft die Anfrage: Der Controller ist dort nicht als Client eingetragen'];
+      if (srv.key !== ws.secret) return [false, 'RADIUS-Server ' + name + ' verwirft die Anfrage: Das Shared Secret stimmt nicht'];
+      return [true, ''];
+    }
+
+    wlanServers(w) {
+      const mm = get(this.aaaLists, w.authlist || '');
+      const grp = mm ? get(this.aaaGroups, mm.group) : undefined;
+      return (grp ? grp.servers : []).filter(n => has(this.radiusServers, n)).map(n => this.radiusServers[n].ip);
+    }
+
+    _dot1x(client, w, res) {
+      /* 802.1X: Kette WLAN -> Authentication List -> Server Group -> RADIUS-Server pruefen. [ok, Benutzer-Eintrag] */
+      const eap = client.eap;
+      if (!eap) { res.reasons.push('Das Endgeraet sendet keine 802.1X-Zugangsdaten, das WLAN verlangt 802.1X'); return [false, null]; }
+      const lst = w.authlist || '';
+      if (!lst) { res.reasons.push('Am WLAN-Profil ist keine 802.1X-Authentication-List konfiguriert (security dot1x authentication-list)'); return [false, null]; }
+      const mm = get(this.aaaLists, lst);
+      if (!mm) { res.reasons.push('Die Authentication List ' + lst + ' ist nicht definiert (aaa authentication dot1x)'); return [false, null]; }
+      const grp = get(this.aaaGroups, mm.group);
+      if (!grp) { res.reasons.push('Die Server Group ' + mm.group + ' der Authentication List ' + lst + ' ist nicht definiert'); return [false, null]; }
+      if (!grp.servers.length) { res.reasons.push('Die Server Group ' + mm.group + ' enthaelt keinen RADIUS-Server'); return [false, null]; }
+      const tried = [];
+      for (const name of grp.servers) {
+        const [ok, why] = this.radiusReply(name);
+        if (!ok) { tried.push(why); continue; }
+        const ws = this.world.radius.servers.find(x => x.ip === this.radiusServers[name].ip);
+        const user = ws.users.find(u => u.name === eap.user);
+        if (!user || user.password !== eap.password) { res.reasons.push('Access-Reject von ' + name + ': Benutzername oder Passwort falsch'); return [false, null]; }
+        return [true, user];
+      }
+      res.reasons.push('Kein RADIUS-Server der Group ' + mm.group + ' antwortet: ' + tried.join('; '));
+      return [false, null];
     }
 
     decide(client) {
@@ -238,6 +308,28 @@
       if (w.akm === 'psk') {
         res.method = 'PSK';
         if (client.psk !== w.psk) { res.reasons.push('Pre-Shared Key stimmt nicht - die Authentifizierung scheitert'); return res; }
+      } else if (w.akm === 'dot1x') {
+        res.method = 'Dot1x';
+        const [ok, user] = this._dot1x(client, w, res);
+        if (!ok) return res;
+        // VLAN per RADIUS (Attribute 64/65/81): nur mit aaa-override im Policy Profile, sonst gilt das VLAN des Policy Profile
+        if ((has(p, 'aaa_override') ? p.aaa_override : false) && user.vlan) {
+          const v = String(user.vlan);
+          if (central) {
+            if (!isDigits(v)) {
+              res.reasons.push('Das von RADIUS gelieferte VLAN ' + v + ' ist am Controller nicht definiert (der Simulator kennt fuer zentrales Switching nur numerische VLAN-IDs)');
+              return res;
+            }
+            res.vlan = v;
+          } else {
+            const vid = Wlc.flexVlan(get(this.flexProfiles, this.flexOf(ap)), v);
+            if (vid === null) {
+              res.reasons.push('Das von RADIUS gelieferte VLAN ' + v + ' ist im Flex Profile ' + this.flexOf(ap) + ' nicht definiert - der Client kann sich nicht verbinden');
+              return res;
+            }
+            res.vlan = String(vid);
+          }
+        }
       } else res.method = 'None';
       res.state = 'Run';
       return res;
@@ -252,7 +344,7 @@
         'ID   Profile Name                     SSID                             Status Security', '-'.repeat(154)];
       for (const [n, w] of rows) {
         out.push(pad(w.id, 4) + ' ' + pad(n, 32) + ' ' + pad(w.ssid, 32) + ' ' + pad(w.shutdown ? 'DOWN' : 'UP', 6) + ' ' +
-                 (w.akm === 'psk' ? '[WPA2][PSK][AES]' : '[open]'));
+                 Wlc.securityOf(w));
       }
       return out.join('\n');
     }
@@ -295,6 +387,19 @@
     }
     showFlexSummary() { return this.nameDescTable('Flex Profiles', 'Flex Profile Name', sortedKeys(this.flexProfiles).map(n => [n, this.flexProfiles[n].descr])); }
     showSiteTagSummary() { return this.nameDescTable('Site Tags', 'Site Tag Name', sortedKeys(this.siteTags).map(n => [n, this.siteTags[n].descr])); }
+    showAaaServers() {
+      /* Nur Zeilen, deren Format der genieparser-Parser kennt; das Geraet gibt weitere aus. Die Dauern sind simuliert. */
+      const out = [];
+      sortedKeys(this.radiusServers).forEach((n, i) => {
+        const r = this.radiusServers[n];
+        const up = this.radiusReply(n)[0];
+        out.push('RADIUS: id ' + (i + 1) + ', priority 1, host ' + (r.ip || '0.0.0.0') + ', auth-port ' + r.auth_port + ', acct-port ' + r.acct_port + ', hostname ' + n,
+                 '  State: current ' + (up ? 'UP' : 'DEAD') + ', duration 600s, previous duration 0s',
+                 '  Dead: total time ' + (up ? '0s' : '600s') + ', count ' + (up ? 0 : 1),
+                 '  Quarantined: No');
+      });
+      return out.join('\n');
+    }
     showPolicySummary() {
       const names = sortedKeys(this.policies);
       const out = ['Number of Policy Profiles: ' + names.length, '',
@@ -309,7 +414,9 @@
 
   // ------------------------------------------------------------------ CLI
   const PROMPTS = { exec: '#', config: '(config)#', wlan: '(config-wlan)#', policy: '(config-wireless-policy)#', ptag: '(config-policy-tag)#',
-                    ap: '(config-ap)#', flex: '(config-wireless-flex-profile)#', flexvlan: '(config-wireless-flex-profile-vlan)#', stag: '(config-site-tag)#' };
+                    ap: '(config-ap)#', flex: '(config-wireless-flex-profile)#', flexvlan: '(config-wireless-flex-profile-vlan)#', stag: '(config-site-tag)#',
+                    radius: '(config-radius-server)#', aaagrp: '(config-sg-radius)#' };
+  const isIpv4 = v => { const p = v.split('.'); return p.length === 4 && p.every(x => isDigits(x) && x.length <= 3 && parseInt(x, 10) <= 255); };
   const eq = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
   const startsWith = (w, p) => w.length >= p.length && p.every((x, i) => w[i] === x);
 
@@ -343,7 +450,8 @@
       const c = this.wlc;
       const m = { 'wlan summary': () => c.showWlanSummary(), 'ap summary': () => c.showApSummary(), 'ap tag summary': () => c.showApTagSummary(),
                   'wireless client summary': () => c.showWirelessClientSummary(), 'wireless profile policy summary': () => c.showPolicySummary(),
-                  'wireless profile flex summary': () => c.showFlexSummary(), 'wireless tag site summary': () => c.showSiteTagSummary() };
+                  'wireless profile flex summary': () => c.showFlexSummary(), 'wireless tag site summary': () => c.showSiteTagSummary(),
+                  'aaa servers': () => c.showAaaServers() };
       if (!has(m, cmd)) throw new CliError('Der Befehl "show ' + cmd + '" ist in diesem Simulator (noch) nicht belegt/umgesetzt');
       return m[cmd]();
     }
@@ -387,7 +495,8 @@
       if (!w.length) throw new CliError('Invalid input detected: "no"');
       const inv = () => new CliError('Invalid input detected: "' + w.join(' ') + '"');
       // Das Objekt des aktuellen Untermodus kann inzwischen (z. B. ueber die Oberflaeche) geloescht worden sein
-      const store = { wlan: null, policy: c.policies, ptag: c.policyTags, flex: c.flexProfiles, flexvlan: c.flexProfiles, stag: c.siteTags };
+      const store = { wlan: null, policy: c.policies, ptag: c.policyTags, flex: c.flexProfiles, flexvlan: c.flexProfiles, stag: c.siteTags,
+                      radius: c.radiusServers, aaagrp: c.aaaGroups };
       if (this.mode === 'wlan' ? !c.wlans.has(this.ctx) : (has(store, this.mode) && store[this.mode] && !has(store[this.mode], this.ctx))) {
         this.mode = 'config'; this.ctx = null; this.ctx2 = null;
         throw new CliError('Das Objekt existiert nicht mehr');
@@ -397,7 +506,7 @@
           if (!isDigits(w[2]) || !(parseInt(w[2], 10) >= 1 && parseInt(w[2], 10) <= 4096)) throw new CliError('WLAN-ID muss 1-4096 sein');
           const id = parseInt(w[2], 10);
           for (const [n, x] of c.wlans) if (n !== w[1] && x.id === id) throw new CliError('WLAN-ID ' + w[2] + ' ist bereits vergeben');
-          if (!c.wlans.has(w[1])) c.wlans.set(w[1], { id, ssid: w[3], shutdown: true, akm: 'open', psk: '' });
+          if (!c.wlans.has(w[1])) c.wlans.set(w[1], { id, ssid: w[3], shutdown: true, akm: 'open', psk: '', authlist: '' });
           this.mode = 'wlan'; this.ctx = w[1];
           return '';
         }
@@ -428,6 +537,46 @@
           if (!has(c.siteTags, w[3]) && !NAME_RE.test(w[3])) throw new CliError('Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
           setdefault(c.siteTags, w[3], newSite());
           this.mode = 'stag'; this.ctx = w[3];
+          return '';
+        }
+        if (eq(w, ['aaa', 'new-model'])) return '';   // AAA ist im Simulator immer aktiv; der Befehl wird angenommen
+        if (startsWith(w, ['radius', 'server']) && w.length === 3 && !no) {
+          if (!has(c.radiusServers, w[2]) && !NAME_RE.test(w[2])) throw new CliError('Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
+          setdefault(c.radiusServers, w[2], { ip: '', auth_port: 1812, acct_port: 1813, key: '', timeout: 5, retransmit: 3 });
+          this.mode = 'radius'; this.ctx = w[2];
+          return '';
+        }
+        if (startsWith(w, ['aaa', 'group', 'server', 'radius']) && w.length === 5 && !no) {
+          if (!has(c.aaaGroups, w[4]) && !NAME_RE.test(w[4])) throw new CliError('Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
+          setdefault(c.aaaGroups, w[4], { servers: [] });
+          this.mode = 'aaagrp'; this.ctx = w[4];
+          return '';
+        }
+        if (startsWith(w, ['aaa', 'authentication', 'dot1x']) && w.length === 6 && w[4] === 'group' && !no) {
+          if (!NAME_RE.test(w[3])) throw new CliError('Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
+          if (!has(c.aaaGroups, w[5])) throw new CliError('Server Group ' + w[5] + ' existiert nicht');
+          c.aaaLists[w[3]] = { group: w[5] };
+          return '';
+        }
+        if (no && startsWith(w, ['aaa', 'authentication', 'dot1x']) && w.length === 4) {
+          if (!has(c.aaaLists, w[3])) throw new CliError('Authentication List ' + w[3] + ' existiert nicht');
+          const users = [...c.wlans.keys()].filter(n => (c.wlans.get(n).authlist || undefined) === w[3]).sort(cmp);
+          if (users.length) throw new CliError('Authentication List ' + w[3] + ' wird von WLANs verwendet (' + users.join(', ') + ') - zuerst dort entfernen');
+          delete c.aaaLists[w[3]];
+          return '';
+        }
+        if (no && startsWith(w, ['aaa', 'group', 'server', 'radius']) && w.length === 5) {
+          if (!has(c.aaaGroups, w[4])) throw new CliError('Server Group ' + w[4] + ' existiert nicht');
+          const users = sortedKeys(c.aaaLists).filter(n => c.aaaLists[n].group === w[4]);
+          if (users.length) throw new CliError('Server Group ' + w[4] + ' wird von Authentication Lists verwendet (' + users.join(', ') + ') - zuerst dort entfernen');
+          delete c.aaaGroups[w[4]];
+          return '';
+        }
+        if (no && startsWith(w, ['radius', 'server']) && w.length === 3) {
+          if (!has(c.radiusServers, w[2])) throw new CliError('RADIUS-Server ' + w[2] + ' existiert nicht');
+          const users = sortedKeys(c.aaaGroups).filter(n => c.aaaGroups[n].servers.includes(w[2]));
+          if (users.length) throw new CliError('RADIUS-Server ' + w[2] + ' ist in Server Groups eingetragen (' + users.join(', ') + ') - zuerst dort entfernen');
+          delete c.radiusServers[w[2]];
           return '';
         }
         if (no && startsWith(w, ['wireless', 'profile', 'flex']) && w.length === 4) {
@@ -475,6 +624,8 @@
         if (w[0] === 'shutdown') x.shutdown = !no;
         else if (startsWith(w, ['security', 'wpa', 'psk', 'set-key']) && w.length === 7 && w[4] === 'ascii') x.psk = w[6];
         else if (startsWith(w, ['security', 'wpa', 'akm']) && w.length === 4 && w[3] === 'psk') x.akm = no ? 'open' : 'psk';
+        else if (startsWith(w, ['security', 'wpa', 'akm']) && w.length === 4 && w[3] === 'dot1x') x.akm = no ? 'open' : 'dot1x';
+        else if (startsWith(w, ['security', 'dot1x', 'authentication-list']) && (w.length === 4 || (no && w.length === 3))) x.authlist = no ? '' : w[3];
         else throw inv();
         return '';
       }
@@ -483,6 +634,7 @@
         if (w[0] === 'shutdown') x.shutdown = !no;
         else if (w[0] === 'vlan' && w.length === 2 && NAME_RE.test(w[1])) x.vlan = w[1];
         else if (eq(w, ['central', 'switching'])) x.central = !no;
+        else if (eq(w, ['aaa-override'])) x.aaa_override = !no;
         else if (w[0] === 'description' && w.length > 1) x.descr = w.slice(1).join(' ');
         else throw inv();
         return '';
@@ -495,6 +647,38 @@
         throw inv();
       }
       if (this.mode === 'flex' || this.mode === 'flexvlan') return this._flex(w, no);
+      if (this.mode === 'radius') {
+        const r = c.radiusServers[this.ctx];
+        if (startsWith(w, ['address', 'ipv4']) && (w.length === 3 || w.length === 7) && !no) {
+          if (!isIpv4(w[2])) throw new CliError('IPv4-Adresse ungueltig: ' + w[2]);
+          if (w.length === 7) {
+            if (w[3] !== 'auth-port' || w[5] !== 'acct-port' || !isDigits(w[4]) || !isDigits(w[6]) ||
+                !(parseInt(w[4], 10) >= 1 && parseInt(w[4], 10) <= 65535 && parseInt(w[6], 10) >= 1 && parseInt(w[6], 10) <= 65535)) throw inv();
+            r.auth_port = parseInt(w[4], 10); r.acct_port = parseInt(w[6], 10);
+          }
+          r.ip = w[2];
+        } else if (w[0] === 'key' && !no && (w.length === 2 || (w.length === 3 && w[1] === '0'))) r.key = w[w.length - 1];
+        else if ((w[0] === 'timeout' || w[0] === 'retransmit') && w.length === 2 && !no) {
+          const hi = w[0] === 'timeout' ? 1000 : 100, lo = w[0] === 'retransmit' ? 0 : 1;
+          if (!isDigits(w[1]) || !(lo <= parseInt(w[1], 10) && parseInt(w[1], 10) <= hi)) throw new CliError('Wert ausserhalb des Bereichs');
+          r[w[0]] = parseInt(w[1], 10);
+        } else throw inv();
+        return '';
+      }
+      if (this.mode === 'aaagrp') {
+        const g = c.aaaGroups[this.ctx];
+        if (startsWith(w, ['server', 'name']) && w.length === 3) {
+          if (no) {
+            if (!g.servers.includes(w[2])) throw new CliError('RADIUS-Server ' + w[2] + ' ist nicht in der Group');
+            g.servers.splice(g.servers.indexOf(w[2]), 1);
+          } else {
+            if (!has(c.radiusServers, w[2])) throw new CliError('RADIUS-Server ' + w[2] + ' existiert nicht');
+            if (!g.servers.includes(w[2])) g.servers.push(w[2]);
+          }
+          return '';
+        }
+        throw inv();
+      }
       if (this.mode === 'stag') {
         const st = c.siteTags[this.ctx];
         if (w[0] === 'flex-profile' && (w.length === 2 || (no && w.length === 1))) {
@@ -650,6 +834,10 @@
       const a = st.aps.find(x => x.name === chk.ap);
       return [!!a && a.mode === chk.mode, 'Modus ' + (a ? a.mode : '?')];
     }
+    if (t === 'wlanservers') {
+      const got = (st._wlan_servers && st._wlan_servers[chk.profile]) || [];
+      return [chk.servers.every(ip => got.includes(ip)), 'Server in der Kette: ' + (got.length ? got.join(', ') : 'keine')];
+    }
     if (t === 'tagmap') {
       const tg = st.policyTags.find(x => x.name === chk.tag);
       const got = tg ? Object.fromEntries(tg.maps.map(m => [m.wlan, m.policy])) : null;
@@ -690,7 +878,7 @@
       const lab = get(this.labs, id);
       if (!lab) throw new LabError('Lab ' + id + ' gibt es nicht', 404);
       if (!lab.modes.includes(mode)) throw new LabError('Modus ' + pyStr(mode) + ' ist fuer dieses Lab nicht vorgesehen');
-      this.sim.resetWorld(lab.worldClients);
+      this.sim.resetWorld(lab.worldClients, lab.worldRadius);
       const [ok, , err] = this.sim.apply(lab.startCommands || []);
       if (!ok) throw new LabError('Startkonfiguration von ' + id + ' fehlerhaft: ' + err.message, 500);
       this.session = { id, mode, hints: 0, answers: {}, checks: 0 };
@@ -748,6 +936,8 @@
       const s = this.need(), lab = this.labs[s.id];
       s.checks += 1;
       const st = this.sim.wlc.state();
+      st._wlan_servers = {};
+      for (const [n, w] of this.sim.wlc.wlans) st._wlan_servers[n] = this.sim.wlc.wlanServers(w);
       const exam = s.mode === 'exam';
       const res = [];
       for (const c of lab.checks) {
@@ -789,9 +979,10 @@
         if (st !== null) { try { this.restoreAll(st); } catch (e) { if (e instanceof StoreError) this.store.quarantine(this.store.P + 'state'); else throw e; } }
       }
     }
-    resetWorld(clients) {
+    resetWorld(clients, radius) {
       this.world = newWorld();
       if (clients !== undefined && clients !== null) this.world.clients = clone(clients);
+      if (radius !== undefined && radius !== null) this.world.radius = { servers: clone(radius) };
       this.wlc = new Wlc(this.world);
       this.cli = new Cli(this.wlc);
     }
@@ -813,6 +1004,7 @@
     restoreAll(d) {
       validateState(d);
       const world = clone(d.world);
+      if (!has(world, 'radius')) world.radius = defaultRadius();   // aeltere Staende kennen keinen RADIUS-Server
       const wlc = new Wlc(world);
       try { wlc.load(d.wlc); wlc.state(); } catch (e) { throw new StoreError('Stand ist beschaedigt'); }
       this.world = world; this.wlc = wlc; this.cli = new Cli(wlc);

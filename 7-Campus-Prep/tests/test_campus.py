@@ -350,6 +350,170 @@ class TestFlexConnect(unittest.TestCase):
         self.assertEqual((f(fp, '20'), f(fp, '7'), f(fp, '8'), f(None, '20')), (20, 7, None, None))
 
 
+def aaa_world():
+    """Welt fuer 802.1X-Tests: ein RADIUS-Server (Standard) und drei Endgeraete mit Zugangsdaten."""
+    s = Sim()
+    s.world['clients'] = [
+        {'mac': '58bf.eaaa.0001', 'ssid': 'Corp1X', 'eap': {'user': 'anna', 'password': 'Passw0rt!'}, 'ap': 'ap-lobby', 'protocol': '11ac'},
+        {'mac': '58bf.eaaa.0002', 'ssid': 'Corp1X', 'eap': {'user': 'bernd', 'password': 'Geheim#2'}, 'ap': 'ap-lobby', 'protocol': '11ac'},
+        {'mac': '58bf.eaaa.0003', 'ssid': 'Corp1X', 'eap': {'user': 'carla', 'password': 'Sommer#3'}, 'ap': 'ap-lobby', 'protocol': '11ac'},
+        {'mac': '58bf.eaaa.0004', 'ssid': 'Corp1X', 'eap': {'user': 'anna', 'password': 'falsch'}, 'ap': 'ap-lobby', 'protocol': '11ac'},
+    ]
+    return s
+
+
+AAA = ['aaa new-model', 'radius server RS1', 'address ipv4 10.10.0.50 auth-port 1812 acct-port 1813', 'key RadiusKey1', 'exit',
+       'aaa group server radius RG1', 'server name RS1', 'exit', 'aaa authentication dot1x L1 group RG1',
+       'wlan W1 1 Corp1X', 'security wpa akm dot1x', 'security dot1x authentication-list L1', 'no shutdown', 'exit',
+       'wireless profile policy PP', 'vlan 20', 'no shutdown', 'exit', 'wireless tag policy PT', 'wlan W1 policy PP', 'exit',
+       'ap a4b2.32aa.0001', 'policy-tag PT', 'exit']
+
+
+class TestDot1xRadius(unittest.TestCase):
+    """802.1X mit RADIUS: Befehlskette nach Cisco-Dokument 213919, Formate aus genieparser; Entscheidungen sind ein Simulator-Modell."""
+
+    def setup(self, extra=()):
+        s = aaa_world()
+        ok, _, err = s.apply(list(AAA) + list(extra))
+        self.assertTrue(ok, err)
+        return s
+
+    def by_user(self, s):
+        return {c['eap']['user'] + ('!' if c['eap']['password'] == 'falsch' else ''): c for c in s.wlc.clients()}
+
+    def test_full_chain_authenticates_and_shows_the_verified_formats(self):
+        s = self.setup()
+        c = self.by_user(s)
+        self.assertEqual([(c[u]['state'], c[u]['method'], c[u]['vlan']) for u in ('anna', 'bernd', 'carla')], [('Run', 'Dot1x', '20')] * 3)
+        self.assertEqual(c['anna!']['state'], 'Not Associated')
+        self.assertIn('Access-Reject von RS1', ' '.join(c['anna!']['reasons']))
+        self.assertRegex(s.cli.run('show wlan summary').split('\n')[4], r'^1\s+W1\s+Corp1X\s+UP\s+\[WPA2\]\[802\.1x\]\[AES\]$')
+        self.assertRegex(s.cli.run('show wireless client summary').split('\n')[4], r'^58bf\.eaaa\.0001\s+ap-lobby\s+WLAN\s+1\s+Run\s+11ac\s+Dot1x\s+Local$')
+
+    def test_show_aaa_servers_uses_the_verified_line_formats(self):
+        s = self.setup()
+        out = s.cli.run('show aaa servers').split('\n')
+        self.assertRegex(out[0], r'^RADIUS:\s+id\s+1,\s+priority\s+1,\s+host\s+10\.10\.0\.50,\s+auth-port\s+1812,\s+acct-port\s+1813,\s*hostname\s+RS1$')
+        self.assertRegex(out[1].strip(), r'^State:\s+current\s+UP,\s+duration\s+\S+,\s+previous\s+duration\s+\S+$')
+        self.assertRegex(out[2].strip(), r'^Dead:\s+total\s+time\s+\S+,\s+count\s+\d+$')
+        self.assertRegex(out[3].strip(), r'^Quarantined:\s+(No|Yes)$')
+        s.world['radius']['servers'][0]['up'] = False
+        self.assertIn('current DEAD', s.cli.run('show aaa servers'))
+        self.assertEqual(Sim().cli.run('show aaa servers'), '')
+
+    def test_every_break_in_the_chain_has_its_own_reason(self):
+        cases = [
+            ('Zugangsdaten', lambda s: s.world['clients'][0].pop('eap'), 'keine 802.1X-Zugangsdaten'),
+            ('ohne Liste', lambda s: s.apply(['wlan W1 1 Corp1X', 'no security dot1x authentication-list']), 'keine 802.1X-Authentication-List'),
+            ('Liste undefiniert', lambda s: s.apply(['wlan W1 1 Corp1X', 'security dot1x authentication-list TIPPFEHLER']), 'Authentication List TIPPFEHLER ist nicht definiert'),
+            ('Group leer', lambda s: s.apply(['aaa group server radius RG1', 'no server name RS1']), 'Group RG1 enthaelt keinen RADIUS-Server'),
+            ('Group undefiniert', lambda s: s.wlc.aaa_groups.pop('RG1'), 'Server Group RG1 der Authentication List L1 ist nicht definiert'),
+            ('Server down', lambda s: s.world['radius']['servers'][0].update(up=False), 'RS1 (10.10.0.50) antwortet nicht'),
+            ('falsche Adresse', lambda s: s.apply(['radius server RS1', 'address ipv4 10.10.0.99']), 'RS1 (10.10.0.99) antwortet nicht'),
+            ('falscher Port', lambda s: s.apply(['radius server RS1', 'address ipv4 10.10.0.50 auth-port 1645 acct-port 1646']), 'Auth-Port 1645 stimmt nicht'),
+            ('NAS unbekannt', lambda s: s.world['radius']['servers'][0].update(nas=[]), 'nicht als Client eingetragen'),
+            ('Secret falsch', lambda s: s.apply(['radius server RS1', 'key Falsch']), 'Shared Secret stimmt nicht'),
+            ('Adresse fehlt', lambda s: s.apply(['radius server RS1', 'address ipv4 0.0.0.0']), 'antwortet nicht'),
+        ]
+        for name, brk, word in cases:
+            with self.subTest(name):
+                s = self.setup()
+                brk(s)
+                anna = next(c for c in s.wlc.clients() if c['mac'] == '58bf.eaaa.0001')
+                self.assertEqual(anna['state'], 'Not Associated', name)
+                self.assertIn(word, ' '.join(anna['reasons']), name)
+
+    def test_second_server_takes_over_but_a_reject_does_not_fail_over(self):
+        s = self.setup(['radius server RS2', 'address ipv4 10.10.0.51', 'key RadiusKey1', 'exit', 'aaa group server radius RG1', 'server name RS2'])
+        s.world['radius']['servers'][0]['up'] = False
+        s.world['radius']['servers'].append(dict(s.world['radius']['servers'][0], ip='10.10.0.51', up=True))
+        c = self.by_user(s)
+        self.assertEqual(c['anna']['state'], 'Run', 'RS1 antwortet nicht, RS2 uebernimmt')
+        self.assertEqual(c['anna!']['state'], 'Not Associated')
+        self.assertIn('Access-Reject von RS2', ' '.join(c['anna!']['reasons']))
+        self.assertEqual(s.wlc.wlan_servers(s.wlc.wlans['W1']), ['10.10.0.50', '10.10.0.51'])
+        states = {r['name']: r['state'] for r in s.wlc.state()['radiusServers']}
+        self.assertEqual(states, {'RS1': 'DEAD', 'RS2': 'UP'})
+
+    def test_aaa_override_decides_whether_the_radius_vlan_applies(self):
+        s = self.setup()
+        self.assertEqual({u: v['vlan'] for u, v in self.by_user(s).items() if u != 'anna!'}, {'anna': '20', 'bernd': '20', 'carla': '20'})
+        s.apply(['wireless profile policy PP', 'aaa-override'])
+        c = self.by_user(s)
+        self.assertEqual((c['anna']['vlan'], c['bernd']['vlan'], c['carla']['vlan']), ('30', '40', '20'), 'carla hat kein VLAN-Attribut')
+        s.apply(['wireless profile policy PP', 'no aaa-override'])
+        self.assertEqual(self.by_user(s)['anna']['vlan'], '20')
+        self.assertTrue(s.wlc.state()['policies'][0]['aaaOverride'] is False)
+
+    def test_aaa_override_with_local_switching_needs_the_vlan_in_the_flex_profile(self):
+        """Annahme (docs/QUELLEN.md): Das per RADIUS gelieferte VLAN muss bei lokalem Switching im Flex Profile stehen."""
+        flex = ['wireless profile policy PP', 'no central switching', 'aaa-override', 'vlan LOKAL', 'exit',
+                'wireless profile flex FP', 'vlan-name LOKAL', 'vlan-id 20', 'exit', 'exit', 'wireless tag site ST', 'no local-site', 'flex-profile FP', 'exit',
+                'ap a4b2.32aa.0001', 'site-tag ST']
+        s = self.setup(flex)
+        c = self.by_user(s)
+        self.assertEqual(c['carla']['vlan'], '20')
+        self.assertEqual(c['anna']['state'], 'Not Associated')
+        self.assertIn('VLAN 30 ist im Flex Profile FP nicht definiert', ' '.join(c['anna']['reasons']))
+        s.apply(['wireless profile flex FP', 'vlan-name V30', 'vlan-id 30', 'vlan-name V40', 'vlan-id 40'])
+        c = self.by_user(s)
+        self.assertEqual((c['anna']['vlan'], c['bernd']['vlan']), ('30', '40'))
+
+    def test_a_dot1x_client_on_a_psk_wlan_and_the_reverse(self):
+        s = self.setup(['wlan W1 1 Corp1X', 'security wpa akm psk', 'security wpa psk set-key ascii 0 Sommer2026'])
+        self.assertIn('Pre-Shared Key', ' '.join(self.by_user(s)['anna']['reasons']))
+        s2 = aaa_world()
+        s2.world['clients'][0].pop('eap')
+        s2.world['clients'][0]['psk'] = 'Sommer2026'
+        s2.apply(list(AAA))
+        self.assertIn('keine 802.1X-Zugangsdaten', ' '.join(s2.wlc.clients()[0]['reasons']))
+
+    def test_cli_modes_validation_and_delete_order(self):
+        s = Sim()
+        s.cli.run('configure terminal')
+        for line in ('aaa new-model', 'radius server RS1'):
+            self.assertEqual(s.cli.run(line), '', line)
+        self.assertEqual(s.cli.prompt, 'wlc1(config-radius-server)#')
+        for bad in ('address ipv4 300.1.1.1', 'address ipv4 1.2.3', 'address ipv6 ::1', 'address ipv4 10.0.0.1 auth-port 0 acct-port 1813',
+                    'address ipv4 10.0.0.1 auth-port x acct-port 1813', 'address ipv4 10.0.0.1 port 1812 acct-port 1813', 'key 7 abc', 'key',
+                    'timeout 0', 'timeout 5000', 'retransmit 101', 'retransmit x', 'no key', 'bogus'):
+            self.assertTrue(s.cli.run(bad).startswith('% '), bad)
+        for ok in ('address ipv4 10.0.0.1', 'address ipv4 10.0.0.2 auth-port 1645 acct-port 1646', 'key 0 geheim', 'key anders', 'timeout 7', 'retransmit 0'):
+            self.assertEqual(s.cli.run(ok), '', ok)
+        self.assertEqual(s.wlc.radius_servers['RS1'], {'ip': '10.0.0.2', 'auth_port': 1645, 'acct_port': 1646, 'key': 'anders', 'timeout': 7, 'retransmit': 0})
+        s.cli.run('exit')
+        self.assertTrue(s.cli.run('radius server bad!name').startswith('% '))
+        self.assertTrue(s.cli.run('aaa group server radius G').startswith('') and s.cli.prompt == 'wlc1(config-sg-radius)#')
+        self.assertTrue(s.cli.run('server name NIX').startswith('% '))
+        self.assertEqual(s.cli.run('server name RS1'), '')
+        self.assertEqual(s.cli.run('server name RS1'), '', 'doppelt eintragen ist kein Fehler')
+        self.assertEqual(s.wlc.aaa_groups['G']['servers'], ['RS1'])
+        self.assertTrue(s.cli.run('no server name NIX').startswith('% '))
+        s.cli.run('exit')
+        self.assertTrue(s.cli.run('aaa authentication dot1x L group NIX').startswith('% '))
+        self.assertTrue(s.cli.run('aaa authentication dot1x bad!name group G').startswith('% '))
+        self.assertEqual(s.cli.run('aaa authentication dot1x L group G'), '')
+        s.cli.run('wlan W 1 X')
+        s.cli.run('security dot1x authentication-list L')
+        s.cli.run('exit')
+        for cmd, word in (('no radius server RS1', 'G'), ('no aaa group server radius G', 'L'), ('no aaa authentication dot1x L', 'W')):
+            self.assertIn(word, s.cli.run(cmd), cmd)
+        for line in ('wlan W 1 X', 'no security dot1x authentication-list', 'exit', 'no aaa authentication dot1x L', 'no aaa group server radius G',
+                     'no radius server RS1', 'aaa group server radius G'):
+            self.assertEqual(s.cli.run(line), '', line)
+        self.assertTrue(s.cli.run('no radius server RS1').startswith('% '))
+        self.assertTrue(s.cli.run('no aaa group server radius NIX').startswith('% '))
+        self.assertTrue(s.cli.run('no aaa authentication dot1x NIX').startswith('% '))
+
+    def test_state_exposes_no_secrets_and_the_user(self):
+        s = self.setup()
+        st = json.dumps(s.wlc.state())
+        self.assertNotIn('RadiusKey1', st)
+        self.assertNotIn('Passw0rt', st)
+        self.assertTrue(s.wlc.state()['radiusServers'][0]['keySet'])
+        self.assertEqual([c['user'] for c in s.wlc.state()['clients']], ['anna', 'bernd', 'carla', 'anna'])
+
+
 class TestWebApi(unittest.TestCase):
     """Zustands- und Apply-Endpunkt der Oberflaeche sowie das Ausliefern der statischen Dateien."""
 
