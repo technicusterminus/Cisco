@@ -18,6 +18,11 @@ class CliError(Exception):
     pass
 
 
+def is_ipv4(v):
+    p = v.split('.')
+    return len(p) == 4 and all(x.isdigit() and len(x) <= 3 and int(x) <= 255 for x in p)
+
+
 class Wlc:
     def __init__(self, world):
         self.world = world
@@ -27,18 +32,24 @@ class Wlc:
         self.ap_cfg = {}       # ethMac -> {'policy_tag': name, 'site_tag': name}
         self.flex_profiles = {DEF_FLEX_PROFILE: {'native': None, 'vlans': {}, 'descr': ''}}   # vlans: name -> id oder None
         self.site_tags = {DEF_SITE_TAG: {'local': True, 'flex': None, 'descr': ''}}
+        self.radius_servers = {}   # name -> {ip, auth_port, acct_port, key, timeout, retransmit}
+        self.aaa_groups = {}       # name -> {servers: [radius-server-name]} (Reihenfolge = Reihenfolge der Versuche)
+        self.aaa_lists = {}        # dot1x-Methodenliste name -> {group}
 
     # ------------------------------------------------------------------ Snapshot und Zustand fuer die Oberflaeche
     def snapshot(self):
-        return copy.deepcopy((self.wlans, self.policies, self.policy_tags, self.ap_cfg, self.flex_profiles, self.site_tags))
+        return copy.deepcopy((self.wlans, self.policies, self.policy_tags, self.ap_cfg, self.flex_profiles, self.site_tags,
+                              self.radius_servers, self.aaa_groups, self.aaa_lists))
 
     def restore(self, snap):
-        self.wlans, self.policies, self.policy_tags, self.ap_cfg, self.flex_profiles, self.site_tags = copy.deepcopy(snap)
+        (self.wlans, self.policies, self.policy_tags, self.ap_cfg, self.flex_profiles, self.site_tags,
+         self.radius_servers, self.aaa_groups, self.aaa_lists) = copy.deepcopy(snap)
 
     def dump(self):
         """Konfiguration fuer die Persistenz (JSON-tauglich). Die Welt (APs, Clients) speichert die Sim."""
         return copy.deepcopy({'wlans': self.wlans, 'policies': self.policies, 'policyTags': self.policy_tags, 'apCfg': self.ap_cfg,
-                              'flexProfiles': self.flex_profiles, 'siteTags': self.site_tags})
+                              'flexProfiles': self.flex_profiles, 'siteTags': self.site_tags, 'radiusServers': self.radius_servers,
+                              'aaaGroups': self.aaa_groups, 'aaaLists': self.aaa_lists})
 
     def load(self, d):
         self.wlans, self.policies = copy.deepcopy(d['wlans']), copy.deepcopy(d['policies'])
@@ -49,6 +60,10 @@ class Wlc:
         self.flex_profiles.setdefault(DEF_FLEX_PROFILE, {'native': None, 'vlans': {}, 'descr': ''})
         self.site_tags = copy.deepcopy(d.get('siteTags') or {})
         self.site_tags.setdefault(DEF_SITE_TAG, {'local': True, 'flex': None, 'descr': ''})
+        # Staende vor Version 3 kennen keine AAA-Objekte
+        self.radius_servers = copy.deepcopy(d.get('radiusServers') or {})
+        self.aaa_groups = copy.deepcopy(d.get('aaaGroups') or {})
+        self.aaa_lists = copy.deepcopy(d.get('aaaLists') or {})
 
     def state(self):
         """Alles, was die Weboberflaeche anzeigt (Schluessel werden nicht herausgegeben)."""
@@ -62,11 +77,16 @@ class Wlc:
         return {
             'wlc': dict(self.world['wlc']),
             'wlans': [{'profile': n, 'id': w['id'], 'ssid': w['ssid'], 'status': 'DOWN' if w['shutdown'] else 'UP',
-                       'akm': w['akm'], 'pskSet': bool(w['psk']),
-                       'security': '[WPA2][PSK][AES]' if w['akm'] == 'psk' else '[open]'}
+                       'akm': w['akm'], 'pskSet': bool(w['psk']), 'authList': w.get('authlist', ''), 'security': self.security_of(w)}
                       for n, w in sorted(self.wlans.items(), key=lambda kv: kv[1]['id'])],
             'policies': [{'name': n, 'vlan': p['vlan'], 'description': p['descr'], 'central': p.get('central', True),
+                          'aaaOverride': p.get('aaa_override', False),
                           'status': 'DISABLED' if p['shutdown'] else 'ENABLED'} for n, p in sorted(self.policies.items())],
+            'radiusServers': [{'name': n, 'ip': r['ip'], 'authPort': r['auth_port'], 'acctPort': r['acct_port'], 'keySet': bool(r['key']),
+                               'timeout': r['timeout'], 'retransmit': r['retransmit'], 'state': 'UP' if self.radius_reply(n)[0] else 'DEAD'}
+                              for n, r in sorted(self.radius_servers.items())],
+            'aaaGroups': [{'name': n, 'servers': list(g['servers'])} for n, g in sorted(self.aaa_groups.items())],
+            'aaaLists': [{'name': n, 'group': g['group']} for n, g in sorted(self.aaa_lists.items())],
             'flexProfiles': [{'name': n, 'builtin': n == DEF_FLEX_PROFILE, 'description': f['descr'], 'native': f['native'],
                               'vlans': [{'name': k, 'id': v} for k, v in sorted(f['vlans'].items())]}
                              for n, f in sorted(self.flex_profiles.items())],
@@ -79,7 +99,7 @@ class Wlc:
             'aps': aps,
             'clients': [{'mac': c['mac'], 'ssid': c['ssid'], 'ap': c['ap'], 'protocol': c['protocol'], 'state': c['state'],
                          'wlan': c['wlan'], 'vlan': c['vlan'], 'method': c['method'], 'switching': c['switching'], 'mode': c['mode'],
-                         'reasons': c['reasons']} for c in self.clients()],
+                         'user': (c.get('eap') or {}).get('user'), 'reasons': c['reasons']} for c in self.clients()],
         }
 
     # ------------------------------------------------------------------ Zustand
@@ -114,6 +134,72 @@ class Wlc:
             i = int(v)
             return i if i in [x for x in fp['vlans'].values() if x is not None] or fp['native'] == i else None
         return fp['vlans'].get(v)
+
+    @staticmethod
+    def security_of(w):
+        """Spalte Security von show wlan summary: Muster [WPA2][802.1x][AES] und [open] sind belegt, [PSK] ist abgeleitet."""
+        return {'psk': '[WPA2][PSK][AES]', 'dot1x': '[WPA2][802.1x][AES]'}.get(w['akm'], '[open]')
+
+    def radius_reply(self, name):
+        """Antwortet der RADIUS-Server hinter dem konfigurierten Eintrag? (ok, Grund). Ohne Antwort verwirft der Controller den
+        Versuch und nimmt den naechsten Server der Group; der Server gilt dann als DEAD (Simulator-Modell)."""
+        srv = self.radius_servers.get(name)
+        if srv is None:
+            return False, 'RADIUS-Server %s ist nicht definiert' % name
+        if not srv['ip']:
+            return False, 'RADIUS-Server %s hat keine Adresse (address ipv4 fehlt)' % name
+        ws = next((x for x in self.world.get('radius', {}).get('servers', []) if x['ip'] == srv['ip']), None)
+        if ws is None or not ws['up']:
+            return False, 'RADIUS-Server %s (%s) antwortet nicht' % (name, srv['ip'])
+        if srv['auth_port'] != ws.get('auth_port', 1812):
+            return False, 'RADIUS-Server %s (%s) antwortet nicht: Auth-Port %s stimmt nicht' % (name, srv['ip'], srv['auth_port'])
+        if self.world['wlc']['ip'] not in ws['nas']:
+            return False, 'RADIUS-Server %s verwirft die Anfrage: Der Controller ist dort nicht als Client eingetragen' % name
+        if srv['key'] != ws['secret']:
+            return False, 'RADIUS-Server %s verwirft die Anfrage: Das Shared Secret stimmt nicht' % name
+        return True, ''
+
+    def wlan_servers(self, w):
+        """RADIUS-Server-Adressen in der Reihenfolge der Versuche fuer ein 802.1X-WLAN (leer, wenn die Kette unvollstaendig ist)."""
+        mm = self.aaa_lists.get(w.get('authlist') or '')
+        grp = self.aaa_groups.get(mm['group']) if mm else None
+        return [self.radius_servers[n]['ip'] for n in (grp['servers'] if grp else []) if n in self.radius_servers]
+
+    def _dot1x(self, client, w, res):
+        """802.1X: Kette WLAN -> Authentication List -> Server Group -> RADIUS-Server pruefen. Rueckgabe (ok, Benutzer-Eintrag)."""
+        eap = client.get('eap')
+        if not eap:
+            res['reasons'].append('Das Endgeraet sendet keine 802.1X-Zugangsdaten, das WLAN verlangt 802.1X')
+            return False, None
+        lst = w.get('authlist') or ''
+        if not lst:
+            res['reasons'].append('Am WLAN-Profil ist keine 802.1X-Authentication-List konfiguriert (security dot1x authentication-list)')
+            return False, None
+        mm = self.aaa_lists.get(lst)
+        if mm is None:
+            res['reasons'].append('Die Authentication List %s ist nicht definiert (aaa authentication dot1x)' % lst)
+            return False, None
+        grp = self.aaa_groups.get(mm['group'])
+        if grp is None:
+            res['reasons'].append('Die Server Group %s der Authentication List %s ist nicht definiert' % (mm['group'], lst))
+            return False, None
+        if not grp['servers']:
+            res['reasons'].append('Die Server Group %s enthaelt keinen RADIUS-Server' % mm['group'])
+            return False, None
+        tried = []
+        for name in grp['servers']:
+            ok, why = self.radius_reply(name)
+            if not ok:
+                tried.append(why)
+                continue
+            ws = next(x for x in self.world['radius']['servers'] if x['ip'] == self.radius_servers[name]['ip'])
+            user = next((u for u in ws['users'] if u['name'] == eap.get('user')), None)
+            if user is None or user['password'] != eap.get('password'):
+                res['reasons'].append('Access-Reject von %s: Benutzername oder Passwort falsch' % name)
+                return False, None
+            return True, user
+        res['reasons'].append('Kein RADIUS-Server der Group %s antwortet: %s' % (mm['group'], '; '.join(tried)))
+        return False, None
 
     def decide(self, client):
         """Didaktisches Modell: Warum ist ein Client assoziiert oder nicht? Rueckgabe {state, ap, wlan, reasons}."""
@@ -169,6 +255,27 @@ class Wlc:
             if client.get('psk') != w['psk']:
                 res['reasons'].append('Pre-Shared Key stimmt nicht - die Authentifizierung scheitert')
                 return res
+        elif w['akm'] == 'dot1x':
+            res['method'] = 'Dot1x'
+            ok, user = self._dot1x(client, w, res)
+            if not ok:
+                return res
+            # VLAN per RADIUS (Attribute 64/65/81): nur mit aaa-override im Policy Profile, sonst gilt das VLAN des Policy Profile
+            if p.get('aaa_override', False) and user.get('vlan'):
+                v = str(user['vlan'])
+                if central:
+                    if not v.isdigit():
+                        res['reasons'].append('Das von RADIUS gelieferte VLAN %s ist am Controller nicht definiert (der Simulator kennt '
+                                              'fuer zentrales Switching nur numerische VLAN-IDs)' % v)
+                        return res
+                    res['vlan'] = v
+                else:
+                    vid = self.flex_vlan(self.flex_profiles.get(self.flex_of(ap)), v)
+                    if vid is None:
+                        res['reasons'].append('Das von RADIUS gelieferte VLAN %s ist im Flex Profile %s nicht definiert - der Client kann '
+                                              'sich nicht verbinden' % (v, self.flex_of(ap)))
+                        return res
+                    res['vlan'] = str(vid)
         else:
             res['method'] = 'None'
         res['state'] = 'Run'
@@ -188,7 +295,7 @@ class Wlc:
                'ID   Profile Name                     SSID                             Status Security',
                '-' * 154]
         for n, w in rows:
-            sec = '[WPA2][PSK][AES]' if w['akm'] == 'psk' else '[open]'
+            sec = self.security_of(w)
             out.append('%-4d %-32s %-32s %-6s %s' % (w['id'], n, w['ssid'], 'DOWN' if w['shutdown'] else 'UP', sec))
         return '\n'.join(out)
 
@@ -237,6 +344,18 @@ class Wlc:
     def show_site_tag_summary(self):
         return self._name_desc_table('Site Tags', 'Site Tag Name', [(n, t['descr']) for n, t in sorted(self.site_tags.items())])
 
+    def show_aaa_servers(self):
+        """Nur Zeilen, deren Format der genieparser-Parser kennt; das Geraet gibt weitere aus (Platform State, Author, Account, Zaehler).
+        Die Dauern sind simuliert."""
+        out = []
+        for i, (n, r) in enumerate(sorted(self.radius_servers.items()), 1):
+            up = self.radius_reply(n)[0]
+            out += ['RADIUS: id %d, priority 1, host %s, auth-port %d, acct-port %d, hostname %s' % (i, r['ip'] or '0.0.0.0', r['auth_port'], r['acct_port'], n),
+                    '  State: current %s, duration 600s, previous duration 0s' % ('UP' if up else 'DEAD'),
+                    '  Dead: total time %s, count %d' % ('0s' if up else '600s', 0 if up else 1),
+                    '  Quarantined: No']
+        return '\n'.join(out)
+
     def show_policy_summary(self):
         rows = sorted(self.policies.items())
         out = ['Number of Policy Profiles: %d' % len(rows), '',
@@ -251,7 +370,8 @@ class Cli:
     """Zeilenweise CLI-Sitzung. Moduswechsel wie im IOS-XE (Prompts: Wissen, nicht belegt)."""
     PROMPTS = {'exec': '#', 'config': '(config)#', 'wlan': '(config-wlan)#', 'policy': '(config-wireless-policy)#',
                'ptag': '(config-policy-tag)#', 'ap': '(config-ap)#', 'flex': '(config-wireless-flex-profile)#',
-               'flexvlan': '(config-wireless-flex-profile-vlan)#', 'stag': '(config-site-tag)#'}
+               'flexvlan': '(config-wireless-flex-profile-vlan)#', 'stag': '(config-site-tag)#', 'radius': '(config-radius-server)#',
+               'aaagrp': '(config-sg-radius)#'}
 
     def __init__(self, wlc):
         self.wlc, self.mode, self.ctx, self.ctx2 = wlc, 'exec', None, None
@@ -296,7 +416,8 @@ class Cli:
              'wireless client summary': self.wlc.show_wireless_client_summary,
              'wireless profile policy summary': self.wlc.show_policy_summary,
              'wireless profile flex summary': self.wlc.show_flex_summary,
-             'wireless tag site summary': self.wlc.show_site_tag_summary}
+             'wireless tag site summary': self.wlc.show_site_tag_summary,
+             'aaa servers': self.wlc.show_aaa_servers}
         if cmd not in m:
             raise CliError('Der Befehl "show %s" ist in diesem Simulator (noch) nicht belegt/umgesetzt' % cmd)
         return m[cmd]()
@@ -348,7 +469,7 @@ class Cli:
             raise CliError('Invalid input detected: "no"')
         # Das Objekt des aktuellen Untermodus kann inzwischen (z. B. ueber die Oberflaeche) geloescht worden sein
         store = {'wlan': c.wlans, 'policy': c.policies, 'ptag': c.policy_tags, 'flex': c.flex_profiles, 'flexvlan': c.flex_profiles,
-                 'stag': c.site_tags}.get(self.mode)
+                 'stag': c.site_tags, 'radius': c.radius_servers, 'aaagrp': c.aaa_groups}.get(self.mode)
         if store is not None and self.ctx not in store:
             self.mode, self.ctx, self.ctx2 = 'config', None, None
             raise CliError('Das Objekt existiert nicht mehr')
@@ -360,7 +481,7 @@ class Cli:
                 if any(n != w[1] and x['id'] == int(w[2]) for n, x in c.wlans.items()):
                     raise CliError('WLAN-ID %s ist bereits vergeben' % w[2])
                 if prof is None:
-                    c.wlans[w[1]] = {'id': int(w[2]), 'ssid': w[3], 'shutdown': True, 'akm': 'open', 'psk': ''}
+                    c.wlans[w[1]] = {'id': int(w[2]), 'ssid': w[3], 'shutdown': True, 'akm': 'open', 'psk': '', 'authlist': ''}
                 self.mode, self.ctx = 'wlan', w[1]
                 return ''
             if w[:3] == ['wireless', 'profile', 'policy'] and len(w) == 4 and not no:
@@ -390,6 +511,51 @@ class Cli:
                     raise CliError('Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)')
                 c.site_tags.setdefault(w[3], {'local': True, 'flex': None, 'descr': ''})
                 self.mode, self.ctx = 'stag', w[3]
+                return ''
+            if w == ['aaa', 'new-model']:
+                return ''   # AAA ist im Simulator immer aktiv; der Befehl wird angenommen
+            if w[:2] == ['radius', 'server'] and len(w) == 3 and not no:
+                if w[2] not in c.radius_servers and not NAME_RE.match(w[2]):
+                    raise CliError('Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)')
+                c.radius_servers.setdefault(w[2], {'ip': '', 'auth_port': 1812, 'acct_port': 1813, 'key': '', 'timeout': 5, 'retransmit': 3})
+                self.mode, self.ctx = 'radius', w[2]
+                return ''
+            if w[:4] == ['aaa', 'group', 'server', 'radius'] and len(w) == 5 and not no:
+                if w[4] not in c.aaa_groups and not NAME_RE.match(w[4]):
+                    raise CliError('Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)')
+                c.aaa_groups.setdefault(w[4], {'servers': []})
+                self.mode, self.ctx = 'aaagrp', w[4]
+                return ''
+            if w[:3] == ['aaa', 'authentication', 'dot1x'] and len(w) == 6 and w[4] == 'group' and not no:
+                if not NAME_RE.match(w[3]):
+                    raise CliError('Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)')
+                if w[5] not in c.aaa_groups:
+                    raise CliError('Server Group %s existiert nicht' % w[5])
+                c.aaa_lists[w[3]] = {'group': w[5]}
+                return ''
+            if no and w[:3] == ['aaa', 'authentication', 'dot1x'] and len(w) == 4:
+                if w[3] not in c.aaa_lists:
+                    raise CliError('Authentication List %s existiert nicht' % w[3])
+                users = sorted(n for n, x in c.wlans.items() if x.get('authlist') == w[3])
+                if users:
+                    raise CliError('Authentication List %s wird von WLANs verwendet (%s) - zuerst dort entfernen' % (w[3], ', '.join(users)))
+                del c.aaa_lists[w[3]]
+                return ''
+            if no and w[:4] == ['aaa', 'group', 'server', 'radius'] and len(w) == 5:
+                if w[4] not in c.aaa_groups:
+                    raise CliError('Server Group %s existiert nicht' % w[4])
+                users = sorted(n for n, x in c.aaa_lists.items() if x['group'] == w[4])
+                if users:
+                    raise CliError('Server Group %s wird von Authentication Lists verwendet (%s) - zuerst dort entfernen' % (w[4], ', '.join(users)))
+                del c.aaa_groups[w[4]]
+                return ''
+            if no and w[:2] == ['radius', 'server'] and len(w) == 3:
+                if w[2] not in c.radius_servers:
+                    raise CliError('RADIUS-Server %s existiert nicht' % w[2])
+                users = sorted(n for n, g in c.aaa_groups.items() if w[2] in g['servers'])
+                if users:
+                    raise CliError('RADIUS-Server %s ist in Server Groups eingetragen (%s) - zuerst dort entfernen' % (w[2], ', '.join(users)))
+                del c.radius_servers[w[2]]
                 return ''
             if no and w[:3] == ['wireless', 'profile', 'flex'] and len(w) == 4:
                 if w[3] == DEF_FLEX_PROFILE:
@@ -446,6 +612,10 @@ class Cli:
                 x['psk'] = w[6]
             elif w[:3] == ['security', 'wpa', 'akm'] and len(w) == 4 and w[3] == 'psk':
                 x['akm'] = 'open' if no else 'psk'
+            elif w[:3] == ['security', 'wpa', 'akm'] and len(w) == 4 and w[3] == 'dot1x':
+                x['akm'] = 'open' if no else 'dot1x'
+            elif w[:3] == ['security', 'dot1x', 'authentication-list'] and (len(w) == 4 or (no and len(w) == 3)):
+                x['authlist'] = '' if no else w[3]
             else:
                 raise CliError('Invalid input detected: "%s"' % ' '.join(w))
             return ''
@@ -457,6 +627,8 @@ class Cli:
                 x['vlan'] = w[1]
             elif w == ['central', 'switching']:
                 x['central'] = not no
+            elif w == ['aaa-override']:
+                x['aaa_override'] = not no
             elif w[0] == 'description' and len(w) > 1:
                 x['descr'] = ' '.join(w[1:])
             else:
@@ -472,6 +644,41 @@ class Cli:
             raise CliError('Invalid input detected: "%s"' % ' '.join(w))
         if self.mode in ('flex', 'flexvlan'):
             return self._flex(w, no)
+        if self.mode == 'radius':
+            r = c.radius_servers[self.ctx]
+            if w[:2] == ['address', 'ipv4'] and len(w) in (3, 7) and not no:
+                if not is_ipv4(w[2]):
+                    raise CliError('IPv4-Adresse ungueltig: %s' % w[2])
+                if len(w) == 7:
+                    if w[3] != 'auth-port' or w[5] != 'acct-port' or not w[4].isdigit() or not w[6].isdigit() \
+                            or not (1 <= int(w[4]) <= 65535 and 1 <= int(w[6]) <= 65535):
+                        raise CliError('Invalid input detected: "%s"' % ' '.join(w))
+                    r['auth_port'], r['acct_port'] = int(w[4]), int(w[6])
+                r['ip'] = w[2]
+            elif w[0] == 'key' and not no and (len(w) == 2 or (len(w) == 3 and w[1] == '0')):
+                r['key'] = w[-1]
+            elif w[0] in ('timeout', 'retransmit') and len(w) == 2 and not no:
+                hi = 1000 if w[0] == 'timeout' else 100
+                if not w[1].isdigit() or not (0 if w[0] == 'retransmit' else 1) <= int(w[1]) <= hi:
+                    raise CliError('Wert ausserhalb des Bereichs')
+                r[w[0]] = int(w[1])
+            else:
+                raise CliError('Invalid input detected: "%s"' % ' '.join(w))
+            return ''
+        if self.mode == 'aaagrp':
+            g = c.aaa_groups[self.ctx]
+            if w[:2] == ['server', 'name'] and len(w) == 3:
+                if no:
+                    if w[2] not in g['servers']:
+                        raise CliError('RADIUS-Server %s ist nicht in der Group' % w[2])
+                    g['servers'].remove(w[2])
+                else:
+                    if w[2] not in c.radius_servers:
+                        raise CliError('RADIUS-Server %s existiert nicht' % w[2])
+                    if w[2] not in g['servers']:
+                        g['servers'].append(w[2])
+                return ''
+            raise CliError('Invalid input detected: "%s"' % ' '.join(w))
         if self.mode == 'stag':
             st = c.site_tags[self.ctx]
             if w[0] == 'flex-profile' and (len(w) == 2 or (no and len(w) == 1)):

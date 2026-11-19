@@ -19,7 +19,17 @@ def default_world():
             {'mac': '58bf.eaaa.0001', 'ssid': 'Corp', 'psk': 'Sommer2026', 'ap': 'ap-lobby', 'protocol': '11ac'},
             {'mac': '58bf.eaaa.0002', 'ssid': 'Corp', 'psk': 'falsch', 'ap': 'ap-lobby', 'protocol': '11ax'},
         ],
+        'radius': default_radius(),
     }
+
+
+def default_radius():
+    """Der simulierte RADIUS-Server hinter dem Controller (Gegenseite, nicht konfigurierbar): Adresse, Auth-Port, gemeinsames
+    Geheimnis, erreichbar, welche Controller er als Client kennt, Benutzer mit optionalem VLAN-Attribut."""
+    return {'servers': [{'ip': '10.10.0.50', 'auth_port': 1812, 'secret': 'RadiusKey1', 'up': True, 'nas': ['10.10.0.10'],
+                         'users': [{'name': 'anna', 'password': 'Passw0rt!', 'vlan': '30'},
+                                   {'name': 'bernd', 'password': 'Geheim#2', 'vlan': '40'},
+                                   {'name': 'carla', 'password': 'Sommer#3', 'vlan': None}]}]}
 
 
 def new_world():

@@ -31,6 +31,7 @@ Cisco-Seiten (cisco.com, developer.cisco.com) waren beim Bau nicht erreichbar. B
 ## Simulator-Festlegungen
 
 - Die Sicherheitsspalte von `show wlan summary` für PSK (`[WPA2][PSK][AES]`) ist aus den belegten 802.1x-Zeilen abgeleitet; ein PSK-Beispiel gab es in den Quellen nicht.
+- 802.1X-Modell (simulator-spezifisch, nicht belegt): Der RADIUS-Server ist eine simulierte Gegenseite (Adresse, Port, Secret, Benutzer mit optionalem VLAN). Ein nicht nutzbarer Server (nicht definiert, ohne Adresse, down, falscher Port, WLC nicht als Client eingetragen, falsches Secret) wird übersprungen und gilt als DEAD; ein Access-Reject (falscher Benutzer oder Passwort) löst keinen Failover aus. Das RADIUS-VLAN gilt nur mit `aaa-override`; bei lokalem Switching muss es im Flex Profile auflösbar sein (Annahme). Zeiten und Zähler sind simuliert. Belegt sind nur Befehlsformen und das Format von `show wlan summary` (`[WPA2][802.1x][AES]`, `Dot1x`) und `show aaa servers` (Kopf-, State-, Dead- und Quarantined-Zeilen) laut genieparser.
 - FlexConnect-Modell (simulator-spezifisch): Ein Policy Profile mit lokalem Switching setzt einen AP im FlexConnect-Modus voraus; an einem AP im Local Mode verbindet sich der Client im Simulator nicht (das Verhalten des Geräts in diesem Fall ist nicht belegt). Eine numerische VLAN-ID im Policy Profile passt im Simulator auf eine VLAN-ID oder die Native VLAN des Flex Profile (nicht belegt). Zentrales Switching kennt nur numerische VLAN-IDs, weil der Simulator keine VLAN-Datenbank des Controllers hat. Die Begründungen sind didaktisch.
 - Die Spalte *Method* heißt für PSK `PSK`; belegt sind nur `Dot1x` und `MAB`.
 - Die Spalte *Tag Source* von `show ap tag summary` zeigt `Default`, wenn der AP kein eigenes Tag hat; belegt ist nur `Static`.
@@ -46,7 +47,8 @@ Cisco-Seiten (cisco.com, developer.cisco.com) waren beim Bau nicht erreichbar. B
 
 ## Offen (nicht umgesetzt, weil nicht belegt)
 
-- FlexConnect: Standalone-Betrieb bei WAN-Ausfall, lokale Authentifizierung am AP, Flex-ACLs, Central DHCP/Association, AAA-Override und VLAN-Gruppen.
+- 802.1X: EAP-Methoden im Detail, Zertifikate, CoA, Accounting-Zähler, Dead-Criteria-Feintuning; in `show aaa servers` fehlen Zähler-, Platform- und Account-Zeilen.
+- FlexConnect: Standalone-Betrieb bei WAN-Ausfall, lokale Authentifizierung am AP, Flex-ACLs, Central DHCP/Association und VLAN-Gruppen.
 - Ausgabeformate aller weiteren `show wireless …`-Befehle, `show wlan all`, `show ap name … config general`.
 - Antwortformate von Site-, Health-, Client- und Wireless-Endpunkten des Catalyst Center (GET-Antworten sind im SDK ungetypt).
 - RESTCONF/NETCONF-Modelle des C9800.

@@ -180,6 +180,74 @@ def sc_decide():
     return out
 
 
+def sc_cli_aaa():
+    r = Recorder('cli-aaa-objects')
+    r.cli('configure terminal', 'aaa new-model', 'no aaa new-model', 'aaa new-model x', 'radius server bad!name', 'radius server RS1', 'address ipv4 300.1.1.1',
+          'address ipv4 1.2.3', 'address ipv6 ::1', 'address ipv4 10.0.0.1 auth-port 0 acct-port 1813', 'address ipv4 10.0.0.1 auth-port x acct-port 1813',
+          'address ipv4 10.0.0.1 port 1812 acct-port 1813', 'address ipv4 10.0.0.1 auth-port 1812', 'address', 'key 7 abc', 'key', 'key 0', 'timeout 0', 'timeout 5000',
+          'retransmit 101', 'retransmit x', 'retransmit', 'no key', 'no address ipv4 10.0.0.1', 'bogus', 'address ipv4 10.0.0.1', 'address ipv4 10.0.0.2 auth-port 1645 acct-port 1646',
+          'key 0 geheim', 'key anders', 'timeout 7', 'retransmit 0', 'exit', 'radius server RS2', 'address ipv4 10.0.0.9', 'key x', 'end', 'show aaa servers',
+          'configure terminal', 'aaa group server radius bad!name', 'aaa group server radius G', 'server name NIX', 'server name RS1', 'server name RS1', 'server name RS2',
+          'no server name NIX', 'no server name RS2', 'server name RS2', 'bogus', 'exit', 'aaa authentication dot1x L group NIX', 'aaa authentication dot1x bad!name group G',
+          'aaa authentication dot1x L group', 'aaa authentication dot1x L group G', 'aaa authentication dot1x L2 group G', 'wlan W 1 X', 'security wpa akm dot1x',
+          'security dot1x authentication-list L', 'security dot1x authentication-list', 'no security dot1x authentication-list', 'security dot1x authentication-list L',
+          'no security wpa akm dot1x', 'security wpa akm dot1x', 'exit', 'wireless profile policy PP', 'aaa-override', 'no aaa-override', 'aaa-override x', 'exit',
+          'no radius server RS1', 'no aaa group server radius G', 'no aaa authentication dot1x L', 'no aaa authentication dot1x L2', 'no aaa group server radius G', 'end',
+          'show wlan summary', 'show aaa servers', 'configure terminal', 'wlan W 1 X', 'no security dot1x authentication-list', 'exit', 'no aaa authentication dot1x L',
+          'no aaa group server radius G', 'no radius server RS1', 'no radius server RS2', 'no radius server NIX', 'no aaa group server radius NIX',
+          'no aaa authentication dot1x NIX', 'end', 'show aaa servers')
+    r.call('GET', '/wlc/api/state')
+    return r.finish()
+
+
+def aaa_variants():
+    flex = ['wireless profile policy PP_Corp', 'no central switching', 'aaa-override', 'vlan LOKAL', 'exit', 'wireless profile flex FP', 'vlan-name LOKAL', 'vlan-id 20', 'exit', 'exit',
+            'wireless tag site ST', 'no local-site', 'flex-profile FP', 'exit', 'ap ' + L1, 'site-tag ST']
+    rs2 = lambda key='RadiusKey1', ip='10.10.0.51': ['radius server RS2', 'address ipv4 %s' % ip, 'key %s' % key, 'exit', 'aaa group server radius RG1', 'server name RS2']
+    w = lambda *c: ['wlan Corp_1X 1 CorpDot1x'] + list(c)
+    return [
+        ('09-radius-shared-secret', 'fixed', ['radius server RS1', 'key RadiusKey1']),
+        ('09-radius-shared-secret', 'secret-case', ['radius server RS1', 'key radiuskey1']),
+        ('09-radius-shared-secret', 'secret-key-0', ['radius server RS1', 'key 0 RadiusKey1']),
+        ('09-radius-shared-secret', 'no-authlist', w('no security dot1x authentication-list')),
+        ('09-radius-shared-secret', 'typo-list', w('security dot1x authentication-list TIPPFEHLER')),
+        ('09-radius-shared-secret', 'port', ['radius server RS1', 'address ipv4 10.10.0.50 auth-port 1645 acct-port 1646', 'key RadiusKey1']),
+        ('09-radius-shared-secret', 'wrong-ip', ['radius server RS1', 'address ipv4 10.10.0.99', 'key RadiusKey1']),
+        ('09-radius-shared-secret', 'no-address', ['radius server RS1', 'address ipv4 0.0.0.0']),
+        ('09-radius-shared-secret', 'empty-group', ['aaa group server radius RG1', 'no server name RS1']),
+        ('09-radius-shared-secret', 'second-server', rs2('RadiusKey1', '10.10.0.50')),
+        ('09-radius-shared-secret', 'open-wlan', w('no security wpa akm dot1x')),
+        ('09-radius-shared-secret', 'psk-wlan', w('security wpa akm psk', 'security wpa psk set-key ascii 0 geheim')),
+        ('09-radius-shared-secret', 'wlan-down', w('shutdown')),
+        ('10-aaa-override-vlan', 'override', ['wireless profile policy PP_Corp', 'aaa-override']),
+        ('10-aaa-override-vlan', 'override-then-off', ['wireless profile policy PP_Corp', 'aaa-override', 'no aaa-override']),
+        ('10-aaa-override-vlan', 'policy-vlan-30', ['wireless profile policy PP_Corp', 'vlan 30']),
+        ('10-aaa-override-vlan', 'override-name-vlan', ['wireless profile policy PP_Corp', 'aaa-override', 'vlan LOKAL']),
+        ('10-aaa-override-vlan', 'override-local-switching', flex),
+        ('10-aaa-override-vlan', 'override-local-switching-vlans', flex + ['wireless profile flex FP', 'vlan-name V30', 'vlan-id 30', 'vlan-name V40', 'vlan-id 40']),
+        ('11-radius-redundanz', 'second-server', rs2()),
+        ('11-radius-redundanz', 'repoint-first', ['radius server RS1', 'address ipv4 10.10.0.51']),
+        ('11-radius-redundanz', 'second-wrong-key', rs2('Falsch')),
+        ('11-radius-redundanz', 'second-first', rs2() + ['no server name RS1', 'server name RS1']),
+        ('11-radius-redundanz', 'new-group', ['radius server RS2', 'address ipv4 10.10.0.51', 'key RadiusKey1', 'exit', 'aaa group server radius RG2', 'server name RS1', 'server name RS2', 'exit',
+                                             'aaa authentication dot1x L2 group RG2', 'wlan Corp_1X 1 CorpDot1x', 'security dot1x authentication-list L2']),
+        ('11-radius-redundanz', 'nas-missing-none', rs2() + ['radius server RS2', 'address ipv4 10.10.0.52']),
+    ]
+
+
+def sc_aaa_variants():
+    out = []
+    for lab, name, cmds in aaa_variants():
+        r = Recorder('aaa-%s-%s' % (lab[:2], name))
+        r.call('POST', '/wlc/api/lab/start', {'id': lab, 'mode': 'guided'})
+        r.apply(cmds)
+        r.call('GET', '/wlc/api/state')
+        r.cli('end', 'show aaa servers', 'show wireless client summary', 'show wlan summary')
+        r.call('POST', '/wlc/api/lab/check', {})
+        out.append(r.finish())
+    return out
+
+
 def sc_apply():
     r = Recorder('apply-atomic-and-validation')
     r.apply(CORP)
@@ -315,7 +383,7 @@ def sc_no_persistence():
 
 
 def build():
-    out = [sc_cli_errors(), sc_cli_policy_ptag_ap(), sc_cli_flex(), sc_names()] + sc_decide() + [sc_apply(), sc_lab_errors(), sc_saves(), sc_no_persistence()]
+    out = [sc_cli_errors(), sc_cli_policy_ptag_ap(), sc_cli_flex(), sc_cli_aaa(), sc_names()] + sc_decide() + sc_aaa_variants() + [sc_apply(), sc_lab_errors(), sc_saves(), sc_no_persistence()]
     for lab_id in lab_ids():
         for mode in ('guided', 'exam'):
             out.append(lab_flow(lab_id, mode))

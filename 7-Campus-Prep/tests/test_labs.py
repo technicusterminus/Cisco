@@ -14,7 +14,8 @@ from campusprep.server import Sim, serve  # noqa: E402
 
 L1, L2 = 'a4b2.32aa.0001', 'a4b2.32aa.0002'
 ALL = ['01-ssid-nicht-sichtbar', '02-admin-down', '03-falscher-schluessel', '04-falsches-policy-profile',
-       '05-gast-wlan-lobby', '06-aufraeumen', '07-flexconnect-zweigstelle', '08-flexconnect-vlan-name']
+       '05-gast-wlan-lobby', '06-aufraeumen', '07-flexconnect-zweigstelle', '08-flexconnect-vlan-name',
+       '09-radius-shared-secret', '10-aaa-override-vlan', '11-radius-redundanz']
 # Woerter, die im sichtbaren Text vor dem Bestehen (Intro, Anforderungen, Pruefungsbeschreibungen) nicht stehen duerfen
 LEAKS = {
     '01-ssid-nicht-sichtbar': ['policy-tag', 'Policy Tag', 'Tag Source', 'PT_Corp'],
@@ -25,6 +26,9 @@ LEAKS = {
     '06-aufraeumen': ['no policy-tag', 'no wlan', 'zuerst', 'Reihenfolge'],
     '07-flexconnect-zweigstelle': ['Flex Profile', 'Site Tag', 'Policy Tag', 'no central switching', 'no local-site', 'flex-profile', 'site-tag', 'CORP_LOCAL'],
     '08-flexconnect-vlan-name': ['Groß', 'Kleinschreibung', 'exakt', 'CORP_LOCAL', 'Corp_Local', 'Zeichen für Zeichen'],
+    '09-radius-shared-secret': ['Shared Secret', 'Schlüssel', 'key RadiusKey1', 'Geheimnis'],
+    '10-aaa-override-vlan': ['aaa-override', 'AAA Override', 'Override'],
+    '11-radius-redundanz': ['server name', 'RS2', 'Server Group'],
 }
 
 
@@ -212,6 +216,68 @@ def s_cmds(s):
     return s.labs.labs['07-flexconnect-zweigstelle']['solutionCommands']
 
 
+class TestRadiusLabs(unittest.TestCase):
+    """CCNP Enterprise Wireless: 802.1X mit RADIUS. Jede naheliegende falsche Abkuerzung besteht nicht."""
+
+    def test_the_three_labs_belong_to_the_wireless_track(self):
+        labs = Sim().labs.labs
+        for i in ('09-radius-shared-secret', '10-aaa-override-vlan', '11-radius-redundanz'):
+            self.assertEqual(labs[i]['track'], 'CCNP Enterprise Wireless (300-430 ENWLSI)')
+
+    def test_lab09_downgrading_the_wlan_connects_everyone_and_fails_security(self):
+        s = fixed('09-radius-shared-secret', ['wlan Corp_1X 1 CorpDot1x', 'no security wpa akm dot1x'])
+        self.assertTrue(next(c for c in s.wlc.clients() if c['mac'] == '58bf.eaaa.0001')['state'] == 'Run')
+        self.assertEqual(failed(s), ['Mallory bleibt abgewiesen', 'Das WLAN nutzt weiterhin 802.1X'])
+
+    def test_lab09_the_cause_is_visible_in_show_aaa_servers_and_the_diagnosis(self):
+        s = started('09-radius-shared-secret')
+        self.assertIn('current DEAD', s.cli.run('show aaa servers'))
+        anna = next(c for c in s.wlc.clients() if c['mac'] == '58bf.eaaa.0001')
+        self.assertIn('Shared Secret stimmt nicht', ' '.join(anna['reasons']))
+        fixed('09-radius-shared-secret')
+        self.assertIn('current UP', fixed('09-radius-shared-secret').cli.run('show aaa servers'))
+
+    def test_lab09_a_second_correct_server_is_an_equivalent_fix(self):
+        cmds = ['radius server RS2', 'address ipv4 10.10.0.50', 'key RadiusKey1', 'exit', 'aaa group server radius RG1', 'server name RS2']
+        self.assertTrue(fixed('09-radius-shared-secret', cmds).labs.check()['passed'])
+
+    def test_lab09_pointing_to_another_address_is_not_a_fix(self):
+        s = fixed('09-radius-shared-secret', ['radius server RS1', 'address ipv4 10.10.0.77', 'key RadiusKey1'])
+        self.assertFalse(s.labs.check()['passed'])
+        self.assertIn('10.10.0.77) antwortet nicht', ' '.join(s.wlc.clients()[0]['reasons']))
+
+    def test_lab10_changing_the_policy_vlan_is_not_the_fix(self):
+        s = fixed('10-aaa-override-vlan', ['wireless profile policy PP_Corp', 'vlan 30'])
+        self.assertFalse(s.labs.check()['passed'])
+        self.assertEqual(sorted(failed(s)), ['Bernd: verbunden, VLAN 40', 'Carla: verbunden, VLAN 20'])
+
+    def test_lab10_the_start_state_puts_everyone_in_the_policy_vlan(self):
+        s = started('10-aaa-override-vlan')
+        self.assertEqual({c['eap']['user']: c['vlan'] for c in s.wlc.clients()}, {'anna': '20', 'bernd': '20', 'carla': '20'})
+        self.assertEqual(failed(s), ['Anna: verbunden, VLAN 30', 'Bernd: verbunden, VLAN 40'])
+
+    def test_lab11_repointing_the_first_server_connects_but_loses_the_redundancy(self):
+        s = fixed('11-radius-redundanz', ['radius server RS1', 'address ipv4 10.10.0.51'])
+        self.assertEqual(failed(s), ['Beide RADIUS-Server sind in der Kette des WLANs'])
+        self.assertTrue(next(c for c in s.wlc.clients() if c['mac'] == '58bf.eaaa.0001')['state'] == 'Run')
+
+    def test_lab11_a_second_server_with_the_wrong_secret_does_not_help(self):
+        cmds = ['radius server RS2', 'address ipv4 10.10.0.51', 'key Falsch', 'exit', 'aaa group server radius RG1', 'server name RS2']
+        s = fixed('11-radius-redundanz', cmds)
+        self.assertEqual(failed(s), ['Anna: verbunden, VLAN 20'])
+        self.assertIn('Shared Secret stimmt nicht', ' '.join(s.wlc.clients()[0]['reasons']))
+
+    def test_lab11_a_new_group_with_both_servers_is_an_equivalent_design(self):
+        cmds = ['radius server RS2', 'address ipv4 10.10.0.51', 'key RadiusKey1', 'exit', 'aaa group server radius RG2', 'server name RS1',
+                'server name RS2', 'exit', 'aaa authentication dot1x L2 group RG2', 'wlan Corp_1X 1 CorpDot1x', 'security dot1x authentication-list L2']
+        self.assertTrue(fixed('11-radius-redundanz', cmds).labs.check()['passed'])
+
+    def test_lab11_the_second_server_first_also_passes(self):
+        cmds = ['radius server RS2', 'address ipv4 10.10.0.51', 'key RadiusKey1', 'exit', 'aaa group server radius RG1', 'no server name RS1',
+                'server name RS2', 'server name RS1']
+        self.assertTrue(fixed('11-radius-redundanz', cmds).labs.check()['passed'])
+
+
 class TestGenerated(unittest.TestCase):
     def test_labs_json_matches_the_generator(self):
         """labs/*.json sind generiert: Wer sie von Hand aendert oder den Generator nicht laufen laesst, faellt hier auf."""
@@ -329,7 +395,7 @@ class TestLabApi(unittest.TestCase):
 
     def test_flow(self):
         st, body = self.call('/wlc/api/labs')
-        self.assertEqual((st, len(body['labs']), body['current']), (200, 8, None))
+        self.assertEqual((st, len(body['labs']), body['current']), (200, 11, None))
         self.assertEqual([x['track'] for x in body['labs']][:1] + [x['track'] for x in body['labs']][-1:],
                          ['Grundlagen Wireless', 'CCNP Enterprise Wireless (300-430 ENWLSI)'])
         self.assertEqual(self.call('/wlc/api/lab/check', 'POST', {})[0], 409)

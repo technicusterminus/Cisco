@@ -57,7 +57,7 @@ class TestState(Base):
         self.assertEqual(read(os.path.join(self.dir, 'state.json')), first)
         self.assertEqual([f for f in os.listdir(self.dir) if f.endswith('.tmp')], [])
         d = json.loads(first)
-        self.assertEqual((d['kind'], d['version']), ('campusprep-state', 2))
+        self.assertEqual((d['kind'], d['version']), ('campusprep-state', 3))   # 3: AAA-Objekte und RADIUS-Gegenseite
         # Determinismus: ein zweiter, unabhaengiger Lauf mit denselben Aktionen schreibt dieselben Bytes (keine Zeitstempel)
         with tempfile.TemporaryDirectory() as other:
             s2 = Sim(data_dir=other)
@@ -134,6 +134,31 @@ class TestMigration(Base):
         self.assertTrue(s2.labs.check()['passed'])
         self.assertTrue(s2.labs.progress['01-ssid-nicht-sichtbar']['guidedPassed'])
         self.assertFalse(os.path.exists(os.path.join(self.dir, 'state.json.bad')))
+
+    def test_version_2_state_without_aaa_objects_still_loads(self):
+        s = Sim(data_dir=self.dir)
+        s.labs.start('07-flexconnect-zweigstelle')
+        s.apply(s.labs.labs['07-flexconnect-zweigstelle']['solutionCommands'])
+        st = s.snapshot_all()
+        st['version'] = 2
+        for k in ('radiusServers', 'aaaGroups', 'aaaLists'):
+            del st['wlc'][k]
+        del st['world']['radius']
+        with open(os.path.join(self.dir, 'state.json'), 'w', encoding='utf-8') as fh:
+            json.dump(st, fh)
+        s2 = Sim(data_dir=self.dir)
+        self.assertEqual(s2.wlc.state()['radiusServers'], [])
+        self.assertEqual(s2.world['radius']['servers'][0]['ip'], '10.10.0.50', 'Standard-RADIUS-Server wird ergaenzt')
+        self.assertTrue(s2.labs.check()['passed'])
+        self.assertFalse(os.path.exists(os.path.join(self.dir, 'state.json.bad')))
+
+    def test_aaa_config_roundtrips(self):
+        s = Sim(data_dir=self.dir)
+        s.labs.start('09-radius-shared-secret')
+        s.persist()
+        s2 = Sim(data_dir=self.dir)
+        self.assertEqual(s2.wlc.state(), s.wlc.state())
+        self.assertEqual(s2.world['radius'], s.world['radius'])
 
     def test_flex_config_roundtrips(self):
         s = Sim(data_dir=self.dir)

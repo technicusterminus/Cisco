@@ -334,6 +334,122 @@ lab(id='08-flexconnect-vlan-name', title='08 Zweigstelle: Lager-Laptop ohne Verb
              'Gleichwertig: Im Flex Profile FP_Lager `no vlan-name Corp_Local`, `vlan-name CORP_LOCAL`, `vlan-id 20`.')
 SOLUTIONS['08-flexconnect-vlan-name'] = ['wireless profile policy PP_Corp_Flex', 'vlan Corp_Local']
 
+# ---------------------------------------------------------------------------------------------------------------
+# CCNP Enterprise Wireless (ENWLSI): 802.1X mit RADIUS. Befehlskette: Cisco-Dokument 213919, AAA Override: Dokument 217043
+# (ueber Websuche zitiert, siehe docs/QUELLEN.md). Der RADIUS-Server ist die simulierte Gegenseite (worldRadius).
+RADIUS_USERS = [{'name': 'anna', 'password': 'Passw0rt!', 'vlan': '30'}, {'name': 'bernd', 'password': 'Geheim#2', 'vlan': '40'},
+                {'name': 'carla', 'password': 'Sommer#3', 'vlan': None}]
+
+
+def radius_server(ip='10.10.0.50', up=True):
+    return {'ip': ip, 'auth_port': 1812, 'secret': 'RadiusKey1', 'up': up, 'nas': ['10.10.0.10'], 'users': [dict(u) for u in RADIUS_USERS]}
+
+
+def eap_client(mac, user, password, ap='ap-lobby'):
+    return {'mac': mac, 'ssid': 'CorpDot1x', 'eap': {'user': user, 'password': password}, 'ap': ap, 'protocol': '11ac'}
+
+
+def dot1x_cfg(key='RadiusKey1', override=False):
+    """Startkonfiguration: RADIUS-Server RS1, Group RG1, Methodenliste DOT1X_LIST, WLAN Corp_1X mit 802.1X, Policy Profile und Tag."""
+    return ['aaa new-model',
+            'radius server RS1', 'address ipv4 10.10.0.50 auth-port 1812 acct-port 1813', 'key ' + key, 'exit',
+            'aaa group server radius RG1', 'server name RS1', 'exit',
+            'aaa authentication dot1x DOT1X_LIST group RG1',
+            'wlan Corp_1X 1 CorpDot1x', 'security wpa akm dot1x', 'security dot1x authentication-list DOT1X_LIST', 'no shutdown', 'exit',
+            'wireless profile policy PP_Corp', 'vlan 20', 'no shutdown'] + (['aaa-override'] if override else []) + [
+            'exit', 'wireless tag policy PT_Corp', 'wlan Corp_1X policy PP_Corp', 'exit', 'ap %s' % L1, 'policy-tag PT_Corp', 'exit']
+
+
+AAA_TOOLS = ['WebUI: Configuration > Security > AAA, Configuration > Tags & Profiles > WLANs und Policy', 'Monitoring > Wireless > Clients',
+             'Client-Diagnose (nur im geführten Modus)', 'CLI: show aaa servers, show wlan summary, show wireless client summary']
+AAA_LIMITS = LIMITS + ['Der RADIUS-Server ist eine simulierte Gegenseite (Benutzer, Geheimnis, VLAN-Zuweisung); es gibt keine ISE-Oberfläche.',
+                       'Nicht modelliert: EAP-Methoden und Zertifikate, Central Web Authentication, CoA, Accounting, Dead-Criteria-Zeiten. Die Dauern in '
+                       '`show aaa servers` sind simuliert; das Gerät zeigt dort mehr Zeilen.']
+
+lab(id='09-radius-shared-secret', title='09 802.1X: Anmeldung scheitert trotz richtiger Zugangsdaten', topic='802.1X / Troubleshooting',
+    level='Fortgeschritten', duration='25 min', kind='troubleshooting', track=TRACK_WIFI, prerequisites=['Lab 01'], tools=AAA_TOOLS, limits=AAA_LIMITS,
+    goals=['Die AAA-Kette vom WLAN bis zum RADIUS-Server lesen', 'Zwischen "Server antwortet nicht" und "Benutzer abgewiesen" unterscheiden',
+           'Das Problem beheben, ohne die Authentifizierung abzuschwächen'],
+    intro='Das WLAN **CorpDot1x** (WPA2-Enterprise) ist eingerichtet, aber Anna kommt trotz richtiger Zugangsdaten nicht hinein.\n\n'
+          '- Der RADIUS-Server 10.10.0.50 läuft und ist erreichbar\n- Das Netzwerkteam hat mit dem RADIUS-Team den Wert **RadiusKey1** vereinbart\n'
+          '- Zum Test: Anna (richtige Zugangsdaten) und Mallory (kein Benutzer im RADIUS) in der Lobby',
+    requirements=['Anna ist mit CorpDot1x verbunden und im VLAN 20.', 'Mallory bleibt abgewiesen.', 'Das WLAN bleibt bei 802.1X.'],
+    hints=['**Konzept:** Controller und RADIUS-Server müssen sich gegenseitig vertrauen. Dafür gibt es pro Server-Eintrag einen vereinbarten Wert, den beide Seiten kennen müssen.',
+           '**Ebene:** Der Server-Eintrag am Controller. WLAN, Authentication List und Server Group sind in Ordnung.',
+           '**Prüfschritte:** `show aaa servers` zeigt den Zustand des Servers. Steht er auf DEAD, obwohl der Server läuft, bekommt der Controller keine Antwort auf seine Anfragen.',
+           '**Lösung:** Im RADIUS-Server-Eintrag **RS1** den Key auf **RadiusKey1** setzen (`key RadiusKey1`). Nicht auf Open oder PSK ausweichen.'],
+    cause='Am RADIUS-Server-Eintrag RS1 steht ein anderes Shared Secret (RadiusKey2) als am Server (RadiusKey1); der Server verwirft die Anfragen.',
+    startCommands=dot1x_cfg(key='RadiusKey2'), worldRadius=[radius_server()],
+    worldClients=[eap_client('58bf.eaaa.0001', 'anna', 'Passw0rt!'), eap_client('58bf.eaaa.0002', 'mallory', 'egal')],
+    checks=[chk('Anna: verbunden, VLAN 20', 'client', mac='58bf.eaaa.0001', state='Run', vlan='20'),
+            chk('Mallory bleibt abgewiesen', 'client', 'security', mac='58bf.eaaa.0002', state='Not Associated'),
+            chk('Das WLAN nutzt weiterhin 802.1X', 'wlan', 'security', profile='Corp_1X', attrs={'akm': 'dot1x'})],
+    questions=[q('q1', 'Wofür dient das gemeinsame Geheimnis (Shared Secret) zwischen Controller und RADIUS-Server?',
+                 ['Es identifiziert Controller und Server gegenseitig und schützt Teile der RADIUS-Nachrichten', 'Es ist das Passwort der Benutzer', 'Es verschlüsselt den WLAN-Verkehr der Clients', 'Es legt das VLAN fest'], 0,
+                 'Das Secret gehört zum Eintrag des Servers. Stimmt es nicht, verwirft der Server die Anfragen. Mit den Passwörtern der Benutzer oder der Funkverschlüsselung hat es nichts zu tun.'),
+               q('q2', 'Woran siehst du am Controller, dass der Server nicht antwortet?',
+                 ['`show aaa servers`: State current DEAD', '`show wlan summary`: Status DOWN', '`show ap summary`: State Registered', '`show wireless client summary` ist leer'], 0,
+                 'Ein Server ohne Antwort gilt als DEAD (im Simulator; die genauen Auslöser am Gerät sind nicht belegt). Die anderen Ausgaben zeigen WLAN, AP und Clients.')],
+    solution='WebUI: Configuration > Security > AAA > RADIUS-Server RS1 > Edit: Key RadiusKey1. CLI: `radius server RS1`, `key RadiusKey1`.')
+SOLUTIONS['09-radius-shared-secret'] = ['radius server RS1', 'key RadiusKey1']
+
+lab(id='10-aaa-override-vlan', title='10 802.1X: Alle im selben VLAN trotz RADIUS-Zuweisung', topic='802.1X / Troubleshooting',
+    level='Fortgeschritten', duration='25 min', kind='troubleshooting', track=TRACK_WIFI, prerequisites=['Lab 09'], tools=AAA_TOOLS, limits=AAA_LIMITS,
+    goals=['Dynamische VLAN-Zuweisung per RADIUS verstehen', 'Den Ort der Einstellung finden: Policy Profile, nicht RADIUS oder WLAN'],
+    intro='Die Anmeldung per 802.1X funktioniert für alle. Im RADIUS sind aber VLANs hinterlegt: **Anna** soll ins VLAN 30, **Bernd** ins VLAN 40. '
+          '**Carla** hat im RADIUS kein VLAN und bleibt im Standard-VLAN 20 des WLANs. Zurzeit landen alle drei im VLAN 20.',
+    requirements=['Anna ist verbunden und im VLAN 30.', 'Bernd ist verbunden und im VLAN 40.', 'Carla ist verbunden und im VLAN 20.',
+                  'Das WLAN bleibt bei 802.1X.'],
+    hints=['**Konzept:** RADIUS kann dem Controller bei der Anmeldung ein VLAN mitgeben. Ob der Controller es übernimmt, entscheidet eine Einstellung auf der Controller-Seite.',
+           '**Ebene:** Policy Profile. Die Authentifizierung selbst funktioniert, WLAN und RADIUS sind in Ordnung.',
+           '**Prüfschritte:** Alle drei landen im VLAN des Policy Profile: Die Angaben aus RADIUS werden ignoriert. Prüfe die Optionen des Policy Profile.',
+           '**Lösung:** Im Policy Profile PP_Corp **AAA Override** einschalten (`aaa-override`). Das VLAN des Policy Profile zu ändern ist keine Lösung.'],
+    cause='Im Policy Profile ist AAA Override aus: Die VLAN-Attribute aus RADIUS werden ignoriert, es gilt das VLAN des Policy Profile.',
+    startCommands=dot1x_cfg(), worldRadius=[radius_server()],
+    worldClients=[eap_client('58bf.eaaa.0001', 'anna', 'Passw0rt!'), eap_client('58bf.eaaa.0002', 'bernd', 'Geheim#2'), eap_client('58bf.eaaa.0003', 'carla', 'Sommer#3')],
+    checks=[chk('Anna: verbunden, VLAN 30', 'client', mac='58bf.eaaa.0001', state='Run', vlan='30'),
+            chk('Bernd: verbunden, VLAN 40', 'client', mac='58bf.eaaa.0002', state='Run', vlan='40'),
+            chk('Carla: verbunden, VLAN 20', 'client', mac='58bf.eaaa.0003', state='Run', vlan='20'),
+            chk('Das WLAN nutzt weiterhin 802.1X', 'wlan', 'security', profile='Corp_1X', attrs={'akm': 'dot1x'})],
+    questions=[q('q1', 'Welche RADIUS-Attribute transportieren das VLAN?',
+                 ['Tunnel-Type, Tunnel-Medium-Type und Tunnel-Private-Group-ID (64, 65, 81)', 'User-Name und User-Password', 'Framed-IP-Address', 'Session-Timeout'], 0,
+                 'Laut Cisco-Dokument 217043: IETF 64 (Tunnel-Type = VLAN), 65 (Tunnel-Medium-Type = 802) und 81 (Tunnel-Private-Group-ID = VLAN-ID).'),
+               q('q2', 'Was passiert mit dem VLAN aus RADIUS, wenn AAA Override im Policy Profile aus ist?',
+                 ['Es wird ignoriert: Der Client landet im VLAN des Policy Profile', 'Der Client wird abgewiesen', 'Es überschreibt das WLAN-Profil', 'Der Controller wählt ein VLAN zufällig'], 0,
+                 'Ohne AAA Override gilt das VLAN des Policy Profile; Carla ohne VLAN-Attribut bleibt auch mit Override dort.')],
+    solution='WebUI: Tags & Profiles > Policy > PP_Corp > Edit: AAA Override ein. CLI: `wireless profile policy PP_Corp`, `aaa-override`.')
+SOLUTIONS['10-aaa-override-vlan'] = ['wireless profile policy PP_Corp', 'aaa-override']
+
+lab(id='11-radius-redundanz', title='11 802.1X: Anmeldung trotz Ausfall des ersten RADIUS-Servers', topic='802.1X / Design',
+    level='Fortgeschritten', duration='30 min', kind='requirements', track=TRACK_WIFI, prerequisites=['Lab 09'], tools=AAA_TOOLS, limits=AAA_LIMITS,
+    goals=['Server Groups und die Reihenfolge der Versuche verstehen', 'Redundanz herstellen, ohne den vorhandenen Eintrag umzubiegen'],
+    intro='Der RADIUS-Server 10.10.0.50 ist ausgefallen, die Anmeldung per 802.1X schlägt fehl. Ein zweiter RADIUS-Server **10.10.0.51** läuft und kennt dieselben '
+          'Benutzer und denselben vereinbarten Wert **RadiusKey1**. Die Anmeldung soll auch dann klappen, wenn einer der Server ausfällt.',
+    requirements=['Anna ist verbunden (VLAN 20), obwohl 10.10.0.50 nicht antwortet.',
+                  'Die Authentifizierung des WLANs nutzt beide RADIUS-Server (10.10.0.50 und 10.10.0.51).',
+                  'Ein Benutzer mit falschem Passwort bleibt abgewiesen.', 'Das WLAN bleibt bei 802.1X.'],
+    hints=['**Konzept:** Der Controller fragt die Server einer Server Group der Reihe nach. Antwortet einer nicht, nimmt er den nächsten.',
+           '**Ebene:** Server-Einträge und Server Group. WLAN und Authentication List verweisen schon auf die Group.',
+           '**Prüfschritte:** Der vorhandene Eintrag soll bleiben, wie er ist: Er zeigt weiter auf den ersten Server. Ergänze einen zweiten Eintrag und nimm ihn in dieselbe Group auf.',
+           '**Lösung:** RADIUS-Server **RS2** mit Adresse 10.10.0.51 und Key RadiusKey1 anlegen und in die Server Group **RG1** aufnehmen (`server name RS2`). Die Adresse von RS1 nicht umbiegen.'],
+    cause='Die Server Group enthält nur den ausgefallenen ersten Server; es gibt keinen zweiten Eintrag.',
+    startCommands=dot1x_cfg(), worldRadius=[radius_server('10.10.0.50', up=False), radius_server('10.10.0.51')],
+    worldClients=[eap_client('58bf.eaaa.0001', 'anna', 'Passw0rt!'), eap_client('58bf.eaaa.0002', 'anna', 'falsch')],
+    checks=[chk('Anna: verbunden, VLAN 20', 'client', mac='58bf.eaaa.0001', state='Run', vlan='20'),
+            chk('Beide RADIUS-Server sind in der Kette des WLANs', 'wlanservers', 'security', profile='Corp_1X', servers=['10.10.0.50', '10.10.0.51']),
+            chk('Falsches Passwort bleibt abgewiesen', 'client', 'security', mac='58bf.eaaa.0002', state='Not Associated'),
+            chk('Das WLAN nutzt weiterhin 802.1X', 'wlan', 'security', profile='Corp_1X', attrs={'akm': 'dot1x'})],
+    questions=[q('q1', 'Was passiert, wenn der erste Server der Group nicht antwortet?',
+                 ['Der Controller fragt den nächsten Server der Group', 'Der Client wird sofort abgewiesen', 'Der Controller wechselt auf PSK', 'Der Client wählt einen anderen Server'], 0,
+                 'Die Reihenfolge der Server in der Group bestimmt die Reihenfolge der Versuche; ohne weiteren Eintrag bleibt nur der Ausfall.'),
+               q('q2', 'Warum ist es keine Lösung, die Adresse von RS1 auf 10.10.0.51 umzustellen?',
+                 ['Dann gibt es wieder nur einen Server und keine Redundanz', 'Weil RS1 dann nicht mehr existiert', 'Weil die Adresse nicht änderbar ist', 'Weil der Key dann nicht mehr passt'], 0,
+                 'Die Anmeldung würde klappen, aber ein Ausfall von 10.10.0.51 legt wieder alles lahm. Die Prüfung verlangt beide Server in der Kette.')],
+    solution='WebUI: Security > AAA: RADIUS-Server RS2 (10.10.0.51, Key RadiusKey1) anlegen; Server Group RG1 > RS2 hinzufügen. '
+             'CLI: `radius server RS2` / `address ipv4 10.10.0.51 auth-port 1812 acct-port 1813` / `key RadiusKey1`; `aaa group server radius RG1` / `server name RS2`.')
+SOLUTIONS['11-radius-redundanz'] = ['radius server RS2', 'address ipv4 10.10.0.51 auth-port 1812 acct-port 1813', 'key RadiusKey1', 'exit',
+                                    'aaa group server radius RG1', 'server name RS2']
+
 
 def main(out=OUT, verbose=True):
     os.makedirs(out, exist_ok=True)
