@@ -7,6 +7,8 @@ Pro Ziel (`Ziel::…` im Anki-Deck) steht hier, **wo die Aufgabenstellung liegt*
 - Anki: `tag:Ziel::x.y.z` zeigt die passenden Karten.
 
 
+Die nach Prüfungsverb und Übungsart bewertete Zuordnung steht im [Trainingscurriculum](CURRICULUM.md#abdeckungsmatrix-zum-blueprint).
+
 ## 1.1.a – Campus-, Fabric- und Cloud-Design
 
 Karten im Deck: 30 (`tag:Ziel::1.1.a`)

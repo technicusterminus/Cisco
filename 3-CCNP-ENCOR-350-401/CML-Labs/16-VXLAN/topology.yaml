@@ -1,7 +1,26 @@
 lab:
   title: 'Lab 16 – VXLAN: VTEP, VNI und Ingress Replication'
   description: Zwei NX-OS-Leafs spannen VLAN 10 über ein geroutetes Underlay als VXLAN-Segment (VNI 10010). Statische Ingress Replication statt EVPN, damit die Grundmechanik sichtbar bleibt. **Ressourcenhungrig:** N
-  notes: 'Aufgaben: siehe README.md'
+  notes: |-
+    ## Lab 16 — VLAN-zu-VNI-Mapping im VXLAN
+
+    **Stufe:** Selbstständig · **Zeitbox:** 55 Minuten
+
+    **Blueprint:** 2.3.b.
+
+    **Voraussetzung:** IPv4-Underlay, VLANs, NX-OS-Grundlagen
+
+    **Start:** Die VTEP-Loopbacks und das geroutete Underlay sind vorbereitet. Die Hosts liegen im selben IP-Subnetz an verschiedenen Leafs.
+
+    **Auftrag:** Stelle eine Layer-2-Verbindung über das VXLAN-Overlay her. Weise das richtige Mapping, die Peer-Beziehung und den tatsächlichen Datenverkehr nach.
+
+    **Grenzen:** Behalte Adressplan und bereitgestellte Infrastruktur bei. Nimm für Gegenproben vorübergehend erzeugte Fehler zurück.
+
+    **Erfolgskriterium:** Beide VTEPs erreichen einander, die vereinbarte VNI ist aktiv und der Datenstrom wird am anderen Leaf dem richtigen VLAN zugeordnet.
+
+    **Gegenprobe:** Underlay-Erreichbarkeit ohne Overlay darf nicht als Nachweis zählen.
+
+    **Wiederholung oder Transfer:** 21: Fabric-Fallstudie, 24: Underlay/Overlay-Diagnose
   version: 0.2.0
 nodes:
 - id: n0
@@ -11,6 +30,18 @@ nodes:
   y: 200
   configuration: |
     hostname LEAF1
+    feature ospf
+    router ospf 1
+      router-id 10.255.0.1
+    interface loopback0
+      ip address 10.255.0.1/32
+      ip router ospf 1 area 0.0.0.0
+    interface Ethernet1/1
+      mtu 9216
+      no switchport
+      ip address 10.0.12.1/30
+      ip router ospf 1 area 0.0.0.0
+      no shutdown
   tags: []
   interfaces:
   - id: i0
@@ -56,6 +87,18 @@ nodes:
   y: 200
   configuration: |
     hostname LEAF2
+    feature ospf
+    router ospf 1
+      router-id 10.255.0.2
+    interface loopback0
+      ip address 10.255.0.2/32
+      ip router ospf 1 area 0.0.0.0
+    interface Ethernet1/1
+      mtu 9216
+      no switchport
+      ip address 10.0.12.2/30
+      ip router ospf 1 area 0.0.0.0
+      no shutdown
   tags: []
   interfaces:
   - id: i0
@@ -189,3 +232,130 @@ links:
   i1: i2
   i2: i1
   label: LEAF2-Ethernet1/2<->H2-GigabitEthernet0/0
+annotations:
+- type: rectangle
+  x1: -4
+  y1: 10
+  x2: 804
+  y2: 130
+  color: '#EAF2FFFA'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Teil A · Bauen
+  x1: 12
+  y1: 19
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: 'Lab 16 – VXLAN: VTEP, VNI und Ingress Replication'
+  x1: 12
+  y1: 40
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 14
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: VTEP-Erreichbarkeit prüfen, danach VLAN, VNI und NVE zusammenführen.
+  x1: 12
+  y1: 72
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 11
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Guide öffnen → Ausgangslage prüfen → Aufgabe lösen
+  x1: 12
+  y1: 99
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 4
+  y1: 144
+  x2: 296
+  y2: 242
+  color: '#60A5FA28'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Site 1
+  x1: 13
+  y1: 151
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 504
+  y1: 144
+  x2: 796
+  y2: 242
+  color: '#2DD4BF28'
+  border_color: '#0F766EFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Site 2
+  x1: 513
+  y1: 151
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1

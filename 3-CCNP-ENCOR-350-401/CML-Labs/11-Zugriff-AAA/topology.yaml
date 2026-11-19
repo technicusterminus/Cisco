@@ -1,7 +1,26 @@
 lab:
   title: Lab 11 – Gerätezugriff und AAA
   description: Lines, lokale Benutzer, Privilege Levels, Login-Härtung und AAA mit TACACS+ (Server absichtlich nicht erreichbar, damit du das Fallback-Verhalten siehst). Der „Admin-PC“ R2 meldet sich per Telnet am G
-  notes: 'Aufgaben: siehe README.md'
+  notes: |-
+    ## Lab 11 — Zugriff und AAA-Fallback
+
+    **Stufe:** Selbstständig · **Zeitbox:** 45 Minuten
+
+    **Blueprint:** 5.1.a, 5.1.b (lokal und Fallback).
+
+    **Voraussetzung:** Console, VTY und SSH-Grundlagen
+
+    **Start:** Zwei Router, lokaler Testbenutzer und ein bewusst nicht erreichbarer AAA-Endpunkt als Szenario.
+
+    **Auftrag:** Stelle lokalen und abgesicherten Fernzugriff her. Belege mit zwei Benutzern unterschiedliche Berechtigungen und dokumentiere, wie der Gerätezugriff bei einem nicht erreichbaren AAA-Server reagiert.
+
+    **Grenzen:** Behalte Adressplan und bereitgestellte Infrastruktur bei. Nimm für Gegenproben vorübergehend erzeugte Fehler zurück.
+
+    **Erfolgskriterium:** Du belegst Zugangserfolg und effektive Autorisierung in getrennten Sitzungen. Die Konsole bleibt als Rückweg verfügbar.
+
+    **Gegenprobe:** Telnet soll nach Abschluss abgelehnt werden. Ein wirklicher Server-REJECT ist in diesem Lab nicht prüfbar.
+
+    **Wiederholung oder Transfer:** 23 für Zugang, Server-AAA bleibt Ausbau
   version: 0.2.0
 nodes:
 - id: n0
@@ -91,3 +110,130 @@ links:
   i1: i1
   i2: i1
   label: R1-GigabitEthernet0/0<->R2-GigabitEthernet0/0
+annotations:
+- type: rectangle
+  x1: 96
+  y1: 10
+  x2: 896
+  y2: 130
+  color: '#EAF2FFFA'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Teil A · Bauen
+  x1: 112
+  y1: 19
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Lab 11 – Gerätezugriff und AAA
+  x1: 112
+  y1: 40
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 14
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Lokale Anmeldung, Autorisierung und AAA-Fallback getrennt überprüfen.
+  x1: 112
+  y1: 72
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 11
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Guide öffnen → Ausgangslage prüfen → Aufgabe lösen
+  x1: 112
+  y1: 99
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 104
+  y1: 144
+  x2: 196
+  y2: 242
+  color: '#60A5FA28'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Zielrouter
+  x1: 113
+  y1: 151
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 404
+  y1: 144
+  x2: 506
+  y2: 242
+  color: '#2DD4BF28'
+  border_color: '#0F766EFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Admin-Client
+  x1: 413
+  y1: 151
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1

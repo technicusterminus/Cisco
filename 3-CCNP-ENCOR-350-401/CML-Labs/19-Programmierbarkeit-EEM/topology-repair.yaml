@@ -1,19 +1,92 @@
 lab:
   title: Lab 19 – RESTCONF, NETCONF, YANG und EEM (Repair)
-  description: 'Ein IOS-XE-Router wird programmierbar: RESTCONF und NETCONF aktivieren, YANG-Daten lesen und per HTTP-Methoden ändern, HTTP-Statuscodes lesen und ein EEM-Applet schreiben. Für die Python-Teile brauchs'
-  notes: 'Aufgaben: siehe README.md'
-  version: 0.2.0
+  description: RESTCONF, NETCONF, YANG und EEM auf IOS XE mit einem vorkonfigurierten, isolierten Linux-Client.
+  notes: |-
+    ## Reparieren
+
+    Bei Lab 19 zuerst den dokumentierten Client- und SSH-Bootstrap ausführen.
+
+    Importiere diese Datei als separates Lab. Reproduziere pro Ticket das Symptom, dokumentiere den Befund und belege die Wirkung der Korrektur. Stelle den Testzustand nach jedem Versuch wieder her.
+
+    **Ticket 1:** RESTCONF-Aufrufe liefern `401 Unauthorized`, obwohl Benutzer und Passwort stimmen.
+
+    **Ticket 2:** Die NETCONF-Verbindung auf Port 830 wird abgelehnt (`Connection refused`).
+
+    **Ticket 3:** Der RESTCONF-Aufruf hängt oder bricht mit Connection refused ab, SSH funktioniert.
+
+    **Ticket 4:** Beim Link-Flap auf Gi2 erscheint die EEM-Syslog-Zeile nie, `show event manager policy registered` zeigt das Applet.
+
+    **Ticket 5:** `show track 1` auf CSR1 ist Down (IP SLA 2.2.2.2 schlägt fehl), R2 antwortet nicht.
+
+    Die Topologiedaten, gestufte Hinweise und Lösungen findest du in den Lab-Unterlagen.
+  version: 0.3.0
 nodes:
 - id: n0
-  label: EXT
-  node_definition: external_connector
+  label: API-CLIENT
+  node_definition: ubuntu
   x: 50
   y: 150
-  configuration: virbr0
+  configuration:
+  - name: user-data
+    content: |
+      #cloud-config
+      hostname: api-client
+      password: cisco
+      chpasswd:
+        expire: false
+      write_files:
+        - path: /opt/encor/restconf.py
+          permissions: '0644'
+          content: |
+            import argparse
+            import base64
+            import getpass
+            import json
+            import ssl
+            from urllib.error import HTTPError, URLError
+            from urllib.request import Request, urlopen
+
+            parser = argparse.ArgumentParser(description="RESTCONF gegen CSR1 im isolierten CML-Lab")
+            parser.add_argument("--description", help="PATCH: Description von GigabitEthernet2 setzen")
+            parser.add_argument("--path", default="/restconf/data/ietf-interfaces:interfaces")
+            args = parser.parse_args()
+            password = getpass.getpass("CSR1 admin password: ")
+            auth = base64.b64encode(f"admin:{password}".encode()).decode()
+            media_type = "application/yang-data+json"
+            headers = {"Accept": media_type, "Authorization": f"Basic {auth}"}
+            url = f"https://192.0.2.1{args.path}"
+            if args.description is None:
+                request = Request(url, headers=headers)
+            else:
+                headers["Content-Type"] = media_type
+                body = {"ietf-interfaces:interface": [
+                    {"name": "GigabitEthernet2", "description": args.description}
+                ]}
+                request = Request(url + "/interface=GigabitEthernet2", data=json.dumps(body).encode(),
+                                  headers=headers, method="PATCH")
+            try:
+                # Der CSR nutzt im isolierten Lab ein selbstsigniertes Zertifikat.
+                with urlopen(request, context=ssl._create_unverified_context(), timeout=10) as response:
+                    print(f"HTTP {response.status}")
+                    print(response.read().decode())
+            except HTTPError as error:
+                print(f"HTTP {error.code}")
+                print(error.read().decode())
+                raise SystemExit(1)
+            except URLError as error:
+                raise SystemExit(str(error.reason))
+  - name: network-config
+    content: |
+      version: 2
+      ethernets:
+        ens2:
+          dhcp4: false
+          addresses:
+            - 192.0.2.2/30
   tags: []
   interfaces:
   - id: i0
-    label: port
+    label: ens2
     slot: 0
     type: physical
 - id: n1
@@ -21,38 +94,49 @@ nodes:
   node_definition: csr1000v
   x: 300
   y: 150
-  configuration: |
-    hostname CSR1
-    no ip domain-lookup
-    service timestamps log datetime msec
-    line con 0
-     exec-timeout 0 0
-     logging synchronous
-    interface GigabitEthernet1
-     ip address dhcp
-     no shutdown
-    interface GigabitEthernet2
-     ip address 10.0.12.1 255.255.255.252
-     no shutdown
-    interface Loopback0
-     ip address 1.1.1.1 255.255.255.255
-     no shutdown
-    ip route 2.2.2.2 255.255.255.255 10.0.12.2
-    username admin privilege 15 secret Lab#2026!
-    ip domain name lab.local
-    ip ssh version 2
-    ip http server
-    restconf
-    ip sla 1
-     icmp-echo 2.2.2.2 source-interface Loopback0
-     frequency 10
-    ip sla schedule 1 life forever start-time now
-    track 1 ip sla 1 reachability
-    event manager applet LINKFLAP
-     event syslog pattern "Interface Gi2, changed state"
-     action 1.0 syslog msg "EEM: Link Gi2 hat Status gewechselt"
-     action 2.0 cli command "enable"
-     action 3.0 cli command "show ip interface brief | redirect flash:ipint.txt"
+  configuration:
+  - name: ios_config.txt
+    content: |
+      hostname CSR1
+      no ip domain-lookup
+      service timestamps log datetime msec
+      line con 0
+       exec-timeout 0 0
+       logging synchronous
+      interface GigabitEthernet1
+       ip address 192.0.2.1 255.255.255.252
+       no shutdown
+      interface GigabitEthernet2
+       ip address 10.0.12.1 255.255.255.252
+       no shutdown
+      interface Loopback0
+       ip address 1.1.1.1 255.255.255.255
+       no shutdown
+      ip route 2.2.2.2 255.255.255.255 10.0.12.2
+      username admin privilege 15 secret Lab#2026!
+      ip domain name lab.local
+      aaa new-model
+      aaa authentication login default local
+      aaa authorization exec default local
+      line vty 0 4
+       transport input ssh
+       exit
+      restconf
+      ip sla 1
+       icmp-echo 2.2.2.2 source-interface Loopback0
+       frequency 10
+      ip sla schedule 1 life forever start-time now
+      track 1 ip sla 1 reachability
+      event manager applet LINKFLAP
+       event syslog pattern "Interface Gi2, changed state"
+       action 1.0 syslog msg "EEM: Link Gi2 hat Status gewechselt"
+       action 2.0 cli command "enable"
+       action 3.0 cli command "show ip interface brief | redirect flash:ipint.txt"
+      event manager applet TRACK-DOWN
+       event track 1 state down
+       action 1.0 syslog msg "EEM: IP-SLA-Ziel nicht erreichbar"
+       action 2.0 cli command "enable"
+       action 3.0 cli command "show ip sla statistics | redirect flash:track-down.txt"
   tags: []
   interfaces:
   - id: i0
@@ -76,20 +160,22 @@ nodes:
   node_definition: iosv
   x: 550
   y: 150
-  configuration: |
-    hostname R2
-    no ip domain-lookup
-    service timestamps log datetime msec
-    line con 0
-     exec-timeout 0 0
-     logging synchronous
-    interface Loopback0
-     ip address 2.2.2.2 255.255.255.255
-     no shutdown
-    interface GigabitEthernet0/0
-     ip address 10.0.12.2 255.255.255.252
-     no shutdown
-    ip route 0.0.0.0 0.0.0.0 10.0.12.11
+  configuration:
+  - name: ios_config.txt
+    content: |
+      hostname R2
+      no ip domain-lookup
+      service timestamps log datetime msec
+      line con 0
+       exec-timeout 0 0
+       logging synchronous
+      interface Loopback0
+       ip address 2.2.2.2 255.255.255.255
+       no shutdown
+      interface GigabitEthernet0/0
+       ip address 10.0.12.2 255.255.255.252
+       no shutdown
+      ip route 0.0.0.0 0.0.0.0 10.0.12.11
   tags: []
   interfaces:
   - id: i0
@@ -117,10 +203,164 @@ links:
   n2: n1
   i1: i0
   i2: i0
-  label: EXT-port<->CSR1-GigabitEthernet1
+  label: API-CLIENT-ens2<->CSR1-GigabitEthernet1
 - id: l1
   n1: n1
   n2: n2
   i1: i1
   i2: i1
   label: CSR1-GigabitEthernet2<->R2-GigabitEthernet0/0
+annotations:
+- type: rectangle
+  x1: -4
+  y1: -40
+  x2: 796
+  y2: 80
+  color: '#FFF4DEFA'
+  border_color: '#A05C10FF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Teil B · Reparieren
+  x1: 12
+  y1: -31
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Lab 19 – RESTCONF, NETCONF, YANG und EEM
+  x1: 12
+  y1: -10
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 14
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Vom Linux-Client RESTCONF und NETCONF prüfen. Ereignisse auf CSR1 beobachten.
+  x1: 12
+  y1: 22
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 11
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Ticket im Guide lesen → Symptom reproduzieren → Fix verifizieren
+  x1: 12
+  y1: 49
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 4
+  y1: 94
+  x2: 96
+  y2: 192
+  color: '#60A5FA28'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: API-Client
+  x1: 13
+  y1: 101
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 254
+  y1: 94
+  x2: 346
+  y2: 192
+  color: '#2DD4BF28'
+  border_color: '#0F766EFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: IOS XE
+  x1: 263
+  y1: 101
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 504
+  y1: 94
+  x2: 599
+  y2: 192
+  color: '#FBBF2428'
+  border_color: '#A05C10FF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: IP-SLA-Ziel
+  x1: 513
+  y1: 101
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1

@@ -9,6 +9,9 @@ fertigen Konfiguration beschrieben (ersetzen, entfernen, einfügen). So stimmen 
 Fehlerliste und Diff immer überein.
 """
 import ipaddress, os, re
+from pathlib import Path
+
+from annotate_cml import annotate
 import yaml
 
 HEADER = ["no ip domain-lookup", "service timestamps log datetime msec",
@@ -89,7 +92,10 @@ def cml_yaml(lab, repair):
         d = {"id": f"n{k}", "label": n["name"], "node_definition": NODE_DEF[n["type"]],
              "x": n["x"], "y": n["y"]}
         if n["type"] != "switch":
-            cfg = "\n".join(full_config(n, repair, lab["faults"] if repair else ())) + "\n"
+            cml_node = n
+            if n.get("cml_base"):
+                cml_node = {**n, "base": n["cml_base"] + "\n" + n.get("base", "")}
+            cfg = "\n".join(full_config(cml_node, repair, lab["faults"] if repair else ())) + "\n"
             d["configuration"] = Lit(cfg)
         d["tags"] = []
         d["interfaces"] = interfaces(n["type"])
@@ -412,6 +418,8 @@ def render(lab, root):
     write(os.path.join(cml, "topology.yaml"), cml_yaml(lab, False))
     write(os.path.join(cml, "topology-repair.yaml"), cml_yaml(lab, True))
     write(os.path.join(cml, "README.md"), readme(lab, "cml"))
+    for name in ("topology.yaml", "topology-repair.yaml"):
+        annotate(Path(cml) / name)
     write(os.path.join(cml, "solutions", "FAULTS.md"), faults_md(lab))
     write(os.path.join(eve, "README.md"), readme(lab, "eve"))
     write(os.path.join(eve, "solutions", "FAULTS.md"), faults_md(lab))

@@ -1,7 +1,28 @@
 lab:
   title: 'Lab 36 – EEM-Applets: Ereignisse, Aktionen und die typischen Fallen'
   description: 'Ziel 6.6 verlangt, ein EEM-Applet zu konstruieren, das konfiguriert, Fehler eingrenzt oder Daten sammelt. Lab 19 zeigt zwei Applets am Rand. Hier baust du sechs kleine Applets, eines je Ereignistyp, und lernst dabei die Stellen kennen, an denen Applets in der Praxis und in Prüfungs-Exhibits scheitern: fehlendes `enable`, die Sortierung der Aktionsnummern, Muster, die nie treffen, und die Bedeutung von `sync` und `skip`.'
-  notes: 'Aufgaben: siehe README.md'
+  notes: |-
+    ## Lab 36 — Ereignisgesteuerte Diagnose
+
+    **Stufe:** Selbstständig · **Zeitbox:** 35 Minuten · **Ziel:** 6.6
+
+    **Voraussetzung:** Du kannst eine OSPF-Nachbarschaft im Gerät erkennen und den Zeitpunkt einer Zustandsänderung im Syslog finden.
+
+    **Start:** Importiere `topology.yaml`. R1 und R2 haben zwei OSPF-Pfade. Beide Nachbarschaften müssen stabil sein. Gi0/0 ist der Kontrollpfad, Gi0/1 der Testpfad.
+
+    **Auftrag:** Erstelle auf R1 ein eigenes EEM-Applet. Beim Verlust der zuvor vollständigen OSPF-Nachbarschaft über Gi0/1 soll R1 automatisch eine Diagnose mit der Nachbartabelle und die Zustandsänderung lokal dokumentieren. Verwende je einen eindeutigen Namen für Applet, Datei und Meldung.
+
+    **Grenzen:** Das Applet liest und protokolliert. Es verändert keine Interfaces, kein Routing und keine gespeicherte Konfiguration. Auslöser und Rückkehr in den Normalzustand erzeugst du im isolierten Lab manuell.
+
+    **Erfolgskriterien:**
+
+    1. Das eigene Applet ist vor dem Test registriert. Die beiden Nachbarschaften sind vollständig.
+    2. Nach Abschalten des Testpfads siehst du einen neuen Applet-Lauf und einen eindeutig zuordenbaren Logeintrag. Der Kontrollpfad bleibt aktiv.
+    3. Eine neu erzeugte lokale Datei enthält die tatsächliche Nachbartabelle nach dem Ereignis. Der funktionierende Kontrollpfad ist darin erkennbar.
+    4. Nach Wiederherstellung von Gi0/1 stehen beide Nachbarschaften wieder. Die Rückkehr in den Zustand FULL erzeugt keinen zweiten Diagnose-Lauf.
+    5. Erkläre den Unterschied zwischen einer registrierten Policy, einem ausgelösten Lauf und einer erfolgreichen Aktion.
+
+    **Transfer:** Öffne anschließend `topology-repair.yaml` als separates Lab. Diagnostiziere zwei Applets mit unterschiedlichen Fehlerbildern und belege jede Reparatur mit einem gezielten Ereignis sowie einem unabhängigen Wirkungsnachweis. Orientiere dich an den Symptomen im Guide.
   version: 0.2.0
 nodes:
 - id: n0
@@ -16,6 +37,7 @@ nodes:
     line con 0
      exec-timeout 0 0
      logging synchronous
+    logging buffered 16384 informational
     interface Loopback0
      ip address 10.255.0.1 255.255.255.255
      ip ospf 1 area 0
@@ -113,3 +135,130 @@ links:
   i1: i2
   i2: i2
   label: R1-GigabitEthernet0/1<->R2-GigabitEthernet0/1
+annotations:
+- type: rectangle
+  x1: 46
+  y1: 10
+  x2: 846
+  y2: 130
+  color: '#EAF2FFFA'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Teil A · Bauen
+  x1: 62
+  y1: 19
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: 'Lab 36 – EEM-Applets: Ereignisse, Aktionen und die typischen Fallen'
+  x1: 62
+  y1: 40
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 14
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: EEM-Applets auslösen und an Konsole, Syslog und Dateisystem verifizieren.
+  x1: 62
+  y1: 72
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 11
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Guide öffnen → Ausgangslage prüfen → Aufgabe lösen
+  x1: 62
+  y1: 99
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 54
+  y1: 144
+  x2: 163
+  y2: 242
+  color: '#60A5FA28'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Applet-Router
+  x1: 63
+  y1: 151
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 454
+  y1: 144
+  x2: 549
+  y2: 242
+  color: '#2DD4BF28'
+  border_color: '#0F766EFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Testpartner
+  x1: 463
+  y1: 151
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1

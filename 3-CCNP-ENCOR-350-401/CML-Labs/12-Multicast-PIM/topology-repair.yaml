@@ -1,7 +1,20 @@
 lab:
   title: Lab 12 – Multicast mit IGMP und PIM Sparse Mode (Repair)
   description: 'Multicast-Verteilung über ein Routernetz: IGMP, PIM-SM mit statischem RP, Auto-RP/BSR im Vergleich, SSM, RPF-Check und typische Fehler. Quelle und Empfänger sind IOS-Hosts.'
-  notes: 'Aufgaben: siehe README.md'
+  notes: |-
+    ## Reparieren
+
+    Importiere diese Datei als separates Lab. Reproduziere pro Ticket das Symptom, dokumentiere den Befund und belege die Wirkung der Korrektur. Stelle den Testzustand nach jedem Versuch wieder her.
+
+    **Ticket 1:** R3 hat keinen PIM-Nachbarn zu R2; REC1 bekommt keine Pakete, REC2 funktioniert.
+
+    **Ticket 2:** REC2 empfängt keine Pakete, `show ip pim rp mapping` auf R4 zeigt einen anderen RP als auf den übrigen Routern.
+
+    **Ticket 3:** Weder REC1 noch REC2 empfangen etwas, obwohl alle Join-Zustände stehen. Auf R1 gibt es keine `(S,G)`-Einträge.
+
+    **Ticket 4:** Der RP zeigt `(*,G)`-Einträge nicht und Multicast wird auf R2 nicht weitergeleitet.
+
+    Die Topologiedaten, gestufte Hinweise und Lösungen findest du in den Lab-Unterlagen.
   version: 0.2.0
 nodes:
 - id: n0
@@ -378,3 +391,157 @@ links:
   i1: i2
   i2: i1
   label: R4-GigabitEthernet0/1<->REC2-GigabitEthernet0/0
+annotations:
+- type: rectangle
+  x1: -54
+  y1: -90
+  x2: 754
+  y2: 30
+  color: '#FFF4DEFA'
+  border_color: '#A05C10FF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Teil B · Reparieren
+  x1: -38
+  y1: -81
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Lab 12 – Multicast mit IGMP und PIM Sparse Mode
+  x1: -38
+  y1: -60
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 14
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Über dem OSPF-Underlay PIM, IGMP und RPF mit zwei Empfängern untersuchen.
+  x1: -38
+  y1: -28
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 11
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Ticket im Guide lesen → Symptom reproduzieren → Fix verifizieren
+  x1: -38
+  y1: -1
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: -46
+  y1: 144
+  x2: 46
+  y2: 242
+  color: '#60A5FA28'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Quelle
+  x1: -37
+  y1: 151
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 54
+  y1: 44
+  x2: 546
+  y2: 342
+  color: '#2DD4BF28'
+  border_color: '#0F766EFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: PIM-Netz
+  x1: 63
+  y1: 51
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 654
+  y1: 44
+  x2: 746
+  y2: 342
+  color: '#FBBF2428'
+  border_color: '#A05C10FF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Empfänger
+  x1: 663
+  y1: 51
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1

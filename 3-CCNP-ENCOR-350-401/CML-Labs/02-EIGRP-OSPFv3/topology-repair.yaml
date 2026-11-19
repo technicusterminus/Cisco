@@ -1,7 +1,20 @@
 lab:
   title: Lab 02 – EIGRP (Named Mode) und OSPFv3 (Repair)
   description: 'Dual-Stack-Dreieck: IPv4 mit EIGRP im Named Mode (inkl. Unequal-Cost-Load-Balancing, Summarization, Authentifizierung), IPv6 mit OSPFv3 Address-Families. So vergleichst du beide IGPs am selben Netz.'
-  notes: 'Aufgaben: siehe README.md'
+  notes: |-
+    ## Reparieren
+
+    Importiere diese Datei als separates Lab. Reproduziere pro Ticket das Symptom, dokumentiere den Befund und belege die Wirkung der Korrektur. Stelle den Testzustand nach jedem Versuch wieder her.
+
+    **Ticket 1:** R2 hat keinen EIGRP-Nachbarn zu R1 oder R3, `show ip eigrp neighbors` ist leer, IPv6/OSPFv3 läuft normal.
+
+    **Ticket 2:** R1–R2 funktioniert, aber der Direktlink R1–R3 bildet keine Nachbarschaft (Log: Authentifizierungsfehler).
+
+    **Ticket 3:** R2–R3 bildet keine EIGRP-Nachbarschaft, R3 ist nur über den Direktlink R1–R3 erreichbar (Pfadwahl bei R1 ungewöhnlich).
+
+    **Ticket 4:** Im IPv6-Netz fehlt die Nachbarschaft R2–R3 (EIGRP IPv4 läuft), `show ospfv3 neighbor` zeigt auf R2 keinen Nachbarn an Gi0/1.
+
+    Die Topologiedaten, gestufte Hinweise und Lösungen findest du in den Lab-Unterlagen.
   version: 0.2.0
 nodes:
 - id: n0
@@ -268,3 +281,103 @@ links:
   i1: i2
   i2: i2
   label: R1-GigabitEthernet0/1<->R3-GigabitEthernet0/1
+annotations:
+- type: rectangle
+  x1: 46
+  y1: -130
+  x2: 846
+  y2: -10
+  color: '#FFF4DEFA'
+  border_color: '#A05C10FF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Teil B · Reparieren
+  x1: 62
+  y1: -121
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Lab 02 – EIGRP (Named Mode) und OSPFv3
+  x1: 62
+  y1: -100
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 14
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: IPv4 mit EIGRP und IPv6 mit OSPFv3 auf demselben Netz vergleichen.
+  x1: 62
+  y1: -68
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 11
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Ticket im Guide lesen → Symptom reproduzieren → Fix verifizieren
+  x1: 62
+  y1: -41
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 54
+  y1: 4
+  x2: 346
+  y2: 382
+  color: '#60A5FA28'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Dual-Stack-Transit
+  x1: 63
+  y1: 11
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1

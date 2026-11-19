@@ -1,7 +1,26 @@
 lab:
   title: Lab 14 – GRE, IPsec und VTI
   description: 'Standortvernetzung über ein unsicheres Transportnetz: GRE-Tunnel, OSPF darüber, IPsec Tunnel Protection (IKEv1), anschließend IKEv2 und VTI. Dazu MTU/MSS und das typische Rekursiv-Routing-Problem.'
-  notes: 'Aufgaben: siehe README.md'
+  notes: |-
+    ## Lab 14 — GRE/IPsec vom Underlay bis zur SA
+
+    **Stufe:** Selbstständig · **Zeitbox:** 60 Minuten
+
+    **Blueprint:** 2.2.b.
+
+    **Voraussetzung:** IPv4-Next-Hop und Tunnelendpunkte
+
+    **Start:** Transport-Routing und Site-Loopbacks sind gesetzt. Die Overlay-Verbindung ist Arbeitsgegenstand.
+
+    **Auftrag:** Baue zwischen den Sites den vorgesehenen GRE/IPsec-Pfad und weise Routing über den Tunnel sowie verschlüsselten Verkehr nach. Vergleiche mit dem VTI-Ansatz als Vertiefung.
+
+    **Grenzen:** Behalte Adressplan und bereitgestellte Infrastruktur bei. Nimm für Gegenproben vorübergehend erzeugte Fehler zurück.
+
+    **Erfolgskriterium:** Das Zielnetz wird über den Tunnel geroutet. Beim kontrollierten Datenfluss steigen passende IPsec-Zähler an beiden Enden.
+
+    **Gegenprobe:** Ein erreichbarer öffentlicher Peer oder ein Tunnel mit Status up/up reicht nicht als Verschlüsselungsnachweis.
+
+    **Wiederholung oder Transfer:** 24
   version: 0.2.0
 nodes:
 - id: n0
@@ -145,3 +164,157 @@ links:
   i1: i2
   i2: i1
   label: ISP-GigabitEthernet0/1<->CE2-GigabitEthernet0/0
+annotations:
+- type: rectangle
+  x1: 46
+  y1: 10
+  x2: 846
+  y2: 130
+  color: '#EAF2FFFA'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Teil A · Bauen
+  x1: 62
+  y1: 19
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Lab 14 – GRE, IPsec und VTI
+  x1: 62
+  y1: 40
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 14
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Underlay zuerst prüfen, dann GRE und IPsec anhand von Routing und SAs belegen.
+  x1: 62
+  y1: 72
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 11
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Guide öffnen → Ausgangslage prüfen → Aufgabe lösen
+  x1: 62
+  y1: 99
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 54
+  y1: 144
+  x2: 146
+  y2: 242
+  color: '#60A5FA28'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Site 1
+  x1: 63
+  y1: 151
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 304
+  y1: 144
+  x2: 396
+  y2: 242
+  color: '#2DD4BF28'
+  border_color: '#0F766EFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Transport
+  x1: 313
+  y1: 151
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 554
+  y1: 144
+  x2: 646
+  y2: 242
+  color: '#FBBF2428'
+  border_color: '#A05C10FF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Site 2
+  x1: 563
+  y1: 151
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1

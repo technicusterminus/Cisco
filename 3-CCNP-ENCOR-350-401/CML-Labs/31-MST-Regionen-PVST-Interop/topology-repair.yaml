@@ -1,7 +1,20 @@
 lab:
   title: 'Lab 31 – MST vertieft: Regionen, Instanzen, Pfadkosten und PVST-Interop (Reparatur)'
   description: 'Vier Switches in einer MST-Region, ein Legacy-Switch mit Rapid-PVST: Region planen, Root je Instanz, Pfadkosten pro Instanz, IST, Boundary und PVST-Simulation.'
-  notes: 'Aufgaben: siehe README.md'
+  notes: |-
+    ## Reparieren
+
+    Importiere diese Datei als separates Lab. Reproduziere pro Ticket das Symptom, dokumentiere den Befund und belege die Wirkung der Korrektur. Stelle den Testzustand nach jedem Versuch wieder her.
+
+    **Ticket 1:** Auf AS2 zeigt `show spanning-tree mst` Boundary-Ports zu DS1 und DS2, und AS2 hält sich für Instanz 2 selbst für die Root.
+
+    **Ticket 2:** Die Lastverteilung fehlt: Auch VLAN 20 läuft über DS1, `show spanning-tree mst 2` zeigt DS1 als Root.
+
+    **Ticket 3:** VLAN 10 von H1 läuft über DS2 zur Root DS1, obwohl AS1 einen direkten Uplink zu DS1 hat. Instanz 2 ist unauffällig.
+
+    **Ticket 4:** H3 erreicht weder sein Gateway noch H1. AS2 und DS2 haben Ports im Zustand `BKN*`.
+
+    Die Topologiedaten, gestufte Hinweise und Lösungen findest du in den Lab-Unterlagen.
   version: 0.2.0
 nodes:
 - id: n0
@@ -713,3 +726,159 @@ links:
   i1: i4
   i2: i1
   label: LEG1-GigabitEthernet1/0<->H3-GigabitEthernet0/0
+annotations:
+- type: rectangle
+  x1: 46
+  y1: -210
+  x2: 846
+  y2: -70
+  color: '#FFF4DEFA'
+  border_color: '#A05C10FF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Teil B · Reparieren
+  x1: 62
+  y1: -201
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: 'Lab 31 – MST vertieft: Regionen, Instanzen, Pfadkosten und PVST-
+
+    Interop (Reparatur)'
+  x1: 62
+  y1: -180
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 14
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: MST-Regionen und PVST-Übergang anhand von Root- und Boundary-Port-Ausgaben prüfen.
+  x1: 62
+  y1: -128
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 11
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Ticket im Guide lesen → Symptom reproduzieren → Fix verifizieren
+  x1: 62
+  y1: -101
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 54
+  y1: -56
+  x2: 446
+  y2: 42
+  color: '#60A5FA28'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Distribution
+  x1: 63
+  y1: -49
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 54
+  y1: 144
+  x2: 446
+  y2: 422
+  color: '#2DD4BF28'
+  border_color: '#0F766EFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Access
+  x1: 63
+  y1: 151
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 604
+  y1: 244
+  x2: 696
+  y2: 502
+  color: '#FBBF2428'
+  border_color: '#A05C10FF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: PVST-Seite
+  x1: 613
+  y1: 251
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1

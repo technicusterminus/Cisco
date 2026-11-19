@@ -1,7 +1,20 @@
 lab:
   title: Lab 05 – VLANs, Trunks und EtherChannel (Repair)
   description: 'Drei Switches, Router-on-a-Stick und drei Hosts: 802.1Q-Trunks (Native VLAN, Allowed VLANs, DTP, VTP) und EtherChannel mit LACP, PAgP und statischem Modus.'
-  notes: 'Aufgaben: siehe README.md'
+  notes: |-
+    ## Reparieren
+
+    Importiere diese Datei als separates Lab. Reproduziere pro Ticket das Symptom, dokumentiere den Befund und belege die Wirkung der Korrektur. Stelle den Testzustand nach jedem Versuch wieder her.
+
+    **Ticket 1:** Po1 kommt nicht hoch: Auf SW1 sind die Ports `s` (suspended), H1 hat keine Verbindung.
+
+    **Ticket 2:** H2 (VLAN 20) hat weder Gateway noch Verbindung, H3 (VLAN 10) funktioniert.
+
+    **Ticket 3:** Alle Hosts in VLAN 20 erreichen ihr Gateway 10.10.20.1 nicht, VLAN 10 ist in Ordnung.
+
+    **Ticket 4:** H3 (10.10.10.13) erreicht weder H1 noch das Gateway.
+
+    Die Topologiedaten, gestufte Hinweise und Lösungen findest du in den Lab-Unterlagen.
   version: 0.2.0
 nodes:
 - id: n0
@@ -513,3 +526,157 @@ links:
   i1: i5
   i2: i1
   label: SW3-GigabitEthernet1/1<->H3-GigabitEthernet0/0
+annotations:
+- type: rectangle
+  x1: -54
+  y1: -140
+  x2: 746
+  y2: -20
+  color: '#FFF4DEFA'
+  border_color: '#A05C10FF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Teil B · Reparieren
+  x1: -38
+  y1: -131
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Lab 05 – VLANs, Trunks und EtherChannel
+  x1: -38
+  y1: -110
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 14
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: VLAN-Pfade über 802.1Q, LACP und PAgP aufbauen und prüfen.
+  x1: -38
+  y1: -78
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 11
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Ticket im Guide lesen → Symptom reproduzieren → Fix verifizieren
+  x1: -38
+  y1: -51
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: -46
+  y1: -6
+  x2: 56
+  y2: 392
+  color: '#60A5FA28'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Access-Hosts
+  x1: -37
+  y1: 1
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 104
+  y1: -6
+  x2: 396
+  y2: 292
+  color: '#2DD4BF28'
+  border_color: '#0F766EFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Switching
+  x1: 113
+  y1: 1
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 504
+  y1: 94
+  x2: 596
+  y2: 192
+  color: '#FBBF2428'
+  border_color: '#A05C10FF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Gateway
+  x1: 513
+  y1: 101
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1

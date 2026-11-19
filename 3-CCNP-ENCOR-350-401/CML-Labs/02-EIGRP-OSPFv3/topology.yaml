@@ -1,7 +1,26 @@
 lab:
   title: Lab 02 – EIGRP (Named Mode) und OSPFv3
   description: 'Dual-Stack-Dreieck: IPv4 mit EIGRP im Named Mode (inkl. Unequal-Cost-Load-Balancing, Summarization, Authentifizierung), IPv6 mit OSPFv3 Address-Families. So vergleichst du beide IGPs am selben Netz.'
-  notes: 'Aufgaben: siehe README.md'
+  notes: |-
+    ## Lab 02 — EIGRP und OSPFv3 getrennt nachweisen
+
+    **Stufe:** Geführt · **Zeitbox:** 65 Minuten
+
+    **Blueprint:** 3.2.a, 3.2.b.
+
+    **Voraussetzung:** 01, IPv6-Link-Local und Loopbacks
+
+    **Start:** IPv4 und IPv6 sind auf den Transitinterfaces und Loopbacks adressiert.
+
+    **Auftrag:** Richte OSPFv3 für die IPv6-Erreichbarkeit der Loopbacks ein und erweitere um eine zweite Area. Vergleiche zum Schluss den ausgewählten IPv4-Pfad nach EIGRP mit dem IPv6-Pfad. EIGRP Named Mode ist die Vertiefung.
+
+    **Grenzen:** Behalte Adressplan und bereitgestellte Infrastruktur bei. Nimm für Gegenproben vorübergehend erzeugte Fehler zurück.
+
+    **Erfolgskriterium:** Die IPv6-Nachbarn stehen in der vorgesehenen Area und beide neuen Loopbacks erscheinen auf R1 als Inter-Area-Ziele. EIGRP und OSPFv3 sind getrennt zu beobachten.
+
+    **Gegenprobe:** Kontrolliere, dass ein IPv4-Routingproblem keinen OSPFv3-Ausfall vortäuscht.
+
+    **Wiederholung oder Transfer:** 34 für Filterprinzipien, 30 zum Routingvergleich
   version: 0.2.0
 nodes:
 - id: n0
@@ -179,3 +198,103 @@ links:
   i1: i2
   i2: i2
   label: R1-GigabitEthernet0/1<->R3-GigabitEthernet0/1
+annotations:
+- type: rectangle
+  x1: 46
+  y1: -130
+  x2: 846
+  y2: -10
+  color: '#EAF2FFFA'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Teil A · Bauen
+  x1: 62
+  y1: -121
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Lab 02 – EIGRP (Named Mode) und OSPFv3
+  x1: 62
+  y1: -100
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 14
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: IPv4 mit EIGRP und IPv6 mit OSPFv3 auf demselben Netz vergleichen.
+  x1: 62
+  y1: -68
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 11
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Guide öffnen → Ausgangslage prüfen → Aufgabe lösen
+  x1: 62
+  y1: -41
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 54
+  y1: 4
+  x2: 346
+  y2: 382
+  color: '#60A5FA28'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Dual-Stack-Transit
+  x1: 63
+  y1: 11
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1

@@ -33,7 +33,7 @@ Multicast-Verteilung über ein Routernetz: IGMP, PIM-SM mit statischem RP, Auto-
 | R3 Gi0/1 – REC1 | 192.168.3.0/24 (R3 .1, REC1 .10) |
 | R4 Gi0/1 – REC2 | 192.168.4.0/24 (R4 .1, REC2 .10) |
 
-Loopbacks: R1 10.255.0.1, R2 10.255.0.2 (RP), R3 10.255.0.3, R4 10.255.0.4 (jeweils /32). OSPF 1 (Area 0) als Unicast-Underlay ist vorhanden. Multicast-Gruppe für Tests: **239.1.1.1**.
+Loopbacks: R1 10.255.0.1, R2 10.255.0.2 (RP), R3 10.255.0.3, R4 10.255.0.4 (jeweils /32). OSPF 1 (Area 0) als Unicast-Underlay ist vorhanden. Multicast-Gruppe für Tests: **239.1.1.1**. Pinge vor Schritt 1 von SRC aus 192.168.3.10 und 192.168.4.10. Auf R2 zeigt `show ip ospf neighbor` drei Nachbarn. Erst danach kommt PIM dazu.
 
 ## Teil A – Bauen
 Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.

@@ -1,7 +1,20 @@
 lab:
   title: 'Lab 33 – Diagnose: Ping und Traceroute lesen, Debug und Conditional Debug sicher einsetzen (Repair)'
   description: 'Ziel 4.1 verlangt, Netzprobleme mit Debugs, Conditional Debugs, Traceroute, Ping, SNMP und Syslog einzugrenzen. SNMP und Syslog übst du in Lab 08. Hier geht es um die Werkzeuge an der Konsole: Du lernst, die Zeichen von Ping und Traceroute als Befund zu lesen, eine MTU-Engstelle auszumessen und Debug-Ausgaben so einzugrenzen, dass sie den Router nicht lahmlegen. Das Netz ist fertig geroutet, damit die Werkzeuge im Mittelpunkt stehen.'
-  notes: 'Aufgaben: siehe README.md'
+  notes: |-
+    ## Reparieren
+
+    Importiere diese Datei als separates Lab. Reproduziere pro Ticket das Symptom, dokumentiere den Befund und belege die Wirkung der Korrektur. Stelle den Testzustand nach jedem Versuch wieder her.
+
+    **Ticket 1:** H1 erreicht SRV nicht. Der Ping von H1 zeigt `U.U.U`.
+
+    **Ticket 2:** Der Ping von H1 zu SRV geht, aber Traceroute bricht in Zeile 3 mit `!A` ab. Das Monitoring meldet den Standort deshalb als gestört.
+
+    **Ticket 3:** Anwender melden: Anmelden am Server geht, große Dateien übertragen hängt. `ping 192.168.3.10 size 1500 df-bit` von H1 zeigt nur Punkte, kein `M`.
+
+    **Ticket 4:** Auf R1 läuft `debug ip icmp` laut `show debugging`, aber `show logging` zeigt keine einzige Debug-Zeile.
+
+    Die Topologiedaten, gestufte Hinweise und Lösungen findest du in den Lab-Unterlagen.
   version: 0.2.0
 nodes:
 - id: n0
@@ -261,3 +274,159 @@ links:
   i1: i2
   i2: i1
   label: R3-GigabitEthernet0/1<->SRV-GigabitEthernet0/0
+annotations:
+- type: rectangle
+  x1: -54
+  y1: -10
+  x2: 854
+  y2: 130
+  color: '#FFF4DEFA'
+  border_color: '#A05C10FF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Teil B · Reparieren
+  x1: -38
+  y1: -1
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: 'Lab 33 – Diagnose: Ping und Traceroute lesen, Debug und Conditional
+
+    Debug sicher einsetzen'
+  x1: -38
+  y1: 20
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 14
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Vom Client zum Dienst messen und ICMP-Befunde mit Debug-Ausgaben abgleichen.
+  x1: -38
+  y1: 72
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 11
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Ticket im Guide lesen → Symptom reproduzieren → Fix verifizieren
+  x1: -38
+  y1: 99
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: -46
+  y1: 144
+  x2: 46
+  y2: 242
+  color: '#60A5FA28'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Start
+  x1: -37
+  y1: 151
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 154
+  y1: 144
+  x2: 646
+  y2: 242
+  color: '#2DD4BF28'
+  border_color: '#0F766EFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Transit
+  x1: 163
+  y1: 151
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 754
+  y1: 144
+  x2: 846
+  y2: 242
+  color: '#FBBF2428'
+  border_color: '#A05C10FF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Dienst
+  x1: 763
+  y1: 151
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1

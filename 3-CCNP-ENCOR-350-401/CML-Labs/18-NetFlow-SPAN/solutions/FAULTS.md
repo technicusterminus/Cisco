@@ -28,7 +28,7 @@
 -  match transport destination-port
 ```
 
-## Ticket 3 (SW2)
+## Ticket 3 (SW2, Papier)
 
 - **Symptom:** ANA2 sieht nichts vom RSPAN-Verkehr von H2, lokales SPAN auf SW1 funktioniert.
 - **So findest du es:** `show interfaces trunk` auf SW2 zeigt VLAN 999 nicht bei den erlaubten VLANs.
@@ -49,7 +49,7 @@
 +  switchport trunk allowed vlan 10
 ```
 
-## Ticket 4 (SW1)
+## Ticket 4 (SW1, Papier)
 
 - **Symptom:** ANA1 sieht H1-Verkehr nicht, `show monitor session 1` zeigt ein anderes Ziel.
 - **So findest du es:** `show monitor session 1` auf SW1 zeigt einen anderen Zielport als den, an dem ANA1 hängt.

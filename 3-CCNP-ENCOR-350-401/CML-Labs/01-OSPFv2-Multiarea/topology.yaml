@@ -1,7 +1,26 @@
 lab:
   title: Lab 01 – OSPFv2 Multi-Area
   description: OSPF-Areas, ABR/ASBR, DR/BDR, Summarization, Stub/NSSA, Authentifizierung und typische OSPF-Fehler.
-  notes: 'Aufgaben: siehe README.md'
+  notes: |-
+    ## Lab 01 — OSPFv2 über einen ABR
+
+    **Stufe:** Geführt · **Zeitbox:** 50 Minuten
+
+    **Blueprint:** 3.2.b; Vergleich für 3.2.a.
+
+    **Voraussetzung:** IPv4-Subnetze, OSPF-Nachbarzustände
+
+    **Start:** IPv4-Adressen, Loopbacks und die externen Testnetze sind vorgegeben.
+
+    **Auftrag:** Verbinde die Backbone-Seite R1/R2 mit dem LAN auf der anderen Seite von R2. Fasse die dafür vorgesehenen Netze zusammen und begründe, welche Interfaces passiv sein dürfen.
+
+    **Grenzen:** Behalte Adressplan und bereitgestellte Infrastruktur bei. Nimm für Gegenproben vorübergehend erzeugte Fehler zurück.
+
+    **Erfolgskriterium:** R2 verbindet beide Areas. Auf dem Broadcast-LAN erklärst du eine FULL- und gegebenenfalls eine 2-WAY-Beziehung. Auf der Backbone-Seite ist das aggregierte statt jedes Detailpräfix sichtbar.
+
+    **Gegenprobe:** Kontrolliere, dass die vom Aggregat nicht erfassten Netze nicht versehentlich verschwinden.
+
+    **Wiederholung oder Transfer:** 28 und 34, anschließend 23
   version: 0.2.0
 nodes:
 - id: n0
@@ -241,3 +260,130 @@ links:
   i1: i1
   i2: i2
   label: R4-GigabitEthernet0/0<->SW-port2
+annotations:
+- type: rectangle
+  x1: 46
+  y1: -90
+  x2: 846
+  y2: 30
+  color: '#EAF2FFFA'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Teil A · Bauen
+  x1: 62
+  y1: -81
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Lab 01 – OSPFv2 Multi-Area
+  x1: 62
+  y1: -60
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 14
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Multi-Area-OSPFv2 aufbauen und Nachbarschaften sowie Summaries prüfen.
+  x1: 62
+  y1: -28
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 11
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Guide öffnen → Ausgangslage prüfen → Aufgabe lösen
+  x1: 62
+  y1: -1
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 54
+  y1: 144
+  x2: 346
+  y2: 242
+  color: '#60A5FA28'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Area 0
+  x1: 63
+  y1: 151
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 454
+  y1: 44
+  x2: 746
+  y2: 342
+  color: '#2DD4BF28'
+  border_color: '#0F766EFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Area 1
+  x1: 463
+  y1: 51
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1

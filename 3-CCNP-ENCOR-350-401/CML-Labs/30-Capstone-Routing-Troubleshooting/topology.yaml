@@ -1,7 +1,26 @@
 lab:
   title: 'Lab 30 – Capstone: Routing-Fehlersuche (OSPF, EIGRP, BGP, Redistribution)'
   description: 'Ein Unternehmensnetz mit OSPF (Area 0 und Stub-Area 1), einem EIGRP-Standort, eBGP zum Provider und Default-Route-Weitergabe. Acht Fehler quer durch alle Protokolle, teils voneinander verdeckt: Die Au'
-  notes: 'Aufgaben: siehe README.md'
+  notes: |-
+    ## Lab 30 — Abschluss Routing im kombinierten Netz
+
+    **Stufe:** Transfer · **Zeitbox:** 90 Minuten
+
+    **Blueprint:** 3.2.a, 3.2.b (IPv4), 3.2.c.
+
+    **Voraussetzung:** 01, 03, 25, 27 und 34
+
+    **Start:** Reparaturvariante mit Provider und internen Routingdomänen.
+
+    **Auftrag:** Rekonstruiere schrittweise die Pfade vom Provider zu den internen Netzen. Bearbeite die Tickets in begründeter Reihenfolge und wähle pro Mechanismus den stärksten Nachweis.
+
+    **Grenzen:** Behalte Adressplan und bereitgestellte Infrastruktur bei. Nimm für Gegenproben vorübergehend erzeugte Fehler zurück.
+
+    **Erfolgskriterium:** Erreichbarkeit, Präfixursprung und vorgesehene Routingentscheidung sind pro Ticket nachvollziehbar.
+
+    **Gegenprobe:** Ein Ersatzpfad darf eine fehlerhafte Nachbarschaft oder unerwünschte Rückverteilung nicht verdecken.
+
+    **Wiederholung oder Transfer:** 24 und 23 für andere Architekturgrenzen
   version: 0.2.0
 nodes:
 - id: n0
@@ -242,3 +261,159 @@ links:
   i1: i3
   i2: i1
   label: R2-GigabitEthernet0/2<->R4-GigabitEthernet0/0
+annotations:
+- type: rectangle
+  x1: 66
+  y1: -310
+  x2: 866
+  y2: -170
+  color: '#EAF2FFFA'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Teil A · Bauen
+  x1: 82
+  y1: -301
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: 'Lab 30 – Capstone: Routing-Fehlersuche (OSPF, EIGRP, BGP,
+
+    Redistribution)'
+  x1: 82
+  y1: -280
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 14
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Routing-Fehler von den Nachbarschaften bis zur Ende-zu-Ende-Route eingrenzen.
+  x1: 82
+  y1: -228
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 11
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Guide öffnen → Ausgangslage prüfen → Aufgabe lösen
+  x1: 82
+  y1: -201
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 254
+  y1: -156
+  x2: 346
+  y2: -58
+  color: '#60A5FA28'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Provider
+  x1: 263
+  y1: -149
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 254
+  y1: -6
+  x2: 346
+  y2: 92
+  color: '#2DD4BF28'
+  border_color: '#0F766EFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Edge
+  x1: 263
+  y1: 1
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 74
+  y1: 144
+  x2: 526
+  y2: 392
+  color: '#FBBF2428'
+  border_color: '#A05C10FF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Interne Router
+  x1: 83
+  y1: 151
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1

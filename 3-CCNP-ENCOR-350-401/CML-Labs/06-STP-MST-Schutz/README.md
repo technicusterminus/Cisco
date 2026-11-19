@@ -40,12 +40,12 @@ Vier Switches im Dreiecksverbund plus „Rogue“-Switch: Rapid-PVST, Root-Platz
 | H1 / H2 | SW3 Gi1/0 / SW4 Gi1/0 (VLAN 10) |
 | SW5 | SW3 Gi1/1 ↔ SW5 Gi0/0 (SW5 ist ab Werk `shutdown`) |
 
-VLANs 10 und 20 sind angelegt, die Inter-Switch-Links sind noch **nicht** als Trunks konfiguriert (Aufgabe 1). Hosts: H1 10.10.10.11, H2 10.10.10.12 (/24).
+VLANs 10 und 20 sind angelegt, die sechs Verbindungen zwischen SW1 bis SW4 sind als Trunks vorkonfiguriert. Hosts: H1 10.10.10.11, H2 10.10.10.12 (/24).
 
 ## Teil A – Bauen
 Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
 
-1. **Trunks.** Lege VLAN 99 an. Mache alle sechs Links zwischen den Switches zu festen Trunks (`switchport trunk encapsulation dot1q`, dann `mode trunk` und `nonegotiate`) mit den erlaubten VLANs 10 und 20 und Native VLAN 99.
+1. **Ausgangslage prüfen.** Kontrolliere auf SW1 bis SW4 mit `show interfaces trunk` die erlaubten VLANs 10 und 20 sowie das Native VLAN 99. Halte fest, welcher der redundanten Ports bereits blockiert.
    - **Prüfen:** H1 pingt H2.
 2. **Rapid-PVST lesen.** Führe auf SW3 `show spanning-tree vlan 10` aus.
    - **Prüfen:** Finde die Root (niedrigste Bridge-ID) und die Rolle jedes Ports: Root, Designated oder Alternate.
@@ -53,8 +53,8 @@ Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, wor
 3. **Root festlegen.** Mache SW1 zur Root für VLAN 10 und SW2 zur Root für VLAN 20, jeweils mit dem anderen als Ersatz: `spanning-tree vlan X root primary` bzw. `secondary`.
    - **Prüfen:** `show spanning-tree root` zeigt für VLAN 10 SW1, für VLAN 20 SW2.
    - **Denkfrage:** Welche Priorität setzen `primary` und `secondary`? Wie kannst du mit `spanning-tree cost` die Pfadwahl beeinflussen?
-4. **Auf MST umstellen.** Setze auf allen Switches `spanning-tree mode mst` mit Region `ENCOR`, Revision 1, Instanz 1 = VLAN 10, Instanz 2 = VLAN 20. Prioritäten: Instanz 0 und 1 SW1 4096, Instanz 2 SW2 4096, der jeweils andere 8192.
-   - **Prüfen:** `show spanning-tree mst configuration` ist auf allen Switches gleich. `show spanning-tree mst` zeigt keine Boundary-Ports.
+4. **Auf MST umstellen.** Setze auf SW1 bis SW4 `spanning-tree mode mst` mit Region `ENCOR`, Revision 1, Instanz 1 = VLAN 10, Instanz 2 = VLAN 20. Prioritäten: Instanz 0 und 1 SW1 4096, Instanz 2 SW2 4096, der jeweils andere 8192.
+   - **Prüfen:** `show spanning-tree mst configuration` ist auf SW1 bis SW4 gleich. Auf diesen sechs Links zeigt `show spanning-tree mst` keine Boundary-Ports.
    - **Denkfrage:** Warum müssen Name, Revision und VLAN-Zuordnung überall gleich sein, und was passiert sonst?
 5. **Edge-Ports schützen.** Setze an den Ports von H1, H2 und an Gi1/1 (SW5) `spanning-tree portfast` und `spanning-tree bpduguard enable`. Schalte SW5 mit `no shutdown` ein.
    - **Prüfen:** Der Port zu SW5 geht in den Zustand err-disabled, die Root bleibt SW1. Danach `errdisable recovery cause bpduguard` mit `errdisable recovery interval 60` setzen.

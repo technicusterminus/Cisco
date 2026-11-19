@@ -1,7 +1,20 @@
 lab:
   title: 'Lab 36 – EEM-Applets: Ereignisse, Aktionen und die typischen Fallen (Repair)'
   description: 'Ziel 6.6 verlangt, ein EEM-Applet zu konstruieren, das konfiguriert, Fehler eingrenzt oder Daten sammelt. Lab 19 zeigt zwei Applets am Rand. Hier baust du sechs kleine Applets, eines je Ereignistyp, und lernst dabei die Stellen kennen, an denen Applets in der Praxis und in Prüfungs-Exhibits scheitern: fehlendes `enable`, die Sortierung der Aktionsnummern, Muster, die nie treffen, und die Bedeutung von `sync` und `skip`.'
-  notes: 'Aufgaben: siehe README.md'
+  notes: |-
+    ## Reparieren
+
+    Importiere diese Datei als separates Lab. Reproduziere pro Ticket das Symptom, dokumentiere den Befund und belege die Wirkung der Korrektur. Stelle den Testzustand nach jedem Versuch wieder her.
+
+    **Ticket 1:** Nach dem Speichern wird die Sicherung gemeldet. Die Sicherungsdatei fehlt.
+
+    **Ticket 2:** Nach dem dritten Ausfall des Testpfads wird der Eingriff gemeldet. Der Testpfad bleibt aktiv.
+
+    **Ticket 3:** Beim Abbruch einer OSPF-Nachbarschaft läuft die vorgesehene Diagnose nicht.
+
+    **Ticket 4:** Der Router meldet die Sperre eines Debug-Befehls. Trotzdem werden die Debugs aktiviert.
+
+    Die Topologiedaten, gestufte Hinweise und Lösungen findest du in den Lab-Unterlagen.
   version: 0.2.0
 nodes:
 - id: n0
@@ -16,6 +29,7 @@ nodes:
     line con 0
      exec-timeout 0 0
      logging synchronous
+    logging buffered 16384 informational
     interface Loopback0
      ip address 10.255.0.1 255.255.255.255
      ip ospf 1 area 0
@@ -144,3 +158,130 @@ links:
   i1: i2
   i2: i2
   label: R1-GigabitEthernet0/1<->R2-GigabitEthernet0/1
+annotations:
+- type: rectangle
+  x1: 46
+  y1: 10
+  x2: 846
+  y2: 130
+  color: '#FFF4DEFA'
+  border_color: '#A05C10FF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Teil B · Reparieren
+  x1: 62
+  y1: 19
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: 'Lab 36 – EEM-Applets: Ereignisse, Aktionen und die typischen Fallen'
+  x1: 62
+  y1: 40
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 14
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: EEM-Applets auslösen und an Konsole, Syslog und Dateisystem verifizieren.
+  x1: 62
+  y1: 72
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 11
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Ticket im Guide lesen → Symptom reproduzieren → Fix verifizieren
+  x1: 62
+  y1: 99
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 54
+  y1: 144
+  x2: 163
+  y2: 242
+  color: '#60A5FA28'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Applet-Router
+  x1: 63
+  y1: 151
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 454
+  y1: 144
+  x2: 549
+  y2: 242
+  color: '#2DD4BF28'
+  border_color: '#0F766EFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Testpartner
+  x1: 463
+  y1: 151
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1

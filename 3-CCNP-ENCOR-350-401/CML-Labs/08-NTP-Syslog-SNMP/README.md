@@ -58,7 +58,8 @@ Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, wor
    - **Prüfen:** Neue Log-Meldungen tragen Datum, Millisekunden und Zeitzone.
    - **Denkfrage:** Warum gibt es für Debug-Meldungen eine eigene Einstellung?
 9. **PTP verstehen.** Beschreibe ohne Konfiguration die Rollen Grandmaster, Boundary Clock und Transparent Clock sowie die Nachrichten Sync, Follow_Up und Delay_Req.
-   - **Denkfrage:** Warum erreicht PTP Nanosekunden, NTP nur Millisekunden?
+   - **Denkfrage:** Wovon hängt die Genauigkeit von PTP und NTP ab?
+   - **PTP-Konfiguration lesen (Papier):** Auf dem vorgelagerten Taktgeber steht `ptp domain 24`. Der benachbarte Switch nutzt bei gleichem PTP-Profil und Transport `ptp domain 25`. Sage voraus, ob der Switch über diese Verbindung synchronisiert. Welche Einstellung vergleichst du zuerst?
 
 <details><summary>Antworten zu den Denkfragen</summary>
 
@@ -70,7 +71,7 @@ Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, wor
 - **Zu 6:** Aufbau: `%FACILITY-SEVERITY-MNEMONIC`. Bei `%LINK-3-UPDOWN` ist LINK die Quelle, 3 das Level (Error) und UPDOWN die Art der Meldung. Die Level reichen von 0 (Emergency) bis 7 (Debug).
 - **Zu 7:** v1 und v2c senden die Community im Klartext. v3 hat Benutzer mit Anmeldung und Verschlüsselung (USM) und regelt per View, wer welche Daten sehen darf (VACM).
 - **Zu 8:** Debug- und Log-Meldungen haben getrennte Einstellungen für Zeitstempel. Bei Debugs will man oft die Uptime oder Millisekunden sehen, unabhängig vom Log-Format.
-- **Zu 9:** Die Grandmaster ist die beste Uhr im Netz, gewählt über den Best Master Clock Algorithm. Eine Boundary Clock synchronisiert sich auf einem Port und gibt die Zeit auf den anderen weiter. Eine Transparent Clock leitet nur weiter und trägt die Zeit ein, die das Paket bei ihr verbracht hat. Sync und Follow_Up liefern die Zeit der Master-Uhr, Delay_Req und Delay_Resp messen die Laufzeit. PTP stempelt die Pakete in der Hardware der Netzwerkkarte. NTP stempelt in Software, und die Verzögerung im Betriebssystem kostet Genauigkeit.
+- **Zu 9:** Die Grandmaster ist die beste Uhr im Netz, gewählt über den Best Master Clock Algorithm. Eine Boundary Clock synchronisiert sich auf einem Port und gibt die Zeit auf den anderen weiter. Eine Transparent Clock leitet nur weiter und trägt die Zeit ein, die das Paket bei ihr verbracht hat. Sync und Follow_Up liefern die Zeit der Master-Uhr, Delay_Req und Delay_Resp messen die Laufzeit. Hardware-Zeitstempel und kontrollierte Pfade können die PTP-Genauigkeit erhöhen. Profil, Implementierung und Pfadasymmetrie beeinflussen die erreichbare Genauigkeit. Im Beispiel trennen die Domain-IDs 24 und 25 die beiden Zeitsysteme, daher vergleichen wir zuerst die Domain-Konfiguration am Taktgeber und am Switch.
 
 </details>
 

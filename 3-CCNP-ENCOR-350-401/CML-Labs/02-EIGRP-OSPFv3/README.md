@@ -30,7 +30,7 @@ Dual-Stack-Dreieck: IPv4 mit EIGRP im Named Mode (inkl. Unequal-Cost-Load-Balanc
 |---|---|---|---|
 | R1 | 1.1.1.1/32, 2001:db8:ff::1/128 | Gi0/0 → R2 (.1), Gi0/1 → R3 (.1) | – |
 | R2 | 2.2.2.2/32, 2001:db8:ff::2/128 | Gi0/0 → R1 (.2), Gi0/1 → R3 (.1) | – |
-| R3 | 3.3.3.3/32, 2001:db8:ff::3/128 | Gi0/0 → R2 (.2), Gi0/1 → R1 (.3) | Lo10–13 = 10.3.0.0–3.0/24 |
+| R3 | 3.3.3.3/32, 2001:db8:ff::3/128 | Gi0/0 → R2 (.2), Gi0/1 → R1 (.2) | Lo10–13 = 10.3.0.0–3.0/24 |
 IPv6-Hosts-Teil jeweils `::1`, `::2` bzw. `::3` im jeweiligen /64.
 
 ## Teil A – Bauen
@@ -38,7 +38,7 @@ Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, wor
 
 **Teil 1: EIGRP für IPv4**
 
-1. **Named Mode einrichten.** Konfiguriere `router eigrp LAB` mit `address-family ipv4 unicast autonomous-system 100` und der Loopback0 als Router-ID. Setze unter `af-interface default` alle Interfaces passiv und nimm nur die Transit-Links mit `no passive-interface` wieder heraus.
+1. **Named Mode einrichten.** Konfiguriere `router eigrp LAB` mit `address-family ipv4 unicast autonomous-system 100` und der Loopback0 als Router-ID. Aktiviere die beiden Transitnetze und die lokalen IPv4-Loopbacks mit `network` und passenden Wildcards. Setze unter `af-interface default` alle Interfaces passiv und nimm nur die Transit-Links mit `no passive-interface` wieder heraus.
    - **Prüfen:** `show ip eigrp neighbors` zeigt auf jedem Router zwei Nachbarn.
    - **Denkfrage:** Was ist der Unterschied zum klassischen `router eigrp 100`, und was ändern die Wide Metrics?
 2. **Topologie lesen.** Sieh dir auf R1 `show ip eigrp topology 10.3.0.0/24` an.
@@ -59,7 +59,7 @@ Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, wor
 
 **Teil 2: OSPFv3 für IPv6**
 
-7. **OSPFv3 starten.** `ipv6 unicast-routing` ist gesetzt, die Interfaces haben schon IPv6-Adressen. Starte `router ospfv3 1` mit `address-family ipv6 unicast`. Setze die Router-ID von Hand auf die IPv4-Adresse der Loopback0. Aktiviere OSPFv3 an jedem Interface mit `ospfv3 1 ipv6 area 0`.
+7. **OSPFv3 starten.** `ipv6 unicast-routing` ist gesetzt, die Interfaces haben schon IPv6-Adressen. Starte `router ospfv3 1` mit `address-family ipv6 unicast`. Setze die Router-ID von Hand auf die IPv4-Adresse der Loopback0. Aktiviere OSPFv3 an den beiden Transit-Interfaces und Loopback0 mit `ospfv3 1 ipv6 area 0`.
    - **Prüfen:** `show ospfv3 neighbor` zeigt alle Nachbarn im Zustand FULL. Ein Ping von Lo0 zu Lo0 per IPv6 klappt.
 8. **Link-Local verstehen.** Sieh dir `show ipv6 route ospf` an.
    - **Denkfrage:** Warum sind die Next-Hops fe80::-Adressen? Welche zwei LSA-Typen sind in OSPFv3 neu?
@@ -85,6 +85,8 @@ Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, wor
 | Ungleiche Lastverteilung | ja, mit `variance` | nein |
 
 </details>
+
+**OSPFv3-Vertiefung.** Verschiebe nach dem Area-0-Test nur R3 Gi0/0 und R2 Gi0/1 in Area 1. Lege auf R3 zwei zusätzliche IPv6-Loopbacks mit Adressen im Bereich `2001:db8:31::/48` an und kündige sie in Area 1 an. R1–R2 und R1–R3 bleiben in Area 0. Prüfe auf R1 die Inter-Area-Routen zu den neuen Loopbacks. Begründe anhand der Topologie, welche Router ABRs sind.
 
 ## Teil B – Reparieren
 

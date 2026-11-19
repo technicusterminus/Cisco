@@ -1,7 +1,26 @@
 lab:
   title: Lab 27 – Redistribution zwischen OSPF und EIGRP mit Tags und Filtern
   description: Zwei Routing-Domänen (OSPF und EIGRP) werden an **zwei** Punkten gegenseitig verbunden. Ohne Schutz entstehen Routing-Schleifen und Rückkopplungen. Du lernst Metrik-Zuweisung, Route-Tags, Route-Maps u
-  notes: 'Aufgaben: siehe README.md'
+  notes: |-
+    ## Lab 27 — Redistribution ohne Rückverteilung
+
+    **Stufe:** Selbstständig · **Zeitbox:** 55 Minuten
+
+    **Blueprint:** Vertiefung zu 3.2.a–b; Redistribution kein eigenes Blueprint-Ziel.
+
+    **Voraussetzung:** 01, 25 und Route-Maps
+
+    **Start:** Die internen OSPF- und EIGRP-Domänen laufen eigenständig. Die beiden Übergänge sind bekannt.
+
+    **Auftrag:** Übernimm die vereinbarten Präfixe zwischen den Domänen, verhindere Rückverteilung und schließe das lokal verbleibende Kundennetz aus.
+
+    **Grenzen:** Behalte Adressplan und bereitgestellte Infrastruktur bei. Nimm für Gegenproben vorübergehend erzeugte Fehler zurück.
+
+    **Erfolgskriterium:** Du belegst Route, Ursprung und Tags an zwei Beobachtungspunkten und die gewünschte Erreichbarkeit nach Ausfall eines Übergangs.
+
+    **Gegenprobe:** Verbotenes Präfix und Rückverteilung bleiben auch beim Ausfall aus.
+
+    **Wiederholung oder Transfer:** 30; Redistribution ist Vertiefung
   version: 0.2.0
 nodes:
 - id: n0
@@ -28,6 +47,13 @@ nodes:
     interface GigabitEthernet0/1
      ip address 10.0.13.1 255.255.255.252
      no shutdown
+    interface Loopback10
+     ip ospf network point-to-point
+    router ospf 1
+     network 10.0.12.0 0.0.0.3 area 0
+     network 10.0.13.0 0.0.0.3 area 0
+     network 10.255.0.1 0.0.0.0 area 0
+     network 10.1.0.0 0.0.0.255 area 0
   tags: []
   interfaces:
   - id: i0
@@ -70,6 +96,12 @@ nodes:
     interface GigabitEthernet0/1
      ip address 10.0.24.1 255.255.255.252
      no shutdown
+    router ospf 1
+     network 10.0.12.0 0.0.0.3 area 0
+     network 10.255.0.2 0.0.0.0 area 0
+    router eigrp 100
+     network 10.0.24.0 0.0.0.3
+     no auto-summary
   tags: []
   interfaces:
   - id: i0
@@ -112,6 +144,12 @@ nodes:
     interface GigabitEthernet0/1
      ip address 10.0.34.1 255.255.255.252
      no shutdown
+    router ospf 1
+     network 10.0.13.0 0.0.0.3 area 0
+     network 10.255.0.3 0.0.0.0 area 0
+    router eigrp 100
+     network 10.0.34.0 0.0.0.3
+     no auto-summary
   tags: []
   interfaces:
   - id: i0
@@ -160,6 +198,12 @@ nodes:
     interface GigabitEthernet0/1
      ip address 10.0.34.2 255.255.255.252
      no shutdown
+    router eigrp 100
+     network 10.0.24.0 0.0.0.3
+     network 10.0.34.0 0.0.0.3
+     network 10.4.0.0 0.0.1.255
+     network 10.255.0.4 0.0.0.0
+     no auto-summary
   tags: []
   interfaces:
   - id: i0
@@ -206,3 +250,157 @@ links:
   i1: i2
   i2: i2
   label: R3-GigabitEthernet0/1<->R4-GigabitEthernet0/1
+annotations:
+- type: rectangle
+  x1: 66
+  y1: -140
+  x2: 866
+  y2: -20
+  color: '#EAF2FFFA'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Teil A · Bauen
+  x1: 82
+  y1: -131
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Lab 27 – Redistribution zwischen OSPF und EIGRP mit Tags und Filtern
+  x1: 82
+  y1: -110
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 14
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Routen zwischen OSPF und EIGRP übernehmen und Rückverteilung verhindern.
+  x1: 82
+  y1: -78
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 11
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Guide öffnen → Ausgangslage prüfen → Aufgabe lösen
+  x1: 82
+  y1: -51
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 254
+  y1: -6
+  x2: 346
+  y2: 92
+  color: '#60A5FA28'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: OSPF-Seite
+  x1: 263
+  y1: 1
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 74
+  y1: 164
+  x2: 526
+  y2: 262
+  color: '#2DD4BF28'
+  border_color: '#0F766EFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Grenzrouter
+  x1: 83
+  y1: 171
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 254
+  y1: 334
+  x2: 349
+  y2: 432
+  color: '#FBBF2428'
+  border_color: '#A05C10FF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: EIGRP-Seite
+  x1: 263
+  y1: 341
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1

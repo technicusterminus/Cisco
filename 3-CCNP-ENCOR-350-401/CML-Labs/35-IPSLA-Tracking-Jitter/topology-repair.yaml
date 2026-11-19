@@ -1,7 +1,20 @@
 lab:
   title: 'Lab 35 – IP SLA vertieft: Tracking mit Floating Static, UDP-Jitter mit Responder, TCP-Connect (Repair)'
   description: 'Lab 04 nutzt IP SLA nur als Zulieferer für PBR. Ziel 4.4 verlangt, IP SLA selbst zu konfigurieren und zu prüfen. Hier baust du einen Standort mit zwei Providern: Eine Messung überwacht den Weg über ISP1 und schaltet bei einem Ausfall *hinter* dem Provider-Router auf ISP2 um. Dabei läufst du absichtlich in die zwei klassischen Fehler (Messung nicht gestartet, Messung folgt der Umschaltung). Danach misst du Jitter und Paketverlust mit einem Responder und die Antwortzeit eines TCP-Dienstes.'
-  notes: 'Aufgaben: siehe README.md'
+  notes: |-
+    ## Reparieren
+
+    Importiere diese Datei als separates Lab. Reproduziere pro Ticket das Symptom, dokumentiere den Befund und belege die Wirkung der Korrektur. Stelle den Testzustand nach jedem Versuch wieder her.
+
+    **Ticket 1:** Der gesamte Verkehr von H1 läuft über ISP2, obwohl ISP1 in Ordnung ist. `show track 1` auf R1 steht auf `Down`.
+
+    **Ticket 2:** Sobald Ticket 1 gelöst ist: `show ip route 0.0.0.0` auf R1 zeigt zwei Next-Hops. Ein Teil der Verbindungen läuft weiter über ISP2.
+
+    **Ticket 3:** Die Jitter-Messung (IP SLA 2) liefert seit dem letzten Wartungsfenster nur `No connection`.
+
+    **Ticket 4:** Sobald Ticket 3 gelöst ist: `show track 2` bleibt `Down`, obwohl die Jitter-Messung Werte liefert.
+
+    Die Topologiedaten, gestufte Hinweise und Lösungen findest du in den Lab-Unterlagen.
   version: 0.2.0
 nodes:
 - id: n0
@@ -272,3 +285,186 @@ links:
   i1: i2
   i2: i2
   label: R3-GigabitEthernet0/1<->R4-GigabitEthernet0/1
+annotations:
+- type: rectangle
+  x1: -54
+  y1: -110
+  x2: 746
+  y2: 30
+  color: '#FFF4DEFA'
+  border_color: '#A05C10FF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Teil B · Reparieren
+  x1: -38
+  y1: -101
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: 'Lab 35 – IP SLA vertieft: Tracking mit Floating Static, UDP-Jitter
+
+    mit Responder, TCP-Connect'
+  x1: -38
+  y1: -80
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 14
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: IP-SLA-Messungen und die Umschaltung zwischen zwei Provider-Pfaden belegen.
+  x1: -38
+  y1: -28
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 11
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Ticket im Guide lesen → Symptom reproduzieren → Fix verifizieren
+  x1: -38
+  y1: -1
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: -46
+  y1: 144
+  x2: 46
+  y2: 242
+  color: '#60A5FA28'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Client
+  x1: -37
+  y1: 151
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 154
+  y1: 144
+  x2: 246
+  y2: 242
+  color: '#2DD4BF28'
+  border_color: '#0F766EFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Messrouter
+  x1: 163
+  y1: 151
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 354
+  y1: 44
+  x2: 446
+  y2: 342
+  color: '#FBBF2428'
+  border_color: '#A05C10FF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Provider
+  x1: 363
+  y1: 51
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 554
+  y1: 144
+  x2: 646
+  y2: 242
+  color: '#C084FC28'
+  border_color: '#7E22CEFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Messziele
+  x1: 563
+  y1: 151
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1

@@ -1,8 +1,8 @@
 # Lab 19 – RESTCONF, NETCONF, YANG und EEM
 
-**Dauer:** 90 min · **Niveau:** mittel bis schwer · **Nodes:** 1× csr1000v, 1× external_connector, 1× iosv
+**Dauer:** 90 min · **Niveau:** mittel bis schwer · **Nodes:** 1× csr1000v, 1× Ubuntu, 1× iosv
 
-Ein IOS-XE-Router wird programmierbar: RESTCONF und NETCONF aktivieren, YANG-Daten lesen und per HTTP-Methoden ändern, HTTP-Statuscodes lesen und ein EEM-Applet schreiben. Für die Python-Teile brauchst du Netzwerkzugang zu CSR1 (External Connector, Default NAT).
+Ein IOS-XE-Router wird programmierbar: RESTCONF und NETCONF aktivieren, YANG-Daten lesen und per HTTP-Methoden ändern, HTTP-Statuscodes lesen und ein EEM-Applet schreiben. Der Ubuntu-Knoten API-CLIENT bringt den API-Zugang im isolierten Lab mit. Beide Varianten starten mit festen IP-Adressen, lokalem Benutzer und AAA-Basis.
 
 **Lernziele:** Nach diesem Lab kannst du …
 
@@ -22,37 +22,45 @@ Ein IOS-XE-Router wird programmierbar: RESTCONF und NETCONF aktivieren, YANG-Dat
 ## Topologie
 
 ```
- CML-Host (NAT) ─ EXT ─ CSR1 ─ R2 ─ Lo0 2.2.2.2
-        Gi1 (DHCP)   Gi2  10.0.12.0/30
+ API-CLIENT ───────────── CSR1 ──────────── R2 ─ Lo0 2.2.2.2
+ ens2 .2   192.0.2.0/30   Gi1 .1  Gi2 .1   10.0.12.0/30
 ```
 
 | Gerät | Interface | Adresse |
 |---|---|---|
-| CSR1 | Gi1 / Gi2 / Lo0 | DHCP (CML-NAT) / 10.0.12.1/30 / 1.1.1.1/32 |
+| API-CLIENT | ens2 | 192.0.2.2/30 |
+| CSR1 | Gi1 / Gi2 / Lo0 | 192.0.2.1/30 / 10.0.12.1/30 / 1.1.1.1/32 |
 | R2 | Gi0/0 / Lo0 | 10.0.12.2/30 / 2.2.2.2/32 |
 
-Benutzer für alle Zugänge: `admin` / `Lab#2026!` (nur Lab).
+CSR1 verwendet `admin` / `Lab#2026!`. An der Linux-Konsole meldest du dich mit `cisco` / `cisco` an. Warte auf den Abschluss von cloud-init (`cloud-init status --wait`) und prüfe `ping -c 3 192.0.2.1`. Cisco dokumentiert beim ersten Start des CSR1000v mögliche administrativ abgeschaltete Ports. Stelle bei Bedarf auf Gi1 und Gi2 mit `no shutdown` den vorgesehenen Linkzustand her.
+
+**Für beide Varianten:** Prüfe mit `show crypto key mypubkey rsa`, ob bereits ein RSA-Schlüssel existiert. Falls nötig, erzeuge ihn auf CSR1 in der Konsole mit `crypto key generate rsa general-keys modulus 2048` und aktiviere `ip ssh version 2`. Bestätige danach vom API-CLIENT per `ssh admin@192.0.2.1`, dass SSH auf Port 22 funktioniert. Die Grundübung benötigt keine Internetverbindung. [Cisco-Dokumentation zu CSR1000v](https://developer.cisco.com/docs/modeling-labs/csr-1000v/)
 
 ## Teil A – Bauen
 Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
 
 **Teil 1: Zugang über APIs**
 
-1. **Benutzer, SSH und HTTPS.** Lege `admin` mit `privilege 15` an, aktiviere SSH Version 2, `ip http secure-server` und `ip http authentication local`. Lies die DHCP-Adresse von Gi1 aus (`show ip interface brief`).
+1. **HTTPS aktivieren.** Der Benutzer und die lokale AAA-Basis stehen bereit. Prüfe die SSH-Erreichbarkeit wie oben. Setze `ip http authentication local` und `ip http secure-server`.
    - **Prüfen:** `show ip http server secure status` meldet den HTTPS-Server als aktiv.
-2. **RESTCONF.** Schalte `restconf` ein. Rufe vom CML-Host aus auf: `curl -k -u admin:… -H "Accept: application/yang-data+json" https://<CSR1>/restconf/data/ietf-interfaces:interfaces`.
+2. **RESTCONF.** Schalte `restconf` ein. Führe vom API-CLIENT `python3 /opt/encor/restconf.py` aus und gib das CSR1-Passwort ein.
    - **Prüfen:** Du bekommst Status 200 und JSON mit allen Interfaces.
    - **Denkfrage:** Welche HTTP-Methoden gibt es, und was bedeuten die Statuscodes 200, 201, 204, 400, 401, 403, 404, 405, 409, 415 und 500?
-3. **NETCONF.** Schalte `netconf-yang` ein. Öffne eine Sitzung mit `ssh -p 830 admin@<CSR1> -s netconf`. Schicke nach dem `<hello>` ein `<get-config>` mit Filter auf `ietf-interfaces`.
-   - **Prüfen:** Das `<hello>` des Routers listet seine Capabilities, darunter `urn:ietf:params:netconf:base:1.1`.
+3. **NETCONF.** Schalte `netconf-yang` ein. Öffne auf dem API-CLIENT eine Sitzung mit `ssh -p 830 -s admin@192.0.2.1 netconf`. Sende die folgenden zwei Zeilen jeweils vollständig. Das Client-Hello bietet nur NETCONF 1.0 an und verwendet deshalb auch für den RPC den Abschluss `]]>]]>`.
+
+   ```xml
+   <hello xmlns="urn:ietf:params:xml:ns:netconf:base:1.0"><capabilities><capability>urn:ietf:params:netconf:base:1.0</capability></capabilities></hello>]]>]]>
+   <rpc message-id="1" xmlns="urn:ietf:params:xml:ns:netconf:base:1.0"><get-config><source><running/></source><filter type="subtree"><interfaces xmlns="urn:ietf:params:xml:ns:yang:ietf-interfaces"/></filter></get-config></rpc>]]>]]>
+   ```
+
+   - **Prüfen:** Das `<hello>` des Routers listet seine Capabilities. Der anschließende `rpc-reply` enthält die Interface-Konfiguration.
    - **Denkfrage:** Wozu dienen `<edit-config>`, `<commit>` und `<lock>`? Welche Datastores gibt es?
 4. **YANG lesen.** Nimm die Antwort aus Schritt 2 und markiere darin Container, List (mit dem Key `name`) und Leafs.
    - **Denkfrage:** Was unterscheidet die Modelle `ietf-interfaces`, `Cisco-IOS-XE-native` und OpenConfig?
-5. **Ändern per PATCH.** Setze per PATCH auf `…/ietf-interfaces:interfaces/interface=GigabitEthernet2` eine Description.
+5. **Ändern per PATCH.** Setze mit `python3 /opt/encor/restconf.py --description "ENCOR-Test"` die Description von GigabitEthernet2 per PATCH.
    - **Prüfen:** Die Antwort ist 204. `show running-config interface Gi2` zeigt die neue Description.
-   - **Prüfen:** Provoziere danach Fehler: ein falscher Pfad liefert 404, ein kaputter Body 400.
-6. **Python.** Führe [`python/restconf_get.py`](python/restconf_get.py) und [`python/netconf_get.py`](python/netconf_get.py) gegen CSR1 aus (Zugangsdaten als Argumente). Ergänze dann `restconf_patch.py`.
-   - **Prüfen:** Beide Skripte geben die Interface-Liste aus.
+   - **Prüfen:** Rufe danach die Ressource mit einem falschen Pfad ab (`--path /restconf/data/ietf-interfaces:interfaces/interface=Missing`) und ordne den Statuscode ein. Wie würde sich ein syntaktisch ungültiger Request-Body davon unterscheiden?
+6. **Python-Transfer (optional).** Für einen Client mit Netzwerkzugang zum CSR1 stehen die Beispiele in [`python/`](python/) bereit. Die vorkonfigurierte CML-Variante verwendet den Python-Client auf API-CLIENT.
 
 **Teil 2: EEM**
 
@@ -61,8 +69,8 @@ Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, wor
    - **Denkfrage:** Warum steht im Pattern der lange Interface-Name?
 8. **Einordnen.**
    - **Denkfrage:** Was unterscheidet ein Applet von einem Tcl-Skript? Welche Auslöser und Aktionen gibt es, und wofür setzt man EEM typischerweise ein?
-9. **EEM mit Tracking.** Lege eine IP-SLA-Messung zu 2.2.2.2 an (`ip sla schedule` nicht vergessen), dazu `track 1`. Ein Applet mit `event track 1 state down` schreibt eine Syslog-Meldung und fährt per `cli command` ein Test-Interface herunter.
-   - **Prüfen:** Schalte auf R2 Lo0 ab. Nach einigen Sekunden geht `track 1` auf Down, und das Applet läuft.
+9. **EEM mit Tracking.** Lege eine IP-SLA-Messung zu 2.2.2.2 an (`ip sla schedule` nicht vergessen), dazu `track 1`. Ein Applet mit `event track 1 state down` schreibt eine Syslog-Meldung und speichert die Diagnoseausgabe in `flash:track-down.txt`. Nutze dafür `show ip sla statistics | redirect flash:track-down.txt`.
+   - **Prüfen:** Schalte auf R2 Lo0 ab. Nach einigen Sekunden geht `track 1` auf Down, und das Applet erzeugt die Datei. Aktiviere Lo0 anschließend wieder.
 
 <details><summary>Antworten zu den Denkfragen</summary>
 
@@ -76,13 +84,13 @@ Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, wor
 
 ## Teil B – Reparieren
 
-Importiere `topology-repair.yaml`. Alle Geräte sind vollständig konfiguriert, aber es stecken **5 Fehler** drin. Behandle jede Meldung als Ticket: erst Symptom nachstellen, dann die Ursache eingrenzen (Layer für Layer), dann beheben und das Ergebnis beweisen. Ändere nur, was kaputt ist.
+Importiere `topology-repair.yaml` und prüfe den SSH-Schlüssel wie oben. Reproduziere den HTTPS-Verbindungsfehler aus Ticket 3 vor dem Authentisierungsfehler aus Ticket 1. Alle Geräte sind vollständig konfiguriert, aber es stecken **5 Fehler** drin. Behandle jede Meldung als Ticket: erst Symptom nachstellen, dann die Ursache eingrenzen (Layer für Layer), dann beheben und das Ergebnis beweisen. Ändere nur, was kaputt ist.
 
 **Ticket 1:** RESTCONF-Aufrufe liefern `401 Unauthorized`, obwohl Benutzer und Passwort stimmen.
 
 **Ticket 2:** Die NETCONF-Verbindung auf Port 830 wird abgelehnt (`Connection refused`).
 
-**Ticket 3:** `curl https://…/restconf/` hängt oder bricht mit Connection refused ab, SSH funktioniert.
+**Ticket 3:** Der RESTCONF-Aufruf hängt oder bricht mit Connection refused ab, SSH funktioniert.
 
 **Ticket 4:** Beim Link-Flap auf Gi2 erscheint die EEM-Syslog-Zeile nie, `show event manager policy registered` zeigt das Applet.
 
@@ -100,7 +108,7 @@ show logging | include EEM
 | Test | Das solltest du sehen |
 |---|---|
 | RESTCONF-GET | Status 200 mit JSON |
-| NETCONF-Hello | `urn:ietf:params:netconf:base:1.1` in den Capabilities |
+| NETCONF-GET-CONFIG | `rpc-reply` mit Interface-Konfiguration |
 | Link-Wechsel an Gi2 | Syslog-Zeile vom EEM-Applet |
 
 ## Teil C – Üben

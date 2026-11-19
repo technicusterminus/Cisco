@@ -39,7 +39,7 @@ Loopback0: R1 10.255.0.1, R2 .2, R3 .3, R4 .4. R1 Lo10 10.1.0.1/24 (OSPF-LAN), R
 ## Teil A – Bauen
 Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
 
-1. **Zwei Domänen aufbauen.** OSPF 1 in Area 0 auf R1 (alle Links, Loopbacks, Lo10 mit `ip ospf network point-to-point`, damit /24 statt /32 angekündigt wird) sowie auf R2 und R3 Richtung R1. EIGRP 100 auf R2, R3 und R4 Richtung R4, inklusive Lo10 und Lo11 von R4, mit `no auto-summary`.
+1. **Zwei Domänen prüfen.** OSPF 1 und EIGRP 100 laufen innerhalb ihrer Domänen. Prüfe auf R2 und R3 die OSPF-Nachbarschaft zu R1, die EIGRP-Nachbarschaft zu R4 und die angelernten Präfixe. R1 soll die Kundennetze hinter R4 erst nach der Redistribution lernen.
    - **Prüfen:** R1 kennt noch keine Netze von R4, R4 keine von R1.
 2. **Redistribution an einem Punkt.** Nur auf R2: `redistribute eigrp 100 subnets` unter OSPF und `redistribute ospf 1 metric 10000 100 255 1 1500` unter EIGRP.
    - **Prüfen:** R1 zeigt die EIGRP-Netze als `O E2`. R4 zeigt die OSPF-Netze als `D EX` mit Administrativer Distanz 170.

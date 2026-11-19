@@ -1,7 +1,26 @@
 lab:
   title: 'Lab 32 – Multicast vertieft: IGMPv3 und SSM, Bidir-PIM, Anycast-RP mit MSDP'
   description: 'Lab 12 hat PIM Sparse Mode mit einem RP gezeigt. Hier baust du auf demselben Netz nacheinander die drei Verfahren, die das Blueprint zusätzlich nennt: Source-Specific Multicast mit IGMPv3 (kein RP), Bidirectional PIM (nur Shared Tree, kein `(S,G)`) und zwei RPs mit gleicher Adresse, die sich ihre Quellen per MSDP mitteilen. Jedes Verfahren bekommt einen eigenen Gruppenbereich, damit du sie nebeneinander vergleichen kannst.'
-  notes: 'Aufgaben: siehe README.md'
+  notes: |-
+    ## Lab 32 — SSM, Bidir-PIM und Anycast-RP vergleichen
+
+    **Stufe:** Selbstständig · **Zeitbox:** 70 Minuten
+
+    **Blueprint:** 3.3.d.
+
+    **Voraussetzung:** 12, RPF und OSPF-Underlay
+
+    **Start:** Das Unicast-Underlay läuft. Quelle und Empfänger sind vorgegeben, die Verfahren nutzen getrennte Testgruppen.
+
+    **Auftrag:** Stelle je Gruppe das vorgesehene Verfahren her und erkläre ihre Unterschiede anhand der Gruppenzustände. Für getrennte RPs prüfe den Austausch von Quelleninformationen.
+
+    **Grenzen:** Behalte Adressplan und bereitgestellte Infrastruktur bei. Nimm für Gegenproben vorübergehend erzeugte Fehler zurück.
+
+    **Erfolgskriterium:** Du weist (S,G) bei SSM, den Shared Tree bei Bidir sowie die RP-/MSDP-Zustände für die Anycast-Gruppe nach.
+
+    **Gegenprobe:** Zwei aufeinanderfolgende Gruppenversuche müssen getrennt bleiben. SSM ohne Quelle darf keinen erfolgreichen Zustelltest liefern.
+
+    **Wiederholung oder Transfer:** 12 als Vergleich, 33 als Methoden-Transfer
   version: 0.2.0
 nodes:
 - id: n0
@@ -295,3 +314,159 @@ links:
   i1: i2
   i2: i1
   label: R4-GigabitEthernet0/1<->REC-GigabitEthernet0/0
+annotations:
+- type: rectangle
+  x1: -54
+  y1: -10
+  x2: 954
+  y2: 130
+  color: '#EAF2FFFA'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Teil A · Bauen
+  x1: -38
+  y1: -1
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: 'Lab 32 – Multicast vertieft: IGMPv3 und SSM, Bidir-PIM, Anycast-RP
+
+    mit MSDP'
+  x1: -38
+  y1: 20
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 14
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: SSM, Bidir und Anycast-RP getrennt aufbauen und Multicast-Zustände vergleichen.
+  x1: -38
+  y1: 72
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 11
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Guide öffnen → Ausgangslage prüfen → Aufgabe lösen
+  x1: -38
+  y1: 99
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: -46
+  y1: 144
+  x2: 46
+  y2: 242
+  color: '#60A5FA28'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Quelle
+  x1: -37
+  y1: 151
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 104
+  y1: 144
+  x2: 796
+  y2: 242
+  color: '#2DD4BF28'
+  border_color: '#0F766EFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Multicast-Netz
+  x1: 113
+  y1: 151
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 854
+  y1: 144
+  x2: 946
+  y2: 242
+  color: '#FBBF2428'
+  border_color: '#A05C10FF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Empfänger
+  x1: 863
+  y1: 151
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1

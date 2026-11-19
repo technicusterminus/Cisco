@@ -2,18 +2,26 @@
 
 Diese Labs ergänzen das Anki-Kompendium (1.845 Karten). Die Karten bauen Wissen auf, in den Labs wendest du es an: **bauen, reparieren, üben**. Jedes der 47 Prüfungsziele des Kompendiums (`Ziel::…`) ist mindestens einem Lab zugeordnet.
 
-**Inhalt:** 33 CML-Labs (30 Themen-Labs und 3 Capstones, zusammen 159 eingebaute Fehler zum Reparieren), ein Python-/API-Drill-Paket mit automatischen Tests, zwei Fallstudien-Pakete für Themen, die sich nicht sinnvoll simulieren lassen.
+**Inhalt:** 33 CML-Labs (30 Themen-Labs und 3 Capstones, 157 Fehler zum Reparieren in CML plus zwei Tickets zur Spiegelung auf Papier), ein Python-/API-Drill-Paket mit automatischen Tests, zwei Fallstudien-Pakete für Themen, die sich nicht sinnvoll simulieren lassen.
 
 **Andere Plattformen:** Dieselben Labs gibt es für [Packet Tracer](../Packet-Tracer-Labs/) (soweit PT die Funktionen kann) und [EVE-NG](../EVE-NG-Labs/).
+
+## Trainingscurriculum
+
+[Curriculum und Blueprint-Matrix](CURRICULUM.md) · [Aufgaben ohne Befehlsliste](AUFGABEN.md) · [Hinweise, Nachweise und Lösungen](NACHWEISE.md)
+
+Für den Einstieg importiere die Bauvariante und öffne den Guide. Die bisherigen README-Schritte kannst du bei Bedarf als geführte Fassung verwenden. Für Transfer startest du 23, 24 und 30 aus der jeweiligen Reparaturdatei.
 
 ## So ist jedes CML-Lab aufgebaut
 
 | Datei | Zweck |
 |---|---|
-| `topology.yaml` | **Bauen:** Topologie mit Basis-Konfiguration (Hostnamen, IP-Adressen). Das Routing/Switching baust du selbst. |
-| `topology-repair.yaml` | **Reparieren:** komplett gebaute Topologie mit eingebauten Fehlern. Die Tickets stehen im README, die Auflösung in `solutions/FAULTS.md`. |
+| `topology.yaml` | **Bauen:** Topologie mit Basis-Konfiguration und den Voraussetzungen der Aufgabe. Bei Multicast, VXLAN und PBR ist das benötigte Unicast-Routing beispielsweise bereits gesetzt. Das jeweilige Lernziel konfigurierst und verifizierst du selbst. |
+| `topology-repair.yaml` | **Reparieren:** konfigurierte Topologie mit eingebauten Fehlern. Die Tickets stehen im CML-Guide und im README, die Auflösung in `solutions/FAULTS.md`. |
 | `README.md` | Teil A Aufgaben, Teil B Tickets, Verifikation, Teil C Transferfragen mit Antworten, Prüfungsbezug |
 | `solutions/*.cfg` | Musterlösung je Gerät (ohne Basis-IP-Adressen) |
+
+**CML-Workbench:** Blaue Kopfboxen kennzeichnen Teil A, ockerfarbene Teil B. Farbige Kästen gruppieren Netzrollen und Standorte. Öffne den **Guide** für die Aufgaben der geladenen Variante. Im README stehen zusätzlich Topologie, Hintergrund und Transferfragen. Über **Canvas Settings → Annotations** blendest du die Kästen ein.
 
 **IOSvL2 und Trunks:** Die Switch-Images unterstützen ISL und Dot1Q. Vor `switchport mode trunk` muss deshalb `switchport trunk encapsulation dot1q` stehen, sonst lehnt der Switch den Trunk-Modus ab. Topologien und Lösungen enthalten die Zeile.
 
@@ -45,8 +53,8 @@ Diese Labs ergänzen das Anki-Kompendium (1.845 Karten). Die Karten bauen Wissen
 | [15](15-LISP/) | LISP: Map-Server, Map-Resolver, xTR | 2.3.a | 6 | 4 | 90 min |
 | [16](16-VXLAN/) | VXLAN: VTEP, VNI und Ingress Replication | 2.3.b | 4 | 4 | 75 min |
 | [17](17-QoS-MQC/) | QoS mit MQC: Markieren, Policing, Shaping, LLQ | 1.4 | 6 | 4 | 90 min |
-| [18](18-NetFlow-SPAN/) | Flexible NetFlow, SPAN und RSPAN | 4.2, 4.3 | 8 | 4 | 75 min |
-| [19](19-Programmierbarkeit-EEM/) | RESTCONF, NETCONF, YANG und EEM | 4.6, 6.3, 6.5, 6.6 | 2 | 5 | 90 min |
+| [18](18-NetFlow-SPAN/) | Flexible NetFlow in CML, SPAN/RSPAN/ERSPAN als Konfigurationsübung | 4.2, 4.3 | 6 | 2 live + 2 Papier | 75 min |
+| [19](19-Programmierbarkeit-EEM/) | RESTCONF, NETCONF, YANG und EEM | 4.6, 6.3, 6.5, 6.6 | 3 | 5 | 90 min |
 | [23](23-Capstone-Campus-Edge-Troubleshooting/) | Capstone: Campus und Edge, Fehlersuche im Gesamtnetz | 3.1.a, 3.1.b, 3.1.c, 3.2.b, 3.3.a, 3.3.b, 3.3.c, 5.1.a, 5.2.a | 8 | 10 | 150 min |
 | [24](24-Capstone-WAN-Overlay-Troubleshooting/) | Capstone: WAN, eBGP und IPsec-Overlay, Fehlersuche | 2.2.a, 2.2.b, 3.2.b, 3.2.c | 6 | 9 | 150 min |
 | [25](25-EIGRP-Klassisch-Summary-Stub/) | EIGRP klassisch: Nachbarschaft, Authentifizierung, Summary und Stub | 3.2.a | 4 | 6 | 90 min |
@@ -125,7 +133,7 @@ Die Reihenfolge folgt dem [Wochenplan im Lernplan](../LERNPLAN.md#wochenplan):
 
 1. **Layer 2:** 05, 06.
 2. **Gateway-Redundanz, Zeit, NAT:** 07, 08, 09.
-3. **OSPF und EIGRP:** 01, 28, 34, 25, optional 02.
+3. **OSPF und EIGRP:** 01, 02 (OSPFv3-Teil), 28, 34 und 25. EIGRP Named Mode in 02 ist eine Vertiefung.
 4. **BGP, Redistribution, PBR:** 03, 26, 27, 29.
 5. **Virtualisierung und Overlay:** 13, 14, optional 15 und 16, dazu der Abschnitt Virtualisierung in 21.
 6. **Architektur und Multicast:** 17, 12, 32, 21.
@@ -135,7 +143,7 @@ Die Reihenfolge folgt dem [Wochenplan im Lernplan](../LERNPLAN.md#wochenplan):
 
 ## Voraussetzungen und Stand
 
-- **Images:** IOSv und IOSvL2 (15.x), CSR1000v (IOS XE) und NX-OSv 9000. Lab 15 braucht ein IOSv-Image mit LISP, Lab 16 den NX-OSv 9000 mit viel RAM, Lab 19 einen CSR1000v mit External Connector.
+- **Images:** IOSv und IOSvL2 (15.x), CSR1000v (IOS XE) und NX-OSv 9000. Lab 15 braucht ein IOSv-Image mit LISP, Lab 16 den NX-OSv 9000 mit viel RAM, Lab 19 einen CSR1000v und das Ubuntu-Cloud-Image des CML-Refplat.
 - **Getestet:** Die Python-Drills (Lab 20) laufen mit den Musterlösungen grün. Bei den CML-Labs ist per Skript geprüft, dass das YAML lädt, alle Links auf vorhandene Interfaces zeigen und jeder eingebaute Fehler in der Konfiguration steckt. In einer laufenden CML-Instanz sind sie noch nicht durchgespielt.
 - **Labs 32 bis 36 und der Live-Test:** Diese Labs entstehen aus den Definitionen in [`../Labs-Quelle`](../Labs-Quelle/). Dort liegt auch [`live_test.py`](../Labs-Quelle/live_test.py): Das Skript spielt ein Lab in einer laufenden CML- oder EVE-NG-Instanz durch (Musterlösung einspielen, jede Zeile auf Parser-Fehler prüfen, jeden Fehler einzeln einbauen, Symptom messen, Fix prüfen) und schreibt einen Bericht. Für alle Labs, auch 01 bis 31, gibt es dort eine Syntaxprüfung (`--syntax`), die jede vom Image abgelehnte Konfigurationszeile meldet. Wie du es startest, steht in [`../Labs-Quelle/README.md`](../Labs-Quelle/README.md). **Auch diese Labs sind bisher nicht in einer laufenden Instanz gelaufen**, der Live-Test ist das Werkzeug, um genau das nachzuholen.
 - **Wenn ein Befehl nicht durchgeht:** Image-Versionen unterscheiden sich in Details. Prüfe die Syntax in der Cisco-Dokumentation. Das ist gleich eine gute Übung. Eine Korrektur per Issue hilft allen.

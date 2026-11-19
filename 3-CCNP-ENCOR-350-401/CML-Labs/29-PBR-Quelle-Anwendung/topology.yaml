@@ -1,7 +1,26 @@
 lab:
   title: Lab 29 – Policy-Based Routing nach Quelle und Anwendung
   description: 'Ein Branch-Router mit zwei Providern: Die Routing-Tabelle sendet alles über Provider A, per PBR wird ein bestimmter Host und Web-Verkehr über Provider B geleitet. Dazu die Wirkung von `deny` in einer '
-  notes: 'Aufgaben: siehe README.md'
+  notes: |-
+    ## Lab 29 — PBR nach Quelle und Anwendung interpretieren
+
+    **Stufe:** Selbstständig · **Zeitbox:** 45 Minuten
+
+    **Blueprint:** 3.2.d.
+
+    **Voraussetzung:** ACLs und statisches IPv4-Routing
+
+    **Start:** Der Standardpfad über Provider A und Rückwege sind vorkonfiguriert. H1 und H2 sind Testquellen.
+
+    **Auftrag:** Lenke den vorgegebenen Quellverkehr und den vorgesehenen TCP-Verkehr über Provider B. Unterscheide die RIB von der tatsächlich weitergeleiteten Auswahl.
+
+    **Grenzen:** Behalte Adressplan und bereitgestellte Infrastruktur bei. Nimm für Gegenproben vorübergehend erzeugte Fehler zurück.
+
+    **Erfolgskriterium:** Baseline und Policy-Pfad sind für jeden Testfall dokumentiert. Der Pfadwechsel ist an einem Policy-Zähler oder Capture nachvollziehbar.
+
+    **Gegenprobe:** Ein unabhängiger H1-Kontrollfluss bleibt auf Provider A, und lokal erzeugter Verkehr erbt die Interface-Policy nicht automatisch.
+
+    **Wiederholung oder Transfer:** 04
   version: 0.2.0
 nodes:
 - id: n0
@@ -25,6 +44,7 @@ nodes:
     interface GigabitEthernet0/2
      ip address 10.1.0.1 255.255.255.0
      no shutdown
+    ip route 0.0.0.0 0.0.0.0 10.0.12.2
   tags: []
   interfaces:
   - id: i0
@@ -64,6 +84,8 @@ nodes:
     interface GigabitEthernet0/1
      ip address 10.0.24.1 255.255.255.252
      no shutdown
+    ip route 192.0.2.44 255.255.255.255 10.0.24.2
+    ip route 10.1.0.0 255.255.255.0 10.0.12.1
   tags: []
   interfaces:
   - id: i0
@@ -103,6 +125,8 @@ nodes:
     interface GigabitEthernet0/1
      ip address 10.0.34.1 255.255.255.252
      no shutdown
+    ip route 192.0.2.44 255.255.255.255 10.0.34.2
+    ip route 10.1.0.0 255.255.255.0 10.0.13.1
   tags: []
   interfaces:
   - id: i0
@@ -145,6 +169,8 @@ nodes:
     interface GigabitEthernet0/1
      ip address 10.0.34.2 255.255.255.252
      no shutdown
+    ip route 10.1.0.0 255.255.255.0 10.0.24.1
+    ip route 10.1.0.0 255.255.255.0 10.0.34.1
   tags: []
   interfaces:
   - id: i0
@@ -325,3 +351,184 @@ links:
   i1: i2
   i2: i1
   label: SW-port2<->H2-GigabitEthernet0/0
+annotations:
+- type: rectangle
+  x1: -54
+  y1: -140
+  x2: 754
+  y2: -20
+  color: '#EAF2FFFA'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Teil A · Bauen
+  x1: -38
+  y1: -131
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Lab 29 – Policy-Based Routing nach Quelle und Anwendung
+  x1: -38
+  y1: -110
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 14
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Referenzpfade ohne PBR messen und danach Quelle und Anwendung vergleichen.
+  x1: -38
+  y1: -78
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 11
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Guide öffnen → Ausgangslage prüfen → Aufgabe lösen
+  x1: -38
+  y1: -51
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: -46
+  y1: -6
+  x2: 146
+  y2: 292
+  color: '#60A5FA28'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Client-LAN
+  x1: -37
+  y1: 1
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 254
+  y1: 94
+  x2: 346
+  y2: 192
+  color: '#2DD4BF28'
+  border_color: '#0F766EFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Branch
+  x1: 263
+  y1: 101
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 454
+  y1: -6
+  x2: 546
+  y2: 292
+  color: '#FBBF2428'
+  border_color: '#A05C10FF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Provider
+  x1: 463
+  y1: 1
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 654
+  y1: 94
+  x2: 746
+  y2: 192
+  color: '#C084FC28'
+  border_color: '#7E22CEFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Dienst
+  x1: 663
+  y1: 101
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1

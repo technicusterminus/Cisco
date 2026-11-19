@@ -1,7 +1,26 @@
 lab:
   title: Lab 26 – iBGP mit Route Reflector, Local Preference und Communities
   description: 'Ein AS mit drei Routern und zwei Upstream-Providern: iBGP über Loopbacks mit Route Reflector, `next-hop-self`, Pfadsteuerung per Local Preference und Markierung per Community. Der OSPF-Underlay liefer'
-  notes: 'Aufgaben: siehe README.md'
+  notes: |-
+    ## Lab 26 — Interne und externe BGP-Lernwege vergleichen
+
+    **Stufe:** Selbstständig · **Zeitbox:** 50 Minuten
+
+    **Blueprint:** Vertiefung zu 3.2.c; direktes eBGP ergänzend, iBGP kein eigenes Blueprint-Ziel.
+
+    **Voraussetzung:** 03, OSPF-Routen zu Loopbacks
+
+    **Start:** OSPF-Underlay steht, BGP ist Aufgabe. Interne Router und ISP-Rollen sind bekannt.
+
+    **Auftrag:** Verteile die beiden extern gelernten Routen intern und steuere genau die beabsichtigte Präferenz. Erkläre den Unterschied zwischen direktem eBGP und der internen Reflektion.
+
+    **Grenzen:** Behalte Adressplan und bereitgestellte Infrastruktur bei. Nimm für Gegenproben vorübergehend erzeugte Fehler zurück.
+
+    **Erfolgskriterium:** Du zeigst einen Route-Reflector-Client-Pfad und den Best Path für beide Protokollkontexte.
+
+    **Gegenprobe:** Eine unerwünschte Route mit falscher Community wird gemäß Vorgabe nicht als bevorzugt behandelt.
+
+    **Wiederholung oder Transfer:** 30; iBGP/RR ist Vertiefung
   version: 0.2.0
 nodes:
 - id: n0
@@ -25,6 +44,8 @@ nodes:
     interface GigabitEthernet0/1
      ip address 10.0.13.1 255.255.255.252
      no shutdown
+    router ospf 1
+     network 10.0.0.0 0.255.255.255 area 0
   tags: []
   interfaces:
   - id: i0
@@ -67,6 +88,8 @@ nodes:
     interface GigabitEthernet0/1
      ip address 192.0.2.1 255.255.255.252
      no shutdown
+    router ospf 1
+     network 10.0.0.0 0.255.255.255 area 0
   tags: []
   interfaces:
   - id: i0
@@ -109,6 +132,8 @@ nodes:
     interface GigabitEthernet0/1
      ip address 192.0.2.5 255.255.255.252
      no shutdown
+    router ospf 1
+     network 10.0.0.0 0.255.255.255 area 0
   tags: []
   interfaces:
   - id: i0
@@ -245,3 +270,130 @@ links:
   i1: i2
   i2: i1
   label: R3-GigabitEthernet0/1<->ISP2-GigabitEthernet0/0
+annotations:
+- type: rectangle
+  x1: 66
+  y1: -130
+  x2: 866
+  y2: -10
+  color: '#EAF2FFFA'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Teil A · Bauen
+  x1: 82
+  y1: -121
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Lab 26 – iBGP mit Route Reflector, Local Preference und Communities
+  x1: 82
+  y1: -100
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 14
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Loopback-Erreichbarkeit prüfen und iBGP-Routen über die internen Peers verfolgen.
+  x1: 82
+  y1: -68
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 11
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Guide öffnen → Ausgangslage prüfen → Aufgabe lösen
+  x1: 82
+  y1: -41
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 74
+  y1: 4
+  x2: 526
+  y2: 272
+  color: '#60A5FA28'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Internes AS
+  x1: 83
+  y1: 11
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 74
+  y1: 344
+  x2: 526
+  y2: 442
+  color: '#2DD4BF28'
+  border_color: '#0F766EFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Provider
+  x1: 83
+  y1: 351
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1

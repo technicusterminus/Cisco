@@ -2,6 +2,8 @@
 
 Der Plan verbindet das [Anki-Deck](Anki/), die [Labs](CML-Labs/), die [Trainer](Trainer/) und die [Prüfungssimulation](Pruefungssimulation/). Er rechnet mit **etwa 8 Stunden pro Woche**. Hast du weniger Zeit, strecke ihn auf 12 Wochen und lass die Labs weg, die als „optional“ markiert sind.
 
+Für CML steht zusätzlich der [Trainingspfad mit Zeitboxen, Transfer und Blueprint-Matrix](CML-Labs/CURRICULUM.md) bereit. Dort trägst du eigene Nachweise ein.
+
 ## Das Prinzip
 
 Jede Woche hat ein Thema und läuft in drei Schritten:
@@ -28,7 +30,7 @@ Jede Woche hat ein Thema und läuft in drei Schritten:
 |---|---|---|---|---|
 | 1 | Layer 2 | 3.1.a, 3.1.b, 3.1.c | [05](CML-Labs/05-VLAN-Trunk-EtherChannel/), [06](CML-Labs/06-STP-MST-Schutz/) | `tag:Ziel::3.1.*` |
 | 2 | Gateway-Redundanz, Zeit, NAT | 3.3.a, 3.3.b, 3.3.c, 1.1.b | [07](CML-Labs/07-FHRP-HSRP-VRRP-GLBP/), [08](CML-Labs/08-NTP-Syslog-SNMP/), [09](CML-Labs/09-NAT-PAT/) | `tag:Ziel::3.3.a`, `3.3.b`, `3.3.c`, `1.1.b` |
-| 3 | OSPF und EIGRP | 3.2.a, 3.2.b | [01](CML-Labs/01-OSPFv2-Multiarea/), [28](CML-Labs/28-OSPF-Areatypen-Summary-Auth/), [25](CML-Labs/25-EIGRP-Klassisch-Summary-Stub/), optional [02](CML-Labs/02-EIGRP-OSPFv3/) | `tag:Ziel::3.2.a`, `3.2.b` |
+| 3 | OSPF und EIGRP | 3.2.a, 3.2.b | [01](CML-Labs/01-OSPFv2-Multiarea/), [28](CML-Labs/28-OSPF-Areatypen-Summary-Auth/), [25](CML-Labs/25-EIGRP-Klassisch-Summary-Stub/) und [02](CML-Labs/02-EIGRP-OSPFv3/) (OSPFv3, EIGRP Named Mode optional) | `tag:Ziel::3.2.a`, `3.2.b` |
 | 4 | BGP, Redistribution, PBR | 3.2.c, 3.2.d | [03](CML-Labs/03-eBGP-Policy/), [26](CML-Labs/26-iBGP-RouteReflector-Communities/), [27](CML-Labs/27-Redistribution-Routenfilter/), [29](CML-Labs/29-PBR-Quelle-Anwendung/) | `tag:Ziel::3.2.c`, `3.2.d` |
 | 5 | Virtualisierung und Overlay | 2.1.a–c, 2.2.a, 2.2.b, 2.3.a, 2.3.b | [13](CML-Labs/13-VRF-Lite/), [14](CML-Labs/14-GRE-IPsec/), optional [15](CML-Labs/15-LISP/) und [16](CML-Labs/16-VXLAN/), Abschnitt Virtualisierung in [21](CML-Labs/21-Design-Fallstudien.md) | `tag:Domaene::2` |
 | 6 | Architektur und Multicast | 1.1.a, 1.2, 1.3, 1.4, 3.3.d | [17](CML-Labs/17-QoS-MQC/), [12](CML-Labs/12-Multicast-PIM/), [21](CML-Labs/21-Design-Fallstudien.md) (SD-WAN, SD-Access, Design) | `tag:Domaene::1`, `tag:Ziel::3.3.d` |

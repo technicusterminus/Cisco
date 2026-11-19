@@ -8,7 +8,7 @@ Material für die Prüfung **350-401 ENCOR v1.2** (Implementing and Operating Ci
 | [Anki-Deck EN](Anki/EN/) | 1.981 Karten auf Englisch mit deutschen Erklärungen, davon 429 MC im Prüfungsstil und 136 Show-Karten |
 | [Prüfungssimulation](Pruefungssimulation/) | 267 Fragen, davon 53 Exhibits und 24 zum Ordnen und Zuordnen; Prüfungsmodus mit 60 Fragen in 75 Minuten |
 | [Trainer](Trainer/) | Rechentrainer (BGP, STP, OSPF, EIGRP, QoS) und Ticket-Trainer mit 155 Lab-Tickets |
-| [Labs](#labs) | 33 Labs für CML, 32 davon auch für EVE-NG und 23 für Packet Tracer, mit 159 eingebauten Fehlern; dazu Python-Drills und zwei Fallstudien-Pakete |
+| [Labs](#labs) | 33 Labs für CML, 32 davon auch für EVE-NG und 23 für Packet Tracer, mit 159 Tickets, davon 157 in CML und zwei zur Spiegelung auf Papier; dazu Python-Drills und zwei Fallstudien-Pakete |
 | [Lernplan](LERNPLAN.md) | 10 Wochen, verbindet Deck, Labs, Trainer und Simulation |
 | [Cheatsheet](ENCOR-Cheatsheet.pdf) | 4 Seiten zum Ausdrucken |
 
@@ -29,6 +29,8 @@ Simulation und Trainer sind einzelne HTML-Dateien und laufen offline im Browser.
 
 ## Labs
 
+Das [CML-Trainingscurriculum](CML-Labs/CURRICULUM.md) führt von geführten Aufgaben zum zeitbegrenzten Transfer. Die CML-Dateien enthalten die Aufgaben oder Tickets im Workbench-Guide.
+
 Jedes Lab hat drei Teile: **Bauen** (Schritt für Schritt, mit Prüfbefehl nach jedem Schritt), **Reparieren** (Tickets mit eingebauten Fehlern, wie im Betrieb) und **Üben** (Transferfragen mit aufklappbaren Antworten). Musterlösungen und Fehlerlisten liegen in `solutions/`.
 
 | Plattform | Umfang | Hinweis |
@@ -43,7 +45,7 @@ Die Labs in der Reihenfolge des Lernplans:
 |---|---|---|
 | 1 | Layer 2 | 05 VLAN, Trunk, EtherChannel · 06 STP, MST, Schutzfunktionen |
 | 2 | Gateway-Redundanz, Zeit, NAT | 07 HSRP, VRRP, GLBP · 08 NTP, Syslog, SNMP · 09 NAT, PAT |
-| 3 | OSPF und EIGRP | 01 OSPFv2 Multi-Area · 28 OSPF-Areatypen · 34 OSPF-Filter, Netztyp, MTU · 25 EIGRP klassisch · 02 EIGRP Named Mode und OSPFv3 (optional) |
+| 3 | OSPF und EIGRP | 01 OSPFv2 Multi-Area · 28 OSPF-Areatypen · 34 OSPF-Filter, Netztyp, MTU · 25 EIGRP klassisch · 02 OSPFv3 (EIGRP Named Mode optional) |
 | 4 | BGP, Redistribution, PBR | 03 eBGP-Policy · 26 iBGP mit Route Reflector · 27 Redistribution · 29 PBR nach Quelle und Anwendung |
 | 5 | Virtualisierung und Overlay | 13 VRF-Lite · 14 GRE, IPsec, VTI · 15 LISP und 16 VXLAN (optional) |
 | 6 | Architektur und Multicast | 17 QoS mit MQC · 12 Multicast mit PIM · 32 SSM, Bidir, MSDP · 21 Design-Fallstudien |

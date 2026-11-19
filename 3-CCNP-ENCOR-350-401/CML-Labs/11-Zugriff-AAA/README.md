@@ -62,7 +62,7 @@ Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, wor
 - **Zu 3:** Mit `aaa new-model` gelten sofort neue Regeln für alle Lines. Ist die Methodenliste falsch, kommst du nicht mehr hinein. Die offene Sitzung ist deine Rettung.
 - **Zu 4:** Der Server antwortet nicht, also nimmt der Router nach dem Timeout die nächste Methode, `local`. Würde der Server antworten und ablehnen, gäbe es kein Fallback. `none` am Ende lässt jeden ohne Prüfung hinein, sobald die anderen Methoden nicht antworten.
 - **Zu 5:** Ohne Exec-Autorisierung übernimmt der Router das Privileg des Benutzers nicht. Alle landen in `R1>` mit Level 1. Befehlsautorisierung per TACACS+ lohnt sich, wenn viele Admins mit unterschiedlichen Rechten arbeiten. Jeder Befehl wird zentral geprüft und protokolliert.
-- **Zu 7:** TACACS+: TCP 49, verschlüsselt das ganze Paket, trennt Authentisierung, Autorisierung und Accounting, typisch für die Verwaltung von Geräten. RADIUS: UDP 1812/1813, verschlüsselt nur das Passwort, fasst Authentisierung und Autorisierung zusammen, typisch für den Netzzugang (802.1X, VPN, WLAN).
+- **Zu 7:** Klassisches TACACS+: TCP 49, Header im Klartext, Paketinhalt obfuskiert, trennt Authentisierung, Autorisierung und Accounting, typisch für die Verwaltung von Geräten. RADIUS: UDP 1812/1813, verschlüsselt nur das Passwort, fasst Authentisierung und Autorisierung zusammen, typisch für den Netzzugang (802.1X, VPN, WLAN).
 - **Zu 8:** Rollenbasierte CLI-Views (`parser view`) oder Befehlsautorisierung über TACACS+. Beide sind feiner und übersichtlicher als nummerierte Level.
 
 </details>

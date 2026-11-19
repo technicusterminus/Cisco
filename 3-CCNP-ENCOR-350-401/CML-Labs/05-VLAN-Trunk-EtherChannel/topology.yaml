@@ -1,7 +1,26 @@
 lab:
   title: Lab 05 – VLANs, Trunks und EtherChannel
   description: 'Drei Switches, Router-on-a-Stick und drei Hosts: 802.1Q-Trunks (Native VLAN, Allowed VLANs, DTP, VTP) und EtherChannel mit LACP, PAgP und statischem Modus.'
-  notes: 'Aufgaben: siehe README.md'
+  notes: |-
+    ## Lab 05 — VLAN, Trunk und Bündel am Symptom unterscheiden
+
+    **Stufe:** Geführt · **Zeitbox:** 60 Minuten
+
+    **Blueprint:** 3.1.a, 3.1.b.
+
+    **Voraussetzung:** VLAN-Tags, Access-Port, LACP-Grundlagen
+
+    **Start:** Hosts und Links sind vorhanden. VLAN-Zuordnung und Trunk-Pfade sind Arbeitsgegenstand.
+
+    **Auftrag:** Baue die logischen Verbindungen und einen funktionierenden VLAN-Pfad zum Gateway. Arbeite anschließend mindestens zwei Tickets mit unterschiedlichen Fehlerschichten ab.
+
+    **Grenzen:** Behalte Adressplan und bereitgestellte Infrastruktur bei. Nimm für Gegenproben vorübergehend erzeugte Fehler zurück.
+
+    **Erfolgskriterium:** Die erwarteten VLANs werden über den logischen Kanal transportiert, und die Pfade innerhalb und zwischen VLANs sind erklärt.
+
+    **Gegenprobe:** Ein fehlender Member darf den intakten logischen Pfad im vorgesehenen Bündel nicht unbemerkt verfälschen.
+
+    **Wiederholung oder Transfer:** 06 und 23
   version: 0.2.0
 nodes:
 - id: n0
@@ -439,3 +458,157 @@ links:
   i1: i5
   i2: i1
   label: SW3-GigabitEthernet1/1<->H3-GigabitEthernet0/0
+annotations:
+- type: rectangle
+  x1: -54
+  y1: -140
+  x2: 746
+  y2: -20
+  color: '#EAF2FFFA'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Teil A · Bauen
+  x1: -38
+  y1: -131
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Lab 05 – VLANs, Trunks und EtherChannel
+  x1: -38
+  y1: -110
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 14
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: VLAN-Pfade über 802.1Q, LACP und PAgP aufbauen und prüfen.
+  x1: -38
+  y1: -78
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 11
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Guide öffnen → Ausgangslage prüfen → Aufgabe lösen
+  x1: -38
+  y1: -51
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: -46
+  y1: -6
+  x2: 56
+  y2: 392
+  color: '#60A5FA28'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Access-Hosts
+  x1: -37
+  y1: 1
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 104
+  y1: -6
+  x2: 396
+  y2: 292
+  color: '#2DD4BF28'
+  border_color: '#0F766EFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Switching
+  x1: 113
+  y1: 1
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 504
+  y1: 94
+  x2: 596
+  y2: 192
+  color: '#FBBF2428'
+  border_color: '#A05C10FF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Gateway
+  x1: 513
+  y1: 101
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1

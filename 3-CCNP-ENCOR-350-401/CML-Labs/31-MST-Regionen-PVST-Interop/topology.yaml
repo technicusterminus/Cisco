@@ -1,7 +1,26 @@
 lab:
   title: 'Lab 31 – MST vertieft: Regionen, Instanzen, Pfadkosten und PVST-Interop'
   description: 'Vier Switches in einer MST-Region, ein Legacy-Switch mit Rapid-PVST: Region planen, Root je Instanz, Pfadkosten pro Instanz, IST, Boundary und PVST-Simulation.'
-  notes: 'Aufgaben: siehe README.md'
+  notes: |-
+    ## Lab 31 — MST-Regionen und PVST-Grenze
+
+    **Stufe:** Selbstständig · **Zeitbox:** 65 Minuten
+
+    **Blueprint:** 3.1.c.
+
+    **Voraussetzung:** 06, Bridge-ID und MST-Instanzen
+
+    **Start:** Access und Distribution sind verkabelt, VLANs und Ausgangsmodus sind dokumentiert.
+
+    **Auftrag:** Baue die vereinbarte MST-Region auf, verteile die Roots je Instanz und diagnostiziere einen Übergang zur PVST-Seite.
+
+    **Grenzen:** Behalte Adressplan und bereitgestellte Infrastruktur bei. Nimm für Gegenproben vorübergehend erzeugte Fehler zurück.
+
+    **Erfolgskriterium:** Der Digest in der Region, die vorgesehenen Root-Ports und der erwartete Grenzport sind nachvollziehbar.
+
+    **Gegenprobe:** Ein abweichender Digest oder ungültiger PVST-Wurzelpfad muss eine erkennbare Abweichung auslösen.
+
+    **Wiederholung oder Transfer:** 23
   version: 0.2.0
 nodes:
 - id: n0
@@ -682,3 +701,159 @@ links:
   i1: i4
   i2: i1
   label: LEG1-GigabitEthernet1/0<->H3-GigabitEthernet0/0
+annotations:
+- type: rectangle
+  x1: 46
+  y1: -210
+  x2: 846
+  y2: -70
+  color: '#EAF2FFFA'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Teil A · Bauen
+  x1: 62
+  y1: -201
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: 'Lab 31 – MST vertieft: Regionen, Instanzen, Pfadkosten und PVST-
+
+    Interop'
+  x1: 62
+  y1: -180
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 14
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: MST-Regionen und PVST-Übergang anhand von Root- und Boundary-Port-Ausgaben prüfen.
+  x1: 62
+  y1: -128
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 11
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Guide öffnen → Ausgangslage prüfen → Aufgabe lösen
+  x1: 62
+  y1: -101
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 54
+  y1: -56
+  x2: 446
+  y2: 42
+  color: '#60A5FA28'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Distribution
+  x1: 63
+  y1: -49
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 54
+  y1: 144
+  x2: 446
+  y2: 422
+  color: '#2DD4BF28'
+  border_color: '#0F766EFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Access
+  x1: 63
+  y1: 151
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 604
+  y1: 244
+  x2: 696
+  y2: 502
+  color: '#FBBF2428'
+  border_color: '#A05C10FF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: PVST-Seite
+  x1: 613
+  y1: 251
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1

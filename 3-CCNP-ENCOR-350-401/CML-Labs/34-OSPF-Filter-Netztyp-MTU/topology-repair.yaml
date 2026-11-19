@@ -1,7 +1,22 @@
 lab:
   title: 'Lab 34 – OSPF: Routen filtern (ABR, ASBR, lokal) und Nachbarschaften mit Netztyp- und MTU-Fehlern (Repair)'
   description: Das Blueprint nennt bei OSPF ausdrücklich Filterung, Nachbarschaft und die Netztypen Point-to-Point und Broadcast. Lab 01 und 28 decken Areas, Summaries und Authentisierung ab, gefiltert wird dort nicht. Hier lernst du die vier Stellen kennen, an denen OSPF Routen zurückhalten kann, und warum es innerhalb einer Area keine fünfte gibt. Dazu kommen zwei Nachbarschaftsfehler, die in `show ip ospf neighbor` harmlos aussehen.
-  notes: 'Aufgaben: siehe README.md'
+  notes: |-
+    ## Reparieren
+
+    Importiere diese Datei als separates Lab. Reproduziere pro Ticket das Symptom, dokumentiere den Befund und belege die Wirkung der Korrektur. Stelle den Testzustand nach jedem Versuch wieder her.
+
+    **Ticket 1:** R1 und R2 zeigen einander als `FULL`, aber R1 lernt keine einzige Route über R2 und umgekehrt.
+
+    **Ticket 2:** R3 kommt mit R2 nicht über `EXSTART` hinaus.
+
+    **Ticket 3:** Aus Area 1 ist außerhalb gar kein Netz mehr sichtbar, auch die Summary 10.1.16.0/23 nicht. Innerhalb von Area 1 ist alles in Ordnung.
+
+    **Ticket 4:** R4 hat eine Route nach 10.1.18.0/24. Laut Vorgabe 3 darf Area 2 dieses Netz nicht kennen.
+
+    **Ticket 5:** 198.51.100.0/24 fehlt im ganzen Netz als externe Route. Auf R4 ist die statische Route vorhanden.
+
+    Die Topologiedaten, gestufte Hinweise und Lösungen findest du in den Lab-Unterlagen.
   version: 0.2.0
 nodes:
 - id: n0
@@ -260,3 +275,159 @@ links:
   i1: i2
   i2: i1
   label: R1-GigabitEthernet0/1<->R4-GigabitEthernet0/0
+annotations:
+- type: rectangle
+  x1: -54
+  y1: -10
+  x2: 746
+  y2: 130
+  color: '#FFF4DEFA'
+  border_color: '#A05C10FF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Teil B · Reparieren
+  x1: -38
+  y1: -1
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: 'Lab 34 – OSPF: Routen filtern (ABR, ASBR, lokal) und Nachbarschaften
+
+    mit Netztyp- und MTU-Fehlern'
+  x1: -38
+  y1: 20
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 14
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Nachbarschaften, LSDB und Routing-Tabelle beim Filtern getrennt beurteilen.
+  x1: -38
+  y1: 72
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 11
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Ticket im Guide lesen → Symptom reproduzieren → Fix verifizieren
+  x1: -38
+  y1: 99
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: -46
+  y1: 144
+  x2: 46
+  y2: 242
+  color: '#60A5FA28'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Area 1
+  x1: -37
+  y1: 151
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 154
+  y1: 144
+  x2: 446
+  y2: 242
+  color: '#2DD4BF28'
+  border_color: '#0F766EFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: ABRs
+  x1: 163
+  y1: 151
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 554
+  y1: 144
+  x2: 646
+  y2: 242
+  color: '#FBBF2428'
+  border_color: '#A05C10FF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Area 2
+  x1: 563
+  y1: 151
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1

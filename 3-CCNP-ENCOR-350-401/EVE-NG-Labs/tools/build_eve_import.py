@@ -2,7 +2,7 @@
 """Erzeugt importierbare EVE-NG-Labs (.unl in .zip) aus den CML-Topologien.
 
 Quelle je Lab:
-  - Topologie (Nodes, Verkabelung, Positionen): CML-Labs/<Lab>/topology.yaml
+  - Topologie: EVE-NG-Labs/<Lab>/topology.yaml, falls vorhanden, sonst die CML-Topologie
   - Startkonfigurationen: EVE-NG-Labs/<Lab>/build/*.cfg und repair/*.cfg
 
 Ergebnis je Lab zwei EVE-Labs, „Bauen“ und „Reparieren“, mit eingebetteter
@@ -216,9 +216,13 @@ def main():
             src = os.path.join(os.path.dirname(topo), fname)
             if not os.path.exists(src):
                 continue
-            with open(src, encoding="utf-8") as f:
+            eve_topology = os.path.join(eve_lab_dir, "topology.yaml")
+            use_eve_topology = os.path.isfile(eve_topology)
+            with open(eve_topology if use_eve_topology else src, encoding="utf-8") as f:
                 cml = yaml.safe_load(f)
             title = cml["lab"]["title"]
+            if use_eve_topology and mode == "repair":
+                title += " (Repair)"
             lab_name = f"{args.paket} {lab} {suffix}"
             if mode == "build":
                 body = ("Teil A (Bauen): Ausgangszustand ist geladen. "

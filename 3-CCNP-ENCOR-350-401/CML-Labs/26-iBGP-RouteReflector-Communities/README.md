@@ -40,7 +40,7 @@ Loopback0 (/32): R1 10.255.0.1, R2 10.255.0.2, R3 10.255.0.3. OSPF 1 Area 0 trä
 ## Teil A – Bauen
 Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
 
-1. **Underlay mit OSPF.** Starte auf R1 bis R3 OSPF 1 in Area 0 für die internen Links und Loopbacks (`network 10.0.0.0 0.255.255.255 area 0`).
+1. **Underlay prüfen.** OSPF 1 in Area 0 ist auf R1 bis R3 für die internen Links und Loopbacks vorkonfiguriert. Prüfe die Routen zu den beiden Nachbar-Loopbacks jeweils vor dem Aufbau der iBGP-Sitzungen.
    - **Prüfen:** R2 pingt die Loopback von R3 (10.255.0.3).
 2. **iBGP mit Route Reflector.** Mache R1 zum Route Reflector: `neighbor 10.255.0.2 remote-as 65001` und `neighbor 10.255.0.3 remote-as 65001`, jeweils mit `update-source Loopback0` und `route-reflector-client`. R2 und R3 peeren nur mit R1, ebenfalls über ihre Loopback.
    - **Prüfen:** `show ip bgp summary` auf R1 zeigt zwei Nachbarn Established.

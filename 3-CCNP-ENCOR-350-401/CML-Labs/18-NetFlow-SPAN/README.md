@@ -1,13 +1,13 @@
 # Lab 18 – Flexible NetFlow, SPAN und RSPAN
 
-**Dauer:** 75 min · **Niveau:** mittel · **Nodes:** 2× iosvl2, 6× iosv
+**Dauer:** 75 min · **Niveau:** mittel · **Nodes:** 2× iosvl2, 4× iosv
 
-Verkehr sichtbar machen: Flexible NetFlow auf einem Router (Record, Exporter, Monitor), lokales SPAN und RSPAN über einen Trunk zwischen zwei Switches. ERSPAN wird als Konfigurationsübung ohne CML-Test behandelt.
+In CML konfigurierst und verifizierst du Flexible NetFlow. SPAN, RSPAN und ERSPAN übst du anhand von Konfigurationsauszügen. IOSvL2 übernimmt hier reguläres Switching, da Cisco [Port-Mirroring auf IOSvL2](https://developer.cisco.com/docs/modeling-labs/2-10/iosvl2/) als nicht unterstützt aufführt.
 
 **Lernziele:** Nach diesem Lab kannst du …
 
 - Flexible NetFlow mit Record, Exporter und Monitor einrichten.
-- Lokales SPAN und RSPAN aufbauen.
+- SPAN, RSPAN und ERSPAN anhand von konkreten Vorgaben konfigurieren und die Prüfausgaben einordnen.
 - Erklären, was NetFlow und SPAN zeigen und wo ihre Grenzen liegen.
 
 | Deck-Tag | Thema | Karten im Kompendium |
@@ -15,15 +15,14 @@ Verkehr sichtbar machen: Flexible NetFlow auf einem Router (Record, Exporter, Mo
 | `Ziel::4.2` | Flexible NetFlow | 24 |
 | `Ziel::4.3` | SPAN, RSPAN und ERSPAN | 22 |
 
-**So arbeitest du:** Teil A = Bauen (importiere `topology.yaml`), Teil B = Reparieren (importiere `topology-repair.yaml`, dort ist alles gebaut, aber mit Fehlern), Teil C = Üben (Transferfragen zum Selbsttest). Lösungen und Fehlerursachen liegen in `solutions/`, erst nach eigenem Versuch öffnen.
+**So arbeitest du:** Teil A = Bauen (importiere `topology.yaml`), Teil B = Reparieren (importiere `topology-repair.yaml`, dort ist NetFlow aufgebaut, aber mit Fehlern), Teil C = Üben (Transferfragen zum Selbsttest). Lösungen und Fehlerursachen liegen in `solutions/`, erst nach eigenem Versuch öffnen.
 
 ## Topologie
 
 ```
- H1 ─┐                                        ┌─ ANA2 (RSPAN-Ziel)
-     SW1 ── Gi0/0 ── R1 ── Gi0/1 ── SRV        SW2
- H2 ─┘      │ Gi0/1 ────────────────────────── Gi0/0
-            └ Gi1/2 ── ANA1 (lokales SPAN-Ziel)
+ H1 ─┐
+     SW1 ─── R1 ─── SRV
+ H2 ─┘└───── SW2
 ```
 
 | Gerät | Interface | Adresse |
@@ -31,9 +30,8 @@ Verkehr sichtbar machen: Flexible NetFlow auf einem Router (Record, Exporter, Mo
 | R1 | Gi0/0 / Gi0/1 | 10.10.10.1/24 / 10.20.20.1/24 |
 | H1 / H2 | Gi0/0 | 10.10.10.11 / 10.10.10.12 |
 | SRV | Gi0/0 | 10.20.20.10 |
-| ANA1 / ANA2 | Gi0/0 | Sniffer-Hosts (passiv) |
 
-SW1 Port-Belegung: Gi0/0 → R1 (Access VLAN 10), Gi0/1 → SW2 (Trunk), Gi1/0 → H1, Gi1/1 → H2, Gi1/2 → ANA1. SW2: Gi0/0 → SW1 (Trunk), Gi1/1 → ANA2.
+SW1 Gi0/0 führt zu R1 (Access VLAN 10), Gi0/1 zu SW2 (Trunk), Gi1/0 zu H1 und Gi1/1 zu H2. SW2 Gi0/0 führt zu SW1. Pinge vor der Übung von H1 und H2 den SRV.
 
 ## Teil A – Bauen
 Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.
@@ -45,17 +43,19 @@ Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, wor
 2. **Exporter anlegen.** Lege `flow exporter EXP` an mit `destination 10.20.20.10`, `transport udp 2055`, `source Gi0/1` und `export-protocol netflow-v9`.
    - **Denkfrage:** Wozu braucht NetFlow v9 Templates?
 3. **Monitor anlegen und binden.** Verbinde Record und Exporter in `flow monitor MON`. Binde ihn an Gi0/0 mit `ip flow monitor MON input` (und `output`). Erzeuge Verkehr: Ping von H1 zu SRV, dazu einen Telnet-Versuch.
-   - **Prüfen:** `show flow monitor MON cache` zeigt eigene Zeilen für ICMP und für TCP mit Zielport 23.
+   - **Prüfen:** `show flow monitor MON cache` zeigt eigene Zeilen für ICMP und für TCP mit Zielport 23. Starte im CML-Workbench am Link R1–SRV einen Capture mit Filter `udp port 2055`. Erzeuge frische Flows und warte auf ihren Ablauf aus dem Cache. Der Capture belegt den Export, die Cache-Ausgabe belegt die Klassifizierung.
 4. **Einordnen.**
    - **Denkfrage:** Was unterscheidet klassisches NetFlow, Flexible NetFlow, sFlow und IPFIX?
 
-**Teil 2: Lokales SPAN**
+**Teil 2: Lokales SPAN als Konfigurationsübung**
+
+Nutze die Schritte 5–7 auf einer Plattform, die die jeweilige Spiegelungsart unterstützt, oder notiere Konfiguration und erwartete Ausgaben auf Papier. In der Übung hängt ANA1 an SW1 Gi1/2 und ANA2 an SW2 Gi1/1. Die beiden Analyseknoten gehören zur Papierübung.
 
 5. **Port spiegeln.** Konfiguriere auf SW1 `monitor session 1 source interface Gi1/0 both` und `monitor session 1 destination interface Gi1/2`.
    - **Prüfen:** `show monitor session 1` zeigt Quelle und Ziel. ANA1 sieht den Verkehr von H1.
    - **Denkfrage:** Was passiert mit dem Zielport?
 
-**Teil 3: RSPAN**
+**Teil 3: RSPAN und ERSPAN**
 
 6. **Über zwei Switches spiegeln.** Lege VLAN 999 auf beiden Switches an und setze darunter `remote-span`. Erlaube es auf dem Trunk. SW1: `monitor session 2 source interface Gi1/1 both` und `monitor session 2 destination remote vlan 999`. SW2: `monitor session 2 source remote vlan 999` und `monitor session 2 destination interface Gi1/1`.
    - **Prüfen:** ANA2 sieht den Verkehr von H2. `show vlan remote-span` listet VLAN 999.
@@ -64,11 +64,14 @@ Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, wor
    ```
    monitor session 3 type erspan-source
     source interface Gi1 both
+    no shutdown
     destination
      erspan-id 10
      ip address 10.1.1.1
      origin ip address 10.1.1.2
    ```
+   - **Auftrag:** Formuliere die Gegenstelle auf einem unterstützenden IOS-XE-Gerät. Die Ziel-IP ist dort lokal, ein Sniffer hängt am Zielport Gi2 und die Session muss ERSPAN-ID 10 annehmen.
+   - **Prüfen:** Die Quell- und Zielsession müssen aktiv sein. Im Transport erwartest du IP mit GRE zwischen 10.1.1.2 und 10.1.1.1, am Zielport die ausgepackten Kopien. [Cisco ERSPAN-Konfiguration](https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/lanswitch/configuration/xe-16/lanswitch-xe-16-book/lnsw-conf-erspan.html)
    - **Denkfrage:** Was unterscheidet SPAN, RSPAN und ERSPAN?
 
 <details><summary>Antworten zu den Denkfragen</summary>
@@ -83,29 +86,27 @@ Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, wor
 
 ## Teil B – Reparieren
 
-Importiere `topology-repair.yaml`. Alle Geräte sind vollständig konfiguriert, aber es stecken **4 Fehler** drin. Behandle jede Meldung als Ticket: erst Symptom nachstellen, dann die Ursache eingrenzen (Layer für Layer), dann beheben und das Ergebnis beweisen. Ändere nur, was kaputt ist.
+Importiere `topology-repair.yaml`. In CML liegen **zwei NetFlow-Fehler** vor. Löse zuerst Ticket 1 und erzeuge danach neuen Verkehr für Ticket 2. Tickets 3 und 4 bearbeitest du anhand der angegebenen Konfiguration. Behandle jede Meldung als Ticket: erst Symptom nachstellen, dann die Ursache eingrenzen (Layer für Layer), dann beheben und das Ergebnis beweisen. Ändere nur, was kaputt ist.
 
 **Ticket 1:** `show flow monitor MON cache` ist leer, obwohl Verkehr läuft; der Exporter zählt keine Pakete.
 
 **Ticket 2:** Im Flow-Cache stehen nur noch Einträge je Host-Paar und Protokoll, Anwendungen (Ports) lassen sich nicht unterscheiden.
 
-**Ticket 3:** ANA2 sieht nichts vom RSPAN-Verkehr von H2, lokales SPAN auf SW1 funktioniert.
+**Ticket 3 (Papier):** ANA2 empfängt keine RSPAN-Kopien. Die Sessions nutzen VLAN 999. Auf SW1 erlaubt der Trunk VLAN 10 und 999, auf SW2 nur VLAN 10. Welche Änderung und welche Prüfausgabe passen?
 
-**Ticket 4:** ANA1 sieht H1-Verkehr nicht, `show monitor session 1` zeigt ein anderes Ziel.
+**Ticket 4 (Papier):** ANA1 hängt an SW1 Gi1/2. `show monitor session 1` meldet Gi1/0 als Source und Gi1/3 als Destination. Welche Zeile änderst du und was prüfst du danach?
 
 ## Verifikation
 ```
 show flow monitor MON cache
 show flow exporter EXP statistics
-show monitor session all
-show vlan remote-span
 ```
 
 | Befehl | Das solltest du sehen |
 |---|---|
 | `show flow monitor MON cache` | Flows von H1 zu SRV, getrennt nach Protokoll und Port |
 | `show flow exporter EXP statistics` | steigende Zahl exportierter Records |
-| Mitschnitt auf ANA1 / ANA2 | ANA1 sieht H1 (SPAN), ANA2 sieht H2 (RSPAN) |
+| CML-Link-Capture R1–SRV | NetFlow-v9-Verkehr an UDP 2055 nach Ablauf der Flow-Einträge |
 
 ## Teil C – Üben
 
@@ -141,5 +142,20 @@ Beantworte zuerst selbst, dann klappe die Antwort auf.
 
 ## Lösungen
 
-- `solutions/<Gerät>.cfg`: Konfiguration zu Teil A (ohne Basis-IP-Adressen)
+<details><summary>ERSPAN-Gegenstelle (IOS XE, plattformabhängig)</summary>
+
+```text
+monitor session 4 type erspan-destination
+ destination interface Gi2
+ no shutdown
+ source
+  erspan-id 10
+  ip address 10.1.1.1
+```
+
+</details>
+
+
+- `solutions/R1.cfg`: Flexible NetFlow für die CML-Topologie
+- `solutions/SW1.cfg` und `solutions/SW2.cfg`: Lösungen der SPAN- und RSPAN-Konfigurationsübung für unterstützende Plattformen
 - `solutions/FAULTS.md`: Fehlerliste zu Teil B (Spoiler!)

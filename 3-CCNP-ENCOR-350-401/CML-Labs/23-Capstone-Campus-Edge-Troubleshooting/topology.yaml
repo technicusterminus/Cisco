@@ -1,7 +1,26 @@
 lab:
   title: 'Lab 23 – Capstone: Campus und Edge, Fehlersuche im Gesamtnetz'
   description: 'Ein komplettes kleines Campus-Netz mit Internet-Edge: Access-Switch mit EtherChannel, Distribution-Router mit HSRP, OSPF, NAT, ACL, NTP und SSH. Der Schwerpunkt liegt auf der Reparatur: Zehn Fehler au'
-  notes: 'Aufgaben: siehe README.md'
+  notes: |-
+    ## Lab 23 — Abschlusslab Campus und Edge
+
+    **Stufe:** Transfer · **Zeitbox:** 110 Minuten
+
+    **Blueprint:** 3.1.a–c, 3.2.b (IPv4), 3.3.a (NTP), 3.3.b–c, 5.1.a, 5.2.a.
+
+    **Voraussetzung:** 05–11, 01, 33 und idealerweise 31
+
+    **Start:** Starte die Reparaturvariante. Campus, Gateway-Paar, Edge und ISP sind als Szenario gegeben.
+
+    **Auftrag:** Bearbeite die Tickets schichtweise, priorisiere Abhängigkeiten und dokumentiere je Ursache die kleinste wirksame Änderung. Wähle deine Nachweise selbst.
+
+    **Grenzen:** Behalte Adressplan und bereitgestellte Infrastruktur bei. Nimm für Gegenproben vorübergehend erzeugte Fehler zurück.
+
+    **Erfolgskriterium:** Hosts, Gateway, Routing und Edge-Funktion erreichen den vereinbarten Endzustand. Mindestens ein Befund pro bearbeitetem Ticket zeigt die Ursache vor und die Wirkung nach dem Fix.
+
+    **Gegenprobe:** Weise einen funktionsfähigen Kontrollfluss nach und zeige, dass ein unzulässiger Verkehrsfluss weiterhin blockiert ist.
+
+    **Wiederholung oder Transfer:** 24 als Gegenprobe mit anderer Architektur
   version: 0.2.0
 nodes:
 - id: n0
@@ -471,3 +490,184 @@ links:
   i1: i5
   i2: i1
   label: SW2-GigabitEthernet1/1<->H20-GigabitEthernet0/0
+annotations:
+- type: rectangle
+  x1: 96
+  y1: -420
+  x2: 896
+  y2: -300
+  color: '#EAF2FFFA'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Teil A · Bauen
+  x1: 112
+  y1: -411
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: 'Lab 23 – Capstone: Campus und Edge, Fehlersuche im Gesamtnetz'
+  x1: 112
+  y1: -390
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 14
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Campus bis Internet prüfen. Für jedes Ticket einen Vorher-Nachher-Beleg sichern.
+  x1: 112
+  y1: -358
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 11
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Guide öffnen → Ausgangslage prüfen → Aufgabe lösen
+  x1: 112
+  y1: -331
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 254
+  y1: -286
+  x2: 346
+  y2: -188
+  color: '#60A5FA28'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Internet
+  x1: 263
+  y1: -279
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 254
+  y1: -136
+  x2: 346
+  y2: -38
+  color: '#2DD4BF28'
+  border_color: '#0F766EFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Edge
+  x1: 263
+  y1: -129
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 104
+  y1: 44
+  x2: 496
+  y2: 142
+  color: '#FBBF2428'
+  border_color: '#A05C10FF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Gateways
+  x1: 113
+  y1: 51
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 104
+  y1: 194
+  x2: 496
+  y2: 592
+  color: '#C084FC28'
+  border_color: '#7E22CEFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Access
+  x1: 113
+  y1: 201
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1

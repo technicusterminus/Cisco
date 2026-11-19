@@ -122,7 +122,7 @@ LAB = dict(
         ("7", "**Nein**, das Muster passt nur auf `write memory`. Wer beide Wege abdecken will, braucht ein zweites Applet oder ein Muster mit Alternative. Zu `_exit_status`: Bei 0 oder ohne Zuweisung wird der ursprüngliche Befehl **nicht** ausgeführt, bei 1 schon. Ein synchrones Applet ohne diese Zeile schluckt also den Befehl. Beachte auch: Die Syslog-Meldung behauptet nur, dass gesichert wurde. Ob `copy` Erfolg hatte, prüft das Applet nicht."),
         ("8", "`watchdog` läuft alle N Sekunden immer wieder. `countdown` läuft einmal nach N Sekunden. `cron` läuft zu festen Zeiten nach Cron-Schreibweise, etwa `cron-entry \"0 2 * * *\"` für täglich 2 Uhr."),
         ("9", "(a) **EEM.** Das Ereignis entsteht auf dem Gerät, die Reaktion muss sofort und auch ohne Verbindung zur Zentrale erfolgen. (b) **Nicht EEM**, sondern ein agentenloses Werkzeug wie Ansible oder der Controller: Das ist eine zentrale, einmalige Änderung mit Kontrolle über den Erfolg. (c) **Beides möglich**, zentral ist besser: Ein Applet mit `timer cron` kann kopieren, aber 400 Applets muss jemand pflegen. Eine zentrale Sicherung sieht außerdem, welches Gerät sich nicht gemeldet hat.")],
-    nodes=[dict(name="R1", type="router", x=100, y=200, base=base(1, 2), sol=SOL),
+    nodes=[dict(name="R1", type="router", x=100, y=200, base=base(1, 2), cml_base="logging buffered 16384 informational", sol=SOL),
            dict(name="R2", type="router", x=500, y=200, base=base(2, 1), sol="")],
     links=[("R1", "Gi0/0", "R2", "Gi0/0"), ("R1", "Gi0/1", "R2", "Gi0/1")],
     tickets=["Nach `write memory` meldet das Log „Sicherung … angestossen“, aber `dir flash:` zeigt keine `backup.cfg`.",

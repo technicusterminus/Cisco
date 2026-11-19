@@ -1,7 +1,26 @@
 lab:
   title: Lab 13 – VRF-Lite mit überlappenden Adressen
   description: Zwei Kunden (RED, BLUE) teilen sich zwei Router und einen Link, nutzen aber dieselben IP-Bereiche. Mit VRF-Lite trennst du Routing-Tabellen, nutzt Subinterfaces als Trunk und OSPF pro VRF.
-  notes: 'Aufgaben: siehe README.md'
+  notes: |-
+    ## Lab 13 — VRF-Trennung mit überlappenden Netzen
+
+    **Stufe:** Selbstständig · **Zeitbox:** 55 Minuten
+
+    **Blueprint:** 2.2.a.
+
+    **Voraussetzung:** IPv4-Routing und separate Routingtabellen
+
+    **Start:** Zwei Kunden haben dieselben Adressen. Die Zuordnung der Ports zu beiden Kunden steht in der Topologie.
+
+    **Auftrag:** Verbinde die Sites je Kunde über eine eigene VRF. Zeige anhand des gleichen Zielpräfixes, warum die Standorte trotzdem getrennt sind.
+
+    **Grenzen:** Behalte Adressplan und bereitgestellte Infrastruktur bei. Nimm für Gegenproben vorübergehend erzeugte Fehler zurück.
+
+    **Erfolgskriterium:** Beide Zielpfade sind in ihrer jeweiligen VRF erreichbar. Jeder Pfad nutzt die vorgesehene Kundenschnittstelle.
+
+    **Gegenprobe:** Eine globale Abfrage oder ein Test aus der falschen VRF darf die Trennung nicht als Erfolg melden.
+
+    **Wiederholung oder Transfer:** 24
   version: 0.2.0
 nodes:
 - id: n0
@@ -269,3 +288,157 @@ links:
   i1: i2
   i2: i1
   label: R2-GigabitEthernet0/1<->CB2-GigabitEthernet0/0
+annotations:
+- type: rectangle
+  x1: -4
+  y1: -90
+  x2: 804
+  y2: 30
+  color: '#EAF2FFFA'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Teil A · Bauen
+  x1: 12
+  y1: -81
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Lab 13 – VRF-Lite mit überlappenden Adressen
+  x1: 12
+  y1: -60
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 14
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Überlappende Adressen durch getrennte VRFs transportieren und vergleichen.
+  x1: 12
+  y1: -28
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 11
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Guide öffnen → Ausgangslage prüfen → Aufgabe lösen
+  x1: 12
+  y1: -1
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 4
+  y1: 44
+  x2: 113
+  y2: 342
+  color: '#60A5FA28'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Kunden Site 1
+  x1: 13
+  y1: 51
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 204
+  y1: 144
+  x2: 596
+  y2: 242
+  color: '#2DD4BF28'
+  border_color: '#0F766EFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Provider
+  x1: 213
+  y1: 151
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 704
+  y1: 44
+  x2: 813
+  y2: 342
+  color: '#FBBF2428'
+  border_color: '#A05C10FF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Kunden Site 2
+  x1: 713
+  y1: 51
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1

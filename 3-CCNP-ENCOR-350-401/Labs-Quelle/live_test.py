@@ -232,7 +232,7 @@ def test_lab(lab, dev, wait, log, stub=False):
     return bad
 
 
-def syntax_labs(only):
+def syntax_labs(only, *, eve=False):
     """Alle Labs mit Reparatur-Topologie: [(Lab-Dict, {Node: Konfigurationszeilen})]."""
     import yaml
     out = []
@@ -242,9 +242,28 @@ def syntax_labs(only):
             continue
         with open(path, encoding="utf-8") as f:
             doc = yaml.safe_load(f)
-        cfg = {n["label"]: [l for l in (n.get("configuration") or "").split("\n")
-                            if l.strip() and not l.startswith(("hostname ", "!")) and l.strip() != "end"]
-               for n in doc["nodes"] if n.get("configuration")}
+        if eve:
+            eve_configs = glob.glob(os.path.join(ROOT, "EVE-NG-Labs", slug, "repair", "*.cfg"))
+            if not eve_configs:
+                continue
+            with_files = {}
+            for config_path in sorted(eve_configs):
+                with open(config_path, encoding="utf-8") as f:
+                    label = os.path.splitext(os.path.basename(config_path))[0]
+                    with_files[label] = f.read()
+        else:
+            with_files = {}
+            for node in doc["nodes"]:
+                configuration = node.get("configuration")
+                if not configuration or node["node_definition"] not in {"iosv", "iosvl2", "csr1000v", "nxosv9000"}:
+                    continue
+                if isinstance(configuration, list):
+                    configuration = next(entry["content"] for entry in configuration
+                                         if entry["name"] in {"ios_config.txt", "nxos_config.txt"})
+                with_files[node["label"]] = configuration
+        cfg = {label: [line for line in configuration.splitlines()
+                       if line.strip() and not line.startswith(("hostname ", "!")) and line.strip() != "end"]
+               for label, configuration in with_files.items()}
         out.append(({"num": slug[:2], "slug": slug, "title": doc["lab"]["title"].replace(" (Repair)", "")}, cfg))
     return out
 
@@ -288,7 +307,7 @@ def main(argv=None):
     ap.add_argument("--syntax", action="store_true", help="nur Syntaxprüfung, dafür für alle Labs")
     a = ap.parse_args(argv)
     if a.syntax:
-        todo = syntax_labs(a.lab)
+        todo = syntax_labs(a.lab, eve=a.mode == "eve")
         labs = [l for l, _ in todo]
         run = {l["slug"]: (lambda dev, l=l, c=c: test_syntax(l, c, dev, print)) for l, c in todo}
     else:

@@ -1,7 +1,26 @@
 lab:
   title: 'Lab 25 – EIGRP klassisch: Nachbarschaft, Authentifizierung, Summary und Stub'
   description: 'EIGRP im klassischen Modus über vier Router: Nachbarschaftsbedingungen (AS, K-Werte, Authentifizierung), Summarisierung, Stub-Router und das Lesen der Topology Table (Feasible Successor, FD/RD). Dazu '
-  notes: 'Aufgaben: siehe README.md'
+  notes: |-
+    ## Lab 25 — EIGRP-Routen und Alternativen einordnen
+
+    **Stufe:** Selbstständig · **Zeitbox:** 40 Minuten
+
+    **Blueprint:** 3.2.a (EIGRP-Anteil).
+
+    **Voraussetzung:** 01, IGP- und Metrikgrundlagen
+
+    **Start:** Vier IOSv-Router, vorgegebene Linkadressen und eindeutige Rollen.
+
+    **Auftrag:** Ermittle Successor und möglichen Alternativpfad. Verändere eine Eigenschaft im Lab und vergleiche Ergebnis und Vorhersage. Erkläre die Abweichung zu OSPF.
+
+    **Grenzen:** Behalte Adressplan und bereitgestellte Infrastruktur bei. Nimm für Gegenproben vorübergehend erzeugte Fehler zurück.
+
+    **Erfolgskriterium:** RD und FD sind am konkreten Präfix nachvollziehbar, und die zusätzliche Route erfüllt die Schleifenbedingung.
+
+    **Gegenprobe:** Ein nicht zulässiger Pfad wird durch Variance allein nicht installierbar.
+
+    **Wiederholung oder Transfer:** 27 und 30
   version: 0.2.0
 nodes:
 - id: n0
@@ -212,3 +231,105 @@ links:
   i1: i3
   i2: i1
   label: R2-GigabitEthernet0/2<->R4-GigabitEthernet0/0
+annotations:
+- type: rectangle
+  x1: 46
+  y1: -160
+  x2: 846
+  y2: -20
+  color: '#EAF2FFFA'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Teil A · Bauen
+  x1: 62
+  y1: -151
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: 'Lab 25 – EIGRP klassisch: Nachbarschaft, Authentifizierung, Summary
+
+    und Stub'
+  x1: 62
+  y1: -130
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 14
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: EIGRP-Nachbarn, Pfadauswahl und Stub-Verhalten gegenüberstellen.
+  x1: 62
+  y1: -78
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 11
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Guide öffnen → Ausgangslage prüfen → Aufgabe lösen
+  x1: 62
+  y1: -51
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 54
+  y1: -6
+  x2: 546
+  y2: 422
+  color: '#60A5FA28'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: EIGRP-Domäne
+  x1: 63
+  y1: 1
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1

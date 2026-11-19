@@ -32,7 +32,7 @@ Ein Branch-Router mit zwei Providern: Die Routing-Tabelle sendet alles über Pro
 | R3 Gi0/1 – R4 Gi0/1 | 10.0.34.0/30 (.1/.2) |
 | R1 Gi0/2 – SW | 10.1.0.0/24 (R1 .1, H1 .11, H2 .12) |
 
-R4 hat Loopback0 192.0.2.44/32 als Server. R1 hat nur die Default-Route über R2. Soll: H1 normal über Provider A, H2 **immer** über Provider B, Web-Verkehr (TCP 80) aller Hosts über Provider B.
+R4 hat Loopback0 192.0.2.44/32 als Server. Das statische Routing ist vorkonfiguriert. R1 nutzt eine Default-Route über R2, R2 und R3 haben Routen zum Dienst und R4 kennt die Rückwege zum Clientnetz. Soll: H1 normal über Provider A, H2 **immer** über Provider B, Web-Verkehr (TCP 80) aller Hosts über Provider B.
 
 ## Teil A – Bauen
 Arbeite die Schritte der Reihe nach ab. Jeder Schritt sagt dir, was du tust, woran du den Erfolg erkennst (**Prüfen**) und worüber du nachdenken sollst (**Denkfrage**). Die Antworten auf die Denkfragen stehen am Ende von Teil A.

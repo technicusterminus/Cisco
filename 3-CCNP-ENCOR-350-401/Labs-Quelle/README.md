@@ -6,6 +6,7 @@ Die Labs 01 bis 31 liegen nur als fertige Dateien vor. Ab Lab 32 entsteht jedes 
 |---|---|
 | `lab_32.py` … `lab_36.py` | Lab-Definitionen |
 | `lablib.py` | erzeugt YAML, READMEs, Konfigurationen und Fehlerlisten, prüft Links, Adressen und Fehler |
+| `annotate_cml.py` | überträgt Aufgaben aus `CML-Labs/AUFGABEN.md` und Tickets aus den Lab-READMEs in den CML-Guide und zeichnet die beschrifteten Bereiche |
 | `build_labs.py` | schreibt alle Labs nach `../CML-Labs` und `../EVE-NG-Labs` |
 | `live_test.py` | spielt die Labs in einer laufenden CML- oder EVE-NG-Instanz durch |
 | `update_ticket_trainer.py` | trägt die Tickets der Labs 32 bis 36 in `../Trainer/ticket-trainer.html` ein |
@@ -21,6 +22,8 @@ python3 EVE-NG-Labs/tools/build_eve_import.py --paket ENCOR
 ```
 
 Beide Befehle aus dem Ordner `3-CCNP-ENCOR-350-401` starten. Die Übersichtstabellen in den READMEs und `ZIELE.md` sind von Hand gepflegt.
+
+Nach einer Änderung an einem älteren CML-Lab den Guide und den Canvas mit `python3 Labs-Quelle/annotate_cml.py <Labnummer>` aktualisieren, zum Beispiel `python3 Labs-Quelle/annotate_cml.py 18`. Ohne Nummern aktualisiert der Aufruf beide Varianten aller Labs. `build_labs.py` übernimmt diesen Schritt für 32 bis 36.
 
 ## Live-Test: Labs in einer laufenden Instanz sicherstellen
 

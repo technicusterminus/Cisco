@@ -1,7 +1,26 @@
 lab:
   title: 'Lab 07 – First-Hop-Redundanz: HSRP, VRRP und GLBP'
   description: Zwei Distribution-Router, ein Access-Switch, drei VLANs mit je einem anderen FHRP-Protokoll. Dazu Tracking, Preemption, Timer und die Frage, welche Redundanzstufe (Link, Gerät, Standort) Hochverfügbar
-  notes: 'Aufgaben: siehe README.md'
+  notes: |-
+    ## Lab 07 — Gateway-Failover beobachten
+
+    **Stufe:** Geführt · **Zeitbox:** 55 Minuten
+
+    **Blueprint:** 3.3.c; FHRP-Anteil von 1.1.b.
+
+    **Voraussetzung:** 05, IPv4-Default-Gateway, VLANs
+
+    **Start:** Redundantes Gateway-Paar und Upstream sind verkabelt. VLANs und Protokollparameter werden nach Aufgabe ergänzt.
+
+    **Auftrag:** Stelle für die vorgesehenen VLANs Gateway-Redundanz her. Löse einen Upstream-Ausfall aus und beobachte Übernahme und Rückkehr. HSRP und VRRP sind der Kern, GLBP ist Vertiefung.
+
+    **Grenzen:** Behalte Adressplan und bereitgestellte Infrastruktur bei. Nimm für Gegenproben vorübergehend erzeugte Fehler zurück.
+
+    **Erfolgskriterium:** Clients behalten dieselbe Gateway-Adresse. Die vorgesehene Instanz übernimmt und der Clientpfad funktioniert nach der Konvergenz.
+
+    **Gegenprobe:** Eine intakte Kontrollinstanz darf nicht denselben unnötigen Wechsel durchlaufen.
+
+    **Wiederholung oder Transfer:** 23
   version: 0.2.0
 nodes:
 - id: n0
@@ -414,3 +433,157 @@ links:
   i1: i7
   i2: i1
   label: SW-GigabitEthernet1/3<->H4-GigabitEthernet0/0
+annotations:
+- type: rectangle
+  x1: -4
+  y1: -240
+  x2: 796
+  y2: -120
+  color: '#EAF2FFFA'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Teil A · Bauen
+  x1: 12
+  y1: -231
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: 'Lab 07 – First-Hop-Redundanz: HSRP, VRRP und GLBP'
+  x1: 12
+  y1: -210
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 14
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Die Gateway-Redundanz der drei VLANs prüfen und Ausfälle beobachten.
+  x1: 12
+  y1: -178
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 11
+  text_unit: pt
+  z_index: 1
+- type: text
+  text_content: Guide öffnen → Ausgangslage prüfen → Aufgabe lösen
+  x1: 12
+  y1: -151
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: false
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 254
+  y1: -106
+  x2: 346
+  y2: -8
+  color: '#60A5FA28'
+  border_color: '#2563EBFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Upstream
+  x1: 263
+  y1: -99
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 104
+  y1: 44
+  x2: 496
+  y2: 142
+  color: '#2DD4BF28'
+  border_color: '#0F766EFF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Gateway-Paar
+  x1: 113
+  y1: 51
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
+- type: rectangle
+  x1: 4
+  y1: 344
+  x2: 546
+  y2: 442
+  color: '#FBBF2428'
+  border_color: '#A05C10FF'
+  border_style: ''
+  border_radius: 12
+  thickness: 2
+  rotation: 0
+  z_index: 0
+- type: text
+  text_content: Client-VLANs
+  x1: 13
+  y1: 351
+  color: '#203653FF'
+  border_color: '#00000000'
+  border_style: ''
+  thickness: 1
+  rotation: 0
+  text_bold: true
+  text_italic: false
+  text_font: sans-serif
+  text_size: 10
+  text_unit: pt
+  z_index: 1
