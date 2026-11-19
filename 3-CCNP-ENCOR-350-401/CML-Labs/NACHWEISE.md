@@ -1,5 +1,7 @@
 # ENCOR – Hinweise, Lösungen und Nachweise
 
+Zur zusätzlichen Praxisstrecke gibt es [Hinweise und Prüfschritte für OSPF, eBGP und IP SLA](Routing-Assurance/solutions/NACHWEISE.md).
+
 Öffne diesen Teil erst für einen Hinweis oder zur Abnahme. Die drei Hinweise gehen von der Denkfrage bis zur konkreteren Diagnose. Bei einem Transferlauf bleiben sie geschlossen. Verwende vorhandene Konfigurationen und Fehlerlisten für den Referenzweg. Die Kriterien erlauben andere Lösungswege.
 
 **Technischer Stand:** Die Nachweise sind Abnahmevorgaben. Statische Prüfung, dokumentierter Feature-Support und beobachtete CML-Wirkung werden im [Curriculum](CURRICULUM.md) getrennt erfasst.

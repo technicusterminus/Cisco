@@ -56,6 +56,8 @@ Verglichen wurde GitHub-Commit [1bde11b](https://github.com/technicusterminus/Ci
 
 ## Reihenfolge
 
+Nach 01, 03 und 35 folgt als zusätzliche CML-Praxis die [Routing-Assurance-Strecke](Routing-Assurance/README.md) (60 Minuten). Sie verknüpft 3.2.b, 3.2.c, 4.1 und 4.4. Der Nachweis umfasst OSPF-Pfadwahl in beiden Richtungen, BGP-Ankündigung und Installation sowie eine aktive Messung mit definiertem Rückweg.
+
 | Abschnitt | Reihenfolge | Voraussetzung und späterer Nachweis |
 |---|---|---|
 | Geführter Einstieg | 05 → 06 → 07 → 08 → 33 | CCNA, VLAN, IPv4 und CLI. Schichtdiagnose später in 23. |

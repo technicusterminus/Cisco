@@ -10,6 +10,8 @@ Diese Labs ergänzen das Anki-Kompendium (1.845 Karten). Die Karten bauen Wissen
 
 [Curriculum und Blueprint-Matrix](CURRICULUM.md) · [Aufgaben ohne Befehlsliste](AUFGABEN.md) · [Hinweise, Nachweise und Lösungen](NACHWEISE.md)
 
+Zusätzlich zu den 33 nummerierten CML-Labs verbindet die [Praxisstrecke Routing Assurance](Routing-Assurance/README.md) OSPF, direktes eBGP und IP SLA auf drei IOSv-Routern. Zwei importierbare Startstände trainieren Pfadwechsel und die Diagnose eines einzelnen ausgefallenen Dienstes.
+
 Für den Einstieg importiere die Bauvariante und öffne den Guide. Die bisherigen README-Schritte kannst du bei Bedarf als geführte Fassung verwenden. Für Transfer startest du 23, 24 und 30 aus der jeweiligen Reparaturdatei.
 
 ## So ist jedes CML-Lab aufgebaut
