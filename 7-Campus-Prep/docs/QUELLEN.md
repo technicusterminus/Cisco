@@ -69,5 +69,5 @@ Cisco-Seiten (cisco.com, developer.cisco.com) waren beim Bau nicht erreichbar. B
 - 802.1X: EAP-Methoden im Detail, Zertifikate, CoA, Accounting-Zähler, Dead-Criteria-Feintuning; in `show aaa servers` fehlen Zähler-, Platform- und Account-Zeilen.
 - FlexConnect: Standalone-Betrieb bei WAN-Ausfall, lokale Authentifizierung am AP, Flex-ACLs, Central DHCP/Association und VLAN-Gruppen.
 - Ausgabeformate aller weiteren `show wireless …`-Befehle, `show wlan all`, `show ap name … config general`.
-- Antwortformate von Site-, Health-, Client- und Wireless-Endpunkten des Catalyst Center (GET-Antworten sind im SDK ungetypt).
+- Antwortformate von Site-, Health-, Client- und Wireless-Endpunkten des Catalyst Center (GET-Antworten sind im SDK ungetypt). Um sie aus einem eigenen Lab zu belegen, nimmt `tools/catc_capture.py` die Antworten schreibgeschützt auf (nur GET nach dem Token, Zugangsdaten nur aus Umgebungsvariablen, Token wird nicht gespeichert, `--anonymize` ersetzt IPs, MACs, Seriennummern, UUIDs, Namen und Geheimnisse durch stabile Platzhalter). Der Simulator selbst verbindet sich nie mit einem Catalyst Center.
 - RESTCONF/NETCONF-Modelle des C9800.
