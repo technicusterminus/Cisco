@@ -18,4 +18,5 @@ Ein Projekt, eine Welt: ein simulierter C9800-WLC mit Access Points und WLAN-Cli
 | 3f | QoS mit Metal-Profilen im Policy Profile: höchster DSCP-Wert je Richtung; Labs 18 und 19 | umgesetzt |
 | 3g | Multicast: CAPWAP-Multicast-Gruppe, Empfang der Clients, `show wireless multicast`; Labs 20 und 21 | umgesetzt |
 | 3h | WLC: Location; weitere belegte Show-Befehle | offen |
-| 4 | Catalyst Center: Sites, Network Settings, Provisioning des WLC, Assurance, Templates (nur mit belegten Antwortformaten) | offen |
+| 4a | Catalyst Center (nur Server): Sites (`site`, `site/count`), Gerätegesundheit und Client-Gesundheit aus der gemeinsamen Welt; Feldnamen aus den `cisco.dnac`-Beispielen | umgesetzt |
+| 4b | Catalyst Center: Oberfläche, Network Settings, Provisioning des WLC, Assurance-Probleme, Templates (nur mit belegten Antwortformaten) | offen |
