@@ -58,6 +58,11 @@ def run_check(chk, st):
     if t == 'apmode':
         a = next((x for x in st['aps'] if x['name'] == chk['ap']), None)
         return (a is not None and a['mode'] == chk['mode']), 'Modus %s' % (a['mode'] if a else '?')
+    if t == 'aprf':
+        a = next((x for x in st['aps'] if x['name'] == chk['ap']), None)
+        r = a['rf'][chk['band']] if a else None
+        ok = r is not None and all(r.get(k) == v for k, v in chk['attrs'].items())
+        return ok, 'nicht gefunden' if r is None else 'Profil %s, max. Sendeleistung %s, Funk %s' % (r['profile'] or '-', r['txMax'] if r['txMax'] is not None else 'automatisch', r['radio'])
     if t == 'mobilitypeer':
         pr = next((x for x in st['mobilityPeers'] if x['ip'] == chk['ip']), None)
         return (pr is not None and pr['control'] == 'Up' and pr['data'] == 'Up'), 'Peer %s: %s' % (

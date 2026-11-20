@@ -1,0 +1,109 @@
+{
+ "cause": "ap-lobby trägt das Default RF Tag; das RF Tag RFT_LOBBY mit dem Profil ist keinem AP zugewiesen.",
+ "checks": [
+  {
+   "ap": "ap-lobby",
+   "attrs": {
+    "profile": "RF_LOBBY",
+    "radio": "on",
+    "txMax": 14
+   },
+   "band": "5ghz",
+   "category": "function",
+   "desc": "ap-lobby nutzt RF_LOBBY im 5-GHz-Band",
+   "type": "aprf"
+  },
+  {
+   "ap": "ap-lager",
+   "attrs": {
+    "profile": null,
+    "radio": "on",
+    "txMax": null
+   },
+   "band": "5ghz",
+   "category": "security",
+   "desc": "ap-lager bleibt bei den globalen Einstellungen",
+   "type": "aprf"
+  }
+ ],
+ "duration": "20 min",
+ "fabric": "wlc1 mit ap-lobby und ap-lager",
+ "goals": [
+  "Die Kette RF-Profil, RF Tag und AP-Zuordnung kennen",
+  "Die Wirkung auf einen einzelnen AP begrenzen"
+ ],
+ "hints": [
+  "**Konzept:** Ein RF-Profil wirkt nie allein. Es braucht einen Verweis aus einem RF Tag, und der AP muss dieses RF Tag tragen.",
+  "**Ebene:** Die AP-Zuordnung. Profil und RF Tag selbst sind in Ordnung.",
+  "**Prüfschritte:** `show ap tag summary` zeigt das RF Tag jedes APs; die Seite Configuration > Wireless > Access Points zeigt die Wirkung je Band.",
+  "**Lösung:** Dem AP ap-lobby das RF Tag **RFT_LOBBY** zuweisen (`ap a4b2.32aa.0001`, `rf-tag RFT_LOBBY`). Nicht das Default RF Tag ändern: Das träfe auch ap-lager."
+ ],
+ "id": "16-rf-tag-fehlt",
+ "intro": "Für die Lobby sollen kleinere Funkzellen gelten: Das RF-Profil **RF_LOBBY** begrenzt das 5-GHz-Band auf 14 dBm und ein RF Tag **RFT_LOBBY** verweist darauf. Trotzdem sendet **ap-lobby** unverändert mit den globalen Einstellungen. **ap-lager** soll unverändert bleiben.",
+ "kind": "troubleshooting",
+ "level": "Fortgeschritten",
+ "limits": [
+  "Das Client-Modell ist didaktisch: Es erklärt, ob und warum ein Client verbunden ist, ist aber keine Abbildung der Controller-Pipeline.",
+  "Nicht modelliert: 802.1x/RADIUS, FlexConnect, RF-Profile, Roaming, Mobility.",
+  "Die Wirkung eines RF-Profils ist vereinfacht: maximale Sendeleistung und Band an/aus je AP. Es gibt keine Funkumgebung, keine Clients mit Signalstärke und kein RRM.",
+  "Nicht modelliert: DCA und Kanalbreite, Datenraten, Band Select, Coverage Hole Detection, RX-SOP, Tx-Power-Wertebereiche des Geräts (der Simulator erlaubt 1 bis 30 dBm)."
+ ],
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 01"
+ ],
+ "questions": [
+  {
+   "answer": 0,
+   "explain": "Die Kette ist Profil, RF Tag, AP. Ein Profil ohne zugewiesenes RF Tag bleibt wirkungslos.",
+   "id": "q1",
+   "options": [
+    "Wenn ein RF Tag darauf verweist und der AP dieses RF Tag trägt",
+    "Sobald es angelegt und aktiviert ist",
+    "Sobald der AP neu startet",
+    "Nur im FlexConnect-Modus"
+   ],
+   "q": "Wann wirkt ein RF-Profil an einem AP?"
+  },
+  {
+   "answer": 0,
+   "explain": "Das Default RF Tag tragen alle APs ohne eigenes Tag. Die Anforderung begrenzt die Wirkung auf die Lobby.",
+   "id": "q2",
+   "options": [
+    "Dann gilt es für alle APs, auch ap-lager",
+    "Das Default RF Tag lässt sich nicht ändern",
+    "Dann wird das Band abgeschaltet",
+    "Dann verliert die Lobby ihre Policy"
+   ],
+   "q": "Warum ist es keine Lösung, das Default RF Tag auf das Profil zeigen zu lassen?"
+  }
+ ],
+ "requirements": [
+  "ap-lobby nutzt im 5-GHz-Band das Profil RF_LOBBY (max. 14 dBm, Funk an).",
+  "ap-lager bleibt bei den globalen Einstellungen."
+ ],
+ "solution": "WebUI: Configuration > Wireless > Access Points > ap-lobby > Edit Tags: RF Tag RFT_LOBBY. CLI: `ap a4b2.32aa.0001`, `rf-tag RFT_LOBBY`.",
+ "solutionCommands": [
+  "ap a4b2.32aa.0001",
+  "rf-tag RFT_LOBBY"
+ ],
+ "startCommands": [
+  "ap dot11 5ghz rf-profile RF_LOBBY",
+  "tx-power max 14",
+  "no shutdown",
+  "exit",
+  "wireless tag rf RFT_LOBBY",
+  "5ghz-rf-policy RF_LOBBY",
+  "exit"
+ ],
+ "title": "16 RF-Profil angelegt, aber die Lobby sendet unverändert",
+ "tools": [
+  "WebUI: Configuration > Tags & Profiles > RF und Configuration > Wireless > Access Points",
+  "CLI: show ap tag summary"
+ ],
+ "topic": "RF / Troubleshooting",
+ "track": "CCNP Enterprise Wireless (300-430 ENWLSI)"
+}

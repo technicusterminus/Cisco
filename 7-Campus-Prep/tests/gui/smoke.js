@@ -147,7 +147,7 @@ const STANDALONE = process.env.STANDALONE === '1';
     // Staende und Fortschritt
     await go('labs');
     console.log('       Kacheln: ' + (await text()).split('\n').filter(l => /bestanden|Starts|Prüfungsmodus$|^\d+( \/ \d+)?$/.test(l)).join(' | ').slice(0, 200));
-    check(/Geführt bestanden/.test(await text()) && /1 \/ 15[\s\S]*Labs bestanden/.test(await text()), 'Fortschritt: Lab 01 ist als geführt bestanden markiert');
+    check(/Geführt bestanden/.test(await text()) && /1 \/ 17[\s\S]*Labs bestanden/.test(await text()), 'Fortschritt: Lab 01 ist als geführt bestanden markiert');
     await p.fill('[data-id="save-name"]', 'lab01-geloest'); await p.click('[data-id="save"]'); await p.waitForTimeout(500);
     check(await p.locator('[data-id="load-lab01-geloest"]').count() === 1, 'Stand wird gespeichert und aufgelistet');
     await p.fill('[data-id="save-name"]', '../evil'); await p.click('[data-id="save"]'); await p.waitForTimeout(400);
@@ -168,7 +168,7 @@ const STANDALONE = process.env.STANDALONE === '1';
     await p.click('[data-id="del-lab01-geloest"]'); await p.waitForTimeout(400);
     check(await p.locator('[data-id="load-lab01-geloest"]').count() === 0, 'Stand lässt sich löschen');
     await p.click('[data-id="reset-progress"]'); await p.waitForTimeout(400);
-    check(/0 \/ 15[\s\S]*Labs bestanden/.test(await text()) && !/Geführt bestanden/.test(await text()), 'Fortschritt zurücksetzen');
+    check(/0 \/ 17[\s\S]*Labs bestanden/.test(await text()) && !/Geführt bestanden/.test(await text()), 'Fortschritt zurücksetzen');
 
     // 802.1X: AAA-Kette im Standardzustand ueber die Dialoge aufbauen, dann ein WLAN mit WPA2 Enterprise
     await go('aaa'); await p.click('[data-id="add-radius"]');
@@ -248,6 +248,31 @@ const STANDALONE = process.env.STANDALONE === '1';
     await go('webauth'); await p.click('[data-id="authz-toggle"]'); await p.waitForTimeout(400);
     check(solved2(await labCheck2()), 'Lab 12: mit der Autorisierung bestanden');
 
+    // RF: Lab 17 komplett ueber die Dialoge, Lab 16 ueber die AP-Zuordnung
+    const labCheck4 = async () => { await go('labs'); await p.click('[data-id="lab-check"]'); await p.waitForTimeout(300); return p.textContent('[data-id="check-result"]'); };
+    const solved4 = r => /bestanden/.test(r) && !/noch nicht/.test(r);
+    await go('labs'); await p.selectOption('[data-id="lab-mode"]', 'guided'); await p.click('[data-id="start-17"]'); await p.waitForTimeout(600);
+    check(!solved4(await labCheck4()), 'Lab 17: ohne Lösung nicht bestanden');
+    await go('rf'); await p.click('[data-id="add-rfprof"]');
+    await p.fill('[data-id="rfprof-name"]', 'RF_LOBBY'); await p.fill('[data-id="rfprof-max"]', '14');
+    check(/ap dot11 5ghz rf-profile RF_LOBBY[\s\S]*tx-power max 14[\s\S]*shutdown/.test(await p.textContent('[data-id="cli-preview"]')) && !/no shutdown/.test(await p.textContent('[data-id="cli-preview"]')), 'RF-Dialog: ein neues Profil ist zunächst deaktiviert (shutdown)');
+    await p.check('[data-id="rfprof-enabled"]');
+    check(/no shutdown/.test(await p.textContent('[data-id="cli-preview"]')), 'RF-Dialog: Enabled ergibt no shutdown');
+    await apply();
+    check(/5 GHz[\s\S]*RF_LOBBY[\s\S]*14 dBm/.test(await text()), 'RF-Profil angelegt');
+    await p.click('[data-id="add-rftag"]'); await p.fill('[data-id="rftag-name"]', 'RFT_LOBBY'); await p.selectOption('[data-id="rftag-5"]', 'RF_LOBBY');
+    check(/wireless tag rf RFT_LOBBY[\s\S]*5ghz-rf-policy RF_LOBBY/.test(await p.textContent('[data-id="cli-preview"]')), 'RF-Tag-Dialog zeigt das CLI-Äquivalent');
+    await apply();
+    check(/RFT_LOBBY[\s\S]*RF_LOBBY/.test(await text()), 'RF Tag angelegt');
+    check(!solved4(await labCheck4()), 'Lab 17: ohne AP-Zuordnung nicht bestanden');
+    await go('apcfg'); await p.click('[data-id="ap-tag-ap-lobby"]'); await p.selectOption('[data-id="ap-rf-tag"]', 'RFT_LOBBY'); await apply();
+    check(/ap-lobby[\s\S]*RF_LOBBY, max\. 14 dBm/.test(await text()), 'Access Points: Wirkung je Band sichtbar');
+    check(solved4(await labCheck4()), 'Lab 17: mit den Dialogen bestanden');
+    await go('labs'); await p.click('[data-id="start-16"]'); await p.waitForTimeout(600);
+    check(!solved4(await labCheck4()), 'Lab 16: ohne Lösung nicht bestanden');
+    await go('apcfg'); await p.click('[data-id="ap-tag-ap-lobby"]'); await p.selectOption('[data-id="ap-rf-tag"]', 'RFT_LOBBY'); await apply();
+    check(solved4(await labCheck4()), 'Lab 16: mit der AP-Zuordnung bestanden');
+
     // Mobility: Lab 15 komplett ueber die Dialoge, Lab 14 ueber das Bearbeiten des Peers
     const labCheck3 = async () => { await go('labs'); await p.click('[data-id="lab-check"]'); await p.waitForTimeout(300); return p.textContent('[data-id="check-result"]'); };
     const solved3 = r => /bestanden/.test(r) && !/noch nicht/.test(r);
@@ -312,7 +337,7 @@ const STANDALONE = process.env.STANDALONE === '1';
     check(/ap-lager[\s\S]*FlexConnect/.test(await text()), 'Nach dem Neuladen ist die Konfiguration noch da');
 
     // Alle Ansichten ohne JS-Fehler
-    for (const id of ['dash', 'labs', 'aaa', 'webauth', 'mobility', 'flex', 'sitetags', 'aps', 'clients', 'wlans', 'policies', 'tags', 'apcfg', 'cli', 'diag']) { await go(id); }
+    for (const id of ['dash', 'labs', 'aaa', 'webauth', 'mobility', 'rf', 'flex', 'sitetags', 'aps', 'clients', 'wlans', 'policies', 'tags', 'apcfg', 'cli', 'diag']) { await go(id); }
     check(rejected === (STANDALONE ? 0 : 3), (STANDALONE ? 'Ohne Server gibt es keine HTTP-Fehler: ' : 'Genau die drei absichtlichen Ablehnungen (HTTP 400) wurden ausgelöst: ') + rejected);
     if (STANDALONE) check(!requests.some(u => /^https?:/.test(u)), 'Keine Netzwerkzugriffe (läuft vollständig offline)' + (requests.some(u => /^https?:/.test(u)) ? ': ' + requests.filter(u => /^https?:/.test(u)).join(' ') : ''));
     check(errs.length === 0, 'Keine JavaScript-Fehler' + (errs.length ? ': ' + errs.join(' | ') : ''));

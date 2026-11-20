@@ -372,6 +372,57 @@ def sc_mob_variants():
     return out
 
 
+def sc_cli_rf():
+    r = Recorder('cli-rf')
+    r.cli('configure terminal', 'ap dot11', 'ap dot11 5ghz', 'ap dot11 5ghz rf-profile', 'ap dot11 6ghz rf-profile X', 'ap dot11 5ghz rf-profile bad!name', 'ap dot11 5ghz rf-profile P',
+          'tx-power max 0', 'tx-power max 31', 'tx-power max x', 'tx-power', 'tx-power med 10', 'bogus', 'shutdown x', 'no bogus', 'tx-power max 10', 'tx-power min 11', 'tx-power min 10',
+          'tx-power min 9', 'no tx-power min', 'no tx-power max', 'tx-power max 20', 'tx-power min 5', 'description Lobby 5 GHz', 'no shutdown', 'exit',
+          'ap dot11 24ghz rf-profile P', 'tx-power max 18', 'exit', 'wireless tag rf', 'wireless tag rf bad!name', 'wireless tag rf T', '5ghz-rf-policy', '5ghz-rf-policy NIX',
+          '24ghz-rf-policy NIX', '6ghz-rf-policy P', '5ghz-rf-policy P', '24ghz-rf-policy P', 'no 24ghz-rf-policy', 'bogus', 'exit', 'ap a4b2.32aa.0001', 'rf-tag', 'rf-tag NIX', 'rf-tag T',
+          'exit', 'no ap dot11 5ghz rf-profile P', 'no wireless tag rf T', 'no wireless tag rf default-rf-tag', 'no wireless tag rf NIX', 'no ap dot11 5ghz rf-profile NIX', 'end',
+          'show ap tag summary', 'configure terminal', 'ap a4b2.32aa.0001', 'no rf-tag', 'exit', 'wireless tag rf T', 'no 5ghz-rf-policy', 'exit', 'no wireless tag rf T',
+          'no ap dot11 5ghz rf-profile P', 'no ap dot11 24ghz rf-profile P', 'end', 'show ap tag summary')
+    r.call('GET', '/wlc/api/state')
+    return r.finish()
+
+
+RF_PROFILE = ['ap dot11 5ghz rf-profile RF_LOBBY', 'tx-power max 14', 'no shutdown', 'exit']
+RF_TAG = ['wireless tag rf RFT_LOBBY', '5ghz-rf-policy RF_LOBBY', 'exit']
+
+
+def rf_variants():
+    return [
+        ('16-rf-tag-fehlt', 'fixed', ['ap ' + L1, 'rf-tag RFT_LOBBY']),
+        ('16-rf-tag-fehlt', 'default-tag', ['wireless tag rf default-rf-tag', '5ghz-rf-policy RF_LOBBY']),
+        ('16-rf-tag-fehlt', 'wrong-ap', ['ap ' + L2, 'rf-tag RFT_LOBBY']),
+        ('16-rf-tag-fehlt', 'both-aps', ['ap ' + L1, 'rf-tag RFT_LOBBY', 'exit', 'ap ' + L2, 'rf-tag RFT_LOBBY']),
+        ('16-rf-tag-fehlt', 'profile-off', ['ap ' + L1, 'rf-tag RFT_LOBBY', 'exit', 'ap dot11 5ghz rf-profile RF_LOBBY', 'shutdown']),
+        ('16-rf-tag-fehlt', 'max-changed', ['ap ' + L1, 'rf-tag RFT_LOBBY', 'exit', 'ap dot11 5ghz rf-profile RF_LOBBY', 'tx-power max 20']),
+        ('17-rf-lobby-einrichten', 'fixed', RF_PROFILE + RF_TAG + ['ap ' + L1, 'rf-tag RFT_LOBBY', 'exit']),
+        ('17-rf-lobby-einrichten', 'profile-disabled', ['ap dot11 5ghz rf-profile RF_LOBBY', 'tx-power max 14', 'exit'] + RF_TAG + ['ap ' + L1, 'rf-tag RFT_LOBBY']),
+        ('17-rf-lobby-einrichten', 'no-assignment', RF_PROFILE + RF_TAG),
+        ('17-rf-lobby-einrichten', 'only-profile', RF_PROFILE),
+        ('17-rf-lobby-einrichten', 'wrong-ap', RF_PROFILE + RF_TAG + ['ap ' + L2, 'rf-tag RFT_LOBBY']),
+        ('17-rf-lobby-einrichten', '24ghz-only', ['ap dot11 24ghz rf-profile RF24', 'tx-power max 14', 'no shutdown', 'exit', 'wireless tag rf RFT_LOBBY', '24ghz-rf-policy RF24', 'exit', 'ap ' + L1, 'rf-tag RFT_LOBBY']),
+        ('17-rf-lobby-einrichten', 'both-bands', RF_PROFILE + ['ap dot11 24ghz rf-profile RF24', 'tx-power max 10', 'no shutdown', 'exit', 'wireless tag rf RFT_LOBBY', '5ghz-rf-policy RF_LOBBY', '24ghz-rf-policy RF24', 'exit', 'ap ' + L1, 'rf-tag RFT_LOBBY']),
+        ('17-rf-lobby-einrichten', 'max-15', ['ap dot11 5ghz rf-profile RF_LOBBY', 'tx-power max 15', 'no shutdown', 'exit'] + RF_TAG + ['ap ' + L1, 'rf-tag RFT_LOBBY']),
+        ('17-rf-lobby-einrichten', 'default-tag', RF_PROFILE + ['wireless tag rf default-rf-tag', '5ghz-rf-policy RF_LOBBY']),
+    ]
+
+
+def sc_rf_variants():
+    out = []
+    for lab, name, cmds in rf_variants():
+        r = Recorder('rf-%s-%s' % (lab[:2], name))
+        r.call('POST', '/wlc/api/lab/start', {'id': lab, 'mode': 'guided'})
+        r.apply(cmds)
+        r.call('GET', '/wlc/api/state')
+        r.cli('end', 'show ap tag summary', 'show wlan summary')
+        r.call('POST', '/wlc/api/lab/check', {})
+        out.append(r.finish())
+    return out
+
+
 def sc_apply():
     r = Recorder('apply-atomic-and-validation')
     r.apply(CORP)
@@ -507,7 +558,7 @@ def sc_no_persistence():
 
 
 def build():
-    out = [sc_cli_errors(), sc_cli_policy_ptag_ap(), sc_cli_flex(), sc_cli_aaa(), sc_cli_webauth(), sc_cli_mobility(), sc_names()] + sc_decide() + sc_aaa_variants() + sc_web_variants() + sc_mob_variants() + [sc_apply(), sc_lab_errors(), sc_saves(), sc_no_persistence()]
+    out = [sc_cli_errors(), sc_cli_policy_ptag_ap(), sc_cli_flex(), sc_cli_aaa(), sc_cli_webauth(), sc_cli_mobility(), sc_cli_rf(), sc_names()] + sc_decide() + sc_aaa_variants() + sc_web_variants() + sc_mob_variants() + sc_rf_variants() + [sc_apply(), sc_lab_errors(), sc_saves(), sc_no_persistence()]
     for lab_id in lab_ids():
         for mode in ('guided', 'exam'):
             out.append(lab_flow(lab_id, mode))
