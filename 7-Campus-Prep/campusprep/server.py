@@ -59,13 +59,16 @@ class Sim:
         world, wlc = self.build_state(d)
         self.world, self.wlc = world, wlc
         self.cli = Cli(self.wlc)
-        self.catc = CatalystCenter(self.world)
+        self.catc = CatalystCenter(self.world, clients=self.wlc_clients)
         self.labs.restore_session(d.get('lab'))
 
     def persist(self):
         if self.store:
             self.store.write_state(self.snapshot_all())
             self.store.write_progress(self.labs.progress)
+
+    def wlc_clients(self):
+        return self.wlc.clients()
 
     def reset_world(self, clients=None, radius=None, mobility=None, underlay=None):
         """Neue Welt (Standard oder mit Lab-Clients und -RADIUS-Servern) und unkonfigurierter Controller."""
@@ -80,7 +83,7 @@ class Sim:
             self.world['underlay'] = copy.deepcopy(underlay)
         self.wlc = Wlc(self.world)
         self.cli = Cli(self.wlc)
-        self.catc = CatalystCenter(self.world)
+        self.catc = CatalystCenter(self.world, clients=self.wlc_clients)
 
     def apply(self, commands):
         return apply_commands(self.wlc, commands)

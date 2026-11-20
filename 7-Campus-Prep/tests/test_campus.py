@@ -145,6 +145,81 @@ class TestCatalystCenter(unittest.TestCase):
         self.assertEqual(c.handle('GET', '/dna/intent/api/v1/network-device')[0], 401)
         self.assertEqual(c.handle('GET', '/dna/intent/api/v1/network-device', headers={'X-Auth-Token': 'x'})[0], 401)
 
+    # Feldnamen laut Beispielantworten der cisco.dnac-Module site_info, device_health_info und client_health_info
+    SITE_FIELDS = {'parentId', 'name', 'additionalInfo', 'siteHierarchy', 'siteNameHierarchy', 'instanceTenantId', 'id'}
+    DEVICE_HEALTH_FIELDS = {'deviceType', 'overallHealth', 'ipAddress', 'deviceFamily', 'issueCount', 'macAddress', 'osVersion', 'name', 'model',
+                            'location', 'reachabilityHealth'}
+    SCORE_FIELDS = {'scoreCategory', 'scoreValue', 'clientCount', 'clientUniqueCount', 'maintenanceAffectedClientCount', 'randomMacCount',
+                    'duidCount', 'starttime', 'endtime', 'connectedToUdnCount', 'unconnectedToUdnCount', 'scoreList'}
+
+    def test_sites_tree_count_filters_and_fields(self):
+        st, body = self.c.handle('GET', '/dna/intent/api/v1/site', headers=self.h)
+        self.assertEqual((st, set(body)), (200, {'response', 'version'}))
+        rows = body['response']
+        self.assertEqual([r['siteNameHierarchy'] for r in rows], ['Global', 'Global/Deutschland', 'Global/Deutschland/Zentrale', 'Global/Deutschland/Zentrale/EG'])
+        for r in rows:
+            self.assertEqual(set(r), self.SITE_FIELDS)
+        by = {r['siteNameHierarchy']: r for r in rows}
+        self.assertIsNone(by['Global']['parentId'])
+        self.assertEqual(by['Global/Deutschland']['parentId'], by['Global']['id'])
+        ids = by['Global/Deutschland/Zentrale/EG']['siteHierarchy'].split('/')
+        self.assertEqual(ids, [by[n]['id'] for n in ('Global', 'Global/Deutschland', 'Global/Deutschland/Zentrale', 'Global/Deutschland/Zentrale/EG')])
+        self.assertEqual(self.c.handle('GET', '/dna/intent/api/v1/site/count', headers=self.h)[1], {'response': 4, 'version': '1.0'})
+        self.assertEqual(self.c.handle('GET', '/dna/intent/api/v1/site/count', {'type': 'floor'}, self.h)[1]['response'], 1)
+        got = self.c.handle('GET', '/dna/intent/api/v1/site', {'name': 'Global/Deutschland/Zentrale'}, self.h)[1]['response']
+        self.assertEqual([r['name'] for r in got], ['Zentrale'])
+        self.assertEqual(len(self.c.handle('GET', '/dna/intent/api/v1/site', {'offset': '2', 'limit': '2'}, self.h)[1]['response']), 2)
+        self.assertEqual(self.c.handle('GET', '/dna/intent/api/v1/site', {'siteId': 'nix'}, self.h)[1]['response'], [])
+        self.assertEqual(self.c.handle('GET', '/dna/intent/api/v1/site')[0], 401)
+        self.assertEqual(self.c.handle('POST', '/dna/intent/api/v1/site', headers=self.h)[0], 404)
+
+    def test_site_ids_are_deterministic(self):
+        again = Sim().catc
+        st, body = again.handle('POST', '/dna/system/api/v1/auth/token', headers={'Authorization': BASIC})
+        a = self.c.handle('GET', '/dna/intent/api/v1/site', headers=self.h)[1]
+        b = again.handle('GET', '/dna/intent/api/v1/site', headers={'X-Auth-Token': body['Token']})[1]
+        self.assertEqual(a, b)
+
+    def test_device_health_follows_the_inventory(self):
+        st, body = self.c.handle('GET', '/dna/intent/api/v1/device-health', headers=self.h)
+        self.assertEqual((st, set(body), body['totalCount']), (200, {'version', 'totalCount', 'response'}, 3))
+        for r in body['response']:
+            self.assertEqual(set(r), self.DEVICE_HEALTH_FIELDS)
+        self.assertEqual([r['name'] for r in body['response']], [d['hostname'] for d in self.c.devices()])
+        self.s.world['aps'][1]['joined'] = False
+        body = self.c.handle('GET', '/dna/intent/api/v1/device-health', headers=self.h)[1]
+        self.assertEqual(sorted(r['name'] for r in body['response']), ['ap-lobby', 'wlc1'], 'ein nicht registrierter AP fehlt wie im Inventar')
+        self.assertEqual(self.c.handle('GET', '/dna/intent/api/v1/device-health', {'limit': '1'}, self.h)[1]['response'][0]['name'], 'wlc1')
+
+    def test_client_health_follows_the_shared_world(self):
+        def score():
+            body = self.c.handle('GET', '/dna/intent/api/v1/client-health', headers=self.h)[1]
+            self.assertEqual(set(body), {'version', 'response'})
+            site = body['response'][0]
+            self.assertEqual(set(site), {'siteId', 'scoreDetail'})
+            for d in site['scoreDetail']:
+                self.assertEqual(set(d), self.SCORE_FIELDS)
+            return {d['scoreCategory']['scoreCategory']: (d['scoreValue'], d['clientCount']) for d in site['scoreDetail']}
+        self.assertEqual(score(), {'ALL': (0, 2), 'WIRELESS': (0, 2)}, 'ohne Konfiguration ist kein Client verbunden')
+        for line in list(CORP) + ['configure terminal', 'ap a4b2.32aa.0001', 'policy-tag PT_Corp', 'end']:
+            self.s.cli.run(line)
+        self.assertEqual(score(), {'ALL': (50, 2), 'WIRELESS': (50, 2)}, 'ein Client verbunden, einer mit falschem Schluessel')
+        self.s.cli.run('configure terminal')
+        self.s.cli.run('wlan Corp_Profile 1 Corp')
+        self.s.cli.run('security wpa psk set-key ascii 0 falsch')
+        self.s.cli.run('end')
+        self.assertEqual(score()['ALL'], (50, 2), 'jetzt ist der andere Client verbunden')
+
+    def test_client_health_survives_restoring_a_state(self):
+        for line in list(CORP) + ['configure terminal', 'ap a4b2.32aa.0001', 'policy-tag PT_Corp', 'end']:
+            self.s.cli.run(line)
+        snap = self.s.snapshot_all()
+        self.s.reset_world()
+        self.s.restore_all(snap)
+        st, tok = self.s.catc.handle('POST', '/dna/system/api/v1/auth/token', headers={'Authorization': BASIC})
+        body = self.s.catc.handle('GET', '/dna/intent/api/v1/client-health', headers={'X-Auth-Token': tok['Token']})[1]
+        self.assertEqual(body['response'][0]['scoreDetail'][0]['scoreValue'], 50)
+
     def test_device_list_fields_and_envelope(self):
         st, body = self.c.handle('GET', '/dna/intent/api/v1/network-device', headers=self.h)
         self.assertEqual(st, 200)
@@ -174,7 +249,8 @@ class TestCatalystCenter(unittest.TestCase):
         self.assertEqual(g('/dna/intent/api/v1/network-device/unbekannt')[0], 404)
 
     def test_unimplemented_endpoint_says_so(self):
-        st, body = self.c.handle('GET', '/dna/intent/api/v1/site', headers=self.h)
+        # /site gibt es inzwischen (Phase 4a); ein weiterhin fehlender Pfad dient als Beispiel
+        st, body = self.c.handle('GET', '/dna/intent/api/v1/network-health', headers=self.h)
         self.assertEqual(st, 404)
         self.assertIn('nicht umgesetzt', body['error'])
 
