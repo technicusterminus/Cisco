@@ -2,7 +2,7 @@
 
 Simulierter **Catalyst 9800 WLC** und simuliertes **Catalyst Center** in einer gemeinsamen Welt. Python-Standardbibliothek, keine Abhängigkeiten, läuft offline. Kein echtes Gerät, keine Verbindung zu echten Controllern.
 
-> Stand: Phase 1, 2a, 2c, 2d, 2e, 3a, 3b, 3c, 3d, 3e, 3f und 3g (siehe [`docs/UMFANG.md`](docs/UMFANG.md)). Die WLC hat eine Weboberfläche und einundzwanzig Labs (fünfzehn davon für CCNP Enterprise Wireless), das Catalyst Center noch keine Oberfläche.
+> Stand: Phase 1 bis 3g (siehe [`docs/UMFANG.md`](docs/UMFANG.md)). Die WLC hat eine Weboberfläche und einundzwanzig Labs (fünfzehn davon für CCNP Enterprise Wireless), das Catalyst Center noch keine Oberfläche.
 
 ## Ohne Python öffnen
 
@@ -14,7 +14,7 @@ Grenzen der Einzeldatei:
 - Der **Prüfungsmodus** ist hier eine Selbstverpflichtung: Hinweise und Lösungen stehen im Quelltext der Datei. Mit dem Server liefert die API sie im Prüfungsmodus nicht aus.
 - Die Datei ist **generiert** (`python3 tools/build_standalone.py`) und eingecheckt; ein Test prüft, dass sie zu den Quellen passt.
 
-Die Browser-Engine (`static/engine.js`) ist eine zweite Umsetzung derselben Regeln wie die Python-Engine. Ein Paritätstest spielt viele Szenarien (über 1000 HTTP-Schritte, alle Labs in beiden Modi, Persistenz-Randfälle) gegen beide ab und verlangt identische Antworten (`node tests/parity/parity.js`).
+Die Browser-Engine (`static/engine.js`) ist eine zweite Umsetzung derselben Regeln wie die Python-Engine. Ein Paritätstest spielt viele Szenarien (über 3000 HTTP-Schritte, alle Labs in beiden Modi, Persistenz-Randfälle) gegen beide ab und verlangt identische Antworten (`node tests/parity/parity.js`).
 
 ## Starten
 
@@ -31,7 +31,7 @@ python3 Labs-Quelle/build_labs.py   # labs/*.json neu erzeugen (deterministisch)
 
 ## WLC-Oberfläche
 
-`http://127.0.0.1:8090/` zeigt die WebUI des simulierten C9800: Dashboard, Monitoring (Access Points, Clients), Configuration (WLANs, Policy, Tags, AP-Tags), Administration (CLI) und die Simulations-Seite *Client-Diagnose*, die erklärt, warum ein Client nicht verbunden ist. Jeder Dialog zeigt vorab das **CLI-Äquivalent**; Änderungen laufen durch dieselbe CLI und werden atomar angewendet (bei einem Fehler bleibt alles wie vorher). Die Menüstruktur ist aus dem Wissen über die WebUI nachgebaut (siehe `docs/QUELLEN.md`).
+`http://127.0.0.1:8090/` zeigt die WebUI des simulierten C9800: Dashboard, Monitoring (Access Points, Clients), Configuration (Tags & Profiles: WLANs, Policy, Flex, Tags, RF; Wireless: Access Points, Mobility; Security: AAA, Web Auth; Services: Multicast), Administration (CLI) und die Simulations-Seite *Client-Diagnose*, die erklärt, warum ein Client nicht verbunden ist. Jeder Dialog zeigt vorab das **CLI-Äquivalent**; Änderungen laufen durch dieselbe CLI und werden atomar angewendet (bei einem Fehler bleibt alles wie vorher). Die Menüstruktur ist aus dem Wissen über die WebUI nachgebaut (siehe `docs/QUELLEN.md`).
 
 ## Labs
 
@@ -58,7 +58,13 @@ Umgesetzt:
 |---|---|
 | Konfiguration | `wlan <profil> <id> <ssid>` mit `security wpa akm psk`, `security wpa psk set-key ascii 0 <key>`, `shutdown`; `wireless profile policy <name>` mit `vlan`, `description`, `shutdown`; `wireless tag policy <name>` mit `wlan <profil> policy <policy>`; `ap <ethernet-mac>` mit `policy-tag <name>` oder `no policy-tag`; Löschen mit `no wlan`, `no wireless profile policy`, `no wireless tag policy` |
 | FlexConnect | `wireless profile flex <name>` mit `native-vlan-id` und `vlan-name`/`vlan-id`; `wireless tag site <name>` mit `no local-site` und `flex-profile`; im Policy Profile `no central switching`; am AP `site-tag`. Ein Site Tag ohne Local Site versetzt den AP in den FlexConnect-Modus |
-| Show (Format belegt) | `show wlan summary`, `show ap summary`, `show ap tag summary`, `show wireless client summary`, `show wireless profile policy summary`, `show wireless profile flex summary`, `show wireless tag site summary` |
+| 802.1X und AAA | `radius server <name>` mit `address ipv4`, `key`, `timeout`, `retransmit`; `aaa group server radius <name>` mit `server name`; `aaa authentication dot1x <liste> group <group>`; im WLAN `security wpa akm dot1x` und `security dot1x authentication-list`; im Policy Profile `aaa-override` |
+| Web Authentication | `username <name> [privilege <n>] password [0] <pw>`; `aaa authentication login <liste> local`; `aaa authorization network default local`; `parameter-map type webauth <name>` mit `type webauth` und `virtual-ip ipv4`; im WLAN `security web-auth` mit `authentication-list` und `parameter-map` |
+| Mobility | `wireless mobility group name <name>`; `wireless mobility group member mac-address <mac> ip <ip> group <name>` |
+| RF | `ap dot11 5ghz\|24ghz rf-profile <name>` mit `tx-power min\|max`, `shutdown`; `wireless tag rf <name>` mit `5ghz-rf-policy` und `24ghz-rf-policy`; am AP `rf-tag` |
+| QoS | im Policy Profile `service-policy output <platinum\|gold\|silver\|bronze>` und `service-policy input <…-up>` |
+| Multicast | `wireless multicast <gruppe>`, `no wireless multicast` |
+| Show (Format belegt oder teilweise belegt) | `show wlan summary`, `show ap summary`, `show ap tag summary`, `show wireless client summary`, `show wireless profile policy summary`, `show wireless profile flex summary`, `show wireless tag site summary`, `show aaa servers`, `show wireless mobility summary`, `show wireless multicast` (die letzten drei teils im Simulator-Format, siehe `docs/QUELLEN.md`) |
 
 Die Welt hat zwei APs und zwei Clients. Das Lernmoment: Ein AP ohne eigenes Policy Tag nutzt `default-policy-tag`, das kein WLAN enthält. Die SSID wird nicht ausgestrahlt, und `show wireless client summary` bleibt leer, bis dem AP ein Policy Tag mit dem WLAN zugewiesen ist. WLAN und Policy Profile sind nach dem Anlegen administrativ down.
 
