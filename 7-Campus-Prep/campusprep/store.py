@@ -9,8 +9,8 @@ import os
 import re
 
 KIND = 'campusprep-state'
-VERSION = 6          # 2: Flex Profiles und Site Tags, 3: AAA-Objekte und RADIUS-Gegenseite, 4: Web-Auth (lokale Benutzer, Login-Listen, Parameter Maps), 5: Mobility (Gruppe, Peers), 6: RF-Profile und RF Tags
-ACCEPTED = (1, 2, 3, 4, 5, 6) # Staende der Version 1 bleiben ladbar; fehlende Felder werden mit Standardwerten gefuellt
+VERSION = 7          # 2: Flex Profiles und Site Tags, 3: AAA-Objekte und RADIUS-Gegenseite, 4: Web-Auth (lokale Benutzer, Login-Listen, Parameter Maps), 5: Mobility (Gruppe, Peers), 6: RF-Profile und RF Tags, 7: QoS im Policy Profile
+ACCEPTED = (1, 2, 3, 4, 5, 6, 7) # Staende der Version 1 bleiben ladbar; fehlende Felder werden mit Standardwerten gefuellt
 NAME_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$')
 
 

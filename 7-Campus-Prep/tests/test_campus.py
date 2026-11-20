@@ -372,6 +372,72 @@ AAA = ['aaa new-model', 'radius server RS1', 'address ipv4 10.10.0.50 auth-port 
 CORP_CFG = CORP[1:-1] + ['ap a4b2.32aa.0001', 'policy-tag PT_Corp', 'exit']
 
 
+class TestQos(unittest.TestCase):
+    """QoS mit Metal-Profilen: service-policy und die hoechsten DSCP-Werte nach Cisco-Dokument 222241; Auswertung ist ein Simulator-Modell."""
+
+    def world(self, extra=(), dscp=46):
+        s = Sim()
+        c = {'mac': '58bf.eaaa.0001', 'ssid': 'Corp', 'psk': 'Sommer2026', 'ap': 'ap-lobby', 'protocol': '11ac'}
+        if dscp is not None:
+            c['dscp'] = dscp
+        s.reset_world([c])
+        ok, _, err = s.apply(list(CORP_CFG) + list(extra))
+        self.assertTrue(ok, err)
+        return s
+
+    def client(self, s):
+        return s.wlc.state()['clients'][0]
+
+    def test_each_metal_profile_caps_the_dscp_at_its_maximum(self):
+        for name, cap in (('platinum', 46), ('gold', 34), ('silver', 0), ('bronze', 8)):
+            s = self.world(['wireless profile policy PP_Corp', 'service-policy output ' + name, 'service-policy input %s-up' % name])
+            c = self.client(s)
+            self.assertEqual((c['state'], c['dscpDown'], c['dscpUp']), ('Run', min(46, cap), min(46, cap)), name)
+
+    def test_lower_marking_is_not_raised_and_no_policy_means_no_cap(self):
+        s = self.world(['wireless profile policy PP_Corp', 'service-policy output gold', 'service-policy input gold-up'], dscp=10)
+        self.assertEqual((self.client(s)['dscpDown'], self.client(s)['dscpUp']), (10, 10))
+        s = self.world()
+        self.assertEqual((self.client(s)['dscpDown'], self.client(s)['dscpUp']), (46, 46))
+
+    def test_directions_are_independent(self):
+        s = self.world(['wireless profile policy PP_Corp', 'service-policy output bronze'])
+        self.assertEqual((self.client(s)['dscpDown'], self.client(s)['dscpUp']), (8, 46))
+        s = self.world(['wireless profile policy PP_Corp', 'service-policy input bronze-up'])
+        self.assertEqual((self.client(s)['dscpDown'], self.client(s)['dscpUp']), (46, 8))
+
+    def test_clients_without_marking_and_unconnected_clients_have_no_dscp_result(self):
+        s = self.world(['wireless profile policy PP_Corp', 'service-policy output bronze'], dscp=None)
+        self.assertEqual((self.client(s)['dscp'], self.client(s)['dscpDown'], self.client(s)['dscpUp']), (None, None, None))
+        s = self.world(['wireless profile policy PP_Corp', 'shutdown'])
+        self.assertEqual((self.client(s)['state'], self.client(s)['dscpDown']), ('Not Associated', None))
+
+    def test_cli_forms_and_errors(self):
+        s = self.world()
+        cli = s.cli
+        cli.run('configure terminal')
+        cli.run('wireless profile policy PP_Corp')
+        for line in ('service-policy output platinum', 'service-policy input gold-up', 'no service-policy output platinum', 'no service-policy input gold-up'):
+            self.assertEqual(cli.run(line), '', line)
+        self.assertEqual([(p['qosOutput'], p['qosInput']) for p in s.wlc.state()['policies']], [('', '')])
+        for line in ('service-policy', 'service-policy output', 'service-policy output bogus', 'service-policy output platinum-up', 'service-policy input platinum',
+                     'service-policy both gold', 'service-policy output gold extra', 'no service-policy output gold'):
+            self.assertTrue(cli.run(line).startswith('% '), line)
+        cli.run('service-policy output platinum')
+        self.assertIn('nicht als service-policy output gesetzt', cli.run('no service-policy output gold'))
+        self.assertEqual(cli.run('no service-policy output platinum'), '')
+        cli.run('service-policy output gold')
+        self.assertEqual(cli.run('no service-policy output'), '')
+        self.assertEqual(s.wlc.state()['policies'][0]['qosOutput'], '')
+
+    def test_failed_apply_rolls_back_qos(self):
+        s = self.world(['wireless profile policy PP_Corp', 'service-policy output gold'])
+        before = s.wlc.state()
+        ok, _, _ = s.apply(['wireless profile policy PP_Corp', 'service-policy output platinum', 'service-policy input nix'])
+        self.assertFalse(ok)
+        self.assertEqual(s.wlc.state(), before)
+
+
 class TestRf(unittest.TestCase):
     """RF-Profile und RF Tags: tx-power und 5ghz-rf-policy stammen aus einem Community-Beispiel (nicht offiziell); die Wirkung ist ein Simulator-Modell."""
 

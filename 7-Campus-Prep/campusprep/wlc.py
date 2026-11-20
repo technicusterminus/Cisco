@@ -14,6 +14,8 @@ DEF_FLEX_PROFILE = 'default-flex-profile'
 DEF_WEBAUTH_MAP = 'global'
 DEF_MOBILITY_GROUP = 'default'
 RF_BANDS = {'24ghz': '2,4 GHz', '5ghz': '5 GHz'}
+METAL_MAX_DSCP = {'platinum': 46, 'gold': 34, 'silver': 0, 'bronze': 8}   # Cisco-Dokument 222241: Bronze 8, Silver 0, Gold 34, Platinum 46
+METAL_IN = {n + '-up': n for n in METAL_MAX_DSCP}   # Upstream-Profile: platinum-up, gold-up, silver-up, bronze-up
 NAME_RE = re.compile(r'^[\w.-]{1,32}$')
 
 
@@ -111,7 +113,7 @@ class Wlc:
                        'webAuthMap': w.get('webauth_map', ''), 'security': self.security_of(w)}
                       for n, w in sorted(self.wlans.items(), key=lambda kv: kv[1]['id'])],
             'policies': [{'name': n, 'vlan': p['vlan'], 'description': p['descr'], 'central': p.get('central', True),
-                          'aaaOverride': p.get('aaa_override', False),
+                          'aaaOverride': p.get('aaa_override', False), 'qosOutput': p.get('qos_out', ''), 'qosInput': p.get('qos_in', ''),
                           'status': 'DISABLED' if p['shutdown'] else 'ENABLED'} for n, p in sorted(self.policies.items())],
             'radiusServers': [{'name': n, 'ip': r['ip'], 'authPort': r['auth_port'], 'acctPort': r['acct_port'], 'keySet': bool(r['key']),
                                'timeout': r['timeout'], 'retransmit': r['retransmit'], 'state': 'UP' if self.radius_reply(n)[0] else 'DEAD'}
@@ -140,7 +142,7 @@ class Wlc:
             'aps': aps,
             'clients': [{'mac': c['mac'], 'ssid': c['ssid'], 'ap': c['ap'], 'protocol': c['protocol'], 'state': c['state'],
                          'wlan': c['wlan'], 'vlan': c['vlan'], 'method': c['method'], 'switching': c['switching'], 'mode': c['mode'],
-                         'user': (c.get('eap') or c.get('web') or {}).get('user'), 'roam': c.get('roam'), 'reasons': c['reasons']} for c in self.clients()],
+                         'user': (c.get('eap') or c.get('web') or {}).get('user'), 'roam': c.get('roam'), 'dscp': c.get('dscp'), 'dscpDown': c.get('dscpDown'), 'dscpUp': c.get('dscpUp'), 'reasons': c['reasons']} for c in self.clients()],
         }
 
     # ------------------------------------------------------------------ Zustand
@@ -291,7 +293,7 @@ class Wlc:
         """Didaktisches Modell: Warum ist ein Client assoziiert oder nicht? Rueckgabe {state, ap, wlan, reasons}."""
         ap = self.ap_by_name(client['ap'])
         res = {'state': 'Not Associated', 'ap': client['ap'], 'wlan': None, 'policy': None, 'vlan': None, 'method': None,
-               'switching': None, 'mode': None, 'roam': None, 'reasons': []}
+               'switching': None, 'mode': None, 'roam': None, 'dscpDown': None, 'dscpUp': None, 'reasons': []}
         if not ap or not ap.get('joined'):
             res['reasons'].append('AP %s ist nicht am Controller registriert' % client['ap'])
             return res
@@ -372,8 +374,16 @@ class Wlc:
                 return res
         if client.get('roam'):
             self._roam(client, w, res)
+        if client.get('dscp') is not None:
+            # QoS: Ein Metal-Profil begrenzt den hoechsten DSCP-Wert; ohne Profil gibt es keine Begrenzung (Simulator-Modell)
+            res['dscpDown'] = self.qos_cap(client['dscp'], METAL_MAX_DSCP.get(p.get('qos_out', '')))
+            res['dscpUp'] = self.qos_cap(client['dscp'], METAL_MAX_DSCP.get(METAL_IN.get(p.get('qos_in', ''), '')))
         res['state'] = 'Run'
         return res
+
+    @staticmethod
+    def qos_cap(dscp, cap):
+        return dscp if cap is None else min(dscp, cap)
 
     def mobility_tunnel(self, ip):
         """Zustand des Mobility-Tunnels zu einem konfigurierten Peer (Simulator-Modell, siehe docs/QUELLEN.md): Control und Data Path
@@ -887,6 +897,17 @@ class Cli:
                 x['central'] = not no
             elif w == ['aaa-override']:
                 x['aaa_override'] = not no
+            elif w[0] == 'service-policy' and len(w) >= 2 and w[1] in ('input', 'output') and ((not no and len(w) == 3) or (no and len(w) in (2, 3))):
+                key = 'qos_in' if w[1] == 'input' else 'qos_out'
+                if no:
+                    if len(w) == 3 and x.get(key) != w[2]:
+                        raise CliError('Das Profil %s ist nicht als service-policy %s gesetzt' % (w[2], w[1]))
+                    x[key] = ''
+                else:
+                    known = METAL_IN if w[1] == 'input' else METAL_MAX_DSCP
+                    if w[2] not in known:
+                        raise CliError('Unbekanntes Profil %s: Der Simulator kennt nur die vordefinierten Metal-Profile (%s)' % (w[2], ', '.join(sorted(known))))
+                    x[key] = w[2]
             elif w[0] == 'description' and len(w) > 1:
                 x['descr'] = ' '.join(w[1:])
             else:

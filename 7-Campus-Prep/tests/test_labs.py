@@ -16,7 +16,7 @@ L1, L2 = 'a4b2.32aa.0001', 'a4b2.32aa.0002'
 ALL = ['01-ssid-nicht-sichtbar', '02-admin-down', '03-falscher-schluessel', '04-falsches-policy-profile',
        '05-gast-wlan-lobby', '06-aufraeumen', '07-flexconnect-zweigstelle', '08-flexconnect-vlan-name',
        '09-radius-shared-secret', '10-aaa-override-vlan', '11-radius-redundanz', '12-webauth-authorization', '13-webauth-einrichten',
-       '14-mobility-gruppenname', '15-mobility-einrichten', '16-rf-tag-fehlt', '17-rf-lobby-einrichten']
+       '14-mobility-gruppenname', '15-mobility-einrichten', '16-rf-tag-fehlt', '17-rf-lobby-einrichten', '18-qos-metal-falsch', '19-qos-gast-begrenzen']
 # Woerter, die im sichtbaren Text vor dem Bestehen (Intro, Anforderungen, Pruefungsbeschreibungen) nicht stehen duerfen
 LEAKS = {
     '01-ssid-nicht-sichtbar': ['policy-tag', 'Policy Tag', 'Tag Source', 'PT_Corp'],
@@ -36,6 +36,8 @@ LEAKS = {
     '15-mobility-einrichten': ['group name Zentrale', 'Gruppennamen auf', 'member mac-address', 'wireless mobility group'],
     '16-rf-tag-fehlt': ['rf-tag', 'zuweisen', 'RF Tag RFT_LOBBY'],
     '17-rf-lobby-einrichten': ['no shutdown', 'tx-power max', '5ghz-rf-policy', 'deaktiviert'],
+    '18-qos-metal-falsch': ['platinum', 'service-policy', 'Silver', 'Metal-Profil'],
+    '19-qos-gast-begrenzen': ['service-policy', 'bronze-up', 'Output bronze', 'PP_Guest'],
 }
 
 
@@ -221,6 +223,50 @@ class TestFlexLabs(unittest.TestCase):
 
 def s_cmds(s):
     return s.labs.labs['07-flexconnect-zweigstelle']['solutionCommands']
+
+
+class TestQosLabs(unittest.TestCase):
+    """CCNP Enterprise Wireless: QoS mit Metal-Profilen. Jede naheliegende falsche Abkuerzung besteht nicht."""
+
+    def dscp(self, s):
+        return {c['mac'][-1]: (c['dscpDown'], c['dscpUp']) for c in s.wlc.clients()}
+
+    def test_labs_belong_to_the_wireless_track(self):
+        labs = Sim().labs.labs
+        for i in ('18-qos-metal-falsch', '19-qos-gast-begrenzen'):
+            self.assertEqual(labs[i]['track'], 'CCNP Enterprise Wireless (300-430 ENWLSI)')
+
+    def test_lab18_start_state_silver_throttles_the_voice_to_best_effort(self):
+        self.assertEqual(self.dscp(started('18-qos-metal-falsch')), {'1': (0, 0), '2': (8, 8)})
+
+    def test_lab18_platinum_for_everyone_lets_the_guest_through(self):
+        s = fixed('18-qos-metal-falsch', ['wireless profile policy PP_Corp', 'service-policy output platinum', 'service-policy input platinum-up', 'exit',
+                                          'wireless profile policy PP_Guest', 'service-policy output platinum', 'service-policy input platinum-up'])
+        self.assertEqual(failed(s), ['Gast-Laptop: DSCP 8 in beide Richtungen'])
+
+    def test_lab18_removing_all_qos_removes_the_guest_cap(self):
+        s = fixed('18-qos-metal-falsch', ['wireless profile policy PP_Corp', 'no service-policy output', 'no service-policy input', 'exit',
+                                          'wireless profile policy PP_Guest', 'no service-policy output', 'no service-policy input'])
+        self.assertEqual(failed(s), ['Gast-Laptop: DSCP 8 in beide Richtungen'])
+
+    def test_lab18_only_one_direction_is_not_enough(self):
+        s = fixed('18-qos-metal-falsch', ['wireless profile policy PP_Corp', 'service-policy output platinum'])
+        self.assertEqual(self.dscp(s)['1'], (46, 0))
+        self.assertFalse(s.labs.check()['passed'])
+
+    def test_lab19_one_direction_or_wrong_profile_fails(self):
+        for cmds, expect in ((['wireless profile policy PP_Guest', 'service-policy output bronze'], (8, 46)),
+                             (['wireless profile policy PP_Guest', 'service-policy input bronze-up'], (46, 8)),
+                             (['wireless profile policy PP_Guest', 'service-policy output silver', 'service-policy input silver-up'], (0, 0)),
+                             (['wireless profile policy PP_Guest', 'service-policy output gold', 'service-policy input gold-up'], (34, 34))):
+            s = fixed('19-qos-gast-begrenzen', cmds)
+            self.assertEqual(self.dscp(s)['2'], expect, cmds)
+            self.assertFalse(s.labs.check()['passed'], cmds)
+
+    def test_lab19_throttling_the_corp_as_well_fails_security(self):
+        s = fixed('19-qos-gast-begrenzen', ['wireless profile policy PP_Guest', 'service-policy output bronze', 'service-policy input bronze-up', 'exit',
+                                            'wireless profile policy PP_Corp', 'service-policy output bronze', 'service-policy input bronze-up'])
+        self.assertEqual(failed(s), ['Corp-Laptop bleibt bei DSCP 46 in beide Richtungen'])
 
 
 class TestRfLabs(unittest.TestCase):
@@ -540,7 +586,7 @@ class TestLabApi(unittest.TestCase):
 
     def test_flow(self):
         st, body = self.call('/wlc/api/labs')
-        self.assertEqual((st, len(body['labs']), body['current']), (200, 17, None))
+        self.assertEqual((st, len(body['labs']), body['current']), (200, 19, None))
         self.assertEqual([x['track'] for x in body['labs']][:1] + [x['track'] for x in body['labs']][-1:],
                          ['Grundlagen Wireless', 'CCNP Enterprise Wireless (300-430 ENWLSI)'])
         self.assertEqual(self.call('/wlc/api/lab/check', 'POST', {})[0], 409)

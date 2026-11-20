@@ -1,0 +1,144 @@
+{
+ "cause": "Das Policy Profile PP_Corp nutzt Silver (höchster DSCP 0); die Sprache wird zu Best Effort abgewertet.",
+ "checks": [
+  {
+   "category": "function",
+   "desc": "Corp-Laptop: DSCP 46 in beide Richtungen",
+   "dscpDown": 46,
+   "dscpUp": 46,
+   "mac": "58bf.eaaa.0001",
+   "state": "Run",
+   "type": "client"
+  },
+  {
+   "category": "security",
+   "desc": "Gast-Laptop: DSCP 8 in beide Richtungen",
+   "dscpDown": 8,
+   "dscpUp": 8,
+   "mac": "58bf.eaaa.0002",
+   "state": "Run",
+   "type": "client"
+  }
+ ],
+ "duration": "20 min",
+ "fabric": "wlc1 mit ap-lobby und ap-lager",
+ "goals": [
+  "Die Metal-Profile und ihren höchsten DSCP-Wert kennen",
+  "Beide Richtungen (Output und Input) im Policy Profile beachten"
+ ],
+ "hints": [
+  "**Konzept:** Ein Metal-Profil legt den höchsten DSCP-Wert fest, der in der jeweiligen Richtung erhalten bleibt. Jedes Profil gilt für einen Wert, den der Verkehr nicht übersteigen darf.",
+  "**Ebene:** Das Policy Profile der Corp-Clients. Das Gast-Profil ist in Ordnung.",
+  "**Prüfschritte:** Die Seite Monitoring > Clients bzw. die Client-Diagnose zeigt, welcher DSCP-Wert je Richtung ankommt. Die Policy-Seite zeigt das Profil je Richtung.",
+  "**Lösung:** Im Policy Profile **PP_Corp** Output **platinum** und Input **platinum-up** setzen (`service-policy output platinum`, `service-policy input platinum-up`). Das Gast-Profil nicht ändern."
+ ],
+ "id": "18-qos-metal-falsch",
+ "intro": "Ein Laptop im Corp-WLAN sendet Sprache mit **DSCP 46**, aber sie wird auf dem Weg abgewertet. Das Gast-WLAN soll weiterhin begrenzt bleiben: Auch dort sendet ein Laptop mit DSCP 46, soll aber höchstens DSCP 8 bekommen.",
+ "kind": "troubleshooting",
+ "level": "Fortgeschritten",
+ "limits": [
+  "Das Client-Modell ist didaktisch: Es erklärt, ob und warum ein Client verbunden ist, ist aber keine Abbildung der Controller-Pipeline.",
+  "Nicht modelliert: 802.1x/RADIUS, FlexConnect, RF-Profile, Roaming, Mobility.",
+  "QoS ist stark vereinfacht: Ein Client sendet Verkehr mit einem DSCP-Wert; das Metal-Profil im Policy Profile begrenzt den höchsten Wert je Richtung. Es gibt keine Bandbreite, keine Warteschlangen, kein AVC und keine WMM-Zuordnung.",
+  "Das Cisco-Dokument 222241 beschreibt die Metal-Profile für APs im Local Mode; FlexConnect ist dort nicht behandelt, der Simulator wertet es gleich aus.",
+  "Ohne service-policy gibt es im Simulator keine Begrenzung; das Standardverhalten des Geräts ist nicht belegt."
+ ],
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 01"
+ ],
+ "questions": [
+  {
+   "answer": 0,
+   "explain": "Laut Cisco-Dokument 222241: Platinum 46, Gold 34, Bronze 8, Silver 0.",
+   "id": "q1",
+   "options": [
+    "46",
+    "34",
+    "8",
+    "0"
+   ],
+   "q": "Welchen höchsten DSCP-Wert lässt das Metal-Profil Platinum zu?"
+  },
+  {
+   "answer": 0,
+   "explain": "Die Anforderung begrenzt Gäste auf DSCP 8. Mit Platinum käme ihr Verkehr unbegrenzt durch.",
+   "id": "q2",
+   "options": [
+    "Dann könnten auch Gäste Sprache mit hoher Priorität senden",
+    "Das Gast-Profil lässt sich nicht ändern",
+    "Dann verliert der Corp-Laptop seine Verbindung",
+    "Platinum gilt nur für Corp"
+   ],
+   "q": "Warum ist es keine Lösung, auch das Gast-Profil auf Platinum zu setzen?"
+  }
+ ],
+ "requirements": [
+  "Der Corp-Laptop behält DSCP 46 in beide Richtungen (zum Client und vom Client).",
+  "Der Gast-Laptop wird in beide Richtungen auf DSCP 8 begrenzt."
+ ],
+ "solution": "WebUI: Tags & Profiles > Policy > PP_Corp > Edit: QoS Output platinum, QoS Input platinum-up. CLI: `wireless profile policy PP_Corp`, `service-policy output platinum`, `service-policy input platinum-up`.",
+ "solutionCommands": [
+  "wireless profile policy PP_Corp",
+  "service-policy output platinum",
+  "service-policy input platinum-up"
+ ],
+ "startCommands": [
+  "wlan Corp_Profile 1 Corp",
+  "security wpa akm psk",
+  "security wpa psk set-key ascii 0 Sommer2026",
+  "no shutdown",
+  "exit",
+  "wlan Guest 2 Gast",
+  "no shutdown",
+  "exit",
+  "wireless profile policy PP_Corp",
+  "vlan 20",
+  "no shutdown",
+  "service-policy output silver",
+  "service-policy input silver-up",
+  "exit",
+  "wireless profile policy PP_Guest",
+  "vlan 99",
+  "no shutdown",
+  "service-policy output bronze",
+  "service-policy input bronze-up",
+  "exit",
+  "wireless tag policy PT_QOS",
+  "wlan Corp_Profile policy PP_Corp",
+  "wlan Guest policy PP_Guest",
+  "exit",
+  "ap a4b2.32aa.0001",
+  "policy-tag PT_QOS",
+  "exit"
+ ],
+ "title": "18 Sprache im Corp-WLAN verliert ihre Priorität",
+ "tools": [
+  "WebUI: Configuration > Tags & Profiles > Policy",
+  "Monitoring > Wireless > Clients",
+  "Client-Diagnose (nur im geführten Modus)",
+  "CLI: show wireless profile policy summary, show wireless client summary"
+ ],
+ "topic": "QoS / Troubleshooting",
+ "track": "CCNP Enterprise Wireless (300-430 ENWLSI)",
+ "worldClients": [
+  {
+   "ap": "ap-lobby",
+   "dscp": 46,
+   "mac": "58bf.eaaa.0001",
+   "protocol": "11ac",
+   "psk": "Sommer2026",
+   "ssid": "Corp"
+  },
+  {
+   "ap": "ap-lobby",
+   "dscp": 46,
+   "mac": "58bf.eaaa.0002",
+   "protocol": "11ac",
+   "ssid": "Gast"
+  }
+ ]
+}
