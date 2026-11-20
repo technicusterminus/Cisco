@@ -369,6 +369,127 @@ AAA = ['aaa new-model', 'radius server RS1', 'address ipv4 10.10.0.50 auth-port 
        'ap a4b2.32aa.0001', 'policy-tag PT', 'exit']
 
 
+class TestWebAuth(unittest.TestCase):
+    """Local Web Authentication: Befehlskette nach Cisco-Dokument 224922/217457; die Portal-Anmeldung ist ein Simulator-Modell."""
+    CHAIN = ['username gast1 privilege 0 password 0 Gast#1', 'aaa authentication login WEBAUTH local', 'aaa authorization network default local',
+             'wlan Guest 2 Gast', 'security web-auth', 'security web-auth authentication-list WEBAUTH', 'security web-auth parameter-map global',
+             'no shutdown', 'exit', 'wireless profile policy PP_G', 'vlan 99', 'no shutdown', 'exit',
+             'wireless tag policy PT_G', 'wlan Guest policy PP_G', 'exit', 'ap a4b2.32aa.0001', 'policy-tag PT_G', 'exit']
+
+    def world(self, extra=(), clients=None):
+        from campusprep.server import Sim
+        s = Sim()
+        s.reset_world(clients or [
+            {'mac': '58bf.eaaa.0001', 'ssid': 'Gast', 'ap': 'ap-lobby', 'protocol': '11ac', 'web': {'user': 'gast1', 'password': 'Gast#1'}},
+            {'mac': '58bf.eaaa.0002', 'ssid': 'Gast', 'ap': 'ap-lobby', 'protocol': '11ac', 'web': {'user': 'gast1', 'password': 'falsch'}},
+            {'mac': '58bf.eaaa.0003', 'ssid': 'Gast', 'ap': 'ap-lobby', 'protocol': '11ac'}])
+        ok, _, err = s.apply(list(self.CHAIN) + list(extra))
+        self.assertTrue(ok, err)
+        return s
+
+    def states(self, s):
+        return {c['mac'][-1]: c['state'] for c in s.wlc.clients()}
+
+    def reasons(self, s, mac='1'):
+        return ' '.join(next(c for c in s.wlc.clients() if c['mac'].endswith(mac))['reasons'])
+
+    def test_complete_chain_authenticates_only_the_valid_login(self):
+        s = self.world()
+        self.assertEqual(self.states(s), {'1': 'Run', '2': 'Webauth Pending', '3': 'Webauth Pending'})
+        self.assertIn('Benutzername oder Passwort falsch', self.reasons(s, '2'))
+        self.assertIn('noch nicht am Web-Portal angemeldet', self.reasons(s, '3'))
+        self.assertEqual(next(c for c in s.wlc.clients() if c['mac'].endswith('1'))['vlan'], '99')
+
+    def test_each_missing_building_block_keeps_everyone_pending_with_a_reason(self):
+        cases = [(['no aaa authorization network default local'], 'aaa authorization network default local'),
+                 (['wlan Guest 2 Gast', 'no security web-auth authentication-list'], 'keine Web-Auth-Authentication-List'),
+                 (['wlan Guest 2 Gast', 'no security web-auth parameter-map'], 'keine Parameter Map gesetzt'),
+                 (['wlan Guest 2 Gast', 'security web-auth authentication-list GIBTSNICHT'], 'GIBTSNICHT ist nicht definiert'),
+                 (['wlan Guest 2 Gast', 'security web-auth parameter-map GIBTSNICHT'], 'Parameter Map GIBTSNICHT ist nicht definiert')]
+        for extra, text in cases:
+            s = self.world(extra)
+            self.assertEqual(self.states(s)['1'], 'Webauth Pending', extra)
+            self.assertIn(text, self.reasons(s), extra)
+
+    def test_wrong_or_removed_user_is_rejected(self):
+        s = self.world(['no username gast1'])
+        self.assertEqual(self.states(s)['1'], 'Webauth Pending')
+        s = self.world(['username gast1 password Neu#Pw'])
+        self.assertEqual(self.states(s)['1'], 'Webauth Pending')
+
+    def test_open_wlan_without_web_auth_connects_everyone_and_the_summary_is_unchanged(self):
+        s = self.world(['wlan Guest 2 Gast', 'no security web-auth'])
+        self.assertEqual(set(self.states(s).values()), {'Run'})
+        self.assertIn('[open]', s.cli.run('show wlan summary'))
+
+    def test_web_auth_on_top_of_psk_requires_both(self):
+        clients = [{'mac': '58bf.eaaa.0001', 'ssid': 'Gast', 'ap': 'ap-lobby', 'protocol': '11ac', 'psk': 'Sommer2026',
+                    'web': {'user': 'gast1', 'password': 'Gast#1'}}]
+        s = self.world(['wlan Guest 2 Gast', 'security wpa akm psk', 'security wpa psk set-key ascii 0 Sommer2026'], clients)
+        self.assertEqual(self.states(s)['1'], 'Run')
+        s = self.world(['wlan Guest 2 Gast', 'security wpa akm psk', 'security wpa psk set-key ascii 0 Falsch123'], clients)
+        self.assertEqual(self.states(s)['1'], 'Not Associated')
+
+    def test_cli_forms_and_prompts(self):
+        s = self.world()
+        cli = s.cli
+        cli.run('configure terminal')
+        self.assertEqual(cli.run('parameter-map type webauth PM1'), '')
+        self.assertTrue(cli.prompt.endswith('(config-params-parameter-map)#'))
+        self.assertEqual(cli.run('type webauth'), '')
+        self.assertTrue(cli.run('virtual-ip ipv4 300.1.1.1').startswith('% '))
+        self.assertTrue(cli.run('type consent').startswith('% '))
+        self.assertEqual(cli.run('virtual-ip ipv4 192.0.2.7'), '')
+        self.assertEqual([m['virtualIp'] for m in s.wlc.state()['webauthMaps']], ['192.0.2.7', '192.0.2.1'])   # sortiert nach Name: PM1 vor global
+        cli.run('exit')
+        for line in ('username a password 0 pw1', 'username b password pw2', 'username c privilege 0 password pw3', 'username d privilege 15 password 0 pw4'):
+            self.assertEqual(cli.run(line), '', line)
+        for line in ('username e', 'username e password', 'username e secret pw', 'username f privilege 99 password pw', 'aaa authentication login L2 group RG1',
+                     'aaa authorization network default group RG1', 'parameter-map type consent PM9'):
+            self.assertTrue(cli.run(line).startswith('% '), line)
+        self.assertEqual(sorted(u['name'] for u in s.wlc.state()['localUsers']), ['a', 'b', 'c', 'd', 'gast1'])
+
+    def test_dependencies_are_refused_and_the_builtin_map_stays(self):
+        s = self.world()
+        cli = s.cli
+        cli.run('configure terminal')
+        self.assertIn('wird von WLANs verwendet', cli.run('no aaa authentication login WEBAUTH'))
+        self.assertIn('vordefiniert', cli.run('no parameter-map type webauth global'))
+        cli.run('parameter-map type webauth PM2')
+        cli.run('exit')
+        cli.run('wlan Guest 2 Gast')
+        cli.run('security web-auth parameter-map PM2')
+        cli.run('exit')
+        self.assertIn('wird von WLANs verwendet', cli.run('no parameter-map type webauth PM2'))
+        cli.run('wlan Guest 2 Gast')
+        cli.run('no security web-auth')
+        cli.run('exit')
+        self.assertEqual(cli.run('no parameter-map type webauth PM2'), '')
+        self.assertEqual(cli.run('no aaa authentication login WEBAUTH'), '')
+        self.assertTrue(cli.run('no aaa authentication login WEBAUTH').startswith('% '))
+
+    def test_no_web_auth_clears_list_and_map(self):
+        s = self.world(['wlan Guest 2 Gast', 'no security web-auth'])
+        w = s.wlc.state()['wlans'][0]
+        self.assertEqual((w['webAuth'], w['webAuthList'], w['webAuthMap']), (False, '', ''))
+
+    def test_deleted_parameter_map_in_an_open_submode_does_not_crash(self):
+        s = self.world()
+        cli = s.cli
+        cli.run('configure terminal')
+        cli.run('parameter-map type webauth PM3')
+        del s.wlc.webauth_maps['PM3']
+        self.assertEqual(cli.run('virtual-ip ipv4 192.0.2.9'), '% Das Objekt existiert nicht mehr')
+
+    def test_failed_apply_rolls_back_web_auth_objects(self):
+        s = self.world()
+        before = s.wlc.state()
+        ok, _, _ = s.apply(['username neu password 0 pw', 'aaa authentication login X local', 'no aaa authorization network default local',
+                            'parameter-map type webauth PMX', 'virtual-ip ipv4 999.1.1.1'])
+        self.assertFalse(ok)
+        self.assertEqual(s.wlc.state(), before)
+
+
 class TestDot1xRadius(unittest.TestCase):
     """802.1X mit RADIUS: Befehlskette nach Cisco-Dokument 213919, Formate aus genieparser; Entscheidungen sind ein Simulator-Modell."""
 

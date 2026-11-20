@@ -1,0 +1,146 @@
+{
+ "cause": "Die Autorisierung aaa authorization network default local fehlt; ohne sie funktioniert die lokale Portal-Anmeldung nicht.",
+ "checks": [
+  {
+   "category": "function",
+   "desc": "gast1: verbunden, VLAN 99",
+   "mac": "58bf.eaaa.0001",
+   "state": "Run",
+   "type": "client",
+   "vlan": "99"
+  },
+  {
+   "category": "security",
+   "desc": "Mallory hat keinen Netzzugang",
+   "mac": "58bf.eaaa.0002",
+   "state": "Webauth Pending",
+   "type": "client"
+  },
+  {
+   "attrs": {
+    "webAuth": true
+   },
+   "category": "security",
+   "desc": "Das WLAN verlangt weiterhin Web Authentication",
+   "profile": "Guest",
+   "type": "wlan"
+  }
+ ],
+ "duration": "25 min",
+ "fabric": "wlc1 mit ap-lobby und ap-lager",
+ "goals": [
+  "Die Bausteine von Local Web Authentication kennen",
+  "Den fehlenden Baustein finden, ohne die Portal-Anmeldung abzuschalten"
+ ],
+ "hints": [
+  "**Konzept:** Die Anmeldung am Portal braucht neben der Authentication List und dem Benutzer noch eine Autorisierung.",
+  "**Ebene:** Globale AAA-Konfiguration, nicht das WLAN oder das Policy Profile.",
+  "**Prüfschritte:** Die Client-Diagnose nennt, was fehlt. Die Seite Security > Web Auth zeigt den Stand der Autorisierung.",
+  "**Lösung:** `aaa authorization network default local` konfigurieren. Die Portal-Anmeldung nicht abschalten."
+ ],
+ "id": "12-webauth-authorization",
+ "intro": "Das Gast-WLAN **Gast** verlangt eine Anmeldung am Portal. Der Gast **gast1** hat ein gültiges lokales Konto, bleibt aber im Zustand *Webauth Pending* hängen. Die Authentication List, die Parameter Map und der Benutzer sind vorhanden.\n\nZum Test: gast1 (richtige Zugangsdaten) und Mallory (kein Konto) in der Lobby.",
+ "kind": "troubleshooting",
+ "level": "Fortgeschritten",
+ "limits": [
+  "Das Client-Modell ist didaktisch: Es erklärt, ob und warum ein Client verbunden ist, ist aber keine Abbildung der Controller-Pipeline.",
+  "Nicht modelliert: 802.1x/RADIUS, FlexConnect, RF-Profile, Roaming, Mobility.",
+  "Die Portal-Anmeldung ist vereinfacht: Es gibt keine Portalseite; der Client trägt seine Zugangsdaten im Client-Eintrag.",
+  "Nicht modelliert: Weiterleitung per HTTP, Zertifikat des Portals, Consent und Webconsent, Central Web Authentication, externe Portale, Sitzungs-Timeouts."
+ ],
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 01"
+ ],
+ "questions": [
+  {
+   "answer": 0,
+   "explain": "Laut Cisco-Dokumenten 224922 und 217457 gehören Methodenliste, Parameter Map, die Autorisierung und lokale Benutzer zusammen.",
+   "id": "q1",
+   "options": [
+    "Authentication List (login, local), Parameter Map, Autorisierung und lokale Benutzer",
+    "Nur die Parameter Map",
+    "Ein RADIUS-Server mit EAP",
+    "Ein PSK im WLAN"
+   ],
+   "q": "Was hängt am Gast-WLAN mit Web Authentication zusammen (lokale Variante)?"
+  },
+  {
+   "answer": 0,
+   "explain": "Ohne Web Auth ist das WLAN offen: Alle Clients sind im Zustand Run, die Sicherheitsprüfung fällt durch.",
+   "id": "q2",
+   "options": [
+    "Dann kommt auch Mallory ohne Konto ins Netz",
+    "Dann ist das WLAN down",
+    "Dann verliert gast1 sein Konto",
+    "Das geht nicht"
+   ],
+   "q": "Warum ist es keine Lösung, Web Authentication am WLAN abzuschalten?"
+  }
+ ],
+ "requirements": [
+  "gast1 ist verbunden (Zustand Run) und im VLAN 99.",
+  "Mallory bleibt ohne Netzzugang (Webauth Pending).",
+  "Das WLAN verlangt weiterhin die Portal-Anmeldung."
+ ],
+ "solution": "WebUI: Security > Web Auth > Autorisierung: Konfigurieren. CLI: `aaa authorization network default local`.",
+ "solutionCommands": [
+  "aaa authorization network default local"
+ ],
+ "startCommands": [
+  "wlan Guest 2 Gast",
+  "no shutdown",
+  "exit",
+  "wireless profile policy PP_Guest",
+  "vlan 99",
+  "no shutdown",
+  "exit",
+  "wireless tag policy PT_Guest",
+  "wlan Guest policy PP_Guest",
+  "exit",
+  "ap a4b2.32aa.0001",
+  "policy-tag PT_Guest",
+  "exit",
+  "username gast1 privilege 0 password 0 Gast#1",
+  "aaa authentication login WEBAUTH local",
+  "wlan Guest 2 Gast",
+  "security web-auth",
+  "security web-auth authentication-list WEBAUTH",
+  "security web-auth parameter-map global",
+  "exit"
+ ],
+ "title": "12 Gast-WLAN: Portal-Anmeldung scheitert trotz richtigem Konto",
+ "tools": [
+  "WebUI: Configuration > Security > Web Auth und Tags & Profiles > WLANs",
+  "Monitoring > Wireless > Clients",
+  "Client-Diagnose (nur im geführten Modus)",
+  "CLI: show wlan summary, show wireless client summary"
+ ],
+ "topic": "Web Authentication / Troubleshooting",
+ "track": "CCNP Enterprise Wireless (300-430 ENWLSI)",
+ "worldClients": [
+  {
+   "ap": "ap-lobby",
+   "mac": "58bf.eaaa.0001",
+   "protocol": "11ac",
+   "ssid": "Gast",
+   "web": {
+    "password": "Gast#1",
+    "user": "gast1"
+   }
+  },
+  {
+   "ap": "ap-lobby",
+   "mac": "58bf.eaaa.0002",
+   "protocol": "11ac",
+   "ssid": "Gast",
+   "web": {
+    "password": "egal",
+    "user": "mallory"
+   }
+  }
+ ]
+}

@@ -1,0 +1,158 @@
+{
+ "cause": "Das WLAN ist offen konfiguriert; es gibt weder einen Benutzer noch eine Authentication List noch die Autorisierung.",
+ "checks": [
+  {
+   "category": "function",
+   "desc": "gast1: verbunden, VLAN 99",
+   "mac": "58bf.eaaa.0001",
+   "state": "Run",
+   "type": "client",
+   "vlan": "99"
+  },
+  {
+   "category": "security",
+   "desc": "Mallory hat keinen Netzzugang",
+   "mac": "58bf.eaaa.0002",
+   "state": "Webauth Pending",
+   "type": "client"
+  },
+  {
+   "attrs": {
+    "webAuth": true,
+    "webAuthList": "WEBAUTH",
+    "webAuthMap": "global"
+   },
+   "category": "function",
+   "desc": "Web Authentication mit Liste und Parameter Map",
+   "profile": "Guest",
+   "type": "wlan"
+  },
+  {
+   "attrs": {
+    "vlan": "99"
+   },
+   "category": "function",
+   "desc": "Das Gast-Policy-Profile bleibt im VLAN 99",
+   "name": "PP_Guest",
+   "type": "policy"
+  }
+ ],
+ "duration": "30 min",
+ "fabric": "wlc1 mit ap-lobby und ap-lager",
+ "goals": [
+  "Local Web Authentication von Grund auf einrichten",
+  "Die Reihenfolge der Bausteine verstehen: Liste, Autorisierung, Parameter Map, WLAN"
+ ],
+ "hints": [
+  "**Konzept:** Web Authentication ist eine zweite Stufe nach dem Verbinden. Dafür braucht der Controller eine Methodenliste, eine Autorisierung und eine Parameter Map; im WLAN werden sie verknüpft.",
+  "**Ebene:** Globale AAA-Konfiguration plus Sicherheits-Einstellungen im WLAN-Profil.",
+  "**Prüfschritte:** Fehlt ein Baustein, bleibt gast1 in Webauth Pending; die Client-Diagnose nennt den fehlenden Baustein.",
+  "**Lösung:** Benutzer gast1 anlegen; Authentication List `WEBAUTH` (login, local); `aaa authorization network default local`; im WLAN Gast Web Authentication mit dieser Liste und der Parameter Map global einschalten."
+ ],
+ "id": "13-webauth-einrichten",
+ "intro": "Das Gast-WLAN **Gast** (VLAN 99) ist offen: Jeder kommt hinein. Es soll eine Anmeldung am Portal verlangen. Der lokale Benutzer **gast1** (Passwort **Gast#1**) soll sich anmelden dürfen. Die Parameter Map **global** ist vordefiniert und kann verwendet werden.",
+ "kind": "requirements",
+ "level": "Fortgeschritten",
+ "limits": [
+  "Das Client-Modell ist didaktisch: Es erklärt, ob und warum ein Client verbunden ist, ist aber keine Abbildung der Controller-Pipeline.",
+  "Nicht modelliert: 802.1x/RADIUS, FlexConnect, RF-Profile, Roaming, Mobility.",
+  "Die Portal-Anmeldung ist vereinfacht: Es gibt keine Portalseite; der Client trägt seine Zugangsdaten im Client-Eintrag.",
+  "Nicht modelliert: Weiterleitung per HTTP, Zertifikat des Portals, Consent und Webconsent, Central Web Authentication, externe Portale, Sitzungs-Timeouts."
+ ],
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 12"
+ ],
+ "questions": [
+  {
+   "answer": 0,
+   "explain": "Bis zur Anmeldung steht der Client im Zustand Webauth Pending (Layer 3), danach in Run.",
+   "id": "q1",
+   "options": [
+    "Erst nach erfolgreicher Anmeldung am Portal",
+    "Sobald er mit dem WLAN verbunden ist",
+    "Sobald er eine IP-Adresse hat",
+    "Wenn der AP ihn sieht"
+   ],
+   "q": "Wann gilt ein Client mit Web Authentication als verbunden (Run)?"
+  },
+  {
+   "answer": 0,
+   "explain": "Das Konto allein schaltet nichts ein; die Kette WLAN, Liste, Parameter Map und Autorisierung muss stehen.",
+   "id": "q2",
+   "options": [
+    "Das WLAN muss Web Authentication mit Liste und Parameter Map verlangen, und die Autorisierung muss vorhanden sein",
+    "Benutzer gelten nur für SSH",
+    "Der Benutzer braucht Privilege 15",
+    "Der Controller muss neu starten"
+   ],
+   "q": "Warum reicht es nicht, nur den Benutzer anzulegen?"
+  }
+ ],
+ "requirements": [
+  "gast1 ist verbunden (Zustand Run) und im VLAN 99.",
+  "Mallory (ohne Konto) bleibt ohne Netzzugang (Webauth Pending).",
+  "Das WLAN verlangt Web Authentication (Authentication List und Parameter Map gesetzt).",
+  "Das Gast-VLAN bleibt 99."
+ ],
+ "solution": "WebUI: Security > Web Auth: Benutzer gast1, Authentication List WEBAUTH, Autorisierung; Tags & Profiles > WLANs > Gast: Web Authentication. CLI: `username gast1 privilege 0 password 0 Gast#1`; `aaa authentication login WEBAUTH local`; `aaa authorization network default local`; `wlan Guest 2 Gast` / `security web-auth` / `security web-auth authentication-list WEBAUTH` / `security web-auth parameter-map global`.",
+ "solutionCommands": [
+  "username gast1 privilege 0 password 0 Gast#1",
+  "aaa authentication login WEBAUTH local",
+  "aaa authorization network default local",
+  "wlan Guest 2 Gast",
+  "security web-auth",
+  "security web-auth authentication-list WEBAUTH",
+  "security web-auth parameter-map global",
+  "exit"
+ ],
+ "startCommands": [
+  "wlan Guest 2 Gast",
+  "no shutdown",
+  "exit",
+  "wireless profile policy PP_Guest",
+  "vlan 99",
+  "no shutdown",
+  "exit",
+  "wireless tag policy PT_Guest",
+  "wlan Guest policy PP_Guest",
+  "exit",
+  "ap a4b2.32aa.0001",
+  "policy-tag PT_Guest",
+  "exit"
+ ],
+ "title": "13 Gast-WLAN mit Portal-Anmeldung einrichten",
+ "tools": [
+  "WebUI: Configuration > Security > Web Auth und Tags & Profiles > WLANs",
+  "Monitoring > Wireless > Clients",
+  "Client-Diagnose (nur im geführten Modus)",
+  "CLI: show wlan summary, show wireless client summary"
+ ],
+ "topic": "Web Authentication / Design",
+ "track": "CCNP Enterprise Wireless (300-430 ENWLSI)",
+ "worldClients": [
+  {
+   "ap": "ap-lobby",
+   "mac": "58bf.eaaa.0001",
+   "protocol": "11ac",
+   "ssid": "Gast",
+   "web": {
+    "password": "Gast#1",
+    "user": "gast1"
+   }
+  },
+  {
+   "ap": "ap-lobby",
+   "mac": "58bf.eaaa.0002",
+   "protocol": "11ac",
+   "ssid": "Gast",
+   "web": {
+    "password": "egal",
+    "user": "mallory"
+   }
+  }
+ ]
+}

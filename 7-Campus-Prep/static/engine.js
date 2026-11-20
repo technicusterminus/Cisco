@@ -17,10 +17,10 @@
   'use strict';
 
   const DEF_POLICY_TAG = 'default-policy-tag', DEF_SITE_TAG = 'default-site-tag', DEF_RF_TAG = 'default-rf-tag';
-  const DEF_FLEX_PROFILE = 'default-flex-profile';
+  const DEF_FLEX_PROFILE = 'default-flex-profile', DEF_WEBAUTH_MAP = 'global';
   const NAME_RE = /^[\p{L}\p{N}_.-]{1,32}$/u;          // wie Python \w (Unicode)
   const STORE_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$/;
-  const KIND = 'campusprep-state', VERSION = 3, ACCEPTED = [1, 2, 3];
+  const KIND = 'campusprep-state', VERSION = 4, ACCEPTED = [1, 2, 3, 4];
   const MODES = ['guided', 'exam'];
   const HIDDEN = ['cause', 'solution', 'solutionCommands', 'startCommands', 'worldClients', 'worldRadius', 'checks', 'hints', 'questions'];
 
@@ -120,18 +120,25 @@
       this.radiusServers = dict();              // name -> {ip, auth_port, acct_port, key, timeout, retransmit}
       this.aaaGroups = dict();                  // name -> {servers: [radius-server-name]} (Reihenfolge = Reihenfolge der Versuche)
       this.aaaLists = dict();                   // dot1x-Methodenliste name -> {group}
+      this.localUsers = dict();                 // Benutzername -> Passwort (lokale Datenbank fuer Web-Auth)
+      this.loginLists = dict();                 // Login-Methodenliste name -> {method: 'local'}
+      this.authzDefaultLocal = false;           // aaa authorization network default local
+      this.webauthMaps = dict(); this.webauthMaps[DEF_WEBAUTH_MAP] = { type: 'webauth', virtual_ip: '192.0.2.1' };
     }
 
     snapshot() {
       return clone({ wlans: this.dumpWlans(), policies: this.policies, policyTags: this.policyTags, apCfg: this.apCfg,
                      flexProfiles: this.flexProfiles, siteTags: this.siteTags, radiusServers: this.radiusServers,
-                     aaaGroups: this.aaaGroups, aaaLists: this.aaaLists });
+                     aaaGroups: this.aaaGroups, aaaLists: this.aaaLists, localUsers: this.localUsers, loginLists: this.loginLists,
+                     authzDefaultLocal: this.authzDefaultLocal, webauthMaps: this.webauthMaps });
     }
     restore(s) {
       this.loadWlans(s.wlans);
       this.policies = clone(s.policies); this.policyTags = clone(s.policyTags); this.apCfg = clone(s.apCfg);
       this.flexProfiles = clone(s.flexProfiles); this.siteTags = clone(s.siteTags);
       this.radiusServers = clone(s.radiusServers); this.aaaGroups = clone(s.aaaGroups); this.aaaLists = clone(s.aaaLists);
+      this.localUsers = clone(s.localUsers); this.loginLists = clone(s.loginLists); this.authzDefaultLocal = s.authzDefaultLocal;
+      this.webauthMaps = clone(s.webauthMaps);
     }
     dumpWlans() { const o = dict(); for (const [k, v] of this.wlans) o[k] = clone(v); return o; }
     loadWlans(o) { this.wlans = new Map(); for (const k of Object.keys(o)) this.wlans.set(k, clone(o[k])); }
@@ -156,6 +163,12 @@
       this.radiusServers = clone(d.radiusServers && Object.keys(d.radiusServers).length ? d.radiusServers : {});
       this.aaaGroups = clone(d.aaaGroups && Object.keys(d.aaaGroups).length ? d.aaaGroups : {});
       this.aaaLists = clone(d.aaaLists && Object.keys(d.aaaLists).length ? d.aaaLists : {});
+      // Staende vor Version 4 kennen keine Web-Auth-Objekte
+      this.localUsers = clone(d.localUsers && Object.keys(d.localUsers).length ? d.localUsers : {});
+      this.loginLists = clone(d.loginLists && Object.keys(d.loginLists).length ? d.loginLists : {});
+      this.authzDefaultLocal = !!d.authzDefaultLocal;
+      this.webauthMaps = clone(d.webauthMaps && Object.keys(d.webauthMaps).length ? d.webauthMaps : {});
+      setdefault(this.webauthMaps, DEF_WEBAUTH_MAP, { type: 'webauth', virtual_ip: '192.0.2.1' });
     }
 
     // ---- Zustand fuer die Oberflaeche
@@ -171,7 +184,8 @@
       return {
         wlc: Object.assign({}, this.world.wlc),
         wlans: wl.map(([n, w]) => ({ profile: n, id: w.id, ssid: w.ssid, status: w.shutdown ? 'DOWN' : 'UP', akm: w.akm,
-                                     pskSet: !!w.psk, authList: w.authlist || '', security: Wlc.securityOf(w) })),
+                                     pskSet: !!w.psk, authList: w.authlist || '', webAuth: !!w.webauth, webAuthList: w.webauth_list || '',
+                                     webAuthMap: w.webauth_map || '', security: Wlc.securityOf(w) })),
         policies: sortedKeys(this.policies).map(n => { const p = this.policies[n];
           return { name: n, vlan: p.vlan, description: p.descr, central: has(p, 'central') ? p.central : true,
                    aaaOverride: has(p, 'aaa_override') ? p.aaa_override : false, status: p.shutdown ? 'DISABLED' : 'ENABLED' }; }),
@@ -180,6 +194,10 @@
                    state: this.radiusReply(n)[0] ? 'UP' : 'DEAD' }; }),
         aaaGroups: sortedKeys(this.aaaGroups).map(n => ({ name: n, servers: this.aaaGroups[n].servers.slice() })),
         aaaLists: sortedKeys(this.aaaLists).map(n => ({ name: n, group: this.aaaLists[n].group })),
+        localUsers: sortedKeys(this.localUsers).map(n => ({ name: n, passwordSet: !!this.localUsers[n] })),
+        loginLists: sortedKeys(this.loginLists).map(n => ({ name: n, method: this.loginLists[n].method })),
+        authzDefaultLocal: this.authzDefaultLocal,
+        webauthMaps: sortedKeys(this.webauthMaps).map(n => ({ name: n, builtin: n === DEF_WEBAUTH_MAP, type: this.webauthMaps[n].type, virtualIp: this.webauthMaps[n].virtual_ip })),
         flexProfiles: sortedKeys(this.flexProfiles).map(n => { const f = this.flexProfiles[n];
           return { name: n, builtin: n === DEF_FLEX_PROFILE, description: f.descr, native: f.native,
                    vlans: sortedKeys(f.vlans).map(k => ({ name: k, id: f.vlans[k] })) }; }),
@@ -191,7 +209,8 @@
         aps,
         clients: this.clients().map(c => ({ mac: c.mac, ssid: c.ssid, ap: c.ap, protocol: c.protocol, state: c.state, wlan: c.wlan,
                                             vlan: c.vlan, method: c.method, switching: c.switching, mode: c.mode,
-                                            user: c.eap && c.eap.user !== undefined ? c.eap.user : null, reasons: c.reasons })),
+                                            user: (() => { const e = c.eap && Object.keys(c.eap).length ? c.eap : (c.web && Object.keys(c.web).length ? c.web : null); return e && e.user !== undefined ? e.user : null; })(),
+                                            reasons: c.reasons })),
       };
     }
 
@@ -331,8 +350,32 @@
           }
         }
       } else res.method = 'None';
+      if (w.webauth) {
+        if (res.method === 'None') res.method = 'Web Auth';
+        if (!this._webauth(client, w, res)) { res.state = 'Webauth Pending'; return res; }
+      }
       res.state = 'Run';
       return res;
+    }
+
+    _webauth(client, w, res) {
+      const lst = w.webauth_list || '';
+      if (!lst) { res.reasons.push('Am WLAN-Profil ist keine Web-Auth-Authentication-List gesetzt (security web-auth authentication-list)'); return false; }
+      if (!has(this.loginLists, lst)) { res.reasons.push('Die Authentication List ' + lst + ' ist nicht definiert (aaa authentication login ' + lst + ' local)'); return false; }
+      const pm = w.webauth_map || '';
+      if (!pm) { res.reasons.push('Am WLAN-Profil ist keine Parameter Map gesetzt (security web-auth parameter-map)'); return false; }
+      if (!has(this.webauthMaps, pm)) { res.reasons.push('Die Parameter Map ' + pm + ' ist nicht definiert (parameter-map type webauth)'); return false; }
+      if (!this.authzDefaultLocal) {
+        res.reasons.push('Die Autorisierung fehlt: aaa authorization network default local ist nicht konfiguriert, die lokale Anmeldung am Portal funktioniert ohne sie nicht');
+        return false;
+      }
+      const cred = client.web;
+      if (!cred || !Object.keys(cred).length) { res.reasons.push('Der Client hat sich noch nicht am Web-Portal angemeldet (Zustand Webauth Pending)'); return false; }
+      if (!has(this.localUsers, cred.user) || this.localUsers[cred.user] !== cred.password) {
+        res.reasons.push('Anmeldung am Portal abgelehnt: Benutzername oder Passwort falsch');
+        return false;
+      }
+      return true;
     }
 
     clients() { return this.world.clients.map(c => Object.assign({}, c, this.decide(c))); }
@@ -415,7 +458,7 @@
   // ------------------------------------------------------------------ CLI
   const PROMPTS = { exec: '#', config: '(config)#', wlan: '(config-wlan)#', policy: '(config-wireless-policy)#', ptag: '(config-policy-tag)#',
                     ap: '(config-ap)#', flex: '(config-wireless-flex-profile)#', flexvlan: '(config-wireless-flex-profile-vlan)#', stag: '(config-site-tag)#',
-                    radius: '(config-radius-server)#', aaagrp: '(config-sg-radius)#' };
+                    radius: '(config-radius-server)#', aaagrp: '(config-sg-radius)#', pmap: '(config-params-parameter-map)#' };
   const isIpv4 = v => { const p = v.split('.'); return p.length === 4 && p.every(x => isDigits(x) && x.length <= 3 && parseInt(x, 10) <= 255); };
   const eq = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
   const startsWith = (w, p) => w.length >= p.length && p.every((x, i) => w[i] === x);
@@ -496,7 +539,7 @@
       const inv = () => new CliError('Invalid input detected: "' + w.join(' ') + '"');
       // Das Objekt des aktuellen Untermodus kann inzwischen (z. B. ueber die Oberflaeche) geloescht worden sein
       const store = { wlan: null, policy: c.policies, ptag: c.policyTags, flex: c.flexProfiles, flexvlan: c.flexProfiles, stag: c.siteTags,
-                      radius: c.radiusServers, aaagrp: c.aaaGroups };
+                      radius: c.radiusServers, aaagrp: c.aaaGroups, pmap: c.webauthMaps };
       if (this.mode === 'wlan' ? !c.wlans.has(this.ctx) : (has(store, this.mode) && store[this.mode] && !has(store[this.mode], this.ctx))) {
         this.mode = 'config'; this.ctx = null; this.ctx2 = null;
         throw new CliError('Das Objekt existiert nicht mehr');
@@ -537,6 +580,51 @@
           if (!has(c.siteTags, w[3]) && !NAME_RE.test(w[3])) throw new CliError('Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
           setdefault(c.siteTags, w[3], newSite());
           this.mode = 'stag'; this.ctx = w[3];
+          return '';
+        }
+        if (w[0] === 'username' && !no && [4, 5, 6, 7].includes(w.length)) {
+          let i = 2;
+          if (w[i] === 'privilege' && w.length >= 6 && isDigits(w[3]) && parseInt(w[3], 10) >= 0 && parseInt(w[3], 10) <= 15) i = 4;
+          if ((w.length - i === 2 || w.length - i === 3) && w[i] === 'password' && (w.length - i === 2 || w[i + 1] === '0')) {
+            if (!NAME_RE.test(w[1])) throw new CliError('Benutzername: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
+            c.localUsers[w[1]] = w[w.length - 1];
+            return '';
+          }
+          throw inv();
+        }
+        if (no && w[0] === 'username' && w.length === 2) {
+          if (!has(c.localUsers, w[1])) throw new CliError('Benutzer ' + w[1] + ' existiert nicht');
+          delete c.localUsers[w[1]];
+          return '';
+        }
+        if (startsWith(w, ['aaa', 'authentication', 'login']) && w.length === 5 && w[4] === 'local' && !no) {
+          if (!NAME_RE.test(w[3])) throw new CliError('Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
+          c.loginLists[w[3]] = { method: 'local' };
+          return '';
+        }
+        if (no && startsWith(w, ['aaa', 'authentication', 'login']) && w.length === 4) {
+          if (!has(c.loginLists, w[3])) throw new CliError('Authentication List ' + w[3] + ' existiert nicht');
+          const users = [...c.wlans.keys()].filter(n => (c.wlans.get(n).webauth_list || undefined) === w[3]).sort(cmp);
+          if (users.length) throw new CliError('Authentication List ' + w[3] + ' wird von WLANs verwendet (' + users.join(', ') + ') - zuerst dort entfernen');
+          delete c.loginLists[w[3]];
+          return '';
+        }
+        if (eq(w, ['aaa', 'authorization', 'network', 'default', 'local']) || (no && startsWith(w, ['aaa', 'authorization', 'network', 'default']))) {
+          c.authzDefaultLocal = !no;
+          return '';
+        }
+        if (startsWith(w, ['parameter-map', 'type', 'webauth']) && w.length === 4 && !no) {
+          if (!has(c.webauthMaps, w[3]) && !NAME_RE.test(w[3])) throw new CliError('Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
+          setdefault(c.webauthMaps, w[3], { type: 'webauth', virtual_ip: '' });
+          this.mode = 'pmap'; this.ctx = w[3];
+          return '';
+        }
+        if (no && startsWith(w, ['parameter-map', 'type', 'webauth']) && w.length === 4) {
+          if (w[3] === DEF_WEBAUTH_MAP) throw new CliError(DEF_WEBAUTH_MAP + ' ist vordefiniert und kann nicht geloescht werden');
+          if (!has(c.webauthMaps, w[3])) throw new CliError('Parameter Map ' + w[3] + ' existiert nicht');
+          const users = [...c.wlans.keys()].filter(n => (c.wlans.get(n).webauth_map || undefined) === w[3]).sort(cmp);
+          if (users.length) throw new CliError('Parameter Map ' + w[3] + ' wird von WLANs verwendet (' + users.join(', ') + ') - zuerst dort entfernen');
+          delete c.webauthMaps[w[3]];
           return '';
         }
         if (eq(w, ['aaa', 'new-model'])) return '';   // AAA ist im Simulator immer aktiv; der Befehl wird angenommen
@@ -626,6 +714,9 @@
         else if (startsWith(w, ['security', 'wpa', 'akm']) && w.length === 4 && w[3] === 'psk') x.akm = no ? 'open' : 'psk';
         else if (startsWith(w, ['security', 'wpa', 'akm']) && w.length === 4 && w[3] === 'dot1x') x.akm = no ? 'open' : 'dot1x';
         else if (startsWith(w, ['security', 'dot1x', 'authentication-list']) && (w.length === 4 || (no && w.length === 3))) x.authlist = no ? '' : w[3];
+        else if (eq(w, ['security', 'web-auth'])) { x.webauth = !no; if (no) { x.webauth_list = ''; x.webauth_map = ''; } }
+        else if (startsWith(w, ['security', 'web-auth', 'authentication-list']) && (w.length === 4 || (no && w.length === 3))) x.webauth_list = no ? '' : w[3];
+        else if (startsWith(w, ['security', 'web-auth', 'parameter-map']) && (w.length === 4 || (no && w.length === 3))) x.webauth_map = no ? '' : w[3];
         else throw inv();
         return '';
       }
@@ -663,6 +754,16 @@
           if (!isDigits(w[1]) || !(lo <= parseInt(w[1], 10) && parseInt(w[1], 10) <= hi)) throw new CliError('Wert ausserhalb des Bereichs');
           r[w[0]] = parseInt(w[1], 10);
         } else throw inv();
+        return '';
+      }
+      if (this.mode === 'pmap') {
+        const m = c.webauthMaps[this.ctx];
+        if (eq(w, ['type', 'webauth']) && !no) m.type = 'webauth';
+        else if (startsWith(w, ['virtual-ip', 'ipv4']) && w.length === 3 && !no) {
+          if (!isIpv4(w[2])) throw new CliError('IPv4-Adresse ungueltig: ' + w[2]);
+          m.virtual_ip = w[2];
+        } else if (no && startsWith(w, ['virtual-ip', 'ipv4'])) m.virtual_ip = '';
+        else throw inv();
         return '';
       }
       if (this.mode === 'aaagrp') {

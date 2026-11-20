@@ -13,7 +13,7 @@ Alle Labs sind Eigenentwicklungen für den Simulator (keine Vorlagen von Cisco o
 
 ## CCNP Enterprise Wireless (300-430 ENWLSI)
 
-Die Labs 07 bis 11 tragen den Track *CCNP Enterprise Wireless*: FlexConnect (07, 08) und 802.1X mit RADIUS (09 bis 11), Prüfungsthemen der 300-430 (Quellen und Vorbehalte in `docs/QUELLEN.md`). Die Labs 01 bis 06 sind Grundlagen.
+Die Labs 07 bis 13 tragen den Track *CCNP Enterprise Wireless*: FlexConnect (07, 08), 802.1X mit RADIUS (09 bis 11) und Local Web Authentication (12, 13), Prüfungsthemen der 300-430 (Quellen und Vorbehalte in `docs/QUELLEN.md`). Die Labs 01 bis 06 sind Grundlagen.
 
 | Lab | Art | Lernmoment | Falsche Abkürzung, die die Prüfung abfängt |
 |---|---|---|---|
@@ -23,6 +23,8 @@ Die Labs 07 bis 11 tragen den Track *CCNP Enterprise Wireless*: FlexConnect (07,
 | 09 802.1X: Anmeldung scheitert trotz richtiger Zugangsdaten | Fehlersuche | Das Shared Secret muss auf WLC und RADIUS-Server gleich sein (Groß-/Kleinschreibung zählt); ein falsches Secret macht den Server DEAD | Das WLAN auf PSK oder Open herabstufen: alle verbinden sich, die Sicherheitsprüfung fällt durch. Den Server auf eine andere Adresse zeigen lassen: keine Lösung |
 | 10 802.1X: Alle im selben VLAN trotz RADIUS-Zuweisung | Fehlersuche | Das VLAN aus RADIUS gilt nur mit `aaa-override` im Policy Profile | Das VLAN des Policy Profile ändern: Die Prüfung verlangt das VLAN des Benutzers aus RADIUS |
 | 11 802.1X: Anmeldung trotz Ausfall des ersten RADIUS-Servers | Anforderungen | Reihenfolge der Server in der Server Group; ein nicht erreichbarer Server wird übersprungen, ein Access-Reject löst keinen Failover aus | Den ersten Server auf die Adresse des zweiten umbiegen: verbindet, aber ohne Redundanz. Zweiter Server mit falschem Secret: hilft nicht |
+| 12 Gast-WLAN: Portal-Anmeldung scheitert trotz richtigem Konto | Fehlersuche | Die lokale Portal-Anmeldung braucht neben Liste, Parameter Map und Benutzer auch die Autorisierung | Web Authentication am WLAN abschalten: Auch Mallory ohne Konto kommt hinein, die Sicherheitsprüfung fällt durch |
+| 13 Gast-WLAN mit Portal-Anmeldung einrichten | Anforderungen | Reihenfolge der Bausteine: Benutzer, Login-Liste, Autorisierung, Parameter Map, Web Auth im WLAN | Nur den Benutzer anlegen: Das WLAN bleibt offen, Mallory kommt ohne Anmeldung hinein. Ohne Parameter Map oder Autorisierung bleibt jeder in Webauth Pending |
 
 Gleichwertig bei Lab 08: den Namen im Policy Profile anpassen oder im Flex Profile umbenennen.
 

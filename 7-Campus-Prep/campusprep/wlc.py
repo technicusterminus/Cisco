@@ -11,6 +11,7 @@ from .world import norm_mac
 
 DEF_POLICY_TAG, DEF_SITE_TAG, DEF_RF_TAG = 'default-policy-tag', 'default-site-tag', 'default-rf-tag'
 DEF_FLEX_PROFILE = 'default-flex-profile'
+DEF_WEBAUTH_MAP = 'global'
 NAME_RE = re.compile(r'^[\w.-]{1,32}$')
 
 
@@ -35,21 +36,29 @@ class Wlc:
         self.radius_servers = {}   # name -> {ip, auth_port, acct_port, key, timeout, retransmit}
         self.aaa_groups = {}       # name -> {servers: [radius-server-name]} (Reihenfolge = Reihenfolge der Versuche)
         self.aaa_lists = {}        # dot1x-Methodenliste name -> {group}
+        self.local_users = {}      # Benutzername -> Passwort (username ... password; lokale Datenbank fuer Web-Auth)
+        self.login_lists = {}      # Login-Methodenliste name -> {method: 'local'} (aaa authentication login ... local)
+        self.authz_default_local = False   # aaa authorization network default local
+        self.webauth_maps = {DEF_WEBAUTH_MAP: {'type': 'webauth', 'virtual_ip': '192.0.2.1'}}   # parameter-map type webauth
 
     # ------------------------------------------------------------------ Snapshot und Zustand fuer die Oberflaeche
     def snapshot(self):
         return copy.deepcopy((self.wlans, self.policies, self.policy_tags, self.ap_cfg, self.flex_profiles, self.site_tags,
-                              self.radius_servers, self.aaa_groups, self.aaa_lists))
+                              self.radius_servers, self.aaa_groups, self.aaa_lists, self.local_users, self.login_lists,
+                              self.authz_default_local, self.webauth_maps))
 
     def restore(self, snap):
         (self.wlans, self.policies, self.policy_tags, self.ap_cfg, self.flex_profiles, self.site_tags,
-         self.radius_servers, self.aaa_groups, self.aaa_lists) = copy.deepcopy(snap)
+         self.radius_servers, self.aaa_groups, self.aaa_lists, self.local_users, self.login_lists,
+         self.authz_default_local, self.webauth_maps) = copy.deepcopy(snap)
 
     def dump(self):
         """Konfiguration fuer die Persistenz (JSON-tauglich). Die Welt (APs, Clients) speichert die Sim."""
         return copy.deepcopy({'wlans': self.wlans, 'policies': self.policies, 'policyTags': self.policy_tags, 'apCfg': self.ap_cfg,
                               'flexProfiles': self.flex_profiles, 'siteTags': self.site_tags, 'radiusServers': self.radius_servers,
-                              'aaaGroups': self.aaa_groups, 'aaaLists': self.aaa_lists})
+                              'aaaGroups': self.aaa_groups, 'aaaLists': self.aaa_lists, 'localUsers': self.local_users,
+                              'loginLists': self.login_lists, 'authzDefaultLocal': self.authz_default_local,
+                              'webauthMaps': self.webauth_maps})
 
     def load(self, d):
         self.wlans, self.policies = copy.deepcopy(d['wlans']), copy.deepcopy(d['policies'])
@@ -64,6 +73,12 @@ class Wlc:
         self.radius_servers = copy.deepcopy(d.get('radiusServers') or {})
         self.aaa_groups = copy.deepcopy(d.get('aaaGroups') or {})
         self.aaa_lists = copy.deepcopy(d.get('aaaLists') or {})
+        # Staende vor Version 4 kennen keine Web-Auth-Objekte
+        self.local_users = copy.deepcopy(d.get('localUsers') or {})
+        self.login_lists = copy.deepcopy(d.get('loginLists') or {})
+        self.authz_default_local = bool(d.get('authzDefaultLocal', False))
+        self.webauth_maps = copy.deepcopy(d.get('webauthMaps') or {})
+        self.webauth_maps.setdefault(DEF_WEBAUTH_MAP, {'type': 'webauth', 'virtual_ip': '192.0.2.1'})
 
     def state(self):
         """Alles, was die Weboberflaeche anzeigt (Schluessel werden nicht herausgegeben)."""
@@ -77,7 +92,8 @@ class Wlc:
         return {
             'wlc': dict(self.world['wlc']),
             'wlans': [{'profile': n, 'id': w['id'], 'ssid': w['ssid'], 'status': 'DOWN' if w['shutdown'] else 'UP',
-                       'akm': w['akm'], 'pskSet': bool(w['psk']), 'authList': w.get('authlist', ''), 'security': self.security_of(w)}
+                       'akm': w['akm'], 'pskSet': bool(w['psk']), 'authList': w.get('authlist', ''), 'webAuth': bool(w.get('webauth')), 'webAuthList': w.get('webauth_list', ''),
+                       'webAuthMap': w.get('webauth_map', ''), 'security': self.security_of(w)}
                       for n, w in sorted(self.wlans.items(), key=lambda kv: kv[1]['id'])],
             'policies': [{'name': n, 'vlan': p['vlan'], 'description': p['descr'], 'central': p.get('central', True),
                           'aaaOverride': p.get('aaa_override', False),
@@ -87,6 +103,11 @@ class Wlc:
                               for n, r in sorted(self.radius_servers.items())],
             'aaaGroups': [{'name': n, 'servers': list(g['servers'])} for n, g in sorted(self.aaa_groups.items())],
             'aaaLists': [{'name': n, 'group': g['group']} for n, g in sorted(self.aaa_lists.items())],
+            'localUsers': [{'name': n, 'passwordSet': bool(pw)} for n, pw in sorted(self.local_users.items())],
+            'loginLists': [{'name': n, 'method': l['method']} for n, l in sorted(self.login_lists.items())],
+            'authzDefaultLocal': self.authz_default_local,
+            'webauthMaps': [{'name': n, 'builtin': n == DEF_WEBAUTH_MAP, 'type': m['type'], 'virtualIp': m['virtual_ip']}
+                            for n, m in sorted(self.webauth_maps.items())],
             'flexProfiles': [{'name': n, 'builtin': n == DEF_FLEX_PROFILE, 'description': f['descr'], 'native': f['native'],
                               'vlans': [{'name': k, 'id': v} for k, v in sorted(f['vlans'].items())]}
                              for n, f in sorted(self.flex_profiles.items())],
@@ -99,7 +120,7 @@ class Wlc:
             'aps': aps,
             'clients': [{'mac': c['mac'], 'ssid': c['ssid'], 'ap': c['ap'], 'protocol': c['protocol'], 'state': c['state'],
                          'wlan': c['wlan'], 'vlan': c['vlan'], 'method': c['method'], 'switching': c['switching'], 'mode': c['mode'],
-                         'user': (c.get('eap') or {}).get('user'), 'reasons': c['reasons']} for c in self.clients()],
+                         'user': (c.get('eap') or c.get('web') or {}).get('user'), 'reasons': c['reasons']} for c in self.clients()],
         }
 
     # ------------------------------------------------------------------ Zustand
@@ -201,6 +222,36 @@ class Wlc:
         res['reasons'].append('Kein RADIUS-Server der Group %s antwortet: %s' % (mm['group'], '; '.join(tried)))
         return False, None
 
+    def _webauth(self, client, w, res):
+        """Local Web Authentication (Layer 3, nach der L2-Anmeldung): Der Client haengt im Zustand Webauth Pending, bis er sich
+        am Portal mit einem lokalen Benutzer anmeldet. Konfigurationskette laut Cisco-Dokument 224922 (siehe docs/QUELLEN.md)."""
+        lst = w.get('webauth_list') or ''
+        if not lst:
+            res['reasons'].append('Am WLAN-Profil ist keine Web-Auth-Authentication-List gesetzt (security web-auth authentication-list)')
+            return False
+        if lst not in self.login_lists:
+            res['reasons'].append('Die Authentication List %s ist nicht definiert (aaa authentication login %s local)' % (lst, lst))
+            return False
+        pm = w.get('webauth_map') or ''
+        if not pm:
+            res['reasons'].append('Am WLAN-Profil ist keine Parameter Map gesetzt (security web-auth parameter-map)')
+            return False
+        if pm not in self.webauth_maps:
+            res['reasons'].append('Die Parameter Map %s ist nicht definiert (parameter-map type webauth)' % pm)
+            return False
+        if not self.authz_default_local:
+            res['reasons'].append('Die Autorisierung fehlt: aaa authorization network default local ist nicht konfiguriert, die lokale '
+                                  'Anmeldung am Portal funktioniert ohne sie nicht')
+            return False
+        cred = client.get('web')
+        if not cred:
+            res['reasons'].append('Der Client hat sich noch nicht am Web-Portal angemeldet (Zustand Webauth Pending)')
+            return False
+        if self.local_users.get(cred.get('user')) != cred.get('password') or cred.get('user') not in self.local_users:
+            res['reasons'].append('Anmeldung am Portal abgelehnt: Benutzername oder Passwort falsch')
+            return False
+        return True
+
     def decide(self, client):
         """Didaktisches Modell: Warum ist ein Client assoziiert oder nicht? Rueckgabe {state, ap, wlan, reasons}."""
         ap = self.ap_by_name(client['ap'])
@@ -278,6 +329,12 @@ class Wlc:
                     res['vlan'] = str(vid)
         else:
             res['method'] = 'None'
+        if w.get('webauth'):
+            if res['method'] == 'None':
+                res['method'] = 'Web Auth'
+            if not self._webauth(client, w, res):
+                res['state'] = 'Webauth Pending'
+                return res
         res['state'] = 'Run'
         return res
 
@@ -371,7 +428,7 @@ class Cli:
     PROMPTS = {'exec': '#', 'config': '(config)#', 'wlan': '(config-wlan)#', 'policy': '(config-wireless-policy)#',
                'ptag': '(config-policy-tag)#', 'ap': '(config-ap)#', 'flex': '(config-wireless-flex-profile)#',
                'flexvlan': '(config-wireless-flex-profile-vlan)#', 'stag': '(config-site-tag)#', 'radius': '(config-radius-server)#',
-               'aaagrp': '(config-sg-radius)#'}
+               'aaagrp': '(config-sg-radius)#', 'pmap': '(config-params-parameter-map)#'}
 
     def __init__(self, wlc):
         self.wlc, self.mode, self.ctx, self.ctx2 = wlc, 'exec', None, None
@@ -469,7 +526,7 @@ class Cli:
             raise CliError('Invalid input detected: "no"')
         # Das Objekt des aktuellen Untermodus kann inzwischen (z. B. ueber die Oberflaeche) geloescht worden sein
         store = {'wlan': c.wlans, 'policy': c.policies, 'ptag': c.policy_tags, 'flex': c.flex_profiles, 'flexvlan': c.flex_profiles,
-                 'stag': c.site_tags, 'radius': c.radius_servers, 'aaagrp': c.aaa_groups}.get(self.mode)
+                 'stag': c.site_tags, 'radius': c.radius_servers, 'aaagrp': c.aaa_groups, 'pmap': c.webauth_maps}.get(self.mode)
         if store is not None and self.ctx not in store:
             self.mode, self.ctx, self.ctx2 = 'config', None, None
             raise CliError('Das Objekt existiert nicht mehr')
@@ -511,6 +568,53 @@ class Cli:
                     raise CliError('Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)')
                 c.site_tags.setdefault(w[3], {'local': True, 'flex': None, 'descr': ''})
                 self.mode, self.ctx = 'stag', w[3]
+                return ''
+            if w[0] == 'username' and not no and len(w) in (4, 5, 6, 7):
+                i = 2
+                if w[i] == 'privilege' and len(w) >= 6 and w[3].isdigit() and 0 <= int(w[3]) <= 15:
+                    i = 4
+                if len(w) - i in (2, 3) and w[i] == 'password' and (len(w) - i == 2 or w[i + 1] == '0'):
+                    if not NAME_RE.match(w[1]):
+                        raise CliError('Benutzername: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)')
+                    c.local_users[w[1]] = w[-1]
+                    return ''
+                raise CliError('Invalid input detected: "%s"' % ' '.join(w))
+            if no and w[0] == 'username' and len(w) == 2:
+                if w[1] not in c.local_users:
+                    raise CliError('Benutzer %s existiert nicht' % w[1])
+                del c.local_users[w[1]]
+                return ''
+            if w[:3] == ['aaa', 'authentication', 'login'] and len(w) == 5 and w[4] == 'local' and not no:
+                if not NAME_RE.match(w[3]):
+                    raise CliError('Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)')
+                c.login_lists[w[3]] = {'method': 'local'}
+                return ''
+            if no and w[:3] == ['aaa', 'authentication', 'login'] and len(w) == 4:
+                if w[3] not in c.login_lists:
+                    raise CliError('Authentication List %s existiert nicht' % w[3])
+                users = sorted(n for n, x in c.wlans.items() if x.get('webauth_list') == w[3])
+                if users:
+                    raise CliError('Authentication List %s wird von WLANs verwendet (%s) - zuerst dort entfernen' % (w[3], ', '.join(users)))
+                del c.login_lists[w[3]]
+                return ''
+            if w == ['aaa', 'authorization', 'network', 'default', 'local'] or (no and w[:4] == ['aaa', 'authorization', 'network', 'default']):
+                c.authz_default_local = not no
+                return ''
+            if w[:3] == ['parameter-map', 'type', 'webauth'] and len(w) == 4 and not no:
+                if w[3] not in c.webauth_maps and not NAME_RE.match(w[3]):
+                    raise CliError('Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)')
+                c.webauth_maps.setdefault(w[3], {'type': 'webauth', 'virtual_ip': ''})
+                self.mode, self.ctx = 'pmap', w[3]
+                return ''
+            if no and w[:3] == ['parameter-map', 'type', 'webauth'] and len(w) == 4:
+                if w[3] == DEF_WEBAUTH_MAP:
+                    raise CliError('%s ist vordefiniert und kann nicht geloescht werden' % DEF_WEBAUTH_MAP)
+                if w[3] not in c.webauth_maps:
+                    raise CliError('Parameter Map %s existiert nicht' % w[3])
+                users = sorted(n for n, x in c.wlans.items() if x.get('webauth_map') == w[3])
+                if users:
+                    raise CliError('Parameter Map %s wird von WLANs verwendet (%s) - zuerst dort entfernen' % (w[3], ', '.join(users)))
+                del c.webauth_maps[w[3]]
                 return ''
             if w == ['aaa', 'new-model']:
                 return ''   # AAA ist im Simulator immer aktiv; der Befehl wird angenommen
@@ -616,6 +720,14 @@ class Cli:
                 x['akm'] = 'open' if no else 'dot1x'
             elif w[:3] == ['security', 'dot1x', 'authentication-list'] and (len(w) == 4 or (no and len(w) == 3)):
                 x['authlist'] = '' if no else w[3]
+            elif w == ['security', 'web-auth']:
+                x['webauth'] = not no
+                if no:
+                    x['webauth_list'] = x['webauth_map'] = ''
+            elif w[:3] == ['security', 'web-auth', 'authentication-list'] and (len(w) == 4 or (no and len(w) == 3)):
+                x['webauth_list'] = '' if no else w[3]
+            elif w[:3] == ['security', 'web-auth', 'parameter-map'] and (len(w) == 4 or (no and len(w) == 3)):
+                x['webauth_map'] = '' if no else w[3]
             else:
                 raise CliError('Invalid input detected: "%s"' % ' '.join(w))
             return ''
@@ -662,6 +774,19 @@ class Cli:
                 if not w[1].isdigit() or not (0 if w[0] == 'retransmit' else 1) <= int(w[1]) <= hi:
                     raise CliError('Wert ausserhalb des Bereichs')
                 r[w[0]] = int(w[1])
+            else:
+                raise CliError('Invalid input detected: "%s"' % ' '.join(w))
+            return ''
+        if self.mode == 'pmap':
+            m = c.webauth_maps[self.ctx]
+            if w == ['type', 'webauth'] and not no:
+                m['type'] = 'webauth'
+            elif w[:2] == ['virtual-ip', 'ipv4'] and len(w) == 3 and not no:
+                if not is_ipv4(w[2]):
+                    raise CliError('IPv4-Adresse ungueltig: %s' % w[2])
+                m['virtual_ip'] = w[2]
+            elif no and w[:2] == ['virtual-ip', 'ipv4']:
+                m['virtual_ip'] = ''
             else:
                 raise CliError('Invalid input detected: "%s"' % ' '.join(w))
             return ''

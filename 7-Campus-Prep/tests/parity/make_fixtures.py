@@ -248,6 +248,77 @@ def sc_aaa_variants():
     return out
 
 
+def sc_cli_webauth():
+    r = Recorder('cli-webauth-objects')
+    r.cli('configure terminal', 'username', 'username a', 'username a password', 'username a password 0', 'username a password 0 pw1 extra', 'username bad!name password pw',
+          'username a password pw1', 'username b password 0 pw2', 'username c privilege 0 password pw3', 'username d privilege 15 password 0 pw4',
+          'username e privilege 99 password pw', 'username e privilege x password pw', 'username f secret pw', 'username g password 7 abc', 'username a password neu',
+          'no username', 'no username nix', 'no username b', 'no username b',
+          'aaa authentication login', 'aaa authentication login L', 'aaa authentication login L local', 'aaa authentication login bad!name local',
+          'aaa authentication login L2 group RG', 'aaa authentication login L3 local extra', 'no aaa authentication login', 'no aaa authentication login NIX',
+          'aaa authorization network default local', 'aaa authorization network default group RG', 'aaa authorization network x local', 'aaa authorization network default',
+          'no aaa authorization network default local', 'no aaa authorization network default', 'aaa authorization network default local',
+          'parameter-map type webauth', 'parameter-map type webauth bad!name', 'parameter-map type consent PM', 'parameter-map type webauth PM', 'type', 'type consent',
+          'type webauth', 'type webauth x', 'virtual-ip', 'virtual-ip ipv4', 'virtual-ip ipv4 300.1.1.1', 'virtual-ip ipv6 ::1', 'virtual-ip ipv4 192.0.2.7', 'no virtual-ip ipv4',
+          'virtual-ip ipv4 192.0.2.8', 'bogus', 'no bogus', 'exit', 'parameter-map type webauth global', 'virtual-ip ipv4 192.0.2.99', 'exit',
+          'wlan W 1 X', 'security web-auth', 'security web-auth x', 'security web-auth authentication-list', 'security web-auth authentication-list L',
+          'security web-auth parameter-map', 'security web-auth parameter-map PM', 'security web-auth parameter-map NIX', 'no security web-auth parameter-map',
+          'security web-auth parameter-map PM', 'exit', 'no aaa authentication login L', 'no parameter-map type webauth PM', 'no parameter-map type webauth global',
+          'wlan W 1 X', 'no security web-auth authentication-list', 'security web-auth authentication-list L', 'no security web-auth', 'exit',
+          'no aaa authentication login L', 'no parameter-map type webauth PM', 'no parameter-map type webauth PM', 'end',
+          'show wlan summary', 'show aaa servers', 'show wireless client summary')
+    r.call('GET', '/wlc/api/state')
+    return r.finish()
+
+
+WEB_BASE = ['wlan Guest 2 Gast', 'no shutdown', 'exit', 'wireless profile policy PP_Guest', 'vlan 99', 'no shutdown', 'exit',
+            'wireless tag policy PT_Guest', 'wlan Guest policy PP_Guest', 'exit', 'ap ' + L1, 'policy-tag PT_Guest', 'exit']
+WEB_FULL = ['username gast1 privilege 0 password 0 Gast#1', 'aaa authentication login WEBAUTH local', 'aaa authorization network default local',
+            'wlan Guest 2 Gast', 'security web-auth', 'security web-auth authentication-list WEBAUTH', 'security web-auth parameter-map global', 'exit']
+
+
+def web_variants():
+    w = lambda *c: ['wlan Guest 2 Gast'] + list(c) + ['exit']
+    return [
+        ('12-webauth-authorization', 'fixed', ['aaa authorization network default local']),
+        ('12-webauth-authorization', 'authz-then-removed', ['aaa authorization network default local', 'no aaa authorization network default local']),
+        ('12-webauth-authorization', 'web-auth-off', w('no security web-auth')),
+        ('12-webauth-authorization', 'no-list', w('no security web-auth authentication-list')),
+        ('12-webauth-authorization', 'typo-list', w('security web-auth authentication-list TIPPFEHLER') + ['aaa authorization network default local']),
+        ('12-webauth-authorization', 'no-map', w('no security web-auth parameter-map') + ['aaa authorization network default local']),
+        ('12-webauth-authorization', 'user-removed', ['aaa authorization network default local', 'no username gast1']),
+        ('12-webauth-authorization', 'user-new-password', ['aaa authorization network default local', 'username gast1 password Anders#1']),
+        ('12-webauth-authorization', 'wlan-down', ['aaa authorization network default local'] + w('shutdown')),
+        ('12-webauth-authorization', 'psk-on-top', ['aaa authorization network default local'] + w('security wpa akm psk', 'security wpa psk set-key ascii 0 Sommer2026')),
+        ('12-webauth-authorization', 'map-no-vip', ['parameter-map type webauth PM9', 'type webauth', 'exit', 'aaa authorization network default local'] + w('security web-auth parameter-map PM9')),
+        ('13-webauth-einrichten', 'fixed', WEB_FULL),
+        ('13-webauth-einrichten', 'no-user', [c for c in WEB_FULL if not c.startswith('username')]),
+        ('13-webauth-einrichten', 'no-list', [c for c in WEB_FULL if 'login' not in c]),
+        ('13-webauth-einrichten', 'no-authz', [c for c in WEB_FULL if 'authorization' not in c]),
+        ('13-webauth-einrichten', 'no-map', [c for c in WEB_FULL if 'parameter-map' not in c]),
+        ('13-webauth-einrichten', 'own-map', ['parameter-map type webauth PM1', 'type webauth', 'virtual-ip ipv4 192.0.2.5', 'exit'] +
+         [c.replace('parameter-map global', 'parameter-map PM1') for c in WEB_FULL]),
+        ('13-webauth-einrichten', 'only-user', ['username gast1 privilege 0 password 0 Gast#1']),
+        ('13-webauth-einrichten', 'user-pw-case', WEB_FULL + ['username gast1 password gast#1']),
+        ('13-webauth-einrichten', 'wrong-vlan', WEB_FULL + ['wireless profile policy PP_Guest', 'vlan 20']),
+        ('13-webauth-einrichten', 'full-then-off', WEB_FULL + w('no security web-auth')),
+        ('13-webauth-einrichten', 'delete-in-use', WEB_FULL + ['no aaa authentication login WEBAUTH', 'no parameter-map type webauth global']),
+    ]
+
+
+def sc_web_variants():
+    out = []
+    for lab, name, cmds in web_variants():
+        r = Recorder('web-%s-%s' % (lab[:2], name))
+        r.call('POST', '/wlc/api/lab/start', {'id': lab, 'mode': 'guided'})
+        r.apply(cmds)
+        r.call('GET', '/wlc/api/state')
+        r.cli('end', 'show wireless client summary', 'show wlan summary')
+        r.call('POST', '/wlc/api/lab/check', {})
+        out.append(r.finish())
+    return out
+
+
 def sc_apply():
     r = Recorder('apply-atomic-and-validation')
     r.apply(CORP)
@@ -383,7 +454,7 @@ def sc_no_persistence():
 
 
 def build():
-    out = [sc_cli_errors(), sc_cli_policy_ptag_ap(), sc_cli_flex(), sc_cli_aaa(), sc_names()] + sc_decide() + sc_aaa_variants() + [sc_apply(), sc_lab_errors(), sc_saves(), sc_no_persistence()]
+    out = [sc_cli_errors(), sc_cli_policy_ptag_ap(), sc_cli_flex(), sc_cli_aaa(), sc_cli_webauth(), sc_names()] + sc_decide() + sc_aaa_variants() + sc_web_variants() + [sc_apply(), sc_lab_errors(), sc_saves(), sc_no_persistence()]
     for lab_id in lab_ids():
         for mode in ('guided', 'exam'):
             out.append(lab_flow(lab_id, mode))
