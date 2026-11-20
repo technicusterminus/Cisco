@@ -708,7 +708,8 @@ QOS_TOOLS = ['WebUI: Configuration > Tags & Profiles > Policy', 'Monitoring > Wi
 QOS_LIMITS = LIMITS + ['QoS ist stark vereinfacht: Ein Client sendet Verkehr mit einem DSCP-Wert; das Metal-Profil im Policy Profile begrenzt den höchsten Wert je Richtung. '
                        'Es gibt keine Bandbreite, keine Warteschlangen, kein AVC und keine WMM-Zuordnung.',
                        'Das Cisco-Dokument 222241 beschreibt die Metal-Profile für APs im Local Mode; FlexConnect ist dort nicht behandelt, der Simulator wertet es gleich aus.',
-                       'Ohne service-policy gibt es im Simulator keine Begrenzung; das Standardverhalten des Geräts ist nicht belegt.']
+                       'Ohne service-policy gibt es im Simulator keine Begrenzung; das Standardverhalten des Geräts ist nicht belegt.',
+                       'Die Höchstwerte folgen nicht der Priorität der Klassen: Bronze (8) ist als Hintergrundklasse niedriger priorisiert als Silver (0). Der Simulator wertet nur den Höchstwert aus.']
 VOICE = qos_client('58bf.eaaa.0001', 'Corp', 46, psk='Sommer2026')
 GUEST_TOUCH = qos_client('58bf.eaaa.0002', 'Gast', 46)
 
