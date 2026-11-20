@@ -543,6 +543,45 @@ def sc_saves():
     return r.finish()
 
 
+def sc_export_import():
+    r = Recorder('export-import')
+    r.call('POST', '/wlc/api/saves/export', {'name': 'nix'})
+    r.apply(CORP)
+    r.call('POST', '/wlc/api/saves', {'name': 'a'})
+    good = r.call('POST', '/wlc/api/saves/export', {'name': 'a'})['state']
+    r.call('POST', '/wlc/api/lab/start', {'id': '09-radius-shared-secret', 'mode': 'guided'})
+    r.apply(['radius server RS1', 'key RadiusKey1'])
+    r.call('POST', '/wlc/api/saves', {'name': 'lab'})
+    lab = r.call('POST', '/wlc/api/saves/export', {'name': 'lab'})['state']
+    r.call('POST', '/wlc/api/saves/delete', {'name': 'a'})
+    r.call('POST', '/wlc/api/lab/stop', {})
+    r.call('POST', '/wlc/api/saves/import', {'name': 'b', 'state': good})
+    r.call('POST', '/wlc/api/saves/import', {'name': 'b', 'state': good})
+    r.call('POST', '/wlc/api/saves/import', {'name': 'c', 'state': lab})
+    r.call('GET', '/wlc/api/state')
+    r.call('POST', '/wlc/api/saves/load', {'name': 'c'})
+    r.call('GET', '/wlc/api/state')
+    r.call('POST', '/wlc/api/lab/check', {})
+    r.call('POST', '/wlc/api/saves/load', {'name': 'b'})
+    r.call('GET', '/wlc/api/state')
+    broken = json.loads(json.dumps(good))
+    broken['wlc']['policies'] = 'kaputt'
+    broken2 = json.loads(json.dumps(good))
+    broken2['wlc']['aaaLists'] = {'L': 5}
+    old = json.loads(json.dumps(good))
+    old['version'] = 1
+    for state in (None, 5, 'text', [], {}, {'kind': 'anderes', 'version': 1}, dict(good, version=99), broken, broken2, dict(good, world='x')):
+        r.call('POST', '/wlc/api/saves/import', {'name': 'neu', 'state': state})
+    for bad in ('../x', 'a/b', '', None, 5, 'x' * 41):
+        r.call('POST', '/wlc/api/saves/import', {'name': bad, 'state': good})
+        r.call('POST', '/wlc/api/saves/export', {'name': bad})
+    r.call('POST', '/wlc/api/saves/import', {'name': 'alt', 'state': old})
+    r.call('POST', '/wlc/api/saves/import', {'state': good})
+    r.call('POST', '/wlc/api/saves/import', {'name': 'neu'})
+    r.call('GET', '/wlc/api/saves')
+    return r.finish()
+
+
 def sc_no_persistence():
     r = Recorder('no-persistence', persistent=False)
     r.call('GET', '/wlc/api/state')
@@ -550,6 +589,8 @@ def sc_no_persistence():
     r.call('POST', '/wlc/api/saves', {'name': 'x'})
     r.call('POST', '/wlc/api/saves/load', {'name': 'x'})
     r.call('POST', '/wlc/api/saves/delete', {'name': 'x'})
+    r.call('POST', '/wlc/api/saves/export', {'name': 'x'})
+    r.call('POST', '/wlc/api/saves/import', {'name': 'x', 'state': {}})
     r.call('POST', '/wlc/api/progress/reset', {})
     r.call('POST', '/wlc/api/lab/start', {'id': '02-admin-down', 'mode': 'guided'})
     r.call('POST', '/wlc/api/lab/check', {})
@@ -558,7 +599,7 @@ def sc_no_persistence():
 
 
 def build():
-    out = [sc_cli_errors(), sc_cli_policy_ptag_ap(), sc_cli_flex(), sc_cli_aaa(), sc_cli_webauth(), sc_cli_mobility(), sc_cli_rf(), sc_names()] + sc_decide() + sc_aaa_variants() + sc_web_variants() + sc_mob_variants() + sc_rf_variants() + [sc_apply(), sc_lab_errors(), sc_saves(), sc_no_persistence()]
+    out = [sc_cli_errors(), sc_cli_policy_ptag_ap(), sc_cli_flex(), sc_cli_aaa(), sc_cli_webauth(), sc_cli_mobility(), sc_cli_rf(), sc_names()] + sc_decide() + sc_aaa_variants() + sc_web_variants() + sc_mob_variants() + sc_rf_variants() + [sc_apply(), sc_lab_errors(), sc_saves(), sc_export_import(), sc_no_persistence()]
     for lab_id in lab_ids():
         for mode in ('guided', 'exam'):
             out.append(lab_flow(lab_id, mode))

@@ -398,6 +398,58 @@ class TestHttp(Base):
         finally:
             self.stop()
 
+    def test_export_and_import_of_a_save(self):
+        self.start(self.dir)
+        try:
+            self.call('/wlc/api/lab/start', 'POST', {'id': '09-radius-shared-secret'})
+            self.call('/wlc/api/apply', 'POST', {'commands': ['radius server RS1', 'key RadiusKey1']})
+            self.call('/wlc/api/saves', 'POST', {'name': 'geloest'})
+            st, exp = self.call('/wlc/api/saves/export', 'POST', {'name': 'geloest'})
+            self.assertEqual(st, 200)
+            self.assertEqual((exp['state']['kind'], exp['state']['version']), ('campusprep-state', 6))
+            # Import legt einen neuen Stand ab, laedt ihn aber nicht
+            self.call('/wlc/api/lab/stop', 'POST', {})
+            before = self.call('/wlc/api/state')[1]
+            st, body = self.call('/wlc/api/saves/import', 'POST', {'name': 'kopie', 'state': exp['state']})
+            self.assertEqual((st, [x['name'] for x in body['saves']]), (200, ['geloest', 'kopie']))
+            self.assertEqual(self.call('/wlc/api/state')[1], before, 'der laufende Zustand bleibt unveraendert')
+            self.assertEqual(self.call('/wlc/api/saves/load', 'POST', {'name': 'kopie'})[0], 200)
+            self.call('/wlc/api/lab/check', 'POST', {})
+            self.assertEqual(self.call('/wlc/api/state')[1]['radiusServers'][0]['state'], 'UP')
+            # vorhandener Name wird nicht ueberschrieben
+            self.assertEqual(self.call('/wlc/api/saves/import', 'POST', {'name': 'kopie', 'state': exp['state']})[0], 409)
+            self.assertEqual(self.call('/wlc/api/saves/export', 'POST', {'name': 'nix'})[0], 404)
+        finally:
+            self.stop()
+
+    def test_import_rejects_foreign_broken_and_unsafe_files(self):
+        self.start(self.dir)
+        try:
+            self.call('/wlc/api/saves', 'POST', {'name': 'gut'})
+            good = self.call('/wlc/api/saves/export', 'POST', {'name': 'gut'})[1]['state']
+            broken = copy.deepcopy(good)
+            broken['wlc']['policies'] = 'kaputt'
+            broken2 = copy.deepcopy(good)
+            broken2['wlc']['aaaLists'] = {'L': 5}
+            for state in (None, 5, 'text', [], {}, {'kind': 'anderes', 'version': 1}, dict(good, version=99), broken, broken2):
+                st, body = self.call('/wlc/api/saves/import', 'POST', {'name': 'neu', 'state': state})
+                self.assertEqual(st, 400, state)
+                self.assertIn('error', body)
+            for bad in ('../x', 'a/b', '', None, 5):
+                self.assertEqual(self.call('/wlc/api/saves/import', 'POST', {'name': bad, 'state': good})[0], 400, bad)
+            self.assertEqual([x['name'] for x in self.call('/wlc/api/saves')[1]['saves']], ['gut'], 'nichts wurde abgelegt')
+            self.assertFalse(os.path.exists(os.path.join(self.dir, 'x.json')))
+            self.assertEqual(self.call('/wlc/api/saves/import', 'POST', {'name': 'v1', 'state': dict(good, version=1)})[0], 200,
+                             'aeltere Staende bleiben importierbar')
+        finally:
+            self.stop()
+        self.start(None)
+        try:
+            self.assertEqual(self.call('/wlc/api/saves/export', 'POST', {'name': 'x'})[0], 409)
+            self.assertEqual(self.call('/wlc/api/saves/import', 'POST', {'name': 'x', 'state': {}})[0], 409)
+        finally:
+            self.stop()
+
     def test_path_traversal_in_save_names(self):
         self.start(self.dir)
         try:

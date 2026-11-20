@@ -161,6 +161,14 @@
       const fps = d.flexProfiles || {}, sts = d.siteTags || {};
       for (const k of Object.keys(fps)) need(fps[k], ['descr', 'native', 'vlans']);
       for (const k of Object.keys(sts)) { need(sts[k], ['descr', 'local']); if (!sts[k].local) need(sts[k], ['flex']); }
+      // Objekte der Versionen 3 bis 6: Ein Eintrag ohne seine Pflichtfelder ist beschaedigt (Python wirft beim Aufbau der Ansicht)
+      for (const [key, fields] of [['radiusServers', ['ip', 'auth_port', 'acct_port', 'key', 'timeout', 'retransmit']], ['aaaGroups', ['servers']], ['aaaLists', ['group']],
+                                   ['loginLists', ['method']], ['webauthMaps', ['type', 'virtual_ip']], ['mobilityPeers', ['mac', 'group']],
+                                   ['rfProfiles', ['band', 'name', 'shutdown', 'tx_min', 'tx_max', 'descr']], ['rfTags', ['24ghz', '5ghz']]]) {
+        const o = d[key] || {};
+        for (const k of Object.keys(o)) need(o[k], fields);
+      }
+      for (const k of Object.keys(d.aaaGroups || {})) if (!Array.isArray(d.aaaGroups[k].servers)) throw new Error('Feld fehlt: servers');
       this.loadWlans(d.wlans);
       this.policies = clone(d.policies); this.policyTags = clone(d.policyTags); this.apCfg = clone(d.apCfg);
       setdefault(this.policyTags, DEF_POLICY_TAG, dict());
@@ -1045,6 +1053,7 @@
       try { d = this.read(key); } catch (e) { throw new StoreError('Stand ' + name + ' ist nicht lesbar'); }
       return validateState(d);
     }
+    namedExists(name) { const v = this.s.get(this.savePath(name)); return v !== null && v !== undefined; }
     deleteNamed(name) {
       const key = this.savePath(name);
       if (this.s.get(key) === null || this.s.get(key) === undefined) throw new StoreError('Stand ' + name + ' gibt es nicht', 404);
@@ -1277,13 +1286,18 @@
     snapshotAll() {
       return plain({ kind: KIND, version: VERSION, world: this.world, wlc: this.wlc.dump(), lab: this.labs.session });
     }
-    restoreAll(d) {
+    buildState(d) {
+      /* Aus einem Stand Welt und Controller aufbauen und pruefen; veraendert nichts am laufenden Zustand. */
       validateState(d);
       const world = clone(d.world);
       if (!has(world, 'radius')) world.radius = defaultRadius();   // aeltere Staende kennen keinen RADIUS-Server
       if (!has(world, 'mobility')) world.mobility = defaultMobility();   // und keine Mobility-Gegenseite
       const wlc = new Wlc(world);
       try { wlc.load(d.wlc); wlc.state(); } catch (e) { throw new StoreError('Stand ist beschaedigt'); }
+      return [world, wlc];
+    }
+    restoreAll(d) {
+      const [world, wlc] = this.buildState(d);
       this.world = world; this.wlc = wlc; this.cli = new Cli(wlc);
       this.labs.restoreSession(d.lab);
     }
@@ -1324,6 +1338,13 @@
         if (method === 'GET' && path === '/wlc/api/saves') return [200, { saves: this.store.listNamed() }];
         if (method === 'POST' && path === '/wlc/api/saves') { this.store.saveNamed(body.name, this.snapshotAll()); return [200, { saves: this.store.listNamed() }]; }
         if (method === 'POST' && path === '/wlc/api/saves/load') { this.restoreAll(this.store.loadNamed(body.name)); return [200, { ok: true }]; }
+        if (method === 'POST' && path === '/wlc/api/saves/export') return [200, { state: this.store.loadNamed(body.name) }];
+        if (method === 'POST' && path === '/wlc/api/saves/import') {
+          this.buildState(body.state);
+          if (this.store.namedExists(body.name)) throw new StoreError('Ein Stand mit diesem Namen existiert bereits', 409);
+          this.store.saveNamed(body.name, body.state);
+          return [200, { saves: this.store.listNamed() }];
+        }
         if (method === 'POST' && path === '/wlc/api/saves/delete') { this.store.deleteNamed(body.name); return [200, { saves: this.store.listNamed() }]; }
         if (method === 'POST' && path === '/wlc/api/progress/reset') { this.labs.resetProgress(); return [200, { labs: this.labs.list() }]; }
       } catch (e) { if (e instanceof StoreError) return [e.status, { error: e.message }]; throw e; }
