@@ -451,6 +451,94 @@ SOLUTIONS['11-radius-redundanz'] = ['radius server RS2', 'address ipv4 10.10.0.5
                                     'aaa group server radius RG1', 'server name RS2']
 
 
+# ---------------------------------------------------------------------------------------------------------------
+# CCNP Enterprise Wireless (ENWLSI): Local Web Authentication. Befehlskette: Cisco-Dokument 224922, Autorisierung: 217457
+# (ueber Websuche zitiert, siehe docs/QUELLEN.md). Die Portal-Anmeldung ist vereinfacht: Der Client traegt am Client-Eintrag
+# seine Portal-Zugangsdaten (web), sonst bleibt er in Webauth Pending.
+def web_client(mac, user=None, password=None, ap='ap-lobby'):
+    c = {'mac': mac, 'ssid': 'Gast', 'ap': ap, 'protocol': '11ac'}
+    if user is not None:
+        c['web'] = {'user': user, 'password': password}
+    return c
+
+
+def guest_base():
+    return ['wlan Guest 2 Gast', 'no shutdown', 'exit',
+            'wireless profile policy PP_Guest', 'vlan 99', 'no shutdown', 'exit',
+            'wireless tag policy PT_Guest', 'wlan Guest policy PP_Guest', 'exit', 'ap %s' % L1, 'policy-tag PT_Guest', 'exit']
+
+
+def webauth_chain(authz=True):
+    return ['username gast1 privilege 0 password 0 Gast#1', 'aaa authentication login WEBAUTH local'] + \
+           (['aaa authorization network default local'] if authz else []) + \
+           ['wlan Guest 2 Gast', 'security web-auth', 'security web-auth authentication-list WEBAUTH',
+            'security web-auth parameter-map global', 'exit']
+
+
+WEB_TOOLS = ['WebUI: Configuration > Security > Web Auth und Tags & Profiles > WLANs', 'Monitoring > Wireless > Clients',
+             'Client-Diagnose (nur im geführten Modus)', 'CLI: show wlan summary, show wireless client summary']
+WEB_LIMITS = LIMITS + ['Die Portal-Anmeldung ist vereinfacht: Es gibt keine Portalseite; der Client trägt seine Zugangsdaten im Client-Eintrag.',
+                       'Nicht modelliert: Weiterleitung per HTTP, Zertifikat des Portals, Consent und Webconsent, Central Web Authentication, '
+                       'externe Portale, Sitzungs-Timeouts.']
+
+lab(id='12-webauth-authorization', title='12 Gast-WLAN: Portal-Anmeldung scheitert trotz richtigem Konto', topic='Web Authentication / Troubleshooting',
+    level='Fortgeschritten', duration='25 min', kind='troubleshooting', track=TRACK_WIFI, prerequisites=['Lab 01'], tools=WEB_TOOLS, limits=WEB_LIMITS,
+    goals=['Die Bausteine von Local Web Authentication kennen', 'Den fehlenden Baustein finden, ohne die Portal-Anmeldung abzuschalten'],
+    intro='Das Gast-WLAN **Gast** verlangt eine Anmeldung am Portal. Der Gast **gast1** hat ein gültiges lokales Konto, bleibt aber im Zustand '
+          '*Webauth Pending* hängen. Die Authentication List, die Parameter Map und der Benutzer sind vorhanden.\n\n'
+          'Zum Test: gast1 (richtige Zugangsdaten) und Mallory (kein Konto) in der Lobby.',
+    requirements=['gast1 ist verbunden (Zustand Run) und im VLAN 99.', 'Mallory bleibt ohne Netzzugang (Webauth Pending).',
+                  'Das WLAN verlangt weiterhin die Portal-Anmeldung.'],
+    hints=['**Konzept:** Die Anmeldung am Portal braucht neben der Authentication List und dem Benutzer noch eine Autorisierung.',
+           '**Ebene:** Globale AAA-Konfiguration, nicht das WLAN oder das Policy Profile.',
+           '**Prüfschritte:** Die Client-Diagnose nennt, was fehlt. Die Seite Security > Web Auth zeigt den Stand der Autorisierung.',
+           '**Lösung:** `aaa authorization network default local` konfigurieren. Die Portal-Anmeldung nicht abschalten.'],
+    cause='Die Autorisierung aaa authorization network default local fehlt; ohne sie funktioniert die lokale Portal-Anmeldung nicht.',
+    startCommands=guest_base() + webauth_chain(authz=False),
+    worldClients=[web_client('58bf.eaaa.0001', 'gast1', 'Gast#1'), web_client('58bf.eaaa.0002', 'mallory', 'egal')],
+    checks=[chk('gast1: verbunden, VLAN 99', 'client', mac='58bf.eaaa.0001', state='Run', vlan='99'),
+            chk('Mallory hat keinen Netzzugang', 'client', 'security', mac='58bf.eaaa.0002', state='Webauth Pending'),
+            chk('Das WLAN verlangt weiterhin Web Authentication', 'wlan', 'security', profile='Guest', attrs={'webAuth': True})],
+    questions=[q('q1', 'Was hängt am Gast-WLAN mit Web Authentication zusammen (lokale Variante)?',
+                 ['Authentication List (login, local), Parameter Map, Autorisierung und lokale Benutzer', 'Nur die Parameter Map', 'Ein RADIUS-Server mit EAP', 'Ein PSK im WLAN'], 0,
+                 'Laut Cisco-Dokumenten 224922 und 217457 gehören Methodenliste, Parameter Map, die Autorisierung und lokale Benutzer zusammen.'),
+               q('q2', 'Warum ist es keine Lösung, Web Authentication am WLAN abzuschalten?',
+                 ['Dann kommt auch Mallory ohne Konto ins Netz', 'Dann ist das WLAN down', 'Dann verliert gast1 sein Konto', 'Das geht nicht'], 0,
+                 'Ohne Web Auth ist das WLAN offen: Alle Clients sind im Zustand Run, die Sicherheitsprüfung fällt durch.')],
+    solution='WebUI: Security > Web Auth > Autorisierung: Konfigurieren. CLI: `aaa authorization network default local`.')
+SOLUTIONS['12-webauth-authorization'] = ['aaa authorization network default local']
+
+lab(id='13-webauth-einrichten', title='13 Gast-WLAN mit Portal-Anmeldung einrichten', topic='Web Authentication / Design',
+    level='Fortgeschritten', duration='30 min', kind='requirements', track=TRACK_WIFI, prerequisites=['Lab 12'], tools=WEB_TOOLS, limits=WEB_LIMITS,
+    goals=['Local Web Authentication von Grund auf einrichten', 'Die Reihenfolge der Bausteine verstehen: Liste, Autorisierung, Parameter Map, WLAN'],
+    intro='Das Gast-WLAN **Gast** (VLAN 99) ist offen: Jeder kommt hinein. Es soll eine Anmeldung am Portal verlangen. Der lokale Benutzer **gast1** '
+          '(Passwort **Gast#1**) soll sich anmelden dürfen. Die Parameter Map **global** ist vordefiniert und kann verwendet werden.',
+    requirements=['gast1 ist verbunden (Zustand Run) und im VLAN 99.', 'Mallory (ohne Konto) bleibt ohne Netzzugang (Webauth Pending).',
+                  'Das WLAN verlangt Web Authentication (Authentication List und Parameter Map gesetzt).', 'Das Gast-VLAN bleibt 99.'],
+    hints=['**Konzept:** Web Authentication ist eine zweite Stufe nach dem Verbinden. Dafür braucht der Controller eine Methodenliste, eine Autorisierung und eine Parameter Map; im WLAN werden sie verknüpft.',
+           '**Ebene:** Globale AAA-Konfiguration plus Sicherheits-Einstellungen im WLAN-Profil.',
+           '**Prüfschritte:** Fehlt ein Baustein, bleibt gast1 in Webauth Pending; die Client-Diagnose nennt den fehlenden Baustein.',
+           '**Lösung:** Benutzer gast1 anlegen; Authentication List `WEBAUTH` (login, local); `aaa authorization network default local`; im WLAN Gast Web Authentication mit dieser Liste und der Parameter Map global einschalten.'],
+    cause='Das WLAN ist offen konfiguriert; es gibt weder einen Benutzer noch eine Authentication List noch die Autorisierung.',
+    startCommands=guest_base(),
+    worldClients=[web_client('58bf.eaaa.0001', 'gast1', 'Gast#1'), web_client('58bf.eaaa.0002', 'mallory', 'egal')],
+    checks=[chk('gast1: verbunden, VLAN 99', 'client', mac='58bf.eaaa.0001', state='Run', vlan='99'),
+            chk('Mallory hat keinen Netzzugang', 'client', 'security', mac='58bf.eaaa.0002', state='Webauth Pending'),
+            chk('Web Authentication mit Liste und Parameter Map', 'wlan', profile='Guest',
+                attrs={'webAuth': True, 'webAuthList': 'WEBAUTH', 'webAuthMap': 'global'}),
+            chk('Das Gast-Policy-Profile bleibt im VLAN 99', 'policy', name='PP_Guest', attrs={'vlan': '99'})],
+    questions=[q('q1', 'Wann gilt ein Client mit Web Authentication als verbunden (Run)?',
+                 ['Erst nach erfolgreicher Anmeldung am Portal', 'Sobald er mit dem WLAN verbunden ist', 'Sobald er eine IP-Adresse hat', 'Wenn der AP ihn sieht'], 0,
+                 'Bis zur Anmeldung steht der Client im Zustand Webauth Pending (Layer 3), danach in Run.'),
+               q('q2', 'Warum reicht es nicht, nur den Benutzer anzulegen?',
+                 ['Das WLAN muss Web Authentication mit Liste und Parameter Map verlangen, und die Autorisierung muss vorhanden sein', 'Benutzer gelten nur für SSH', 'Der Benutzer braucht Privilege 15', 'Der Controller muss neu starten'], 0,
+                 'Das Konto allein schaltet nichts ein; die Kette WLAN, Liste, Parameter Map und Autorisierung muss stehen.')],
+    solution='WebUI: Security > Web Auth: Benutzer gast1, Authentication List WEBAUTH, Autorisierung; Tags & Profiles > WLANs > Gast: Web Authentication. '
+             'CLI: `username gast1 privilege 0 password 0 Gast#1`; `aaa authentication login WEBAUTH local`; `aaa authorization network default local`; '
+             '`wlan Guest 2 Gast` / `security web-auth` / `security web-auth authentication-list WEBAUTH` / `security web-auth parameter-map global`.')
+SOLUTIONS['13-webauth-einrichten'] = webauth_chain(authz=True)
+
+
 def main(out=OUT, verbose=True):
     os.makedirs(out, exist_ok=True)
     for f in os.listdir(out):

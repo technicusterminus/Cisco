@@ -15,7 +15,7 @@ from campusprep.server import Sim, serve  # noqa: E402
 L1, L2 = 'a4b2.32aa.0001', 'a4b2.32aa.0002'
 ALL = ['01-ssid-nicht-sichtbar', '02-admin-down', '03-falscher-schluessel', '04-falsches-policy-profile',
        '05-gast-wlan-lobby', '06-aufraeumen', '07-flexconnect-zweigstelle', '08-flexconnect-vlan-name',
-       '09-radius-shared-secret', '10-aaa-override-vlan', '11-radius-redundanz']
+       '09-radius-shared-secret', '10-aaa-override-vlan', '11-radius-redundanz', '12-webauth-authorization', '13-webauth-einrichten']
 # Woerter, die im sichtbaren Text vor dem Bestehen (Intro, Anforderungen, Pruefungsbeschreibungen) nicht stehen duerfen
 LEAKS = {
     '01-ssid-nicht-sichtbar': ['policy-tag', 'Policy Tag', 'Tag Source', 'PT_Corp'],
@@ -29,6 +29,8 @@ LEAKS = {
     '09-radius-shared-secret': ['Shared Secret', 'Schlüssel', 'key RadiusKey1', 'Geheimnis'],
     '10-aaa-override-vlan': ['aaa-override', 'AAA Override', 'Override'],
     '11-radius-redundanz': ['server name', 'RS2', 'Server Group'],
+    '12-webauth-authorization': ['aaa authorization', 'Autorisierung konfigurieren', 'default local'],
+    '13-webauth-einrichten': ['security web-auth', 'WEBAUTH', 'Parameter Map global', 'aaa authentication login'],
 }
 
 
@@ -216,6 +218,51 @@ def s_cmds(s):
     return s.labs.labs['07-flexconnect-zweigstelle']['solutionCommands']
 
 
+class TestWebAuthLabs(unittest.TestCase):
+    """CCNP Enterprise Wireless: Local Web Authentication. Jede naheliegende falsche Abkuerzung besteht nicht."""
+
+    def test_labs_belong_to_the_wireless_track(self):
+        labs = Sim().labs.labs
+        for i in ('12-webauth-authorization', '13-webauth-einrichten'):
+            self.assertEqual(labs[i]['track'], 'CCNP Enterprise Wireless (300-430 ENWLSI)')
+
+    def test_lab12_start_state_and_diagnosis_name_the_missing_authorization(self):
+        s = started('12-webauth-authorization')
+        gast = next(c for c in s.wlc.clients() if c['mac'] == '58bf.eaaa.0001')
+        self.assertEqual(gast['state'], 'Webauth Pending')
+        self.assertIn('aaa authorization network default local', ' '.join(gast['reasons']))
+
+    def test_lab12_switching_web_auth_off_lets_everyone_in_and_fails_security(self):
+        s = fixed('12-webauth-authorization', ['wlan Guest 2 Gast', 'no security web-auth'])
+        self.assertEqual({c['mac']: c['state'] for c in s.wlc.clients()}, {'58bf.eaaa.0001': 'Run', '58bf.eaaa.0002': 'Run'})
+        self.assertEqual(sorted(failed(s)), ['Das WLAN verlangt weiterhin Web Authentication', 'Mallory hat keinen Netzzugang'])
+
+    def test_lab12_removing_the_authorization_again_breaks_it(self):
+        s = fixed('12-webauth-authorization')
+        self.assertTrue(s.labs.check()['passed'])
+        s.apply(['no aaa authorization network default local'])
+        self.assertFalse(s.labs.check()['passed'])
+
+    def test_lab13_leaving_the_wlan_open_fails_security(self):
+        s = fixed('13-webauth-einrichten', ['username gast1 privilege 0 password 0 Gast#1'])
+        self.assertFalse(s.labs.check()['passed'])
+        self.assertIn('Web Authentication mit Liste und Parameter Map', failed(s))
+
+    def test_lab13_missing_user_keeps_the_guest_pending(self):
+        cmds = [c for c in started('13-webauth-einrichten').labs.labs['13-webauth-einrichten']['solutionCommands'] if not c.startswith('username')]
+        s = fixed('13-webauth-einrichten', cmds)
+        gast = next(c for c in s.wlc.clients() if c['mac'] == '58bf.eaaa.0001')
+        self.assertEqual(gast['state'], 'Webauth Pending')
+        self.assertIn('Benutzername oder Passwort falsch', ' '.join(gast['reasons']))
+        self.assertFalse(s.labs.check()['passed'])
+
+    def test_lab13_a_missing_parameter_map_keeps_everyone_pending(self):
+        cmds = [c for c in started('13-webauth-einrichten').labs.labs['13-webauth-einrichten']['solutionCommands'] if 'parameter-map' not in c]
+        s = fixed('13-webauth-einrichten', cmds)
+        self.assertEqual({c['state'] for c in s.wlc.clients()}, {'Webauth Pending'})
+        self.assertFalse(s.labs.check()['passed'])
+
+
 class TestRadiusLabs(unittest.TestCase):
     """CCNP Enterprise Wireless: 802.1X mit RADIUS. Jede naheliegende falsche Abkuerzung besteht nicht."""
 
@@ -395,7 +442,7 @@ class TestLabApi(unittest.TestCase):
 
     def test_flow(self):
         st, body = self.call('/wlc/api/labs')
-        self.assertEqual((st, len(body['labs']), body['current']), (200, 11, None))
+        self.assertEqual((st, len(body['labs']), body['current']), (200, 13, None))
         self.assertEqual([x['track'] for x in body['labs']][:1] + [x['track'] for x in body['labs']][-1:],
                          ['Grundlagen Wireless', 'CCNP Enterprise Wireless (300-430 ENWLSI)'])
         self.assertEqual(self.call('/wlc/api/lab/check', 'POST', {})[0], 409)

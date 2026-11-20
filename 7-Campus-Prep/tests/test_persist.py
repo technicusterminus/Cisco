@@ -57,7 +57,7 @@ class TestState(Base):
         self.assertEqual(read(os.path.join(self.dir, 'state.json')), first)
         self.assertEqual([f for f in os.listdir(self.dir) if f.endswith('.tmp')], [])
         d = json.loads(first)
-        self.assertEqual((d['kind'], d['version']), ('campusprep-state', 3))   # 3: AAA-Objekte und RADIUS-Gegenseite
+        self.assertEqual((d['kind'], d['version']), ('campusprep-state', 4))   # 4: Web-Auth (lokale Benutzer, Login-Listen, Parameter Maps); 3: AAA-Objekte
         # Determinismus: ein zweiter, unabhaengiger Lauf mit denselben Aktionen schreibt dieselben Bytes (keine Zeitstempel)
         with tempfile.TemporaryDirectory() as other:
             s2 = Sim(data_dir=other)
@@ -151,6 +151,35 @@ class TestMigration(Base):
         self.assertEqual(s2.world['radius']['servers'][0]['ip'], '10.10.0.50', 'Standard-RADIUS-Server wird ergaenzt')
         self.assertTrue(s2.labs.check()['passed'])
         self.assertFalse(os.path.exists(os.path.join(self.dir, 'state.json.bad')))
+
+    def test_version_3_state_without_web_auth_objects_still_loads(self):
+        s = Sim(data_dir=self.dir)
+        s.labs.start('09-radius-shared-secret')
+        s.apply(s.labs.labs['09-radius-shared-secret']['solutionCommands'])
+        st = s.snapshot_all()
+        st['version'] = 3
+        for k in ('localUsers', 'loginLists', 'authzDefaultLocal', 'webauthMaps'):
+            del st['wlc'][k]
+        with open(os.path.join(self.dir, 'state.json'), 'w', encoding='utf-8') as fh:
+            json.dump(st, fh)
+        s2 = Sim(data_dir=self.dir)
+        w = s2.wlc.state()
+        self.assertEqual((w['localUsers'], w['loginLists'], w['authzDefaultLocal']), ([], [], False))
+        self.assertEqual([m['name'] for m in w['webauthMaps']], ['global'], 'Parameter Map global wird ergaenzt')
+        self.assertTrue(s2.labs.check()['passed'])
+        self.assertFalse(os.path.exists(os.path.join(self.dir, 'state.json.bad')))
+
+    def test_web_auth_config_roundtrips(self):
+        s = Sim(data_dir=self.dir)
+        s.apply(['username gast1 privilege 0 password 0 Gast#1', 'aaa authentication login WEBAUTH local', 'aaa authorization network default local',
+                 'parameter-map type webauth PM1', 'type webauth', 'virtual-ip ipv4 192.0.2.5', 'exit',
+                 'wlan Guest 2 Gast', 'security web-auth', 'security web-auth authentication-list WEBAUTH', 'security web-auth parameter-map PM1'])
+        s.persist()
+        before = s.wlc.state()
+        s2 = Sim(data_dir=self.dir)
+        self.assertEqual(s2.wlc.state(), before)
+        self.assertTrue(before['authzDefaultLocal'])
+        self.assertEqual(before['wlans'][0]['webAuthMap'], 'PM1')
 
     def test_aaa_config_roundtrips(self):
         s = Sim(data_dir=self.dir)

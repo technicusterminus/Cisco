@@ -36,13 +36,13 @@ const NAV = [
   { g: 'Monitoring', sub: 'Wireless', items: [['aps', 'Access Points'], ['clients', 'Clients']] },
   { g: 'Configuration', sub: 'Tags & Profiles', items: [['wlans', 'WLANs'], ['policies', 'Policy'], ['flex', 'Flex'], ['tags', 'Tags (Policy)'], ['sitetags', 'Tags (Site)']] },
   { g: 'Configuration', sub: 'Wireless', items: [['apcfg', 'Access Points']] },
-  { g: 'Configuration', sub: 'Security', items: [['aaa', 'AAA']] },
+  { g: 'Configuration', sub: 'Security', items: [['aaa', 'AAA'], ['webauth', 'Web Auth']] },
   { g: 'Administration', items: [['cli', 'Command Line Interface']] },
   { g: 'Troubleshooting', items: [['diag', 'Client-Diagnose (Simulation)']] },
 ];
 const TITLES = { dash: 'Dashboard', labs: 'Labs (Simulation)', aps: 'Monitoring > Wireless > Access Points', clients: 'Monitoring > Wireless > Clients',
   wlans: 'Configuration > Tags & Profiles > WLANs', policies: 'Configuration > Tags & Profiles > Policy',
-  aaa: 'Configuration > Security > AAA', flex: 'Configuration > Tags & Profiles > Flex', sitetags: 'Configuration > Tags & Profiles > Tags > Site',
+  aaa: 'Configuration > Security > AAA', webauth: 'Configuration > Security > Web Auth', flex: 'Configuration > Tags & Profiles > Flex', sitetags: 'Configuration > Tags & Profiles > Tags > Site',
   tags: 'Configuration > Tags & Profiles > Tags > Policy', apcfg: 'Configuration > Wireless > Access Points',
   cli: 'Administration > Command Line Interface', diag: 'Troubleshooting > Client-Diagnose (Simulation)' };
 
@@ -155,10 +155,20 @@ function wlanDialog(w) {
   const syncSec = () => { keyRows.forEach(e => { e.style.display = sec.value === 'psk' ? '' : 'none'; }); authRows.forEach(e => { e.style.display = sec.value === 'dot1x' ? '' : 'none'; }); };
   sec.addEventListener('change', syncSec);
   const en = h('input', { 'data-id': 'wlan-enabled', type: 'checkbox' }); en.checked = w ? w.status === 'UP' : false;
+  const wa = h('input', { 'data-id': 'wlan-webauth', type: 'checkbox' }); wa.checked = !!(w && w.webAuth);
+  const optList = (items, cur, id, empty) => { const n = items.slice(); if (cur && !n.includes(cur)) n.push(cur);
+    const sel = h('select', { 'data-id': id }, n.length ? n.map(x => h('option', { value: x }, items.includes(x) ? x : x + ' (nicht definiert)')) : [h('option', { value: '' }, empty)]);
+    if (cur) sel.value = cur; return sel; };
+  const waList = optList(S.loginLists.map(l => l.name), w && w.webAuthList, 'wlan-wa-list', '(keine Authentication List vorhanden)');
+  const waMap = optList(S.webauthMaps.map(m => m.name), w && w.webAuthMap || 'global', 'wlan-wa-map', '(keine Parameter Map vorhanden)');
+  const waRows = field('Authentication List (login)', waList, 'Unter Security > Web Auth anlegen.').concat(field('Parameter Map', waMap, 'Standard: global.')).filter(Boolean);
+  const syncWa = () => waRows.forEach(e => { e.style.display = wa.checked ? '' : 'none'; });
+  wa.addEventListener('change', syncWa);
   const body = h('div', null,
     h('div', { class: 'row' }, field('Profile Name', prof), field('WLAN ID', id), field('SSID', ssid, 'Im Simulator ohne Leerzeichen.'),
-      field('Security', sec), keyRows, authRows, field('Status Enabled', en)));
-  syncSec();
+      field('Security', sec), keyRows, authRows, field('Web Authentication (Layer 3)', wa, 'Der Client meldet sich nach dem Verbinden am Portal an.'), waRows,
+      field('Status Enabled', en)));
+  syncSec(); syncWa();
   modal(w ? 'Edit WLAN ' + w.profile : 'Add WLAN', body, () => {
     if (!w) {
       need(/^[\w.-]{1,32}$/.test(prof.value), 'Profile Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
@@ -177,6 +187,10 @@ function wlanDialog(w) {
       c.push('security wpa akm dot1x', 'security dot1x authentication-list ' + authSel.value);
     } else if (w && w.akm === 'psk') c.push('no security wpa akm psk');
     else if (w && w.akm === 'dot1x') c.push('no security wpa akm dot1x');
+    if (wa.checked) {
+      need(waList.value, 'Authentication List wählen (zuerst unter Security > Web Auth anlegen)'); need(waMap.value, 'Parameter Map wählen');
+      c.push('security web-auth', 'security web-auth authentication-list ' + waList.value, 'security web-auth parameter-map ' + waMap.value);
+    } else if (w && w.webAuth) c.push('no security web-auth');
     c.push(en.checked ? 'no shutdown' : 'shutdown');
     return c;
   }, refresh);
@@ -283,6 +297,55 @@ function listDialog(l) {
     if (!l) need(/^[\w.-]{1,32}$/.test(name.value), 'Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
     need(grp.value, 'Server Group wählen (zuerst eine anlegen)');
     return ['aaa authentication dot1x ' + (l ? l.name : name.value) + ' group ' + grp.value];
+  }, refresh);
+}
+
+VIEWS.webauth = main => {
+  main.append(h('div', { class: 'note' }, 'Local Web Authentication: Der Client verbindet sich und meldet sich dann in einem Portal an. Damit das klappt, braucht es eine Authentication List (login, local), die Autorisierung (aaa authorization network default local), eine Parameter Map und einen lokalen Benutzer.'));
+  main.append(h('h2', null, 'Autorisierung'), h('div', { class: 'bar' },
+    h('span', { 'data-id': 'authz-state' }, 'aaa authorization network default local: ' + (S.authzDefaultLocal ? 'konfiguriert' : 'fehlt')), ' ',
+    h('button', { class: 'small', 'data-id': 'authz-toggle', onclick: async () => { const r = await api.apply([S.authzDefaultLocal ? 'no aaa authorization network default local' : 'aaa authorization network default local']); if (!r.ok) { toast(r.error.message); return; } refresh(); } },
+      S.authzDefaultLocal ? 'Entfernen' : 'Konfigurieren')));
+  main.append(h('h2', null, 'Authentication Lists (login)'), h('div', { class: 'bar' }, h('button', { class: 'primary', 'data-id': 'add-login', onclick: () => loginDialog() }, '+ Add')));
+  main.append(table([{ l: 'Name', f: l => l.name }, { l: 'Type', f: () => 'login' }, { l: 'Method', f: l => l.method },
+    { l: '', f: l => h('button', { class: 'small danger', onclick: () => remove('no aaa authentication login ' + l.name, 'Authentication List ' + l.name) }, 'Delete') }], S.loginLists, 'Keine Authentication Lists.'));
+  main.append(h('h2', null, 'Parameter Maps (webauth)'), h('div', { class: 'bar' }, h('button', { class: 'primary', 'data-id': 'add-pmap', onclick: () => pmapDialog() }, '+ Add')));
+  main.append(table([{ l: 'Name', f: m => m.name }, { l: 'Type', f: m => m.type }, { l: 'Virtual IPv4', f: m => m.virtualIp || '–' },
+    { l: '', f: m => [h('button', { class: 'small', onclick: () => pmapDialog(m) }, 'Edit'), ' ',
+      m.builtin ? '' : h('button', { class: 'small danger', onclick: () => remove('no parameter-map type webauth ' + m.name, 'Parameter Map ' + m.name) }, 'Delete')] }], S.webauthMaps, 'Keine Parameter Maps.'));
+  main.append(h('h2', null, 'Lokale Benutzer'), h('div', { class: 'bar' }, h('button', { class: 'primary', 'data-id': 'add-user', onclick: () => userDialog() }, '+ Add')));
+  main.append(table([{ l: 'Benutzername', f: u => u.name }, { l: 'Passwort', f: u => u.passwordSet ? 'gesetzt' : 'fehlt' },
+    { l: '', f: u => h('button', { class: 'small danger', onclick: () => remove('no username ' + u.name, 'Benutzer ' + u.name) }, 'Delete') }], S.localUsers, 'Keine lokalen Benutzer.'));
+};
+
+function loginDialog() {
+  const name = h('input', { 'data-id': 'login-name', placeholder: 'WEBAUTH_LIST' });
+  modal('Add Authentication List (login)', h('div', { class: 'row' }, field('Name', name), field('Method', h('input', { value: 'local', disabled: true }))), () => {
+    need(/^[\w.-]{1,32}$/.test(name.value), 'Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
+    return ['aaa authentication login ' + name.value + ' local'];
+  }, refresh);
+}
+
+function pmapDialog(m) {
+  const name = h('input', { 'data-id': 'pmap-name', value: m ? m.name : '', disabled: !!m, placeholder: 'PM_GAST' });
+  const vip = h('input', { 'data-id': 'pmap-vip', value: m ? m.virtualIp : '', placeholder: '192.0.2.1' });
+  modal(m ? 'Edit Parameter Map ' + m.name : 'Add Parameter Map', h('div', { class: 'row' }, field('Name', name), field('Type', h('input', { value: 'webauth', disabled: true })),
+    field('Virtual IPv4 Address', vip, 'Eine nicht routbare Adresse, z. B. aus 192.0.2.0/24.')), () => {
+    if (!m) need(/^[\w.-]{1,32}$/.test(name.value), 'Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
+    const c = ['parameter-map type webauth ' + (m ? m.name : name.value), 'type webauth'];
+    if (vip.value) { need(/^(\d{1,3})(\.\d{1,3}){3}$/.test(vip.value) && vip.value.split('.').every(x => +x <= 255), 'Virtual IPv4: gültige Adresse'); c.push('virtual-ip ipv4 ' + vip.value); }
+    else if (m && m.virtualIp) c.push('no virtual-ip ipv4');
+    return c;
+  }, refresh);
+}
+
+function userDialog() {
+  const name = h('input', { 'data-id': 'user-name', placeholder: 'gast1' });
+  const pw = h('input', { 'data-id': 'user-pw', type: 'password', autocomplete: 'off' });
+  modal('Add lokaler Benutzer', h('div', { class: 'row' }, field('Benutzername', name), field('Passwort', pw, 'Ohne Leerzeichen.')), () => {
+    need(/^[\w.-]{1,32}$/.test(name.value), 'Benutzername: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
+    need(/^\S{1,64}$/.test(pw.value), 'Passwort: 1-64 Zeichen ohne Leerzeichen');
+    return ['username ' + name.value + ' privilege 0 password 0 ' + pw.value];
   }, refresh);
 }
 
