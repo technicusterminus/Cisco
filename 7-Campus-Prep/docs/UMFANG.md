@@ -13,5 +13,6 @@ Ein Projekt, eine Welt: ein simulierter C9800-WLC mit Access Points und WLAN-Cli
 | 3a | FlexConnect: Flex Profile, Site Tag, lokales Switching, AP-Modus; Labs 07 und 08 (CCNP Enterprise Wireless) | umgesetzt |
 | 3b | 802.1X mit RADIUS: RADIUS-Server, Server Group, Authentication List, WLAN mit WPA2 Enterprise, AAA Override, Server-Redundanz; `show aaa servers`; Labs 09 bis 11 | umgesetzt |
 | 3c | Local Web Authentication: lokale Benutzer, Login-Liste, Autorisierung, Parameter Map, Web Auth im WLAN; Zustand Webauth Pending; Labs 12 und 13 | umgesetzt |
-| 3d | WLC: RF-Profile, QoS, Multicast, Mobility, Location; weitere belegte Show-Befehle | offen |
+| 3d | Mobility: Gruppenname, Peers, Tunnelzustand, Inter-Controller-Roaming; `show wireless mobility summary`; Labs 14 und 15 | umgesetzt |
+| 3e | WLC: RF-Profile, QoS, Multicast, Location; weitere belegte Show-Befehle | offen |
 | 4 | Catalyst Center: Sites, Network Settings, Provisioning des WLC, Assurance, Templates (nur mit belegten Antwortformaten) | offen |

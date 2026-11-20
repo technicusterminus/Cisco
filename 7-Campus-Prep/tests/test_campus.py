@@ -369,6 +369,83 @@ AAA = ['aaa new-model', 'radius server RS1', 'address ipv4 10.10.0.50 auth-port 
        'ap a4b2.32aa.0001', 'policy-tag PT', 'exit']
 
 
+CORP_CFG = CORP[1:-1] + ['ap a4b2.32aa.0001', 'policy-tag PT_Corp', 'exit']
+
+
+class TestMobility(unittest.TestCase):
+    """Mobility: Befehle und Felder nach Cisco-Dokument 213913; Tunnel- und Roaming-Entscheidung sind ein Simulator-Modell."""
+    MEMBER = 'wireless mobility group member mac-address aabb.cc00.0200 ip 10.10.0.20 group Campus'
+
+    def world(self, extra=(), roam=True):
+        from campusprep.server import Sim
+        s = Sim()
+        c = {'mac': '58bf.eaaa.0001', 'ssid': 'Corp', 'psk': 'Sommer2026', 'ap': 'ap-lobby', 'protocol': '11ac'}
+        if roam:
+            c['roam'] = {'from': '10.10.0.20'}
+        s.reset_world([c])
+        ok, _, err = s.apply(list(CORP_CFG) + list(extra))
+        self.assertTrue(ok, err)
+        return s
+
+    def client(self, s):
+        return s.wlc.clients()[0]
+
+    def test_matching_configuration_brings_the_tunnel_up_and_the_client_roams(self):
+        s = self.world(['wireless mobility group name default', self.MEMBER])
+        self.assertEqual(self.client(s)['roam'], 'Inter-Controller')
+        p = s.wlc.state()['mobilityPeers'][0]
+        self.assertEqual((p['ip'], p['control'], p['data'], p['reason']), ('10.10.0.20', 'Up', 'Up', ''))
+        out = s.cli.run('show wireless mobility summary')
+        for text in ('Mobility Group Name: default', 'Mobility MAC Address: aabb.cc00.0100', 'Wireless Management IP Address: 10.10.0.10',
+                     'Mobility Keepalive Interval/Count: 10/3', '10.10.0.20', 'Up'):
+            self.assertIn(text, out)
+
+    def test_each_mismatch_keeps_the_tunnel_down_with_a_reason_and_the_client_connects_as_a_new_session(self):
+        cases = [([], 'nicht konfiguriert'),
+                 (['wireless mobility group member mac-address aabb.cc00.0201 ip 10.10.0.20 group Campus'], 'MAC-Adresse'),
+                 (['wireless mobility group member mac-address aabb.cc00.0200 ip 10.10.0.20 group Falsch'], 'Gruppenname Falsch'),
+                 ([self.MEMBER, 'wireless mobility group name Anders'], 'erwartet diesen Controller in der Gruppe default'),
+                 (['wireless mobility group member mac-address aabb.cc00.0200 ip 10.10.0.21 group Campus'], 'nicht konfiguriert')]
+        for extra, text in cases:
+            s = self.world(extra)
+            c = self.client(s)
+            self.assertEqual((c['state'], c['roam']), ('Run', None), extra)
+            self.assertIn(text, ' '.join(c['reasons']), extra)
+
+    def test_a_different_security_on_the_other_controller_prevents_roaming(self):
+        s = self.world([self.MEMBER, 'wlan Corp_Profile 1 Corp', 'no security wpa akm psk'])
+        c = self.client(s)
+        self.assertEqual((c['state'], c['roam']), ('Run', None))
+        self.assertIn('Sicherheit der SSID Corp dort (psk)', ' '.join(c['reasons']))
+
+    def test_a_client_that_does_not_roam_is_unaffected(self):
+        s = self.world([self.MEMBER], roam=False)
+        self.assertEqual((self.client(s)['state'], self.client(s)['roam'], self.client(s)['reasons']), ('Run', None, []))
+
+    def test_cli_forms_and_errors(self):
+        s = self.world()
+        cli = s.cli
+        cli.run('configure terminal')
+        for line in ('wireless mobility group name Neu', 'wireless mobility group member mac-address aabb.cc00.0200 ip 10.10.0.20 group Campus',
+                     'wireless mobility group member mac-address AA:BB:CC:00:02:00 ip 10.10.0.21 group G2'):
+            self.assertEqual(cli.run(line), '', line)
+        for line in ('wireless mobility group name', 'wireless mobility group name bad!name', 'wireless mobility group member mac-address zz ip 10.10.0.20 group G',
+                     'wireless mobility group member mac-address aabb.cc00.0200 ip 300.1.1.1 group G', 'wireless mobility group member mac-address aabb.cc00.0200 ip 10.10.0.10 group G',
+                     'wireless mobility group member mac-address aabb.cc00.0200 ip 10.10.0.20', 'wireless mobility group member ip 10.10.0.20',
+                     'no wireless mobility group member ip 10.9.9.9', 'no wireless mobility group name', 'wireless mobility group bogus'):
+            self.assertTrue(cli.run(line).startswith('% '), line)
+        self.assertEqual(sorted(p['ip'] for p in s.wlc.state()['mobilityPeers']), ['10.10.0.20', '10.10.0.21'])
+        self.assertEqual(cli.run('no wireless mobility group member ip 10.10.0.21'), '')
+        self.assertEqual([p['mac'] for p in s.wlc.state()['mobilityPeers']], ['aabb.cc00.0200'])
+
+    def test_failed_apply_rolls_back_mobility(self):
+        s = self.world([self.MEMBER])
+        before = s.wlc.state()
+        ok, _, _ = s.apply(['wireless mobility group name Neu', 'no wireless mobility group member ip 10.10.0.20', 'wireless mobility group name bad!'])
+        self.assertFalse(ok)
+        self.assertEqual(s.wlc.state(), before)
+
+
 class TestWebAuth(unittest.TestCase):
     """Local Web Authentication: Befehlskette nach Cisco-Dokument 224922/217457; die Portal-Anmeldung ist ein Simulator-Modell."""
     CHAIN = ['username gast1 privilege 0 password 0 Gast#1', 'aaa authentication login WEBAUTH local', 'aaa authorization network default local',

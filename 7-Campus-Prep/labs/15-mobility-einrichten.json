@@ -1,0 +1,154 @@
+{
+ "cause": "Es ist keine Mobility konfiguriert: Der eigene Gruppenname ist der Standardwert, und es gibt keinen Peer-Eintrag.",
+ "checks": [
+  {
+   "category": "function",
+   "desc": "Mobility-Tunnel zu 10.10.0.20 ist oben",
+   "ip": "10.10.0.20",
+   "type": "mobilitypeer"
+  },
+  {
+   "category": "function",
+   "desc": "Laptop von wlc2: verbunden, VLAN 20, geroamt",
+   "mac": "58bf.eaaa.0001",
+   "roam": "Inter-Controller",
+   "state": "Run",
+   "type": "client",
+   "vlan": "20"
+  },
+  {
+   "category": "security",
+   "desc": "Laptop mit falschem Schlüssel bleibt abgewiesen",
+   "mac": "58bf.eaaa.0002",
+   "state": "Not Associated",
+   "type": "client"
+  }
+ ],
+ "duration": "30 min",
+ "fabric": "wlc1 mit ap-lobby und ap-lager",
+ "goals": [
+  "Mobility zwischen zwei Controllern von Grund auf einrichten",
+  "Verstehen, dass beide Seiten zueinander passen müssen"
+ ],
+ "hints": [
+  "**Konzept:** Mobility braucht eine Konfiguration auf beiden Seiten, und beide müssen übereinstimmen: Wie die Gegenseite uns kennt, und wie wir sie kennen.",
+  "**Ebene:** Globale Mobility-Einstellungen: der eigene Gruppenname und der Peer-Eintrag.",
+  "**Prüfschritte:** `show wireless mobility summary` zeigt den eigenen Gruppennamen und den Zustand des Peers; die Client-Diagnose nennt, woran der Tunnel scheitert.",
+  "**Lösung:** Eigenen Gruppennamen auf **Zentrale** setzen (`wireless mobility group name Zentrale`) und den Peer mit MAC, IP und der Gruppe **Campus** eintragen (`wireless mobility group member mac-address … ip … group Campus`)."
+ ],
+ "id": "15-mobility-einrichten",
+ "intro": "Der neue Controller **wlc2** (10.10.0.20, MAC aabb.cc00.0200, Mobility-Gruppe **Campus**) soll Mobility-Peer werden. Das Team von wlc2 hat diesen Controller dort bereits eingetragen: mit seiner IP und MAC und mit dem Gruppennamen **Zentrale**. Hier ist noch nichts eingerichtet.",
+ "kind": "requirements",
+ "level": "Fortgeschritten",
+ "limits": [
+  "Das Client-Modell ist didaktisch: Es erklärt, ob und warum ein Client verbunden ist, ist aber keine Abbildung der Controller-Pipeline.",
+  "Nicht modelliert: 802.1x/RADIUS, FlexConnect, RF-Profile, Roaming, Mobility.",
+  "Die Gegenseite ist ein simulierter Controller (wlc2); ob zwei Controller sich in der Praxis genauso verhalten, ist nicht belegt.",
+  "Das Roaming ist vereinfacht: Es gibt nur \"Inter-Controller\" oder eine neue Sitzung. Nicht modelliert: Anchor/Foreign, Guest Anchor, L2- und L3-Roaming im Detail, Datenverschlüsselung des Tunnels, Software-Mindestversionen."
+ ],
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 14"
+ ],
+ "questions": [
+  {
+   "answer": 0,
+   "explain": "Im Simulator kommt der Tunnel nur hoch, wenn beide Einträge zueinander passen (Simulator-Modell).",
+   "id": "q1",
+   "options": [
+    "Der Peer ist mit passender IP, MAC und Gruppe eingetragen, und die Gegenseite kennt diesen Controller ebenfalls richtig",
+    "Nur die IP-Adressen",
+    "Nur der Gruppenname",
+    "Nichts, Tunnel bauen sich selbst auf"
+   ],
+   "q": "Was muss für einen funktionierenden Mobility-Tunnel auf beiden Seiten stimmen?"
+  },
+  {
+   "answer": 0,
+   "explain": "Der eigene Gruppenname gehört zur Konfiguration der Gegenseite: Sie hat diesen Controller dort eingetragen.",
+   "id": "q2",
+   "options": [
+    "Die Gegenseite erwartet diesen Controller unter dem Gruppennamen Zentrale, hier ist noch der Standardname gesetzt",
+    "Weil Peers nur mit Passwort funktionieren",
+    "Weil der Eintrag erst nach einem Neustart gilt",
+    "Weil das WLAN fehlt"
+   ],
+   "q": "Warum reicht der Peer-Eintrag allein nicht?"
+  }
+ ],
+ "requirements": [
+  "Der Mobility-Tunnel zu 10.10.0.20 ist oben (Control und Data Path).",
+  "Der Laptop von wlc2 ist verbunden (VLAN 20) und hat geroamt (Inter-Controller).",
+  "Der Laptop mit falschem Schlüssel bleibt abgewiesen."
+ ],
+ "solution": "WebUI: Configuration > Wireless > Mobility: Gruppenname Zentrale; Peer 10.10.0.20 hinzufügen (MAC, Gruppe Campus). CLI: `wireless mobility group name Zentrale`; `wireless mobility group member mac-address aabb.cc00.0200 ip 10.10.0.20 group Campus`.",
+ "solutionCommands": [
+  "wireless mobility group name Zentrale",
+  "wireless mobility group member mac-address aabb.cc00.0200 ip 10.10.0.20 group Campus"
+ ],
+ "startCommands": [
+  "wlan Corp_Profile 1 Corp",
+  "security wpa akm psk",
+  "security wpa psk set-key ascii 0 Sommer2026",
+  "no shutdown",
+  "exit",
+  "wireless profile policy PP_Corp",
+  "vlan 20",
+  "no shutdown",
+  "exit",
+  "wireless tag policy PT_Corp",
+  "wlan Corp_Profile policy PP_Corp",
+  "exit",
+  "ap a4b2.32aa.0001",
+  "policy-tag PT_Corp",
+  "exit"
+ ],
+ "title": "15 Mobility mit einem neuen Controller einrichten",
+ "tools": [
+  "WebUI: Configuration > Wireless > Mobility",
+  "Monitoring > Wireless > Clients",
+  "Client-Diagnose (nur im geführten Modus)",
+  "CLI: show wireless mobility summary, show wireless client summary"
+ ],
+ "topic": "Mobility / Design",
+ "track": "CCNP Enterprise Wireless (300-430 ENWLSI)",
+ "worldClients": [
+  {
+   "ap": "ap-lobby",
+   "mac": "58bf.eaaa.0001",
+   "protocol": "11ac",
+   "psk": "Sommer2026",
+   "roam": {
+    "from": "10.10.0.20"
+   },
+   "ssid": "Corp"
+  },
+  {
+   "ap": "ap-lobby",
+   "mac": "58bf.eaaa.0002",
+   "protocol": "11ac",
+   "psk": "falsch",
+   "ssid": "Corp"
+  }
+ ],
+ "worldMobility": [
+  {
+   "group": "Campus",
+   "ip": "10.10.0.20",
+   "knows": {
+    "group": "Zentrale",
+    "ip": "10.10.0.10",
+    "mac": "aabb.cc00.0100"
+   },
+   "mac": "aabb.cc00.0200",
+   "name": "wlc2",
+   "up": true,
+   "wlans": {
+    "Corp": "psk"
+   }
+  }
+ ]
+}

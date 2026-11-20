@@ -13,7 +13,7 @@ Alle Labs sind Eigenentwicklungen für den Simulator (keine Vorlagen von Cisco o
 
 ## CCNP Enterprise Wireless (300-430 ENWLSI)
 
-Die Labs 07 bis 13 tragen den Track *CCNP Enterprise Wireless*: FlexConnect (07, 08), 802.1X mit RADIUS (09 bis 11) und Local Web Authentication (12, 13), Prüfungsthemen der 300-430 (Quellen und Vorbehalte in `docs/QUELLEN.md`). Die Labs 01 bis 06 sind Grundlagen.
+Die Labs 07 bis 15 tragen den Track *CCNP Enterprise Wireless*: FlexConnect (07, 08), 802.1X mit RADIUS (09 bis 11), Local Web Authentication (12, 13) und Mobility (14, 15), Prüfungsthemen der 300-430 (Quellen und Vorbehalte in `docs/QUELLEN.md`). Die Labs 01 bis 06 sind Grundlagen.
 
 | Lab | Art | Lernmoment | Falsche Abkürzung, die die Prüfung abfängt |
 |---|---|---|---|
@@ -25,6 +25,8 @@ Die Labs 07 bis 13 tragen den Track *CCNP Enterprise Wireless*: FlexConnect (07,
 | 11 802.1X: Anmeldung trotz Ausfall des ersten RADIUS-Servers | Anforderungen | Reihenfolge der Server in der Server Group; ein nicht erreichbarer Server wird übersprungen, ein Access-Reject löst keinen Failover aus | Den ersten Server auf die Adresse des zweiten umbiegen: verbindet, aber ohne Redundanz. Zweiter Server mit falschem Secret: hilft nicht |
 | 12 Gast-WLAN: Portal-Anmeldung scheitert trotz richtigem Konto | Fehlersuche | Die lokale Portal-Anmeldung braucht neben Liste, Parameter Map und Benutzer auch die Autorisierung | Web Authentication am WLAN abschalten: Auch Mallory ohne Konto kommt hinein, die Sicherheitsprüfung fällt durch |
 | 13 Gast-WLAN mit Portal-Anmeldung einrichten | Anforderungen | Reihenfolge der Bausteine: Benutzer, Login-Liste, Autorisierung, Parameter Map, Web Auth im WLAN | Nur den Benutzer anlegen: Das WLAN bleibt offen, Mallory kommt ohne Anmeldung hinein. Ohne Parameter Map oder Autorisierung bleibt jeder in Webauth Pending |
+| 14 Roaming zwischen Controllern: Sitzung bricht ab | Fehlersuche | Der Tunnel zum Peer kommt nur hoch, wenn Gruppe und MAC im Peer-Eintrag zum Peer passen | Den Peer entfernen oder den eigenen Gruppennamen ändern: Der Tunnel bleibt unten, der Laptop roamt nicht. Das WLAN öffnen: Auch der Laptop mit falschem Schlüssel kommt hinein |
+| 15 Mobility mit einem neuen Controller einrichten | Anforderungen | Beide Seiten müssen zueinander passen: Der eigene Gruppenname (wie die Gegenseite uns kennt) und der Peer-Eintrag | Nur den Peer eintragen oder nur den Gruppennamen setzen: Der Tunnel bleibt unten |
 
 Gleichwertig bei Lab 08: den Namen im Policy Profile anpassen oder im Flex Profile umbenennen.
 

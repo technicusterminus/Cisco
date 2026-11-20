@@ -147,7 +147,7 @@ const STANDALONE = process.env.STANDALONE === '1';
     // Staende und Fortschritt
     await go('labs');
     console.log('       Kacheln: ' + (await text()).split('\n').filter(l => /bestanden|Starts|Prüfungsmodus$|^\d+( \/ \d+)?$/.test(l)).join(' | ').slice(0, 200));
-    check(/Geführt bestanden/.test(await text()) && /1 \/ 13[\s\S]*Labs bestanden/.test(await text()), 'Fortschritt: Lab 01 ist als geführt bestanden markiert');
+    check(/Geführt bestanden/.test(await text()) && /1 \/ 15[\s\S]*Labs bestanden/.test(await text()), 'Fortschritt: Lab 01 ist als geführt bestanden markiert');
     await p.fill('[data-id="save-name"]', 'lab01-geloest'); await p.click('[data-id="save"]'); await p.waitForTimeout(500);
     check(await p.locator('[data-id="load-lab01-geloest"]').count() === 1, 'Stand wird gespeichert und aufgelistet');
     await p.fill('[data-id="save-name"]', '../evil'); await p.click('[data-id="save"]'); await p.waitForTimeout(400);
@@ -168,7 +168,7 @@ const STANDALONE = process.env.STANDALONE === '1';
     await p.click('[data-id="del-lab01-geloest"]'); await p.waitForTimeout(400);
     check(await p.locator('[data-id="load-lab01-geloest"]').count() === 0, 'Stand lässt sich löschen');
     await p.click('[data-id="reset-progress"]'); await p.waitForTimeout(400);
-    check(/0 \/ 13[\s\S]*Labs bestanden/.test(await text()) && !/Geführt bestanden/.test(await text()), 'Fortschritt zurücksetzen');
+    check(/0 \/ 15[\s\S]*Labs bestanden/.test(await text()) && !/Geführt bestanden/.test(await text()), 'Fortschritt zurücksetzen');
 
     // 802.1X: AAA-Kette im Standardzustand ueber die Dialoge aufbauen, dann ein WLAN mit WPA2 Enterprise
     await go('aaa'); await p.click('[data-id="add-radius"]');
@@ -248,6 +248,30 @@ const STANDALONE = process.env.STANDALONE === '1';
     await go('webauth'); await p.click('[data-id="authz-toggle"]'); await p.waitForTimeout(400);
     check(solved2(await labCheck2()), 'Lab 12: mit der Autorisierung bestanden');
 
+    // Mobility: Lab 15 komplett ueber die Dialoge, Lab 14 ueber das Bearbeiten des Peers
+    const labCheck3 = async () => { await go('labs'); await p.click('[data-id="lab-check"]'); await p.waitForTimeout(300); return p.textContent('[data-id="check-result"]'); };
+    const solved3 = r => /bestanden/.test(r) && !/noch nicht/.test(r);
+    await go('labs'); await p.selectOption('[data-id="lab-mode"]', 'guided'); await p.click('[data-id="start-15"]'); await p.waitForTimeout(600);
+    check(!solved3(await labCheck3()), 'Lab 15: ohne Lösung nicht bestanden');
+    await go('mobility');
+    check(/Keine Mobility-Peers/.test(await text()), 'Mobility: zu Beginn kein Peer');
+    await p.click('[data-id="edit-mobgroup"]'); await p.fill('[data-id="mobgroup-name"]', 'Zentrale');
+    check(/wireless mobility group name Zentrale/.test(await p.textContent('[data-id="cli-preview"]')), 'Gruppen-Dialog zeigt das CLI-Äquivalent');
+    await apply();
+    await p.click('[data-id="add-peer"]'); await p.fill('[data-id="peer-ip"]', '10.10.0.20'); await p.fill('[data-id="peer-mac"]', 'aabb.cc00.0200'); await p.fill('[data-id="peer-group"]', 'Campus');
+    check(/wireless mobility group member mac-address aabb\.cc00\.0200 ip 10\.10\.0\.20 group Campus/.test(await p.textContent('[data-id="cli-preview"]')), 'Peer-Dialog zeigt das CLI-Äquivalent');
+    await apply();
+    check(/10\.10\.0\.20[\s\S]*aabb\.cc00\.0200[\s\S]*Campus[\s\S]*UP[\s\S]*UP/.test(await text()), 'Peer angelegt, Control und Data Path oben');
+    check(solved3(await labCheck3()), 'Lab 15: mit den Dialogen bestanden');
+    await go('diag');
+    check(/Inter-Controller/.test(await text()), 'Diagnose zeigt das Roaming (Inter-Controller)');
+    await go('labs'); await p.click('[data-id="start-14"]'); await p.waitForTimeout(600);
+    check(!solved3(await labCheck3()), 'Lab 14: ohne Lösung nicht bestanden');
+    await go('diag');
+    check(/Gruppenname Zentrale[\s\S]*Campus/.test(await text()), 'Lab 14: Diagnose nennt den falschen Gruppennamen');
+    await go('mobility'); await p.click('button:has-text("Edit") >> nth=1'); await p.fill('[data-id="peer-group"]', 'Campus'); await apply();
+    check(solved3(await labCheck3()), 'Lab 14: mit dem richtigen Gruppennamen bestanden');
+
     // CCNP Enterprise Wireless: FlexConnect-Lab 07, komplett ueber die Dialoge
     await go('labs'); await p.selectOption('[data-id="lab-mode"]', 'guided'); await p.click('[data-id="start-07"]'); await p.waitForTimeout(600);
     check(/CCNP Enterprise Wireless/.test(await p.textContent('[data-id="lab-track"]')) && /Zweigstelle Lager/.test(await text()), 'Lab 07 startet mit dem Track CCNP Enterprise Wireless');
@@ -288,7 +312,7 @@ const STANDALONE = process.env.STANDALONE === '1';
     check(/ap-lager[\s\S]*FlexConnect/.test(await text()), 'Nach dem Neuladen ist die Konfiguration noch da');
 
     // Alle Ansichten ohne JS-Fehler
-    for (const id of ['dash', 'labs', 'aaa', 'webauth', 'flex', 'sitetags', 'aps', 'clients', 'wlans', 'policies', 'tags', 'apcfg', 'cli', 'diag']) { await go(id); }
+    for (const id of ['dash', 'labs', 'aaa', 'webauth', 'mobility', 'flex', 'sitetags', 'aps', 'clients', 'wlans', 'policies', 'tags', 'apcfg', 'cli', 'diag']) { await go(id); }
     check(rejected === (STANDALONE ? 0 : 3), (STANDALONE ? 'Ohne Server gibt es keine HTTP-Fehler: ' : 'Genau die drei absichtlichen Ablehnungen (HTTP 400) wurden ausgelöst: ') + rejected);
     if (STANDALONE) check(!requests.some(u => /^https?:/.test(u)), 'Keine Netzwerkzugriffe (läuft vollständig offline)' + (requests.some(u => /^https?:/.test(u)) ? ': ' + requests.filter(u => /^https?:/.test(u)).join(' ') : ''));
     check(errs.length === 0, 'Keine JavaScript-Fehler' + (errs.length ? ': ' + errs.join(' | ') : ''));

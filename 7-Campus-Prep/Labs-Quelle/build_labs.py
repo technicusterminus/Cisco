@@ -539,6 +539,86 @@ lab(id='13-webauth-einrichten', title='13 Gast-WLAN mit Portal-Anmeldung einrich
 SOLUTIONS['13-webauth-einrichten'] = webauth_chain(authz=True)
 
 
+# ---------------------------------------------------------------------------------------------------------------
+# CCNP Enterprise Wireless (ENWLSI): Mobility zwischen Controllern. Befehle und Felder von show wireless mobility summary:
+# Cisco-Dokument 213913 (ueber Websuche zitiert, siehe docs/QUELLEN.md). Die Gegenseite (worldMobility) ist simuliert.
+def mobility_remote(knows_group='Campus', up=True):
+    return {'name': 'wlc2', 'ip': '10.10.0.20', 'mac': 'aabb.cc00.0200', 'group': 'Campus', 'up': up,
+            'knows': {'ip': '10.10.0.10', 'mac': 'aabb.cc00.0100', 'group': knows_group}, 'wlans': {'Corp': 'psk'}}
+
+
+def roam_client(mac, psk='Sommer2026', roam=True):
+    c = client(mac, 'Corp', psk, 'ap-lobby')
+    if roam:
+        c['roam'] = {'from': '10.10.0.20'}
+    return c
+
+
+MOB_TOOLS = ['WebUI: Configuration > Wireless > Mobility', 'Monitoring > Wireless > Clients', 'Client-Diagnose (nur im geführten Modus)',
+             'CLI: show wireless mobility summary, show wireless client summary']
+MOB_LIMITS = LIMITS + ['Die Gegenseite ist ein simulierter Controller (wlc2); ob zwei Controller sich in der Praxis genauso verhalten, ist nicht belegt.',
+                       'Das Roaming ist vereinfacht: Es gibt nur "Inter-Controller" oder eine neue Sitzung. Nicht modelliert: Anchor/Foreign, Guest Anchor, '
+                       'L2- und L3-Roaming im Detail, Datenverschlüsselung des Tunnels, Software-Mindestversionen.']
+MOB_BASE = corp() + ['ap %s' % L1, 'policy-tag PT_Corp', 'exit']
+
+lab(id='14-mobility-gruppenname', title='14 Roaming zwischen Controllern: Sitzung bricht ab', topic='Mobility / Troubleshooting',
+    level='Fortgeschritten', duration='25 min', kind='troubleshooting', track=TRACK_WIFI, prerequisites=['Lab 01'], tools=MOB_TOOLS, limits=MOB_LIMITS,
+    goals=['Lesen, was `show wireless mobility summary` über den Tunnel zu einem Peer verrät', 'Die Einstellung finden, die den Tunnel verhindert, ohne den Peer zu entfernen'],
+    intro='Ein zweiter Controller **wlc2** (10.10.0.20, MAC aabb.cc00.0200, Mobility-Gruppe **Campus**) ist als Mobility-Peer eingetragen. '
+          'Trotzdem verliert ein Laptop beim Wechsel von wlc2 in die Lobby seine Sitzung: Er verbindet sich neu, statt zu roamen.\n\n'
+          'Zum Test: ein Laptop, der von wlc2 kommt, und ein Laptop mit falschem Schlüssel in der Lobby.',
+    requirements=['Der Laptop von wlc2 ist verbunden (VLAN 20) und hat geroamt (Inter-Controller).', 'Der Mobility-Tunnel zu 10.10.0.20 ist oben (Control und Data Path).',
+                  'Der Laptop mit falschem Schlüssel bleibt abgewiesen.', 'Das WLAN bleibt bei PSK.'],
+    hints=['**Konzept:** Roaming zwischen Controllern setzt einen funktionierenden Mobility-Tunnel voraus. Beide Seiten müssen zueinander passen.',
+           '**Ebene:** Der Peer-Eintrag am Controller. WLAN, Policy und Tags sind in Ordnung.',
+           '**Prüfschritte:** `show wireless mobility summary` zeigt Control und Data Path des Peers; die Client-Diagnose nennt, woran der Tunnel scheitert.',
+           '**Lösung:** Den Peer-Eintrag mit dem richtigen Gruppennamen **Campus** neu setzen (`wireless mobility group member mac-address aabb.cc00.0200 ip 10.10.0.20 group Campus`). Den Peer nicht entfernen.'],
+    cause='Im Peer-Eintrag steht der Gruppenname Zentrale; der Controller wlc2 gehört zur Gruppe Campus. Der Tunnel kommt nicht hoch.',
+    startCommands=MOB_BASE + ['wireless mobility group name Campus', 'wireless mobility group member mac-address aabb.cc00.0200 ip 10.10.0.20 group Zentrale'],
+    worldMobility=[mobility_remote('Campus')],
+    worldClients=[roam_client('58bf.eaaa.0001'), roam_client('58bf.eaaa.0002', psk='falsch', roam=False)],
+    checks=[chk('Laptop von wlc2: verbunden, VLAN 20, geroamt', 'client', mac='58bf.eaaa.0001', state='Run', vlan='20', roam='Inter-Controller'),
+            chk('Mobility-Tunnel zu 10.10.0.20 ist oben', 'mobilitypeer', ip='10.10.0.20'),
+            chk('Laptop mit falschem Schlüssel bleibt abgewiesen', 'client', 'security', mac='58bf.eaaa.0002', state='Not Associated'),
+            chk('Das WLAN nutzt weiterhin PSK', 'wlan', 'security', profile='Corp_Profile', attrs={'akm': 'psk'})],
+    questions=[q('q1', 'Was zeigt `show wireless mobility summary` für den Peer?',
+                 ['Gruppenname, MAC-Adresse und den Zustand von Control und Data Path', 'Die Clients des Peers', 'Die WLANs des Peers', 'Die Laufzeit des Peers'], 0,
+                 'Die Ausgabe nennt die Mobility-Daten dieses Controllers und die Peers samt Tunnelzustand (im Simulator in einem vereinfachten Format).'),
+               q('q2', 'Warum ist es keine Lösung, den Peer-Eintrag zu entfernen?',
+                 ['Dann gibt es keinen Tunnel mehr, und der Laptop roamt nicht', 'Dann ist das WLAN down', 'Dann verliert der Laptop seine IP-Adresse', 'Das geht nicht'], 0,
+                 'Ohne Peer gibt es keinen Tunnel; der Laptop verbindet sich zwar, aber als neue Sitzung. Die Prüfung verlangt Roaming.')],
+    solution='WebUI: Configuration > Wireless > Mobility > Peer 10.10.0.20 > Edit: Gruppenname Campus. '
+             'CLI: `wireless mobility group member mac-address aabb.cc00.0200 ip 10.10.0.20 group Campus`.')
+SOLUTIONS['14-mobility-gruppenname'] = ['wireless mobility group member mac-address aabb.cc00.0200 ip 10.10.0.20 group Campus']
+
+lab(id='15-mobility-einrichten', title='15 Mobility mit einem neuen Controller einrichten', topic='Mobility / Design',
+    level='Fortgeschritten', duration='30 min', kind='requirements', track=TRACK_WIFI, prerequisites=['Lab 14'], tools=MOB_TOOLS, limits=MOB_LIMITS,
+    goals=['Mobility zwischen zwei Controllern von Grund auf einrichten', 'Verstehen, dass beide Seiten zueinander passen müssen'],
+    intro='Der neue Controller **wlc2** (10.10.0.20, MAC aabb.cc00.0200, Mobility-Gruppe **Campus**) soll Mobility-Peer werden. Das Team von wlc2 hat diesen Controller '
+          'dort bereits eingetragen: mit seiner IP und MAC und mit dem Gruppennamen **Zentrale**. Hier ist noch nichts eingerichtet.',
+    requirements=['Der Mobility-Tunnel zu 10.10.0.20 ist oben (Control und Data Path).', 'Der Laptop von wlc2 ist verbunden (VLAN 20) und hat geroamt (Inter-Controller).',
+                  'Der Laptop mit falschem Schlüssel bleibt abgewiesen.'],
+    hints=['**Konzept:** Mobility braucht eine Konfiguration auf beiden Seiten, und beide müssen übereinstimmen: Wie die Gegenseite uns kennt, und wie wir sie kennen.',
+           '**Ebene:** Globale Mobility-Einstellungen: der eigene Gruppenname und der Peer-Eintrag.',
+           '**Prüfschritte:** `show wireless mobility summary` zeigt den eigenen Gruppennamen und den Zustand des Peers; die Client-Diagnose nennt, woran der Tunnel scheitert.',
+           '**Lösung:** Eigenen Gruppennamen auf **Zentrale** setzen (`wireless mobility group name Zentrale`) und den Peer mit MAC, IP und der Gruppe **Campus** eintragen (`wireless mobility group member mac-address … ip … group Campus`).'],
+    cause='Es ist keine Mobility konfiguriert: Der eigene Gruppenname ist der Standardwert, und es gibt keinen Peer-Eintrag.',
+    startCommands=MOB_BASE, worldMobility=[mobility_remote('Zentrale')],
+    worldClients=[roam_client('58bf.eaaa.0001'), roam_client('58bf.eaaa.0002', psk='falsch', roam=False)],
+    checks=[chk('Mobility-Tunnel zu 10.10.0.20 ist oben', 'mobilitypeer', ip='10.10.0.20'),
+            chk('Laptop von wlc2: verbunden, VLAN 20, geroamt', 'client', mac='58bf.eaaa.0001', state='Run', vlan='20', roam='Inter-Controller'),
+            chk('Laptop mit falschem Schlüssel bleibt abgewiesen', 'client', 'security', mac='58bf.eaaa.0002', state='Not Associated')],
+    questions=[q('q1', 'Was muss für einen funktionierenden Mobility-Tunnel auf beiden Seiten stimmen?',
+                 ['Der Peer ist mit passender IP, MAC und Gruppe eingetragen, und die Gegenseite kennt diesen Controller ebenfalls richtig', 'Nur die IP-Adressen', 'Nur der Gruppenname', 'Nichts, Tunnel bauen sich selbst auf'], 0,
+                 'Im Simulator kommt der Tunnel nur hoch, wenn beide Einträge zueinander passen (Simulator-Modell).'),
+               q('q2', 'Warum reicht der Peer-Eintrag allein nicht?',
+                 ['Die Gegenseite erwartet diesen Controller unter dem Gruppennamen Zentrale, hier ist noch der Standardname gesetzt', 'Weil Peers nur mit Passwort funktionieren', 'Weil der Eintrag erst nach einem Neustart gilt', 'Weil das WLAN fehlt'], 0,
+                 'Der eigene Gruppenname gehört zur Konfiguration der Gegenseite: Sie hat diesen Controller dort eingetragen.')],
+    solution='WebUI: Configuration > Wireless > Mobility: Gruppenname Zentrale; Peer 10.10.0.20 hinzufügen (MAC, Gruppe Campus). '
+             'CLI: `wireless mobility group name Zentrale`; `wireless mobility group member mac-address aabb.cc00.0200 ip 10.10.0.20 group Campus`.')
+SOLUTIONS['15-mobility-einrichten'] = ['wireless mobility group name Zentrale', 'wireless mobility group member mac-address aabb.cc00.0200 ip 10.10.0.20 group Campus']
+
+
 def main(out=OUT, verbose=True):
     os.makedirs(out, exist_ok=True)
     for f in os.listdir(out):

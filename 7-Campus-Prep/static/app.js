@@ -35,14 +35,14 @@ const NAV = [
   { id: 'labs', l: 'Labs (Simulation)' },
   { g: 'Monitoring', sub: 'Wireless', items: [['aps', 'Access Points'], ['clients', 'Clients']] },
   { g: 'Configuration', sub: 'Tags & Profiles', items: [['wlans', 'WLANs'], ['policies', 'Policy'], ['flex', 'Flex'], ['tags', 'Tags (Policy)'], ['sitetags', 'Tags (Site)']] },
-  { g: 'Configuration', sub: 'Wireless', items: [['apcfg', 'Access Points']] },
+  { g: 'Configuration', sub: 'Wireless', items: [['apcfg', 'Access Points'], ['mobility', 'Mobility']] },
   { g: 'Configuration', sub: 'Security', items: [['aaa', 'AAA'], ['webauth', 'Web Auth']] },
   { g: 'Administration', items: [['cli', 'Command Line Interface']] },
   { g: 'Troubleshooting', items: [['diag', 'Client-Diagnose (Simulation)']] },
 ];
 const TITLES = { dash: 'Dashboard', labs: 'Labs (Simulation)', aps: 'Monitoring > Wireless > Access Points', clients: 'Monitoring > Wireless > Clients',
   wlans: 'Configuration > Tags & Profiles > WLANs', policies: 'Configuration > Tags & Profiles > Policy',
-  aaa: 'Configuration > Security > AAA', webauth: 'Configuration > Security > Web Auth', flex: 'Configuration > Tags & Profiles > Flex', sitetags: 'Configuration > Tags & Profiles > Tags > Site',
+  mobility: 'Configuration > Wireless > Mobility', aaa: 'Configuration > Security > AAA', webauth: 'Configuration > Security > Web Auth', flex: 'Configuration > Tags & Profiles > Flex', sitetags: 'Configuration > Tags & Profiles > Tags > Site',
   tags: 'Configuration > Tags & Profiles > Tags > Policy', apcfg: 'Configuration > Wireless > Access Points',
   cli: 'Administration > Command Line Interface', diag: 'Troubleshooting > Client-Diagnose (Simulation)' };
 
@@ -300,6 +300,39 @@ function listDialog(l) {
   }, refresh);
 }
 
+VIEWS.mobility = main => {
+  main.append(h('div', { class: 'note' }, 'Mobility verbindet Controller, damit Clients ihre Sitzung beim Wechsel behalten. Der Tunnel kommt nur hoch, wenn beide Seiten zueinander passen: Peer-Eintrag hier und Eintrag der Gegenseite. Die Gegenseite ist ein simulierter Controller.'));
+  main.append(h('h2', null, 'Dieser Controller'), table([{ l: 'Mobility Group Name', f: () => S.mobilityGroup }, { l: 'Mobility MAC Address', f: () => S.mobilityMac },
+    { l: '', f: () => h('button', { class: 'small', 'data-id': 'edit-mobgroup', onclick: () => mobGroupDialog() }, 'Edit') }], [1]));
+  main.append(h('h2', null, 'Mobility Peers'), h('div', { class: 'bar' }, h('button', { class: 'primary', 'data-id': 'add-peer', onclick: () => peerDialog() }, '+ Add')));
+  main.append(table([{ l: 'IP Address', f: p => p.ip }, { l: 'MAC Address', f: p => p.mac }, { l: 'Group Name', f: p => p.group },
+    { l: 'Control Path', f: p => stateBadge(p.control === 'Up' ? 'UP' : 'DOWN') }, { l: 'Data Path', f: p => stateBadge(p.data === 'Up' ? 'UP' : 'DOWN') },
+    { l: 'Hinweis', f: p => p.reason || '' },
+    { l: '', f: p => [h('button', { class: 'small', onclick: () => peerDialog(p) }, 'Edit'), ' ',
+      h('button', { class: 'small danger', onclick: () => remove('no wireless mobility group member ip ' + p.ip, 'Mobility-Peer ' + p.ip) }, 'Delete')] }], S.mobilityPeers, 'Keine Mobility-Peers.'));
+};
+
+function mobGroupDialog() {
+  const name = h('input', { 'data-id': 'mobgroup-name', value: S.mobilityGroup });
+  modal('Edit Mobility Group Name', h('div', { class: 'row' }, field('Mobility Group Name', name)), () => {
+    need(/^[\w.-]{1,32}$/.test(name.value), 'Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
+    return ['wireless mobility group name ' + name.value];
+  }, refresh);
+}
+
+function peerDialog(p) {
+  const ip = h('input', { 'data-id': 'peer-ip', value: p ? p.ip : '', disabled: !!p, placeholder: '10.10.0.20' });
+  const mac = h('input', { 'data-id': 'peer-mac', value: p ? p.mac : '', placeholder: 'aabb.cc00.0200' });
+  const grp = h('input', { 'data-id': 'peer-group', value: p ? p.group : '', placeholder: 'Campus' });
+  modal(p ? 'Edit Mobility Peer ' + p.ip : 'Add Mobility Peer', h('div', { class: 'row' }, field('Peer IP Address', ip), field('Peer MAC Address', mac, 'Die Mobility-MAC des Peers.'),
+    field('Peer Group Name', grp, 'Der Gruppenname, zu dem der Peer gehört.')), () => {
+    need(/^(\d{1,3})(\.\d{1,3}){3}$/.test(ip.value) && ip.value.split('.').every(x => +x <= 255), 'IP Address: gültige IPv4-Adresse');
+    need(/^([0-9a-fA-F]{4}\.){2}[0-9a-fA-F]{4}$|^([0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2}$/.test(mac.value), 'MAC Address: z. B. aabb.cc00.0200');
+    need(/^[\w.-]{1,32}$/.test(grp.value), 'Group Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
+    return ['wireless mobility group member mac-address ' + mac.value + ' ip ' + ip.value + ' group ' + grp.value];
+  }, refresh);
+}
+
 VIEWS.webauth = main => {
   main.append(h('div', { class: 'note' }, 'Local Web Authentication: Der Client verbindet sich und meldet sich dann in einem Portal an. Damit das klappt, braucht es eine Authentication List (login, local), die Autorisierung (aaa authorization network default local), eine Parameter Map und einen lokalen Benutzer.'));
   main.append(h('h2', null, 'Autorisierung'), h('div', { class: 'bar' },
@@ -494,7 +527,7 @@ VIEWS.diag = main => {
   if (!S.diagAvailable) { main.append(h('div', { class: 'note', 'data-id': 'diag-locked' }, 'Im Prüfungsmodus ist die Client-Diagnose nicht verfügbar. Nutze Monitoring, die Show-Befehle und die CLI.')); return; }
   main.append(h('div', { class: 'note' }, 'Simulation: Diese Seite gibt es am echten Controller nicht. Sie erklärt, warum ein Client (nicht) verbunden ist. Die Begründungen sind ein didaktisches Modell.'));
   main.append(table([{ l: 'MAC Address', f: c => c.mac }, { l: 'Benutzer', f: c => c.user || '–' }, { l: 'SSID', f: c => c.ssid }, { l: 'AP', f: c => c.ap },
-    { l: 'Ergebnis', f: c => stateBadge(c.state) }, { l: 'Switching', f: c => c.switching || '–' }, { l: 'Begründung', cls: 'reason', f: c => c.reasons.length ? c.reasons.join(' ') : 'Verbunden' }], S.clients));
+    { l: 'Roaming', f: c => c.roam || '–' }, { l: 'Ergebnis', f: c => stateBadge(c.state) }, { l: 'Switching', f: c => c.switching || '–' }, { l: 'Begründung', cls: 'reason', f: c => c.reasons.length ? c.reasons.join(' ') : 'Verbunden' }], S.clients));
 };
 
 /* ---------------------------------------------------------------- Labs */

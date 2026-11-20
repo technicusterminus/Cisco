@@ -2,11 +2,11 @@
 
 Simulierter **Catalyst 9800 WLC** und simuliertes **Catalyst Center** in einer gemeinsamen Welt. Python-Standardbibliothek, keine Abhängigkeiten, läuft offline. Kein echtes Gerät, keine Verbindung zu echten Controllern.
 
-> Stand: Phase 1, 2a, 2c, 2d, 2e, 3a, 3b und 3c (siehe [`docs/UMFANG.md`](docs/UMFANG.md)). Die WLC hat eine Weboberfläche und dreizehn Labs (sieben davon für CCNP Enterprise Wireless), das Catalyst Center noch keine Oberfläche.
+> Stand: Phase 1, 2a, 2c, 2d, 2e, 3a, 3b, 3c und 3d (siehe [`docs/UMFANG.md`](docs/UMFANG.md)). Die WLC hat eine Weboberfläche und fünfzehn Labs (neun davon für CCNP Enterprise Wireless), das Catalyst Center noch keine Oberfläche.
 
 ## Ohne Python öffnen
 
-**`WLC-Simulator.html` per Doppelklick im Browser öffnen** (Chrome, Edge, Firefox): Die WLC mit Weboberfläche, CLI und allen dreizehn Labs läuft vollständig im Browser, ohne Python, ohne Webserver und ohne Netzwerk. Der Zustand und der Lab-Fortschritt bleiben im lokalen Speicher des Browsers erhalten (pro Browser und Gerät; im privaten Modus nicht).
+**`WLC-Simulator.html` per Doppelklick im Browser öffnen** (Chrome, Edge, Firefox): Die WLC mit Weboberfläche, CLI und allen fünfzehn Labs läuft vollständig im Browser, ohne Python, ohne Webserver und ohne Netzwerk. Der Zustand und der Lab-Fortschritt bleiben im lokalen Speicher des Browsers erhalten (pro Browser und Gerät; im privaten Modus nicht).
 
 Grenzen der Einzeldatei:
 
@@ -35,7 +35,7 @@ python3 Labs-Quelle/build_labs.py   # labs/*.json neu erzeugen (deterministisch)
 
 ## Labs
 
-Die Seite *Labs (Simulation)* startet dreizehn Labs (acht Fehlersuchen, fünf Aufgaben nach Anforderungen), siehe [`docs/LAB-KATALOG.md`](docs/LAB-KATALOG.md). Die Labs 07 bis 13 gehören zum Track *CCNP Enterprise Wireless (300-430 ENWLSI)* und üben FlexConnect, 802.1X mit RADIUS und Local Web Authentication. Ein Start setzt die Welt zurück. Bewertet wird das Verhalten (Client verbunden, VLAN, Zuordnungen), mit getrennten Prüfungen für *Funktion* und *Sicherheit / Least Privilege*; die naheliegende falsche Abkürzung besteht nie. Modi: *geführt* (vier Hinweisstufen, Lösung, Client-Diagnose) und *Prüfung* (keine Hilfe, keine Details). Verständnisfragen zählen nicht zum Bestehen.
+Die Seite *Labs (Simulation)* startet fünfzehn Labs (neun Fehlersuchen, sechs Aufgaben nach Anforderungen), siehe [`docs/LAB-KATALOG.md`](docs/LAB-KATALOG.md). Die Labs 07 bis 15 gehören zum Track *CCNP Enterprise Wireless (300-430 ENWLSI)* und üben FlexConnect, 802.1X mit RADIUS, Local Web Authentication und Mobility. Ein Start setzt die Welt zurück. Bewertet wird das Verhalten (Client verbunden, VLAN, Zuordnungen), mit getrennten Prüfungen für *Funktion* und *Sicherheit / Least Privilege*; die naheliegende falsche Abkürzung besteht nie. Modi: *geführt* (vier Hinweisstufen, Lösung, Client-Diagnose) und *Prüfung* (keine Hilfe, keine Details). Verständnisfragen zählen nicht zum Bestehen.
 
 ## Speichern und Fortschritt
 
