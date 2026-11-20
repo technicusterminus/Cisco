@@ -37,12 +37,13 @@ const NAV = [
   { g: 'Configuration', sub: 'Tags & Profiles', items: [['wlans', 'WLANs'], ['policies', 'Policy'], ['flex', 'Flex'], ['tags', 'Tags (Policy)'], ['sitetags', 'Tags (Site)'], ['rf', 'RF']] },
   { g: 'Configuration', sub: 'Wireless', items: [['apcfg', 'Access Points'], ['mobility', 'Mobility']] },
   { g: 'Configuration', sub: 'Security', items: [['aaa', 'AAA'], ['webauth', 'Web Auth']] },
+  { g: 'Configuration', sub: 'Services', items: [['multicast', 'Multicast']] },
   { g: 'Administration', items: [['cli', 'Command Line Interface']] },
   { g: 'Troubleshooting', items: [['diag', 'Client-Diagnose (Simulation)']] },
 ];
 const TITLES = { dash: 'Dashboard', labs: 'Labs (Simulation)', aps: 'Monitoring > Wireless > Access Points', clients: 'Monitoring > Wireless > Clients',
   wlans: 'Configuration > Tags & Profiles > WLANs', policies: 'Configuration > Tags & Profiles > Policy',
-  rf: 'Configuration > Tags & Profiles > RF', mobility: 'Configuration > Wireless > Mobility', aaa: 'Configuration > Security > AAA', webauth: 'Configuration > Security > Web Auth', flex: 'Configuration > Tags & Profiles > Flex', sitetags: 'Configuration > Tags & Profiles > Tags > Site',
+  multicast: 'Configuration > Services > Multicast', rf: 'Configuration > Tags & Profiles > RF', mobility: 'Configuration > Wireless > Mobility', aaa: 'Configuration > Security > AAA', webauth: 'Configuration > Security > Web Auth', flex: 'Configuration > Tags & Profiles > Flex', sitetags: 'Configuration > Tags & Profiles > Tags > Site',
   tags: 'Configuration > Tags & Profiles > Tags > Policy', apcfg: 'Configuration > Wireless > Access Points',
   cli: 'Administration > Command Line Interface', diag: 'Troubleshooting > Client-Diagnose (Simulation)' };
 
@@ -303,6 +304,23 @@ function listDialog(l) {
     if (!l) need(/^[\w.-]{1,32}$/.test(name.value), 'Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
     need(grp.value, 'Server Group wählen (zuerst eine anlegen)');
     return ['aaa authentication dot1x ' + (l ? l.name : name.value) + ' group ' + grp.value];
+  }, refresh);
+}
+
+VIEWS.multicast = main => {
+  const m = S.multicast;
+  main.append(h('div', { class: 'note' }, 'Multicast für WLAN-Clients: Der Controller schickt Multicast per CAPWAP-Multicast-Gruppe an die APs. Die Gruppe sollte aus 239.0.0.0/8 stammen und im Netz eindeutig sein. Das Netz unter dem Controller muss Multicast zu den APs weiterleiten.'));
+  main.append(table([{ l: 'Multicast', f: () => stateBadge(m.enabled ? 'UP' : 'DOWN') }, { l: 'AP CAPWAP Multicast', f: () => m.mode },
+    { l: 'AP CAPWAP IPv4 Multicast Group Address', f: () => m.group || '–' }, { l: 'Hinweis', f: () => m.groupInUse ? 'Gruppe wird im Netz schon verwendet' : (m.enabled && !m.group.startsWith('239.') ? 'Außerhalb von 239.0.0.0/8' : '') },
+    { l: '', f: () => [h('button', { class: 'small', 'data-id': 'edit-multicast', onclick: () => multicastDialog() }, 'Edit'), ' ',
+      m.enabled ? h('button', { class: 'small danger', 'data-id': 'disable-multicast', onclick: () => remove('no wireless multicast', 'Multicast') }, 'Disable') : ''] }], [1]));
+};
+
+function multicastDialog() {
+  const grp = h('input', { 'data-id': 'multicast-group', value: S.multicast.group, placeholder: '239.1.1.10' });
+  modal('Edit Multicast', h('div', { class: 'row' }, field('AP CAPWAP IPv4 Multicast Group Address', grp, 'Eine Adresse aus 239.0.0.0/8, die im Netz sonst nicht verwendet wird.')), () => {
+    need(/^(\d{1,3})(\.\d{1,3}){3}$/.test(grp.value) && grp.value.split('.').every(x => +x <= 255), 'Gruppe: gültige IPv4-Adresse');
+    return ['wireless multicast ' + grp.value];
   }, refresh);
 }
 
@@ -583,7 +601,7 @@ VIEWS.diag = main => {
   if (!S.diagAvailable) { main.append(h('div', { class: 'note', 'data-id': 'diag-locked' }, 'Im Prüfungsmodus ist die Client-Diagnose nicht verfügbar. Nutze Monitoring, die Show-Befehle und die CLI.')); return; }
   main.append(h('div', { class: 'note' }, 'Simulation: Diese Seite gibt es am echten Controller nicht. Sie erklärt, warum ein Client (nicht) verbunden ist. Die Begründungen sind ein didaktisches Modell.'));
   main.append(table([{ l: 'MAC Address', f: c => c.mac }, { l: 'Benutzer', f: c => c.user || '–' }, { l: 'SSID', f: c => c.ssid }, { l: 'AP', f: c => c.ap },
-    { l: 'Roaming', f: c => c.roam || '–' }, { l: 'DSCP (markiert → runter / rauf)', f: c => c.dscp === null ? '–' : c.state === 'Run' ? c.dscp + ' → ' + c.dscpDown + ' / ' + c.dscpUp : c.dscp + ' (nicht verbunden)' }, { l: 'Ergebnis', f: c => stateBadge(c.state) }, { l: 'Switching', f: c => c.switching || '–' }, { l: 'Begründung', cls: 'reason', f: c => c.reasons.length ? c.reasons.join(' ') : 'Verbunden' }], S.clients));
+    { l: 'Roaming', f: c => c.roam || '–' }, { l: 'Multicast', f: c => c.mcast || '–' }, { l: 'DSCP (markiert → runter / rauf)', f: c => c.dscp === null ? '–' : c.state === 'Run' ? c.dscp + ' → ' + c.dscpDown + ' / ' + c.dscpUp : c.dscp + ' (nicht verbunden)' }, { l: 'Ergebnis', f: c => stateBadge(c.state) }, { l: 'Switching', f: c => c.switching || '–' }, { l: 'Begründung', cls: 'reason', f: c => c.reasons.length ? c.reasons.join(' ') : 'Verbunden' }], S.clients));
 };
 
 /* ---------------------------------------------------------------- Labs */

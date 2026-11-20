@@ -57,7 +57,7 @@ class TestState(Base):
         self.assertEqual(read(os.path.join(self.dir, 'state.json')), first)
         self.assertEqual([f for f in os.listdir(self.dir) if f.endswith('.tmp')], [])
         d = json.loads(first)
-        self.assertEqual((d['kind'], d['version']), ('campusprep-state', 7))   # 7: QoS im Policy Profile; 6: RF-Profile und RF Tags; 5: Mobility (Gruppe, Peers); 4: Web-Auth (lokale Benutzer, Login-Listen, Parameter Maps); 3: AAA-Objekte
+        self.assertEqual((d['kind'], d['version']), ('campusprep-state', 8))   # 8: Multicast; 7: QoS im Policy Profile; 6: RF-Profile und RF Tags; 5: Mobility (Gruppe, Peers); 4: Web-Auth (lokale Benutzer, Login-Listen, Parameter Maps); 3: AAA-Objekte
         # Determinismus: ein zweiter, unabhaengiger Lauf mit denselben Aktionen schreibt dieselben Bytes (keine Zeitstempel)
         with tempfile.TemporaryDirectory() as other:
             s2 = Sim(data_dir=other)
@@ -201,6 +201,26 @@ class TestMigration(Base):
         w = s2.wlc.state()
         self.assertEqual((w['rfProfiles'], [t['name'] for t in w['rfTags']]), ([], ['default-rf-tag']))
         self.assertTrue(s2.labs.check()['passed'])
+        self.assertFalse(os.path.exists(os.path.join(self.dir, 'state.json.bad')))
+
+    def test_multicast_config_roundtrips_and_version_7_state_still_loads(self):
+        s = Sim(data_dir=self.dir)
+        s.labs.start('21-multicast-einrichten')
+        s.apply(s.labs.labs['21-multicast-einrichten']['solutionCommands'])
+        s.persist()
+        s2 = Sim(data_dir=self.dir)
+        self.assertEqual(s2.wlc.state(), s.wlc.state())
+        self.assertEqual(s2.world['underlay'], s.world['underlay'])
+        self.assertTrue(s2.labs.check()['passed'])
+        st = s.snapshot_all()
+        st['version'] = 7
+        del st['wlc']['multicastGroup']
+        del st['world']['underlay']
+        with open(os.path.join(self.dir, 'state.json'), 'w', encoding='utf-8') as fh:
+            json.dump(st, fh)
+        s3 = Sim(data_dir=self.dir)
+        self.assertEqual(s3.wlc.state()['multicast']['enabled'], False)
+        self.assertEqual(s3.world['underlay'], {'multicastRouting': True, 'usedGroups': []})
         self.assertFalse(os.path.exists(os.path.join(self.dir, 'state.json.bad')))
 
     def test_qos_config_roundtrips_and_version_6_state_still_loads(self):
@@ -425,7 +445,7 @@ class TestHttp(Base):
             self.call('/wlc/api/saves', 'POST', {'name': 'geloest'})
             st, exp = self.call('/wlc/api/saves/export', 'POST', {'name': 'geloest'})
             self.assertEqual(st, 200)
-            self.assertEqual((exp['state']['kind'], exp['state']['version']), ('campusprep-state', 7))   # 7: QoS im Policy Profile
+            self.assertEqual((exp['state']['kind'], exp['state']['version']), ('campusprep-state', 8))   # 8: Multicast; 7: QoS im Policy Profile
             # Import legt einen neuen Stand ab, laedt ihn aber nicht
             self.call('/wlc/api/lab/stop', 'POST', {})
             before = self.call('/wlc/api/state')[1]

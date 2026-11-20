@@ -470,6 +470,46 @@ def sc_qos_variants():
     return out
 
 
+def sc_cli_multicast():
+    r = Recorder('cli-multicast')
+    r.cli('configure terminal', 'wireless multicast', 'wireless multicast 10.0.0.1', 'wireless multicast 240.0.0.1', 'wireless multicast 224.0.0.251', 'wireless multicast 300.1.1.1',
+          'wireless multicast 239.1.1.10 extra', 'wireless multicast x', 'wireless multicast mode unicast', 'wireless multicast 239.1.1.10', 'end', 'show wireless multicast',
+          'configure terminal', 'wireless multicast 224.0.1.5', 'wireless multicast 239.255.255.255', 'no wireless multicast 239.1.1.10', 'no wireless multicast', 'no wireless multicast',
+          'end', 'show wireless multicast', 'show wireless multicast detail')
+    r.call('GET', '/wlc/api/state')
+    return r.finish()
+
+
+def mc_variants():
+    return [
+        ('20-multicast-gruppe-belegt', 'fixed', ['wireless multicast 239.1.1.20']),
+        ('20-multicast-gruppe-belegt', 'off', ['no wireless multicast']),
+        ('20-multicast-gruppe-belegt', 'outside-239', ['wireless multicast 225.1.1.1']),
+        ('20-multicast-gruppe-belegt', 'same-group', ['wireless multicast 239.1.1.10']),
+        ('20-multicast-gruppe-belegt', 'reserved', ['wireless multicast 224.0.0.251']),
+        ('20-multicast-gruppe-belegt', 'edge-239-0-0-1', ['wireless multicast 239.0.0.1']),
+        ('21-multicast-einrichten', 'fixed', ['wireless multicast 239.1.1.20']),
+        ('21-multicast-einrichten', 'used', ['wireless multicast 239.1.1.10']),
+        ('21-multicast-einrichten', 'nothing', []),
+        ('21-multicast-einrichten', 'then-off', ['wireless multicast 239.1.1.20', 'no wireless multicast']),
+        ('21-multicast-einrichten', 'outside-239', ['wireless multicast 238.0.0.1', 'wireless multicast 224.0.1.5']),
+        ('21-multicast-einrichten', 'client-off-policy', ['wireless multicast 239.1.1.20', 'wireless profile policy PP_Corp', 'shutdown']),
+    ]
+
+
+def sc_mc_variants():
+    out = []
+    for lab, name, cmds in mc_variants():
+        r = Recorder('mc-%s-%s' % (lab[:2], name))
+        r.call('POST', '/wlc/api/lab/start', {'id': lab, 'mode': 'guided'})
+        r.apply(cmds)
+        r.call('GET', '/wlc/api/state')
+        r.cli('end', 'show wireless multicast', 'show wireless client summary')
+        r.call('POST', '/wlc/api/lab/check', {})
+        out.append(r.finish())
+    return out
+
+
 def sc_apply():
     r = Recorder('apply-atomic-and-validation')
     r.apply(CORP)
@@ -646,7 +686,7 @@ def sc_no_persistence():
 
 
 def build():
-    out = [sc_cli_errors(), sc_cli_policy_ptag_ap(), sc_cli_flex(), sc_cli_aaa(), sc_cli_webauth(), sc_cli_mobility(), sc_cli_rf(), sc_cli_qos(), sc_names()] + sc_decide() + sc_aaa_variants() + sc_web_variants() + sc_mob_variants() + sc_rf_variants() + sc_qos_variants() + [sc_apply(), sc_lab_errors(), sc_saves(), sc_export_import(), sc_no_persistence()]
+    out = [sc_cli_errors(), sc_cli_policy_ptag_ap(), sc_cli_flex(), sc_cli_aaa(), sc_cli_webauth(), sc_cli_mobility(), sc_cli_rf(), sc_cli_qos(), sc_cli_multicast(), sc_names()] + sc_decide() + sc_aaa_variants() + sc_web_variants() + sc_mob_variants() + sc_rf_variants() + sc_qos_variants() + sc_mc_variants() + [sc_apply(), sc_lab_errors(), sc_saves(), sc_export_import(), sc_no_persistence()]
     for lab_id in lab_ids():
         for mode in ('guided', 'exam'):
             out.append(lab_flow(lab_id, mode))

@@ -48,17 +48,18 @@ class Wlc:
         self.mobility_peers = {}   # Peer-IP -> {mac, group} (wireless mobility group member)
         self.rf_profiles = {}      # 'band:name' -> {band, name, shutdown, tx_min, tx_max, descr}
         self.rf_tags = {DEF_RF_TAG: {'24ghz': '', '5ghz': ''}}   # name -> {24ghz: Profil, 5ghz: Profil}
+        self.multicast_group = ''   # wireless multicast <gruppe>; leer = Multicast aus
 
     # ------------------------------------------------------------------ Snapshot und Zustand fuer die Oberflaeche
     def snapshot(self):
         return copy.deepcopy((self.wlans, self.policies, self.policy_tags, self.ap_cfg, self.flex_profiles, self.site_tags,
                               self.radius_servers, self.aaa_groups, self.aaa_lists, self.local_users, self.login_lists,
-                              self.authz_default_local, self.webauth_maps, self.mobility_group, self.mobility_peers, self.rf_profiles, self.rf_tags))
+                              self.authz_default_local, self.webauth_maps, self.mobility_group, self.mobility_peers, self.rf_profiles, self.rf_tags, self.multicast_group))
 
     def restore(self, snap):
         (self.wlans, self.policies, self.policy_tags, self.ap_cfg, self.flex_profiles, self.site_tags,
          self.radius_servers, self.aaa_groups, self.aaa_lists, self.local_users, self.login_lists,
-         self.authz_default_local, self.webauth_maps, self.mobility_group, self.mobility_peers, self.rf_profiles, self.rf_tags) = copy.deepcopy(snap)
+         self.authz_default_local, self.webauth_maps, self.mobility_group, self.mobility_peers, self.rf_profiles, self.rf_tags, self.multicast_group) = copy.deepcopy(snap)
 
     def dump(self):
         """Konfiguration fuer die Persistenz (JSON-tauglich). Die Welt (APs, Clients) speichert die Sim."""
@@ -67,7 +68,8 @@ class Wlc:
                               'aaaGroups': self.aaa_groups, 'aaaLists': self.aaa_lists, 'localUsers': self.local_users,
                               'loginLists': self.login_lists, 'authzDefaultLocal': self.authz_default_local,
                               'webauthMaps': self.webauth_maps, 'mobilityGroup': self.mobility_group,
-                              'mobilityPeers': self.mobility_peers, 'rfProfiles': self.rf_profiles, 'rfTags': self.rf_tags})
+                              'mobilityPeers': self.mobility_peers, 'rfProfiles': self.rf_profiles, 'rfTags': self.rf_tags,
+                              'multicastGroup': self.multicast_group})
 
     def load(self, d):
         self.wlans, self.policies = copy.deepcopy(d['wlans']), copy.deepcopy(d['policies'])
@@ -95,6 +97,8 @@ class Wlc:
         self.rf_profiles = copy.deepcopy(d.get('rfProfiles') or {})
         self.rf_tags = copy.deepcopy(d.get('rfTags') or {})
         self.rf_tags.setdefault(DEF_RF_TAG, {'24ghz': '', '5ghz': ''})
+        # Staende vor Version 8 kennen kein Multicast
+        self.multicast_group = d.get('multicastGroup') or ''
 
     def state(self):
         """Alles, was die Weboberflaeche anzeigt (Schluessel werden nicht herausgegeben)."""
@@ -126,6 +130,8 @@ class Wlc:
             'rfProfiles': [{'name': p['name'], 'band': p['band'], 'status': 'DISABLED' if p['shutdown'] else 'ENABLED', 'txMin': p['tx_min'],
                             'txMax': p['tx_max'], 'description': p['descr']} for _, p in sorted(self.rf_profiles.items())],
             'rfTags': [{'name': n, 'builtin': n == DEF_RF_TAG, 'rf24': t['24ghz'], 'rf5': t['5ghz']} for n, t in sorted(self.rf_tags.items())],
+            'multicast': {'enabled': bool(self.multicast_group), 'group': self.multicast_group, 'mode': 'Multicast' if self.multicast_group else 'Unicast',
+                          'groupInUse': self.multicast_group in self.world.get('underlay', {}).get('usedGroups', [])},
             'mobilityGroup': self.mobility_group, 'mobilityMac': self.world['wlc']['mac'],
             'mobilityPeers': [dict(ip=ip, mac=p['mac'], group=p['group'], **self.mobility_tunnel(ip)) for ip, p in sorted(self.mobility_peers.items())],
             'webauthMaps': [{'name': n, 'builtin': n == DEF_WEBAUTH_MAP, 'type': m['type'], 'virtualIp': m['virtual_ip']}
@@ -142,7 +148,9 @@ class Wlc:
             'aps': aps,
             'clients': [{'mac': c['mac'], 'ssid': c['ssid'], 'ap': c['ap'], 'protocol': c['protocol'], 'state': c['state'],
                          'wlan': c['wlan'], 'vlan': c['vlan'], 'method': c['method'], 'switching': c['switching'], 'mode': c['mode'],
-                         'user': (c.get('eap') or c.get('web') or {}).get('user'), 'roam': c.get('roam'), 'dscp': c.get('dscp'), 'dscpDown': c.get('dscpDown'), 'dscpUp': c.get('dscpUp'), 'reasons': c['reasons']} for c in self.clients()],
+                         'user': (c.get('eap') or c.get('web') or {}).get('user'), 'roam': c.get('roam'), 'dscp': c.get('dscp'), 'dscpDown': c.get('dscpDown'), 'dscpUp': c.get('dscpUp'),
+                         'mcast': c.get('mcast') if isinstance(c.get('mcast'), str) else None,
+                         'reasons': c['reasons']} for c in self.clients()],
         }
 
     # ------------------------------------------------------------------ Zustand
@@ -293,7 +301,7 @@ class Wlc:
         """Didaktisches Modell: Warum ist ein Client assoziiert oder nicht? Rueckgabe {state, ap, wlan, reasons}."""
         ap = self.ap_by_name(client['ap'])
         res = {'state': 'Not Associated', 'ap': client['ap'], 'wlan': None, 'policy': None, 'vlan': None, 'method': None,
-               'switching': None, 'mode': None, 'roam': None, 'dscpDown': None, 'dscpUp': None, 'reasons': []}
+               'switching': None, 'mode': None, 'roam': None, 'dscpDown': None, 'dscpUp': None, 'mcast': None, 'reasons': []}
         if not ap or not ap.get('joined'):
             res['reasons'].append('AP %s ist nicht am Controller registriert' % client['ap'])
             return res
@@ -378,8 +386,28 @@ class Wlc:
             # QoS: Ein Metal-Profil begrenzt den hoechsten DSCP-Wert; ohne Profil gibt es keine Begrenzung (Simulator-Modell)
             res['dscpDown'] = self.qos_cap(client['dscp'], METAL_MAX_DSCP.get(p.get('qos_out', '')))
             res['dscpUp'] = self.qos_cap(client['dscp'], METAL_MAX_DSCP.get(METAL_IN.get(p.get('qos_in', ''), '')))
+        if client.get('mcast') is True:
+            self._mcast(res)
         res['state'] = 'Run'
         return res
+
+    def _mcast(self, res):
+        """Multicast-Empfang eines verbundenen Clients (Simulator-Modell nach Cisco-Dokument 225203): Der Controller muss Multicast mit
+        einer CAPWAP-Gruppe eingeschaltet haben, die Gruppe darf im Netz nicht anderweitig verwendet werden, und das Netz unter dem
+        Controller muss den Multicast zu den APs weiterleiten."""
+        ul = self.world.get('underlay', {})
+        if not self.multicast_group:
+            res['mcast'] = 'Not received'
+            res['reasons'].append('Multicast ist am Controller aus (wireless multicast <Gruppe>): Multicast-Verkehr wird fuer Clients verworfen')
+        elif self.multicast_group in ul.get('usedGroups', []):
+            res['mcast'] = 'Not received'
+            res['reasons'].append('Die CAPWAP-Multicast-Gruppe %s wird im Netz schon anderweitig verwendet: Die APs bekommen fremden Verkehr, '
+                                  'eine eindeutige Gruppe aus 239.0.0.0/8 waehlen' % self.multicast_group)
+        elif not ul.get('multicastRouting', True):
+            res['mcast'] = 'Not received'
+            res['reasons'].append('Der CAPWAP-Multicast erreicht die APs nicht: Das Netz unter dem Controller leitet Multicast nicht weiter')
+        else:
+            res['mcast'] = 'Received'
 
     @staticmethod
     def qos_cap(dscp, cap):
@@ -487,6 +515,13 @@ class Wlc:
     def show_site_tag_summary(self):
         return self._name_desc_table('Site Tags', 'Site Tag Name', [(n, t['descr']) for n, t in sorted(self.site_tags.items())])
 
+    def show_wireless_multicast(self):
+        """Felder laut Cisco-Dokument 225203 (nur Treffer der Websuche): Multicast, AP Capwap Multicast, AP Capwap IPv4 Multicast group Address.
+        Abstaende, Reihenfolge und Werte bei ausgeschaltetem Multicast sind Simulator-Format; die weiteren Felder des Geraets fehlen."""
+        if not self.multicast_group:
+            return 'Multicast : Disabled'
+        return '\n'.join(['Multicast : Enabled', 'AP Capwap Multicast : Multicast', 'AP Capwap IPv4 Multicast group Address : %s' % self.multicast_group])
+
     def show_mobility_summary(self):
         """Felder laut Cisco-Dokument 213913 (nur Treffer der Websuche): Management-IP, Gruppenname, Mobility-MAC, DSCP, Keepalive. Abstaende,
         Reihenfolge und die Peer-Tabelle sind Simulator-Format; DSCP 48 und Keepalive 10/3 sind die Werte aus dem Beispiel des Dokuments."""
@@ -575,7 +610,8 @@ class Cli:
              'wireless profile policy summary': self.wlc.show_policy_summary,
              'wireless profile flex summary': self.wlc.show_flex_summary,
              'wireless tag site summary': self.wlc.show_site_tag_summary,
-             'aaa servers': self.wlc.show_aaa_servers, 'wireless mobility summary': self.wlc.show_mobility_summary}
+             'aaa servers': self.wlc.show_aaa_servers, 'wireless mobility summary': self.wlc.show_mobility_summary,
+             'wireless multicast': self.wlc.show_wireless_multicast}
         if cmd not in m:
             raise CliError('Der Befehl "show %s" ist in diesem Simulator (noch) nicht belegt/umgesetzt' % cmd)
         return m[cmd]()
@@ -771,6 +807,17 @@ class Cli:
                 if w[5] not in c.mobility_peers:
                     raise CliError('Mobility-Peer %s existiert nicht' % w[5])
                 del c.mobility_peers[w[5]]
+                return ''
+            if w[:2] == ['wireless', 'multicast'] and len(w) == 3 and not no:
+                if not is_ipv4(w[2]):
+                    raise CliError('IPv4-Adresse ungueltig: %s' % w[2])
+                first = int(w[2].split('.')[0])
+                if not 224 <= first <= 239 or w[2].startswith('224.0.0.'):
+                    raise CliError('Keine nutzbare Multicast-Gruppe: %s (erlaubt 224.0.1.0 bis 239.255.255.255)' % w[2])
+                c.multicast_group = w[2]
+                return ''
+            if no and w[:2] == ['wireless', 'multicast'] and len(w) == 2:
+                c.multicast_group = ''
                 return ''
             if w == ['aaa', 'new-model']:
                 return ''   # AAA ist im Simulator immer aktiv; der Befehl wird angenommen

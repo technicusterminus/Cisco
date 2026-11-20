@@ -13,7 +13,7 @@ Alle Labs sind Eigenentwicklungen für den Simulator (keine Vorlagen von Cisco o
 
 ## CCNP Enterprise Wireless (300-430 ENWLSI)
 
-Die Labs 07 bis 19 tragen den Track *CCNP Enterprise Wireless*: FlexConnect (07, 08), 802.1X mit RADIUS (09 bis 11), Local Web Authentication (12, 13), Mobility (14, 15), RF (16, 17) und QoS (18, 19), Prüfungsthemen der 300-430 (Quellen und Vorbehalte in `docs/QUELLEN.md`). Die Labs 01 bis 06 sind Grundlagen.
+Die Labs 07 bis 21 tragen den Track *CCNP Enterprise Wireless*: FlexConnect (07, 08), 802.1X mit RADIUS (09 bis 11), Local Web Authentication (12, 13), Mobility (14, 15), RF (16, 17), QoS (18, 19) und Multicast (20, 21), Prüfungsthemen der 300-430 (Quellen und Vorbehalte in `docs/QUELLEN.md`). Die Labs 01 bis 06 sind Grundlagen.
 
 | Lab | Art | Lernmoment | Falsche Abkürzung, die die Prüfung abfängt |
 |---|---|---|---|
@@ -31,6 +31,8 @@ Die Labs 07 bis 19 tragen den Track *CCNP Enterprise Wireless*: FlexConnect (07,
 | 17 Kleinere Funkzellen in der Lobby einrichten | Anforderungen | Profil, RF Tag und AP-Zuordnung; ein neues Profil ist zunächst deaktiviert | Profil ohne `no shutdown`: Das Band ist aus. Nur das 2,4-GHz-Profil oder das falsche Band: Das 5-GHz-Band bleibt unverändert. Default RF Tag: Trifft alle APs |
 | 18 Sprache im Corp-WLAN verliert ihre Priorität | Fehlersuche | Das Metal-Profil legt den höchsten DSCP-Wert je Richtung fest (Silver 0, Platinum 46) | Platinum auch für Gäste: Sie dürften dann DSCP 46 senden. Alle service-policy entfernen: Die Gäste sind nicht mehr begrenzt. Nur Output setzen: Der Verkehr vom Client bleibt bei 0 |
 | 19 Gäste in beide Richtungen begrenzen | Anforderungen | Output und Input sind getrennte Einstellungen; Bronze ist 8 | Nur eine Richtung: Die andere bleibt bei 46. Silver (0) oder Gold (34): falscher Wert. Auch das Corp-WLAN auf Bronze: Corp wird gebremst |
+| 20 Multicast kommt bei den Clients nicht an | Fehlersuche | Die CAPWAP-Multicast-Gruppe muss im Netz eindeutig sein | Multicast ausschalten: Nichts kommt an. Eine Adresse außerhalb von 239.0.0.0/8: Der Empfang klappt, die Prüfung auf die empfohlene Gruppe nicht |
+| 21 Multicast für die Lobby einrichten | Anforderungen | Multicast einschalten mit einer freien Gruppe aus 239.0.0.0/8 | Die belegte Gruppe 239.1.1.10: Kein Empfang. Eine Adresse außerhalb von 239.0.0.0/8: Prüfung fällt durch |
 
 Gleichwertig bei Lab 08: den Namen im Policy Profile anpassen oder im Flex Profile umbenennen.
 

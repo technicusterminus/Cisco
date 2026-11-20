@@ -372,6 +372,68 @@ AAA = ['aaa new-model', 'radius server RS1', 'address ipv4 10.10.0.50 auth-port 
 CORP_CFG = CORP[1:-1] + ['ap a4b2.32aa.0001', 'policy-tag PT_Corp', 'exit']
 
 
+class TestMulticast(unittest.TestCase):
+    """Multicast: wireless multicast <gruppe> und show wireless multicast nach Cisco-Dokument 225203; die Auswertung ist ein Simulator-Modell."""
+
+    def world(self, extra=(), mcast=True, underlay=None):
+        s = Sim()
+        c = {'mac': '58bf.eaaa.0001', 'ssid': 'Corp', 'psk': 'Sommer2026', 'ap': 'ap-lobby', 'protocol': '11ac'}
+        if mcast:
+            c['mcast'] = True
+        s.reset_world([c], underlay=underlay)
+        ok, _, err = s.apply(list(CORP_CFG) + list(extra))
+        self.assertTrue(ok, err)
+        return s
+
+    def client(self, s):
+        return s.wlc.state()['clients'][0]
+
+    def test_default_is_off_and_the_client_does_not_receive(self):
+        s = self.world()
+        self.assertEqual(s.wlc.state()['multicast'], {'enabled': False, 'group': '', 'mode': 'Unicast', 'groupInUse': False})
+        self.assertEqual(self.client(s)['mcast'], 'Not received')
+        self.assertIn('Multicast ist am Controller aus', ' '.join(self.client(s)['reasons']))
+        self.assertEqual(s.cli.run('show wireless multicast'), 'Multicast : Disabled')
+
+    def test_enabled_multicast_is_received_and_shown_in_the_documented_fields(self):
+        s = self.world(['wireless multicast 239.1.1.10'])
+        self.assertEqual(self.client(s)['mcast'], 'Received')
+        self.assertEqual(s.cli.run('show wireless multicast').splitlines(),
+                         ['Multicast : Enabled', 'AP Capwap Multicast : Multicast', 'AP Capwap IPv4 Multicast group Address : 239.1.1.10'])
+        self.assertEqual(s.wlc.state()['multicast']['mode'], 'Multicast')
+
+    def test_used_group_and_a_down_underlay_each_prevent_reception(self):
+        s = self.world(['wireless multicast 239.1.1.10'], underlay={'multicastRouting': True, 'usedGroups': ['239.1.1.10']})
+        self.assertEqual(self.client(s)['mcast'], 'Not received')
+        self.assertTrue(s.wlc.state()['multicast']['groupInUse'])
+        s = self.world(['wireless multicast 239.1.1.10'], underlay={'multicastRouting': False, 'usedGroups': []})
+        self.assertIn('leitet Multicast nicht weiter', ' '.join(self.client(s)['reasons']))
+
+    def test_clients_without_the_marker_or_not_connected_have_no_result(self):
+        s = self.world(['wireless multicast 239.1.1.10'], mcast=False)
+        self.assertEqual(self.client(s)['mcast'], None)
+        s = self.world(['wireless multicast 239.1.1.10', 'wireless profile policy PP_Corp', 'shutdown'])
+        self.assertEqual((self.client(s)['state'], self.client(s)['mcast']), ('Not Associated', None))
+
+    def test_cli_forms_and_errors(self):
+        s = self.world()
+        cli = s.cli
+        cli.run('configure terminal')
+        for line in ('wireless multicast 239.1.1.10', 'wireless multicast 224.0.1.5', 'wireless multicast 239.255.255.255', 'no wireless multicast'):
+            self.assertEqual(cli.run(line), '', line)
+        for line in ('wireless multicast', 'wireless multicast 10.0.0.1', 'wireless multicast 240.0.0.1', 'wireless multicast 224.0.0.251', 'wireless multicast 300.1.1.1',
+                     'wireless multicast 239.1.1.10 extra', 'wireless multicast x', 'no wireless multicast 239.1.1.10', 'wireless multicast mode unicast'):
+            self.assertTrue(cli.run(line).startswith('% '), line)
+        self.assertEqual(s.wlc.state()['multicast']['enabled'], False)
+
+    def test_failed_apply_rolls_back_multicast(self):
+        s = self.world(['wireless multicast 239.1.1.10'])
+        before = s.wlc.state()
+        ok, _, _ = s.apply(['wireless multicast 239.9.9.9', 'wireless multicast 10.0.0.1'])
+        self.assertFalse(ok)
+        self.assertEqual(s.wlc.state(), before)
+
+
 class TestQos(unittest.TestCase):
     """QoS mit Metal-Profilen: service-policy und die hoechsten DSCP-Werte nach Cisco-Dokument 222241; Auswertung ist ein Simulator-Modell."""
 

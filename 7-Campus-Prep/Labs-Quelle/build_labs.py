@@ -758,6 +758,73 @@ lab(id='19-qos-gast-begrenzen', title='19 Gäste in beide Richtungen begrenzen',
 SOLUTIONS['19-qos-gast-begrenzen'] = ['wireless profile policy PP_Guest', 'service-policy output bronze', 'service-policy input bronze-up']
 
 
+# ---------------------------------------------------------------------------------------------------------------
+# CCNP Enterprise Wireless (ENWLSI): Multicast. Cisco-Dokument 225203 (ueber Websuche zitiert, siehe docs/QUELLEN.md): wireless multicast <gruppe>,
+# Gruppe aus 239.0.0.0/8 und im Netz eindeutig, show wireless multicast. Das Netz unter dem Controller (worldUnderlay) ist simuliert.
+def mcast_client(mac, psk='Sommer2026'):
+    c = client(mac, 'Corp', psk, 'ap-lobby')
+    c['mcast'] = True
+    return c
+
+
+MC_TOOLS = ['WebUI: Configuration > Services > Multicast', 'Monitoring > Wireless > Clients', 'Client-Diagnose (nur im geführten Modus)',
+            'CLI: show wireless multicast, show wireless client summary']
+MC_LIMITS = LIMITS + ['Multicast ist stark vereinfacht: Ein Client will Multicast empfangen; das gelingt, wenn der Controller Multicast mit einer CAPWAP-Gruppe eingeschaltet hat, '
+                      'die Gruppe im Netz eindeutig ist und das Netz unter dem Controller Multicast zu den APs weiterleitet.',
+                      'Nicht modelliert: IGMP/MLD-Snooping, Multicast über Unicast, IPv6, VLAN-Multicast, Bonjour/mDNS, Broadcast-Weiterleitung. Das Netz unter dem Controller '
+                      'ist eine simulierte Gegenseite, an der es nichts einzustellen gibt.',
+                      '`show wireless multicast` zeigt nur drei Felder; das Gerät gibt mehr aus.']
+MC_BASE = corp() + ['ap %s' % L1, 'policy-tag PT_Corp', 'exit']
+
+lab(id='20-multicast-gruppe-belegt', title='20 Multicast kommt bei den Clients nicht an', topic='Multicast / Troubleshooting',
+    level='Fortgeschritten', duration='20 min', kind='troubleshooting', track=TRACK_WIFI, prerequisites=['Lab 01'], tools=MC_TOOLS, limits=MC_LIMITS,
+    goals=['Die Bedingungen für Multicast im WLAN kennen', 'Aus der Diagnose den Fehler an der CAPWAP-Multicast-Gruppe erkennen'],
+    intro='Ein Streaming-Dienst für die Lobby (Multicast) kommt bei den WLAN-Clients nicht an. Multicast ist am Controller eingeschaltet, '
+          'das Netz unter dem Controller leitet Multicast weiter. Der Laptop in der Lobby empfängt trotzdem nichts.',
+    requirements=['Der Laptop in der Lobby empfängt Multicast.', 'Multicast bleibt am Controller eingeschaltet, mit einer geeigneten Gruppe.'],
+    hints=['**Konzept:** Der Controller schickt Multicast per CAPWAP-Multicast-Gruppe an die APs. Diese Gruppe darf im Netz nicht für etwas anderes verwendet werden.',
+           '**Ebene:** Die globale Multicast-Einstellung am Controller.',
+           '**Prüfschritte:** `show wireless multicast` zeigt die Gruppe; die Client-Diagnose nennt, was nicht stimmt.',
+           '**Lösung:** Eine andere, eindeutige Gruppe aus 239.0.0.0/8 setzen, z. B. `wireless multicast 239.1.1.20`. Multicast nicht abschalten.'],
+    cause='Die CAPWAP-Multicast-Gruppe 239.1.1.10 wird im Netz schon anderweitig verwendet; die APs bekommen fremden Verkehr.',
+    startCommands=MC_BASE + ['wireless multicast 239.1.1.10'], worldUnderlay={'multicastRouting': True, 'usedGroups': ['239.1.1.10']},
+    worldClients=[mcast_client('58bf.eaaa.0001')],
+    checks=[chk('Laptop empfängt Multicast', 'client', mac='58bf.eaaa.0001', state='Run', mcast='Received'),
+            chk('Multicast ist mit einer geeigneten Gruppe eingerichtet', 'mcastcfg', 'security', prefix='239.')],
+    questions=[q('q1', 'Warum soll die CAPWAP-Multicast-Gruppe im Netz eindeutig sein?',
+                 ['Sonst bekommen die APs Verkehr anderer Dienste in derselben Gruppe', 'Weil Gruppen nur einmal vergeben werden dürfen', 'Weil der Controller sonst neu startet', 'Weil sonst das WLAN down ist'], 0,
+                 'Laut Cisco-Dokument 225203 sollte die Adresse aus 239.0.0.0/8 stammen und im Netz eindeutig sein.'),
+               q('q2', 'Warum ist es keine Lösung, Multicast am Controller auszuschalten?',
+                 ['Dann wird Multicast für die Clients verworfen', 'Dann fällt der AP aus', 'Dann braucht der Client ein neues Zertifikat', 'Das geht nicht'], 0,
+                 'Ohne Multicast am Controller kommt auch bei den Clients nichts an; die Anforderung verlangt Empfang.')],
+    solution='WebUI: Configuration > Services > Multicast > Edit: eine eindeutige Gruppe aus 239.0.0.0/8, z. B. 239.1.1.20. CLI: `wireless multicast 239.1.1.20`.')
+SOLUTIONS['20-multicast-gruppe-belegt'] = ['wireless multicast 239.1.1.20']
+
+lab(id='21-multicast-einrichten', title='21 Multicast für die Lobby einrichten', topic='Multicast / Design',
+    level='Fortgeschritten', duration='25 min', kind='requirements', track=TRACK_WIFI, prerequisites=['Lab 20'], tools=MC_TOOLS, limits=MC_LIMITS,
+    goals=['Multicast am Controller einrichten', 'Die Empfehlung für die Gruppe beachten, nicht nur eine gültige Adresse wählen'],
+    intro='Die Lobby soll einen Multicast-Dienst bekommen. Am Controller ist noch kein Multicast eingerichtet. Im Netz ist die Gruppe 239.1.1.10 schon für einen anderen Dienst vergeben. '
+          'Das Netz unter dem Controller leitet Multicast weiter.',
+    requirements=['Der Laptop in der Lobby empfängt Multicast.', 'Die Gruppe stammt aus 239.0.0.0/8 und ist im Netz nicht anderweitig verwendet.'],
+    hints=['**Konzept:** Multicast am Controller wird mit einer CAPWAP-Multicast-Gruppe eingeschaltet. Nicht jede gültige Adresse ist eine gute Wahl.',
+           '**Ebene:** Die globale Multicast-Einstellung am Controller.',
+           '**Prüfschritte:** Prüfe, welche Gruppen im Netz schon verwendet werden (siehe Aufgabe) und aus welchem Bereich die Gruppe stammen soll.',
+           '**Lösung:** `wireless multicast <Gruppe>` mit einer freien Adresse aus 239.0.0.0/8, nicht 239.1.1.10.'],
+    cause='Multicast ist am Controller nicht eingeschaltet.',
+    startCommands=MC_BASE, worldUnderlay={'multicastRouting': True, 'usedGroups': ['239.1.1.10']},
+    worldClients=[mcast_client('58bf.eaaa.0001')],
+    checks=[chk('Laptop empfängt Multicast', 'client', mac='58bf.eaaa.0001', state='Run', mcast='Received'),
+            chk('Multicast ist an, Gruppe aus 239.0.0.0/8 und im Netz eindeutig', 'mcastcfg', 'security', prefix='239.')],
+    questions=[q('q1', 'Aus welchem Bereich soll die CAPWAP-Multicast-Gruppe stammen?',
+                 ['239.0.0.0/8', '224.0.0.0/24', '10.0.0.0/8', 'Jede Adresse ist gleich gut'], 0,
+                 'Laut Cisco-Dokument 225203: eine Adresse aus 239.0.0.0/8, eindeutig im Netz.'),
+               q('q2', 'Warum reicht eine beliebige gültige Multicast-Adresse nicht?',
+                 ['Sie kann im Netz schon anderweitig verwendet werden oder außerhalb des empfohlenen Bereichs liegen', 'Der Controller akzeptiert nur 239.1.1.10', 'Der AP braucht zuerst ein Update', 'Sie wird sofort abgelehnt'], 0,
+                 'Der Simulator akzeptiert viele Adressen; die Prüfung verlangt eine freie aus dem empfohlenen Bereich.')],
+    solution='WebUI: Configuration > Services > Multicast > Edit: eine freie Gruppe aus 239.0.0.0/8, z. B. 239.1.1.20. CLI: `wireless multicast 239.1.1.20`.')
+SOLUTIONS['21-multicast-einrichten'] = ['wireless multicast 239.1.1.20']
+
+
 def main(out=OUT, verbose=True):
     os.makedirs(out, exist_ok=True)
     for f in os.listdir(out):

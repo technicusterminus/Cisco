@@ -21,6 +21,7 @@ def default_world():
         ],
         'radius': default_radius(),
         'mobility': default_mobility(),
+        'underlay': default_underlay(),
     }
 
 
@@ -31,6 +32,12 @@ def default_radius():
                          'users': [{'name': 'anna', 'password': 'Passw0rt!', 'vlan': '30'},
                                    {'name': 'bernd', 'password': 'Geheim#2', 'vlan': '40'},
                                    {'name': 'carla', 'password': 'Sommer#3', 'vlan': None}]}]}
+
+
+def default_underlay():
+    """Das Netz unter dem Controller (Gegenseite): Ob es Multicast zu den APs weiterleitet (multicastRouting) und welche
+    Multicast-Gruppen dort schon anderweitig verwendet werden (usedGroups)."""
+    return {'multicastRouting': True, 'usedGroups': []}
 
 
 def default_mobility():
