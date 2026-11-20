@@ -41,7 +41,8 @@
   "Nicht modelliert: 802.1x/RADIUS, FlexConnect, RF-Profile, Roaming, Mobility.",
   "QoS ist stark vereinfacht: Ein Client sendet Verkehr mit einem DSCP-Wert; das Metal-Profil im Policy Profile begrenzt den höchsten Wert je Richtung. Es gibt keine Bandbreite, keine Warteschlangen, kein AVC und keine WMM-Zuordnung.",
   "Das Cisco-Dokument 222241 beschreibt die Metal-Profile für APs im Local Mode; FlexConnect ist dort nicht behandelt, der Simulator wertet es gleich aus.",
-  "Ohne service-policy gibt es im Simulator keine Begrenzung; das Standardverhalten des Geräts ist nicht belegt."
+  "Ohne service-policy gibt es im Simulator keine Begrenzung; das Standardverhalten des Geräts ist nicht belegt.",
+  "Die Höchstwerte folgen nicht der Priorität der Klassen: Bronze (8) ist als Hintergrundklasse niedriger priorisiert als Silver (0). Der Simulator wertet nur den Höchstwert aus."
  ],
  "modes": [
   "guided",
