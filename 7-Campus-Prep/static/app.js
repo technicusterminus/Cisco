@@ -640,10 +640,33 @@ async function savesCard(main) {
       const r = await api.post('/wlc/api/saves/load', { name: x.name });
       if (r.http !== 200) { toast(r.error); return; }
       toast('Stand geladen'); refresh();
-    } }, 'Laden'), ' ', h('button', { class: 'small danger', 'data-id': 'del-' + x.name, onclick: async () => {
+    } }, 'Laden'), ' ', x.broken ? '' : [h('button', { class: 'small', 'data-id': 'export-' + x.name, onclick: async () => {
+      const r = await api.post('/wlc/api/saves/export', { name: x.name });
+      if (r.http !== 200) { toast(r.error); return; }
+      const a = h('a', { href: URL.createObjectURL(new Blob([JSON.stringify(r.state, null, 1) + '\n'], { type: 'application/json' })), download: 'campusprep-' + x.name + '.json' });
+      document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      toast('Stand exportiert');
+    } }, 'Exportieren'), ' '], h('button', { class: 'small danger', 'data-id': 'del-' + x.name, onclick: async () => {
       if (!confirm('Stand "' + x.name + '" löschen?')) return;
       await api.post('/wlc/api/saves/delete', { name: x.name }); refresh();
     } }, 'Löschen')] }], sv.saves, 'Keine Stände gespeichert.'));
+  const impName = h('input', { 'data-id': 'import-name', placeholder: 'Name (leer: aus dem Dateinamen)', 'aria-label': 'Name des importierten Stands', maxlength: 40 });
+  const impFile = h('input', { 'data-id': 'import-file', type: 'file', accept: '.json,application/json', 'aria-label': 'Stand-Datei' });
+  impFile.addEventListener('change', async () => {
+    const f = impFile.files[0];
+    if (!f) return;
+    if (f.size > 5 * 1024 * 1024) { toast('Datei ist zu groß (mehr als 5 MB)'); impFile.value = ''; return; }
+    let state;
+    try { state = JSON.parse(await f.text()); } catch (e) { toast('Die Datei ist kein gültiges JSON'); impFile.value = ''; return; }
+    let nm = impName.value.trim() || f.name.replace(/\.json$/i, '').replace(/^campusprep-/, '').replace(/[^A-Za-z0-9._-]/g, '-').slice(0, 40);
+    if (!/^[A-Za-z0-9]/.test(nm)) nm = 'x' + nm.slice(0, 39);
+    const r = await api.post('/wlc/api/saves/import', { name: nm, state });
+    impFile.value = '';
+    if (r.http !== 200) { toast(r.error); return; }
+    toast('Stand importiert als ' + nm + ' (noch nicht geladen)'); refresh();
+  });
+  main.append(h('div', { class: 'muted', style: 'margin-top:10px' }, 'Import: Eine Stand-Datei (aus „Exportieren“) wird geprüft und als neuer Stand abgelegt, ohne den laufenden Zustand zu ändern. Ein vorhandener Name wird nicht überschrieben.'),
+    h('div', { class: 'bar' }, impName, impFile));
   main.append(h('div', { class: 'bar', style: 'margin-top:10px' }, h('button', { class: 'danger', 'data-id': 'reset-progress', onclick: async () => {
     if (!confirm('Den gesamten Lab-Fortschritt zurücksetzen?')) return;
     await api.post('/wlc/api/progress/reset'); toast('Fortschritt zurückgesetzt'); refresh();

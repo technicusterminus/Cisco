@@ -122,6 +122,9 @@ class Store:
         except (ValueError, OSError):
             raise StoreError('Stand %s ist nicht lesbar' % name)
 
+    def named_exists(self, name):
+        return os.path.exists(self._save_path(name))
+
     def delete_named(self, name):
         path = self._save_path(name)
         if not os.path.exists(path):

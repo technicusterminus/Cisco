@@ -38,8 +38,9 @@ class Sim:
         return {'kind': KIND, 'version': VERSION, 'world': copy.deepcopy(self.world), 'wlc': self.wlc.dump(),
                 'lab': copy.deepcopy(self.labs.session)}
 
-    def restore_all(self, d):
-        """Zustand ersetzen. Wirft StoreError und laesst die laufende Sim unveraendert, wenn der Stand nicht passt."""
+    @staticmethod
+    def build_state(d):
+        """Aus einem Stand Welt und Controller aufbauen und pruefen. Wirft StoreError; veraendert nichts am laufenden Zustand."""
         validate_state(d)
         world = copy.deepcopy(d['world'])
         world.setdefault('radius', default_radius())   # aeltere Staende kennen keinen RADIUS-Server
@@ -50,6 +51,11 @@ class Sim:
             wlc.state()
         except (KeyError, TypeError, ValueError, AttributeError):
             raise StoreError('Stand ist beschaedigt')
+        return world, wlc
+
+    def restore_all(self, d):
+        """Zustand ersetzen. Wirft StoreError und laesst die laufende Sim unveraendert, wenn der Stand nicht passt."""
+        world, wlc = self.build_state(d)
         self.world, self.wlc = world, wlc
         self.cli = Cli(self.wlc)
         self.catc = CatalystCenter(self.world)
@@ -137,6 +143,14 @@ def make_handler(sim):
                 if (method, path) == ('POST', '/wlc/api/saves/load'):
                     sim.restore_all(sim.store.load_named(body.get('name')))
                     return self._send(200, {'ok': True})
+                if (method, path) == ('POST', '/wlc/api/saves/export'):
+                    return self._send(200, {'state': sim.store.load_named(body.get('name'))})
+                if (method, path) == ('POST', '/wlc/api/saves/import'):
+                    sim.build_state(body.get('state'))   # prueft den Stand, ohne den laufenden Zustand anzufassen
+                    if sim.store.named_exists(body.get('name')):
+                        raise StoreError('Ein Stand mit diesem Namen existiert bereits', 409)
+                    sim.store.save_named(body.get('name'), body['state'])
+                    return self._send(200, {'saves': sim.store.list_named()})
                 if (method, path) == ('POST', '/wlc/api/saves/delete'):
                     sim.store.delete_named(body.get('name'))
                     return self._send(200, {'saves': sim.store.list_named()})

@@ -32,8 +32,8 @@ const STANDALONE = process.env.STANDALONE === '1';
     const requests = [];
     p.on('request', rq => requests.push(rq.url()));
     p.on('pageerror', e => errs.push('pageerror: ' + e.message));
-    let rejected = 0;   // die absichtlichen Ablehnungen (HTTP 400) des Tests werden separat gezaehlt
-    p.on('console', m => { if (m.type() !== 'error') return; if (/status of 400/.test(m.text())) rejected++; else errs.push('console: ' + m.text()); });
+    let rejected = 0, conflicts = 0;   // die absichtlichen Ablehnungen (HTTP 400 und 409) des Tests werden separat gezaehlt
+    p.on('console', m => { if (m.type() !== 'error') return; if (/status of 400/.test(m.text())) rejected++; else if (/status of 409/.test(m.text())) conflicts++; else errs.push('console: ' + m.text()); });
     p.on('dialog', d => d.accept());
     const go = async id => { await p.click('nav a[data-view="' + id + '"]'); await p.waitForTimeout(250); };
     const text = async () => p.evaluate(() => document.getElementById('main').innerText);
@@ -152,6 +152,27 @@ const STANDALONE = process.env.STANDALONE === '1';
     check(await p.locator('[data-id="load-lab01-geloest"]').count() === 1, 'Stand wird gespeichert und aufgelistet');
     await p.fill('[data-id="save-name"]', '../evil'); await p.click('[data-id="save"]'); await p.waitForTimeout(400);
     check(/Name: 1-40 Zeichen/.test(await p.textContent('#toast')), 'Ungültiger Name wird abgelehnt');
+    // Export und Import eines Stands als Datei
+    const tmpDir = require('fs').mkdtempSync(require('path').join(require('os').tmpdir(), 'campusprep-gui-'));
+    const [dl] = await Promise.all([p.waitForEvent('download'), p.click('[data-id="export-lab01-geloest"]')]);
+    const expFile = require('path').join(tmpDir, dl.suggestedFilename());
+    await dl.saveAs(expFile);
+    check(dl.suggestedFilename() === 'campusprep-lab01-geloest.json', 'Export: Dateiname campusprep-<Name>.json');
+    const expJson = JSON.parse(require('fs').readFileSync(expFile, 'utf8'));
+    check(expJson.kind === 'campusprep-state' && expJson.lab && expJson.lab.id === '01-ssid-nicht-sichtbar', 'Export: gültiger Stand mit Lab-Sitzung');
+    await p.setInputFiles('[data-id="import-file"]', expFile); await p.waitForTimeout(500);
+    check(/Ein Stand mit diesem Namen existiert bereits|importiert/.test(await p.textContent('#toast')) && await p.locator('[data-id="load-lab01-geloest"]').count() === 1, 'Import: der vorhandene Name wird nicht überschrieben');
+    await p.fill('[data-id="import-name"]', 'kopie'); await p.setInputFiles('[data-id="import-file"]', expFile); await p.waitForTimeout(600);
+    check(await p.locator('[data-id="load-kopie"]').count() === 1 && /importiert als kopie/.test(await p.textContent('#toast')), 'Import: Datei wird als neuer Stand abgelegt');
+    const badFile = require('path').join(tmpDir, 'kaputt.json'); require('fs').writeFileSync(badFile, '{"kind": "anderes"}');
+    await p.fill('[data-id="import-name"]', 'kaputt'); await p.setInputFiles('[data-id="import-file"]', badFile); await p.waitForTimeout(500);
+    check(/Kein Campus-Prep-Stand/.test(await p.textContent('#toast')) && await p.locator('[data-id="load-kaputt"]').count() === 0, 'Import: eine fremde Datei wird abgelehnt');
+    const textFile = require('path').join(tmpDir, 'text.json'); require('fs').writeFileSync(textFile, 'das ist kein json');
+    await p.setInputFiles('[data-id="import-file"]', textFile); await p.waitForTimeout(400);
+    check(/kein gültiges JSON/.test(await p.textContent('#toast')), 'Import: ungültiges JSON wird abgelehnt');
+    await p.fill('[data-id="import-name"]', '');
+    await p.click('[data-id="del-kopie"]'); await p.waitForTimeout(400);
+    check(await p.locator('[data-id="load-kopie"]').count() === 0, 'Der importierte Stand lässt sich löschen');
     // Pruefungsmodus: Lab 02
     await p.selectOption('[data-id="lab-mode"]', 'exam'); await p.click('[data-id="start-02"]'); await p.waitForTimeout(500);
     check(/Prüfungsmodus/.test(await text()) && await p.locator('[data-id="hint"]').count() === 0 && await p.locator('[data-id="lab-solution"]').count() === 0, 'Prüfungsmodus: keine Hinweise, keine Lösung');
@@ -338,7 +359,7 @@ const STANDALONE = process.env.STANDALONE === '1';
 
     // Alle Ansichten ohne JS-Fehler
     for (const id of ['dash', 'labs', 'aaa', 'webauth', 'mobility', 'rf', 'flex', 'sitetags', 'aps', 'clients', 'wlans', 'policies', 'tags', 'apcfg', 'cli', 'diag']) { await go(id); }
-    check(rejected === (STANDALONE ? 0 : 3), (STANDALONE ? 'Ohne Server gibt es keine HTTP-Fehler: ' : 'Genau die drei absichtlichen Ablehnungen (HTTP 400) wurden ausgelöst: ') + rejected);
+    check(rejected === (STANDALONE ? 0 : 4) && conflicts === (STANDALONE ? 0 : 1), (STANDALONE ? 'Ohne Server gibt es keine HTTP-Fehler: ' : 'Genau die absichtlichen Ablehnungen (4 x HTTP 400, 1 x 409) wurden ausgelöst: ') + rejected + '/' + conflicts);
     if (STANDALONE) check(!requests.some(u => /^https?:/.test(u)), 'Keine Netzwerkzugriffe (läuft vollständig offline)' + (requests.some(u => /^https?:/.test(u)) ? ': ' + requests.filter(u => /^https?:/.test(u)).join(' ') : ''));
     check(errs.length === 0, 'Keine JavaScript-Fehler' + (errs.length ? ': ' + errs.join(' | ') : ''));
   } finally { await b.close(); if (srv) srv.kill(); }
