@@ -147,7 +147,7 @@ const STANDALONE = process.env.STANDALONE === '1';
     // Staende und Fortschritt
     await go('labs');
     console.log('       Kacheln: ' + (await text()).split('\n').filter(l => /bestanden|Starts|Prüfungsmodus$|^\d+( \/ \d+)?$/.test(l)).join(' | ').slice(0, 200));
-    check(/Geführt bestanden/.test(await text()) && /1 \/ 19[\s\S]*Labs bestanden/.test(await text()), 'Fortschritt: Lab 01 ist als geführt bestanden markiert');
+    check(/Geführt bestanden/.test(await text()) && /1 \/ 21[\s\S]*Labs bestanden/.test(await text()), 'Fortschritt: Lab 01 ist als geführt bestanden markiert');
     await p.fill('[data-id="save-name"]', 'lab01-geloest'); await p.click('[data-id="save"]'); await p.waitForTimeout(500);
     check(await p.locator('[data-id="load-lab01-geloest"]').count() === 1, 'Stand wird gespeichert und aufgelistet');
     await p.fill('[data-id="save-name"]', '../evil'); await p.click('[data-id="save"]'); await p.waitForTimeout(400);
@@ -189,7 +189,7 @@ const STANDALONE = process.env.STANDALONE === '1';
     await p.click('[data-id="del-lab01-geloest"]'); await p.waitForTimeout(400);
     check(await p.locator('[data-id="load-lab01-geloest"]').count() === 0, 'Stand lässt sich löschen');
     await p.click('[data-id="reset-progress"]'); await p.waitForTimeout(400);
-    check(/0 \/ 19[\s\S]*Labs bestanden/.test(await text()) && !/Geführt bestanden/.test(await text()), 'Fortschritt zurücksetzen');
+    check(/0 \/ 21[\s\S]*Labs bestanden/.test(await text()) && !/Geführt bestanden/.test(await text()), 'Fortschritt zurücksetzen');
 
     // 802.1X: AAA-Kette im Standardzustand ueber die Dialoge aufbauen, dann ein WLAN mit WPA2 Enterprise
     await go('aaa'); await p.click('[data-id="add-radius"]');
@@ -268,6 +268,30 @@ const STANDALONE = process.env.STANDALONE === '1';
     check(/gast1[\s\S]*aaa authorization network default local/.test(await text()), 'Lab 12: Diagnose nennt die fehlende Autorisierung');
     await go('webauth'); await p.click('[data-id="authz-toggle"]'); await p.waitForTimeout(400);
     check(solved2(await labCheck2()), 'Lab 12: mit der Autorisierung bestanden');
+
+    // Multicast: Lab 21 und Lab 20 ueber den Multicast-Dialog
+    const labCheck6 = async () => { await go('labs'); await p.click('[data-id="lab-check"]'); await p.waitForTimeout(300); return p.textContent('[data-id="check-result"]'); };
+    const solved6 = r => /bestanden/.test(r) && !/noch nicht/.test(r);
+    await go('labs'); await p.selectOption('[data-id="lab-mode"]', 'guided'); await p.click('[data-id="start-21"]'); await p.waitForTimeout(600);
+    check(!solved6(await labCheck6()), 'Lab 21: ohne Lösung nicht bestanden');
+    await go('multicast');
+    check(/Multicast[\s\S]*Unicast/.test(await text()) && await p.locator('[data-id="disable-multicast"]').count() === 0, 'Multicast: zu Beginn aus');
+    await go('diag');
+    check(/Multicast[\s\S]*Not received/.test(await text()) && /Multicast ist am Controller aus/.test(await text()), 'Diagnose: Multicast kommt nicht an, Grund genannt');
+    await go('multicast'); await p.click('[data-id="edit-multicast"]'); await p.fill('[data-id="multicast-group"]', '239.1.1.10');
+    check(/wireless multicast 239\.1\.1\.10/.test(await p.textContent('[data-id="cli-preview"]')), 'Multicast-Dialog zeigt das CLI-Äquivalent');
+    await apply();
+    check(/Gruppe wird im Netz schon verwendet/.test(await text()), 'Die belegte Gruppe wird markiert');
+    check(!solved6(await labCheck6()), 'Lab 21: mit der belegten Gruppe nicht bestanden');
+    await go('multicast'); await p.click('[data-id="edit-multicast"]'); await p.fill('[data-id="multicast-group"]', '239.1.1.20'); await apply();
+    check(/239\.1\.1\.20/.test(await text()) && !/schon verwendet/.test(await text()), 'Freie Gruppe gesetzt');
+    check(solved6(await labCheck6()), 'Lab 21: mit einer freien Gruppe bestanden');
+    await go('labs'); await p.click('[data-id="start-20"]'); await p.waitForTimeout(600);
+    check(!solved6(await labCheck6()), 'Lab 20: ohne Lösung nicht bestanden');
+    await go('multicast'); await p.click('[data-id="edit-multicast"]'); await p.fill('[data-id="multicast-group"]', '239.1.1.20'); await apply();
+    check(solved6(await labCheck6()), 'Lab 20: mit einer anderen Gruppe bestanden');
+    await go('multicast'); await p.click('[data-id="disable-multicast"]'); await p.waitForTimeout(400);
+    check(/Multicast[\s\S]*Unicast/.test(await text()), 'Multicast lässt sich ausschalten');
 
     // QoS: Lab 19 und Lab 18 ueber den Policy-Dialog
     const labCheck5 = async () => { await go('labs'); await p.click('[data-id="lab-check"]'); await p.waitForTimeout(300); return p.textContent('[data-id="check-result"]'); };
@@ -378,7 +402,7 @@ const STANDALONE = process.env.STANDALONE === '1';
     check(/ap-lager[\s\S]*FlexConnect/.test(await text()), 'Nach dem Neuladen ist die Konfiguration noch da');
 
     // Alle Ansichten ohne JS-Fehler
-    for (const id of ['dash', 'labs', 'aaa', 'webauth', 'mobility', 'rf', 'flex', 'sitetags', 'aps', 'clients', 'wlans', 'policies', 'tags', 'apcfg', 'cli', 'diag']) { await go(id); }
+    for (const id of ['dash', 'labs', 'aaa', 'webauth', 'multicast', 'mobility', 'rf', 'flex', 'sitetags', 'aps', 'clients', 'wlans', 'policies', 'tags', 'apcfg', 'cli', 'diag']) { await go(id); }
     check(rejected === (STANDALONE ? 0 : 4) && conflicts === (STANDALONE ? 0 : 1), (STANDALONE ? 'Ohne Server gibt es keine HTTP-Fehler: ' : 'Genau die absichtlichen Ablehnungen (4 x HTTP 400, 1 x 409) wurden ausgelöst: ') + rejected + '/' + conflicts);
     if (STANDALONE) check(!requests.some(u => /^https?:/.test(u)), 'Keine Netzwerkzugriffe (läuft vollständig offline)' + (requests.some(u => /^https?:/.test(u)) ? ': ' + requests.filter(u => /^https?:/.test(u)).join(' ') : ''));
     check(errs.length === 0, 'Keine JavaScript-Fehler' + (errs.length ? ': ' + errs.join(' | ') : ''));

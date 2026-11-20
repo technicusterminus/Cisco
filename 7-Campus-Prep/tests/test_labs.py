@@ -16,7 +16,8 @@ L1, L2 = 'a4b2.32aa.0001', 'a4b2.32aa.0002'
 ALL = ['01-ssid-nicht-sichtbar', '02-admin-down', '03-falscher-schluessel', '04-falsches-policy-profile',
        '05-gast-wlan-lobby', '06-aufraeumen', '07-flexconnect-zweigstelle', '08-flexconnect-vlan-name',
        '09-radius-shared-secret', '10-aaa-override-vlan', '11-radius-redundanz', '12-webauth-authorization', '13-webauth-einrichten',
-       '14-mobility-gruppenname', '15-mobility-einrichten', '16-rf-tag-fehlt', '17-rf-lobby-einrichten', '18-qos-metal-falsch', '19-qos-gast-begrenzen']
+       '14-mobility-gruppenname', '15-mobility-einrichten', '16-rf-tag-fehlt', '17-rf-lobby-einrichten', '18-qos-metal-falsch', '19-qos-gast-begrenzen',
+       '20-multicast-gruppe-belegt', '21-multicast-einrichten']
 # Woerter, die im sichtbaren Text vor dem Bestehen (Intro, Anforderungen, Pruefungsbeschreibungen) nicht stehen duerfen
 LEAKS = {
     '01-ssid-nicht-sichtbar': ['policy-tag', 'Policy Tag', 'Tag Source', 'PT_Corp'],
@@ -38,6 +39,8 @@ LEAKS = {
     '17-rf-lobby-einrichten': ['no shutdown', 'tx-power max', '5ghz-rf-policy', 'deaktiviert'],
     '18-qos-metal-falsch': ['platinum', 'service-policy', 'Silver', 'Metal-Profil'],
     '19-qos-gast-begrenzen': ['service-policy', 'bronze-up', 'Output bronze', 'PP_Guest'],
+    '20-multicast-gruppe-belegt': ['wireless multicast', '239.1.1.20', 'andere, eindeutige', 'anderweitig verwendet'],
+    '21-multicast-einrichten': ['wireless multicast', '239.1.1.20', 'freie Adresse', 'nicht 239.1.1.10'],
 }
 
 
@@ -223,6 +226,46 @@ class TestFlexLabs(unittest.TestCase):
 
 def s_cmds(s):
     return s.labs.labs['07-flexconnect-zweigstelle']['solutionCommands']
+
+
+class TestMulticastLabs(unittest.TestCase):
+    """CCNP Enterprise Wireless: Multicast. Jede naheliegende falsche Abkuerzung besteht nicht."""
+
+    def rx(self, s):
+        return s.wlc.state()['clients'][0]['mcast']
+
+    def test_labs_belong_to_the_wireless_track(self):
+        labs = Sim().labs.labs
+        for i in ('20-multicast-gruppe-belegt', '21-multicast-einrichten'):
+            self.assertEqual(labs[i]['track'], 'CCNP Enterprise Wireless (300-430 ENWLSI)')
+
+    def test_lab20_start_state_and_diagnosis_name_the_used_group(self):
+        s = started('20-multicast-gruppe-belegt')
+        self.assertEqual(self.rx(s), 'Not received')
+        self.assertIn('schon anderweitig verwendet', ' '.join(s.wlc.clients()[0]['reasons']))
+        self.assertIn('239.1.1.10', s.cli.run('show wireless multicast'))
+
+    def test_lab20_switching_multicast_off_is_not_the_fix(self):
+        s = fixed('20-multicast-gruppe-belegt', ['no wireless multicast'])
+        self.assertEqual(self.rx(s), 'Not received')
+        self.assertFalse(s.labs.check()['passed'])
+
+    def test_lab20_a_group_outside_239_passes_the_function_but_not_the_check(self):
+        s = fixed('20-multicast-gruppe-belegt', ['wireless multicast 225.1.1.1'])
+        self.assertEqual(self.rx(s), 'Received')
+        self.assertEqual(failed(s), ['Multicast ist mit einer geeigneten Gruppe eingerichtet'])
+
+    def test_lab21_the_used_group_does_not_work_and_a_free_one_does(self):
+        s = fixed('21-multicast-einrichten', ['wireless multicast 239.1.1.10'])
+        self.assertEqual((self.rx(s), s.labs.check()['passed']), ('Not received', False))
+        s = fixed('21-multicast-einrichten', ['wireless multicast 239.5.5.5'])
+        self.assertEqual((self.rx(s), s.labs.check()['passed']), ('Received', True))
+
+    def test_lab21_a_down_underlay_is_not_fixable_on_the_controller(self):
+        s = fixed('21-multicast-einrichten')
+        s.world['underlay']['multicastRouting'] = False
+        self.assertIn('leitet Multicast nicht weiter', ' '.join(s.wlc.clients()[0]['reasons']))
+        self.assertEqual(self.rx(s), 'Not received')
 
 
 class TestQosLabs(unittest.TestCase):
@@ -586,7 +629,7 @@ class TestLabApi(unittest.TestCase):
 
     def test_flow(self):
         st, body = self.call('/wlc/api/labs')
-        self.assertEqual((st, len(body['labs']), body['current']), (200, 19, None))
+        self.assertEqual((st, len(body['labs']), body['current']), (200, 21, None))
         self.assertEqual([x['track'] for x in body['labs']][:1] + [x['track'] for x in body['labs']][-1:],
                          ['Grundlagen Wireless', 'CCNP Enterprise Wireless (300-430 ENWLSI)'])
         self.assertEqual(self.call('/wlc/api/lab/check', 'POST', {})[0], 409)

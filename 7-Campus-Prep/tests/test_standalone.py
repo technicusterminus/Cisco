@@ -45,7 +45,7 @@ class TestStandaloneFile(unittest.TestCase):
         labs_dir = os.path.join(ROOT, 'labs')
         files = [json.loads(read(os.path.join(labs_dir, f))) for f in sorted(os.listdir(labs_dir)) if f.endswith('.json')]
         self.assertEqual(embedded, files)
-        self.assertEqual(len(embedded), 19)
+        self.assertEqual(len(embedded), 21)
 
 
 @unittest.skipUnless(shutil.which('node'), 'Node.js nicht installiert')

@@ -23,9 +23,9 @@
   const METAL_IN = { 'platinum-up': 'platinum', 'gold-up': 'gold', 'silver-up': 'silver', 'bronze-up': 'bronze' };
   const NAME_RE = /^[\p{L}\p{N}_.-]{1,32}$/u;          // wie Python \w (Unicode)
   const STORE_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$/;
-  const KIND = 'campusprep-state', VERSION = 7, ACCEPTED = [1, 2, 3, 4, 5, 6, 7];
+  const KIND = 'campusprep-state', VERSION = 8, ACCEPTED = [1, 2, 3, 4, 5, 6, 7, 8];
   const MODES = ['guided', 'exam'];
-  const HIDDEN = ['cause', 'solution', 'solutionCommands', 'startCommands', 'worldClients', 'worldRadius', 'worldMobility', 'checks', 'hints', 'questions'];
+  const HIDDEN = ['cause', 'solution', 'solutionCommands', 'startCommands', 'worldClients', 'worldRadius', 'worldMobility', 'worldUnderlay', 'checks', 'hints', 'questions'];
 
   // ------------------------------------------------------------------ Hilfen
   class CliError extends Error {}
@@ -85,6 +85,7 @@
   }
 
   /* Der simulierte RADIUS-Server hinter dem Controller (Gegenseite, nicht konfigurierbar). */
+  const defaultUnderlay = () => ({ multicastRouting: true, usedGroups: [] });
   const defaultMobility = () => clone({ controllers: [{ name: 'wlc2', ip: '10.10.0.20', mac: 'aabb.cc00.0200', group: 'Campus', up: true,
     knows: { ip: '10.10.0.10', mac: 'aabb.cc00.0100', group: 'default' }, wlans: { Corp: 'psk' } }] });
   const defaultRadius = () => clone({ servers: [{ ip: '10.10.0.50', auth_port: 1812, secret: 'RadiusKey1', up: true, nas: ['10.10.0.10'],
@@ -107,6 +108,7 @@
       ],
       radius: defaultRadius(),
       mobility: defaultMobility(),
+      underlay: defaultUnderlay(),
     });
   }
 
@@ -134,6 +136,7 @@
       this.mobilityPeers = dict();              // Peer-IP -> {mac, group}
       this.rfProfiles = dict();                 // 'band:name' -> {band, name, shutdown, tx_min, tx_max, descr}
       this.rfTags = dict(); this.rfTags[DEF_RF_TAG] = { '24ghz': '', '5ghz': '' };   // name -> {24ghz, 5ghz}
+      this.multicastGroup = '';                 // wireless multicast <gruppe>; leer = Multicast aus
     }
 
     snapshot() {
@@ -141,7 +144,8 @@
                      flexProfiles: this.flexProfiles, siteTags: this.siteTags, radiusServers: this.radiusServers,
                      aaaGroups: this.aaaGroups, aaaLists: this.aaaLists, localUsers: this.localUsers, loginLists: this.loginLists,
                      authzDefaultLocal: this.authzDefaultLocal, webauthMaps: this.webauthMaps, mobilityGroup: this.mobilityGroup,
-                     mobilityPeers: this.mobilityPeers, rfProfiles: this.rfProfiles, rfTags: this.rfTags });
+                     mobilityPeers: this.mobilityPeers, rfProfiles: this.rfProfiles, rfTags: this.rfTags,
+                     multicastGroup: this.multicastGroup });
     }
     restore(s) {
       this.loadWlans(s.wlans);
@@ -150,7 +154,7 @@
       this.radiusServers = clone(s.radiusServers); this.aaaGroups = clone(s.aaaGroups); this.aaaLists = clone(s.aaaLists);
       this.localUsers = clone(s.localUsers); this.loginLists = clone(s.loginLists); this.authzDefaultLocal = s.authzDefaultLocal;
       this.webauthMaps = clone(s.webauthMaps); this.mobilityGroup = s.mobilityGroup; this.mobilityPeers = clone(s.mobilityPeers);
-      this.rfProfiles = clone(s.rfProfiles); this.rfTags = clone(s.rfTags);
+      this.rfProfiles = clone(s.rfProfiles); this.rfTags = clone(s.rfTags); this.multicastGroup = s.multicastGroup;
     }
     dumpWlans() { const o = dict(); for (const [k, v] of this.wlans) o[k] = clone(v); return o; }
     loadWlans(o) { this.wlans = new Map(); for (const k of Object.keys(o)) this.wlans.set(k, clone(o[k])); }
@@ -196,6 +200,8 @@
       this.rfProfiles = clone(d.rfProfiles && Object.keys(d.rfProfiles).length ? d.rfProfiles : {});
       this.rfTags = clone(d.rfTags && Object.keys(d.rfTags).length ? d.rfTags : {});
       setdefault(this.rfTags, DEF_RF_TAG, { '24ghz': '', '5ghz': '' });
+      // Staende vor Version 8 kennen kein Multicast
+      this.multicastGroup = d.multicastGroup || '';
     }
 
     // ---- Zustand fuer die Oberflaeche
@@ -229,6 +235,8 @@
         rfProfiles: sortedKeys(this.rfProfiles).map(k => { const p = this.rfProfiles[k];
           return { name: p.name, band: p.band, status: p.shutdown ? 'DISABLED' : 'ENABLED', txMin: p.tx_min, txMax: p.tx_max, description: p.descr }; }),
         rfTags: sortedKeys(this.rfTags).map(n => ({ name: n, builtin: n === DEF_RF_TAG, rf24: this.rfTags[n]['24ghz'], rf5: this.rfTags[n]['5ghz'] })),
+        multicast: { enabled: !!this.multicastGroup, group: this.multicastGroup, mode: this.multicastGroup ? 'Multicast' : 'Unicast',
+                     groupInUse: (((this.world.underlay || {}).usedGroups) || []).includes(this.multicastGroup) },
         mobilityGroup: this.mobilityGroup, mobilityMac: this.world.wlc.mac,
         mobilityPeers: sortedKeys(this.mobilityPeers).map(ip => Object.assign({ ip, mac: this.mobilityPeers[ip].mac, group: this.mobilityPeers[ip].group }, this.mobilityTunnel(ip))),
         webauthMaps: sortedKeys(this.webauthMaps).map(n => ({ name: n, builtin: n === DEF_WEBAUTH_MAP, type: this.webauthMaps[n].type, virtualIp: this.webauthMaps[n].virtual_ip })),
@@ -245,6 +253,7 @@
                                             vlan: c.vlan, method: c.method, switching: c.switching, mode: c.mode,
                                             roam: c.roam === undefined ? null : c.roam, dscp: c.dscp === undefined ? null : c.dscp,
                                             dscpDown: c.dscpDown === undefined ? null : c.dscpDown, dscpUp: c.dscpUp === undefined ? null : c.dscpUp,
+                                            mcast: typeof c.mcast === 'string' ? c.mcast : null,
                                             user: (() => { const e = c.eap && Object.keys(c.eap).length ? c.eap : (c.web && Object.keys(c.web).length ? c.web : null); return e && e.user !== undefined ? e.user : null; })(),
                                             reasons: c.reasons })),
       };
@@ -332,7 +341,7 @@
     decide(client) {
       const ap = this.apByName(client.ap);
       const res = { state: 'Not Associated', ap: client.ap, wlan: null, policy: null, vlan: null, method: null,
-                    switching: null, mode: null, roam: null, dscpDown: null, dscpUp: null, reasons: [] };
+                    switching: null, mode: null, roam: null, dscpDown: null, dscpUp: null, mcast: null, reasons: [] };
       if (!ap || !ap.joined) { res.reasons.push('AP ' + client.ap + ' ist nicht am Controller registriert'); return res; }
       let wl = null;
       for (const [n, w] of this.wlans) if (w.ssid === client.ssid) { wl = n; break; }
@@ -408,8 +417,25 @@
         res.dscpDown = Wlc.qosCap(client.dscp, has(METAL_MAX_DSCP, out) ? METAL_MAX_DSCP[out] : null);
         res.dscpUp = Wlc.qosCap(client.dscp, has(METAL_IN, inn) ? METAL_MAX_DSCP[METAL_IN[inn]] : null);
       }
+      if (client.mcast === true) this._mcast(res);
       res.state = 'Run';
       return res;
+    }
+    _mcast(res) {
+      /* Multicast-Empfang eines verbundenen Clients (Simulator-Modell): Multicast mit CAPWAP-Gruppe am Controller, Gruppe im Netz eindeutig,
+         Netz unter dem Controller leitet Multicast zu den APs weiter. */
+      const ul = this.world.underlay || {};
+      const used = ul.usedGroups || [];
+      if (!this.multicastGroup) {
+        res.mcast = 'Not received';
+        res.reasons.push('Multicast ist am Controller aus (wireless multicast <Gruppe>): Multicast-Verkehr wird fuer Clients verworfen');
+      } else if (used.includes(this.multicastGroup)) {
+        res.mcast = 'Not received';
+        res.reasons.push('Die CAPWAP-Multicast-Gruppe ' + this.multicastGroup + ' wird im Netz schon anderweitig verwendet: Die APs bekommen fremden Verkehr, eine eindeutige Gruppe aus 239.0.0.0/8 waehlen');
+      } else if (has(ul, 'multicastRouting') && !ul.multicastRouting) {
+        res.mcast = 'Not received';
+        res.reasons.push('Der CAPWAP-Multicast erreicht die APs nicht: Das Netz unter dem Controller leitet Multicast nicht weiter');
+      } else res.mcast = 'Received';
     }
     static qosCap(dscp, cap) { return cap === null ? dscp : Math.min(dscp, cap); }
 
@@ -513,6 +539,10 @@
     }
     showFlexSummary() { return this.nameDescTable('Flex Profiles', 'Flex Profile Name', sortedKeys(this.flexProfiles).map(n => [n, this.flexProfiles[n].descr])); }
     showSiteTagSummary() { return this.nameDescTable('Site Tags', 'Site Tag Name', sortedKeys(this.siteTags).map(n => [n, this.siteTags[n].descr])); }
+    showWirelessMulticast() {
+      if (!this.multicastGroup) return 'Multicast : Disabled';
+      return ['Multicast : Enabled', 'AP Capwap Multicast : Multicast', 'AP Capwap IPv4 Multicast group Address : ' + this.multicastGroup].join('\n');
+    }
     showMobilitySummary() {
       const w = this.world.wlc;
       const out = ['Mobility Summary', '', 'Wireless Management IP Address: ' + w.ip, 'Mobility Control Message DSCP Value: 48', 'Mobility Keepalive Interval/Count: 10/3',
@@ -592,7 +622,8 @@
       const m = { 'wlan summary': () => c.showWlanSummary(), 'ap summary': () => c.showApSummary(), 'ap tag summary': () => c.showApTagSummary(),
                   'wireless client summary': () => c.showWirelessClientSummary(), 'wireless profile policy summary': () => c.showPolicySummary(),
                   'wireless profile flex summary': () => c.showFlexSummary(), 'wireless tag site summary': () => c.showSiteTagSummary(),
-                  'aaa servers': () => c.showAaaServers(), 'wireless mobility summary': () => c.showMobilitySummary() };
+                  'aaa servers': () => c.showAaaServers(), 'wireless mobility summary': () => c.showMobilitySummary(),
+                  'wireless multicast': () => c.showWirelessMulticast() };
       if (!has(m, cmd)) throw new CliError('Der Befehl "show ' + cmd + '" ist in diesem Simulator (noch) nicht belegt/umgesetzt');
       return m[cmd]();
     }
@@ -774,6 +805,14 @@
           delete c.mobilityPeers[w[5]];
           return '';
         }
+        if (startsWith(w, ['wireless', 'multicast']) && w.length === 3 && !no) {
+          if (!isIpv4(w[2])) throw new CliError('IPv4-Adresse ungueltig: ' + w[2]);
+          const first = parseInt(w[2].split('.')[0], 10);
+          if (!(first >= 224 && first <= 239) || w[2].startsWith('224.0.0.')) throw new CliError('Keine nutzbare Multicast-Gruppe: ' + w[2] + ' (erlaubt 224.0.1.0 bis 239.255.255.255)');
+          c.multicastGroup = w[2];
+          return '';
+        }
+        if (no && startsWith(w, ['wireless', 'multicast']) && w.length === 2) { c.multicastGroup = ''; return ''; }
         if (eq(w, ['aaa', 'new-model'])) return '';   // AAA ist im Simulator immer aktiv; der Befehl wird angenommen
         if (startsWith(w, ['radius', 'server']) && w.length === 3 && !no) {
           if (!has(c.radiusServers, w[2]) && !NAME_RE.test(w[2])) throw new CliError('Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
@@ -1108,7 +1147,7 @@
       const ok = c.state === chk.state && (chk.vlan === undefined || chk.vlan === null || String(c.vlan) === String(chk.vlan)) &&
                  (chk.switching === undefined || chk.switching === null || c.switching === chk.switching) &&
                  (chk.roam === undefined || chk.roam === null || c.roam === chk.roam) &&
-                 ['dscpDown', 'dscpUp'].every(k => chk[k] === undefined || chk[k] === null || c[k] === chk[k]);
+                 ['dscpDown', 'dscpUp', 'mcast'].every(k => chk[k] === undefined || chk[k] === null || c[k] === chk[k]);
       return [ok, 'Zustand ' + c.state + (c.vlan ? ', VLAN ' + c.vlan : '') + (c.state === 'Run' && c.switching ? ', ' + c.switching + ' geschaltet' : '') +
                     (c.dscpDown !== undefined && c.dscpDown !== null ? ', DSCP runter ' + c.dscpDown + ', rauf ' + c.dscpUp : '')];
     }
@@ -1131,6 +1170,10 @@
     if (t === 'apmode') {
       const a = st.aps.find(x => x.name === chk.ap);
       return [!!a && a.mode === chk.mode, 'Modus ' + (a ? a.mode : '?')];
+    }
+    if (t === 'mcastcfg') {
+      const m = st.multicast;
+      return [m.enabled && m.group.startsWith(chk.prefix) && !m.groupInUse, 'Multicast ' + (m.enabled ? 'an' : 'aus') + ', Gruppe ' + (m.group || '-') + (m.groupInUse ? ' (im Netz schon verwendet)' : '')];
     }
     if (t === 'aprf') {
       const a = st.aps.find(x => x.name === chk.ap);
@@ -1186,7 +1229,7 @@
       const lab = get(this.labs, id);
       if (!lab) throw new LabError('Lab ' + id + ' gibt es nicht', 404);
       if (!lab.modes.includes(mode)) throw new LabError('Modus ' + pyStr(mode) + ' ist fuer dieses Lab nicht vorgesehen');
-      this.sim.resetWorld(lab.worldClients, lab.worldRadius, lab.worldMobility);
+      this.sim.resetWorld(lab.worldClients, lab.worldRadius, lab.worldMobility, lab.worldUnderlay);
       const [ok, , err] = this.sim.apply(lab.startCommands || []);
       if (!ok) throw new LabError('Startkonfiguration von ' + id + ' fehlerhaft: ' + err.message, 500);
       this.session = { id, mode, hints: 0, answers: {}, checks: 0 };
@@ -1287,11 +1330,12 @@
         if (st !== null) { try { this.restoreAll(st); } catch (e) { if (e instanceof StoreError) this.store.quarantine(this.store.P + 'state'); else throw e; } }
       }
     }
-    resetWorld(clients, radius, mobility) {
+    resetWorld(clients, radius, mobility, underlay) {
       this.world = newWorld();
       if (clients !== undefined && clients !== null) this.world.clients = clone(clients);
       if (radius !== undefined && radius !== null) this.world.radius = { servers: clone(radius) };
       if (mobility !== undefined && mobility !== null) this.world.mobility = { controllers: clone(mobility) };
+      if (underlay !== undefined && underlay !== null) this.world.underlay = clone(underlay);
       this.wlc = new Wlc(this.world);
       this.cli = new Cli(this.wlc);
     }
@@ -1316,6 +1360,7 @@
       const world = clone(d.world);
       if (!has(world, 'radius')) world.radius = defaultRadius();   // aeltere Staende kennen keinen RADIUS-Server
       if (!has(world, 'mobility')) world.mobility = defaultMobility();   // und keine Mobility-Gegenseite
+      if (!has(world, 'underlay')) world.underlay = defaultUnderlay();   // und kein Underlay
       const wlc = new Wlc(world);
       try { wlc.load(d.wlc); wlc.state(); } catch (e) { throw new StoreError('Stand ist beschaedigt'); }
       return [world, wlc];

@@ -8,7 +8,7 @@ import os
 
 LABS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'labs')
 MODES = ('guided', 'exam')
-HIDDEN = ('cause', 'solution', 'solutionCommands', 'startCommands', 'worldClients', 'worldRadius', 'worldMobility', 'checks', 'hints', 'questions')
+HIDDEN = ('cause', 'solution', 'solutionCommands', 'startCommands', 'worldClients', 'worldRadius', 'worldMobility', 'worldUnderlay', 'checks', 'hints', 'questions')
 
 
 class LabError(Exception):
@@ -38,7 +38,7 @@ def run_check(chk, st):
         ok = (c['state'] == chk['state'] and (chk.get('vlan') is None or str(c['vlan']) == str(chk['vlan']))
               and (chk.get('switching') is None or c.get('switching') == chk['switching'])
               and (chk.get('roam') is None or c.get('roam') == chk['roam'])
-              and all(chk.get(k) is None or c.get(k) == chk[k] for k in ('dscpDown', 'dscpUp')))
+              and all(chk.get(k) is None or c.get(k) == chk[k] for k in ('dscpDown', 'dscpUp', 'mcast')))
         return ok, 'Zustand %s%s%s%s' % (c['state'], ', VLAN %s' % c['vlan'] if c['vlan'] else '',
                                          ', %s geschaltet' % c['switching'] if c['state'] == 'Run' and c.get('switching') else '',
                                          ', DSCP runter %s, rauf %s' % (c['dscpDown'], c['dscpUp']) if c.get('dscpDown') is not None else '')
@@ -60,6 +60,10 @@ def run_check(chk, st):
     if t == 'apmode':
         a = next((x for x in st['aps'] if x['name'] == chk['ap']), None)
         return (a is not None and a['mode'] == chk['mode']), 'Modus %s' % (a['mode'] if a else '?')
+    if t == 'mcastcfg':
+        m = st['multicast']
+        ok = m['enabled'] and m['group'].startswith(chk['prefix']) and not m['groupInUse']
+        return ok, 'Multicast %s, Gruppe %s%s' % ('an' if m['enabled'] else 'aus', m['group'] or '-', ' (im Netz schon verwendet)' if m['groupInUse'] else '')
     if t == 'aprf':
         a = next((x for x in st['aps'] if x['name'] == chk['ap']), None)
         r = a['rf'][chk['band']] if a else None
@@ -114,7 +118,7 @@ class LabEngine:
             raise LabError('Lab %s gibt es nicht' % lab_id, 404)
         if mode not in lab['modes']:
             raise LabError('Modus %s ist fuer dieses Lab nicht vorgesehen' % mode)
-        self.sim.reset_world(lab.get('worldClients'), lab.get('worldRadius'), lab.get('worldMobility'))
+        self.sim.reset_world(lab.get('worldClients'), lab.get('worldRadius'), lab.get('worldMobility'), lab.get('worldUnderlay'))
         ok, _, err = self.sim.apply(lab.get('startCommands', []))
         if not ok:
             raise LabError('Startkonfiguration von %s fehlerhaft: %s' % (lab_id, err['message']), 500)

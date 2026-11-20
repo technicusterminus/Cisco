@@ -16,5 +16,6 @@ Ein Projekt, eine Welt: ein simulierter C9800-WLC mit Access Points und WLAN-Cli
 | 3d | Mobility: Gruppenname, Peers, Tunnelzustand, Inter-Controller-Roaming; `show wireless mobility summary`; Labs 14 und 15 | umgesetzt |
 | 3e | RF-Profile und RF Tags: Profile je Band, Sendeleistung, Band an/aus, Zuordnung per AP; Labs 16 und 17 | umgesetzt |
 | 3f | QoS mit Metal-Profilen im Policy Profile: höchster DSCP-Wert je Richtung; Labs 18 und 19 | umgesetzt |
-| 3g | WLC: Multicast, Location; weitere belegte Show-Befehle | offen |
+| 3g | Multicast: CAPWAP-Multicast-Gruppe, Empfang der Clients, `show wireless multicast`; Labs 20 und 21 | umgesetzt |
+| 3h | WLC: Location; weitere belegte Show-Befehle | offen |
 | 4 | Catalyst Center: Sites, Network Settings, Provisioning des WLC, Assurance, Templates (nur mit belegten Antwortformaten) | offen |

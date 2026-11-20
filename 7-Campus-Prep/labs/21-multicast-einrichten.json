@@ -1,0 +1,125 @@
+{
+ "cause": "Multicast ist am Controller nicht eingeschaltet.",
+ "checks": [
+  {
+   "category": "function",
+   "desc": "Laptop empfängt Multicast",
+   "mac": "58bf.eaaa.0001",
+   "mcast": "Received",
+   "state": "Run",
+   "type": "client"
+  },
+  {
+   "category": "security",
+   "desc": "Multicast ist an, Gruppe aus 239.0.0.0/8 und im Netz eindeutig",
+   "prefix": "239.",
+   "type": "mcastcfg"
+  }
+ ],
+ "duration": "25 min",
+ "fabric": "wlc1 mit ap-lobby und ap-lager",
+ "goals": [
+  "Multicast am Controller einrichten",
+  "Die Empfehlung für die Gruppe beachten, nicht nur eine gültige Adresse wählen"
+ ],
+ "hints": [
+  "**Konzept:** Multicast am Controller wird mit einer CAPWAP-Multicast-Gruppe eingeschaltet. Nicht jede gültige Adresse ist eine gute Wahl.",
+  "**Ebene:** Die globale Multicast-Einstellung am Controller.",
+  "**Prüfschritte:** Prüfe, welche Gruppen im Netz schon verwendet werden (siehe Aufgabe) und aus welchem Bereich die Gruppe stammen soll.",
+  "**Lösung:** `wireless multicast <Gruppe>` mit einer freien Adresse aus 239.0.0.0/8, nicht 239.1.1.10."
+ ],
+ "id": "21-multicast-einrichten",
+ "intro": "Die Lobby soll einen Multicast-Dienst bekommen. Am Controller ist noch kein Multicast eingerichtet. Im Netz ist die Gruppe 239.1.1.10 schon für einen anderen Dienst vergeben. Das Netz unter dem Controller leitet Multicast weiter.",
+ "kind": "requirements",
+ "level": "Fortgeschritten",
+ "limits": [
+  "Das Client-Modell ist didaktisch: Es erklärt, ob und warum ein Client verbunden ist, ist aber keine Abbildung der Controller-Pipeline.",
+  "Nicht modelliert: 802.1x/RADIUS, FlexConnect, RF-Profile, Roaming, Mobility.",
+  "Multicast ist stark vereinfacht: Ein Client will Multicast empfangen; das gelingt, wenn der Controller Multicast mit einer CAPWAP-Gruppe eingeschaltet hat, die Gruppe im Netz eindeutig ist und das Netz unter dem Controller Multicast zu den APs weiterleitet.",
+  "Nicht modelliert: IGMP/MLD-Snooping, Multicast über Unicast, IPv6, VLAN-Multicast, Bonjour/mDNS, Broadcast-Weiterleitung. Das Netz unter dem Controller ist eine simulierte Gegenseite, an der es nichts einzustellen gibt.",
+  "`show wireless multicast` zeigt nur drei Felder; das Gerät gibt mehr aus."
+ ],
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 20"
+ ],
+ "questions": [
+  {
+   "answer": 0,
+   "explain": "Laut Cisco-Dokument 225203: eine Adresse aus 239.0.0.0/8, eindeutig im Netz.",
+   "id": "q1",
+   "options": [
+    "239.0.0.0/8",
+    "224.0.0.0/24",
+    "10.0.0.0/8",
+    "Jede Adresse ist gleich gut"
+   ],
+   "q": "Aus welchem Bereich soll die CAPWAP-Multicast-Gruppe stammen?"
+  },
+  {
+   "answer": 0,
+   "explain": "Der Simulator akzeptiert viele Adressen; die Prüfung verlangt eine freie aus dem empfohlenen Bereich.",
+   "id": "q2",
+   "options": [
+    "Sie kann im Netz schon anderweitig verwendet werden oder außerhalb des empfohlenen Bereichs liegen",
+    "Der Controller akzeptiert nur 239.1.1.10",
+    "Der AP braucht zuerst ein Update",
+    "Sie wird sofort abgelehnt"
+   ],
+   "q": "Warum reicht eine beliebige gültige Multicast-Adresse nicht?"
+  }
+ ],
+ "requirements": [
+  "Der Laptop in der Lobby empfängt Multicast.",
+  "Die Gruppe stammt aus 239.0.0.0/8 und ist im Netz nicht anderweitig verwendet."
+ ],
+ "solution": "WebUI: Configuration > Services > Multicast > Edit: eine freie Gruppe aus 239.0.0.0/8, z. B. 239.1.1.20. CLI: `wireless multicast 239.1.1.20`.",
+ "solutionCommands": [
+  "wireless multicast 239.1.1.20"
+ ],
+ "startCommands": [
+  "wlan Corp_Profile 1 Corp",
+  "security wpa akm psk",
+  "security wpa psk set-key ascii 0 Sommer2026",
+  "no shutdown",
+  "exit",
+  "wireless profile policy PP_Corp",
+  "vlan 20",
+  "no shutdown",
+  "exit",
+  "wireless tag policy PT_Corp",
+  "wlan Corp_Profile policy PP_Corp",
+  "exit",
+  "ap a4b2.32aa.0001",
+  "policy-tag PT_Corp",
+  "exit"
+ ],
+ "title": "21 Multicast für die Lobby einrichten",
+ "tools": [
+  "WebUI: Configuration > Services > Multicast",
+  "Monitoring > Wireless > Clients",
+  "Client-Diagnose (nur im geführten Modus)",
+  "CLI: show wireless multicast, show wireless client summary"
+ ],
+ "topic": "Multicast / Design",
+ "track": "CCNP Enterprise Wireless (300-430 ENWLSI)",
+ "worldClients": [
+  {
+   "ap": "ap-lobby",
+   "mac": "58bf.eaaa.0001",
+   "mcast": true,
+   "protocol": "11ac",
+   "psk": "Sommer2026",
+   "ssid": "Corp"
+  }
+ ],
+ "worldUnderlay": {
+  "multicastRouting": true,
+  "usedGroups": [
+   "239.1.1.10"
+  ]
+ }
+}
