@@ -155,7 +155,7 @@ function genStp(){for(let tries=0;tries<500;tries++){
   const pn=p=>`${sw[p.sw].nm} ${p.name}`;
   const allPorts=[];sw.forEach(s=>s.ports.forEach(p=>allPorts.push(pn(p))));
   const bl=blocked[0];const bl_l=bl.link;
-  let st=`<li><b>Root Bridge:</b> kleinste Bridge-ID gewinnt, zuerst Priorität, bei Gleichstand MAC. ${sw.map(s=>`${s.nm} ${s.prio}/${s.mac}`).join(', ')} → <b>${root.nm}</b>.</li>`;
+  let st=`<li><b>Root Bridge:</b> kleinste Bridge-ID gewinnt, zuerst Priorität, bei Gleichstand MAC. ${sw.map(s=>`${s.nm} ${s.prio}/${s.mac}`).join(', ')} → <b>${root.nm}</b>. Auf dem Gerät steht die Priorität plus VLAN-ID (Extended System ID), hier ${root.prio} + 1 = ${root.prio+1}; da alle Switches im selben VLAN liegen, ändert das die Reihenfolge nicht.</li>`;
   st+=`<li><b>Root-Pfadkosten</b> (100 Mbit/s = 19, 1 Gbit/s = 4, 10 Gbit/s = 2): ${sw.map((s,i)=>`${s.nm} ${rpc[i]}`).join(', ')}.</li>`;
   const w=why[ask];st+=`<li><b>Root Port von ${sw[ask].nm}:</b> ${w.cand.map(c=>`${c.p.name} über ${sw[c.p.peer.sw].nm} = ${rpc[c.p.peer.sw]} + ${c.p.link.cost} = ${c.c}`).join(', ')}. `+
     (w.tie?`Gleiche Kosten, also entscheidet die kleinere Bridge-ID des Nachbarn${w.cand[0].nb===w.cand[1].nb?', dann die Port-ID des Nachbarn':''}. `:'Die niedrigsten Kosten gewinnen. ')+`→ <b>${rp[ask].name}</b>.</li>`;
@@ -186,7 +186,7 @@ function genDscp(){const p=pick(PHB.filter(x=>x.n!=='CS0'));const mode=rnd(0,2);
     fields:[{l:'PHB (z. B. AF21, EF, CS3)',a:p.n,norm:true}].concat(p.y?[{l:'Drop-Wahrscheinlichkeit',sel:['niedrig','mittel','hoch'],a:DROP[p.y]}]:[]),
     steps:`<ol><li><b>Binär:</b> ${p.v} = <code>${bin6(p.v)}</code>. Die ersten 3 Bit sind die Klasse (${bin6(p.v).slice(0,3)} = ${prec}), die nächsten 2 Bit die Drop-Stufe (${bin6(p.v).slice(3,5)} = ${parseInt(bin6(p.v).slice(3,5),2)}).</li>${p.y?`<li>Klasse ${p.x} mit Drop ${p.y} ist <b>AF${p.x}${p.y}</b>, Drop-Wahrscheinlichkeit ${DROP[p.y]}. Je höher die zweite Ziffer, desto eher wird das Paket bei Stau verworfen.</li>`:p.n==='EF'?`<li>46 ist der feste Wert für <b>EF</b>.</li>`:`<li>Drop-Bits 00 und Vielfaches von 8: Class Selector <b>${p.n}</b>.</li>`}</ol>`};
   return{q:`Welchen Wert hat das ganze ToS-Byte (DSCP plus 2 ECN-Bits auf 0) bei <code>${p.n}</code>?`,
-    fields:[{l:'ToS-Byte dezimal',a:String(p.v*4)},{l:'ToS-Byte hex (0x..)',a:'0x'+(p.v*4).toString(16).toUpperCase().padStart(2,'0'),norm:true}],
+    fields:[{l:'ToS-Byte dezimal',a:String(p.v*4)},{l:'ToS-Byte hex (mit oder ohne 0x)',a:'0x'+(p.v*4).toString(16).toUpperCase().padStart(2,'0'),hex:true}],
     steps:`<ol>${phbSteps(p)}<li><b>ToS-Byte:</b> DSCP steht in den oberen 6 Bit, dahinter 2 ECN-Bits. Zwei Stellen nach links = × 4: ${p.v} × 4 = <code>${p.v*4}</code> = <code>0x${(p.v*4).toString(16).toUpperCase().padStart(2,'0')}</code>.</li></ol>`};}
 
 // ---------- OSPF Areatypen und LSAs ----------
@@ -235,7 +235,7 @@ function genDr(){const n=rnd(3,5);const rs=[];const rids=shuffle(['1.1.1.1','2.2
 
 // ---------- EIGRP Feasible Successor ----------
 function genEigrp(){for(let t=0;t<200;t++){const n=rnd(3,4);const nb=[];
-  for(let i=0;i<n;i++){const rd=pick([28160,30720,128256,156160,281600,2297856,2809856]);const link=pick([2816,25600,256000,2585600]);nb.push({ip:`10.0.${i+1}2.2`.replace('.12.','.1'+(i+2)+'.'),ifc:`Gi0/${i}`,rd,fd:rd+link})}
+  for(let i=0;i<n;i++){const rd=pick([28160,30720,128256,156160,281600,2297856,2809856]);const link=pick([2816,25600,256000,2585600]);nb.push({ip:'',ifc:`Gi0/${i}`,rd,fd:rd+link})}
   nb.forEach((x,i)=>x.ip=`10.0.1${i+2}.2`);
   const fds=nb.map(x=>x.fd);if(new Set(fds).size<n)continue;
   const s=nb.reduce((a,b)=>b.fd<a.fd?b:a);const fs=nb.filter(x=>x!==s&&x.rd<s.fd);
@@ -247,8 +247,68 @@ function genEigrp(){for(let t=0;t<200;t++){const n=rnd(3,4);const nb=[];
    steps:`<ol><li><b>Successor</b> = kleinste Feasible Distance: <b>${s.ip}</b> mit ${s.fd}.</li><li><b>Feasibility Condition:</b> Ein anderer Nachbar ist Feasible Successor, wenn seine Reported Distance kleiner ist als die FD des Successors (${s.fd}). Dann kann sein Weg nicht über diesen Router zurückführen.</li>${nb.filter(x=>x!==s).map(x=>`<li>${x.ip}: RD ${x.rd} ${x.rd<s.fd?'&lt;':'≥'} ${s.fd} → ${x.rd<s.fd?'<b>Feasible Successor</b>':'kein FS'}.</li>`).join('')}</ol>`};}
   throw new Error('EIGRP');}
 
+// ---------- EIGRP Variance ----------
+function genVar(){for(let t=0;t<500;t++){
+  const base=pick([28160,30720,128256]),v=pick([2,3]),m=rnd(2,3);
+  const sl=pick([2816,25600]);const nb=[{succ:true,fd:base,rd:base-sl}];
+  for(let i=0;i<m;i++){const fs=i===0||Math.random()<.5;
+    if(fs){nb.push({fd:Math.round(base*pick([1.4,1.8,2.5,3.5])),rd:Math.round(base*pick([.3,.5,.8]))})}
+    else{const rd=Math.round(base*pick([1,1.2,1.5]));nb.push({fd:rd+pick([2816,25600]),rd})}}
+  nb.forEach((x,i)=>{x.ip=`10.0.1${i+2}.2`;x.ifc=`Gi0/${i}`;x.fs=x.succ||x.rd<base});
+  if(new Set(nb.map(x=>x.fd)).size<nb.length||nb.some(x=>x.fd===v*base))continue;
+  const used=nb.filter(x=>x.succ||(x.fs&&x.fd<v*base));
+  const minV=Math.max(...nb.filter(x=>x.fs).map(x=>Math.floor(x.fd/base)+1));
+  const out=`P 172.16.5.0/24, 1 successors, FD is ${base}\n`+shuffle(nb).map(x=>`        via ${x.ip} (${x.fd}/${x.rd}), ${x.ifc}`).join('\n');
+  const succ=nb[0];
+  return{q:`Ausschnitt aus <code>show ip eigrp topology all-links</code>. In Klammern steht (Feasible Distance / Reported Distance). Unter <code>router eigrp</code> ist <code>variance ${v}</code> konfiguriert.`,
+   x:`<pre>${esc(out)}</pre>`,
+   data:{base,v,nb:nb.map(({ip,fd,rd,succ})=>({ip,fd,rd,succ:!!succ})),used:used.map(x=>x.ip),minV},
+   fields:[{l:'Über welche Nachbarn läuft Verkehr?',multi:nb.map(x=>x.ip),a:used.map(x=>x.ip)},{l:'Kleinste variance, mit der alle Feasible Successors genutzt werden',a:String(minV)}],
+   steps:`<ol><li><b>Successor</b> ist ${succ.ip} mit der kleinsten FD ${base}. Er wird immer genutzt.</li><li><b>Voraussetzung für Unequal-Cost:</b> Ein Pfad muss zuerst Feasible Successor sein (RD kleiner als ${base}). Variance macht aus einem Feasible Successor keinen, der die Bedingung verletzt.</li>${nb.slice(1).map(x=>`<li>${x.ip}: RD ${x.rd} ${x.fs?'&lt;':'≥'} ${base} → ${x.fs?'Feasible Successor. FD '+x.fd+(x.fd<v*base?' &lt; ':' ≥ ')+v+' × '+base+' = '+v*base+(x.fd<v*base?' → <b>wird genutzt</b>':' → bleibt Reserve'):'kein Feasible Successor, wird nie genutzt, auch wenn seine FD klein ist'}.</li>`).join('')}<li><b>Kleinste variance</b> für alle Feasible Successors: die größte FD geteilt durch ${base} aufrunden = <code>${minV}</code>.</li><li>Der Verkehr verteilt sich im Verhältnis der Metriken (Standard traffic-share balanced).</li></ol>`};}
+  throw new Error('Variance');}
+
+// ---------- OSPF Kosten ----------
+const SPD=[{n:'10 Mbit/s',m:10},{n:'100 Mbit/s',m:100},{n:'1 Gbit/s',m:1000},{n:'10 Gbit/s',m:10000},{n:'40 Gbit/s',m:40000}];
+const ospfCost=(ref,m)=>Math.max(1,Math.floor(ref/m));
+function genCost(){const ref=pick([100,100,1000,10000]);
+  const path=k=>Array.from({length:k},()=>pick(SPD));
+  const A=path(rnd(2,3)),B=path(rnd(1,2));
+  const sum=P=>P.reduce((a,l)=>a+ospfCost(ref,l.m),0);const ca=sum(A),cb=sum(B);
+  const win=ca<cb?'A':cb<ca?'B':'beide (ECMP)';
+  const calc=(P,nm)=>`<li><b>Pfad ${nm}:</b> ${P.map(l=>`${l.n} = max(1, ⌊${ref}/${l.m}⌋) = ${ospfCost(ref,l.m)}`).join(', ')} → Summe <code>${sum(P)}</code>.</li>`;
+  const saturated=ref===100&&[...A,...B].filter(l=>l.m>=100).length>=2;
+  return{q:`OSPF mit <code>auto-cost reference-bandwidth ${ref}</code> (Mbit/s) auf allen Routern${ref===100?', das ist der Standardwert':''}. Zwei Pfade führen zum selben Ziel, alle Links sind OSPF-Interfaces mit Standardkosten. Wie hoch sind die Pfadkosten, und welchen Pfad nimmt OSPF?`,
+   x:table(['Pfad','Links in Reihenfolge'],[['A',A.map(l=>l.n).join(', ')],['B',B.map(l=>l.n).join(', ')]]),
+   data:{ref,A:A.map(l=>l.m),B:B.map(l=>l.m),ca,cb,win},
+   fields:[{l:'Kosten Pfad A',a:String(ca)},{l:'Kosten Pfad B',a:String(cb)},{l:'OSPF wählt',sel:['A','B','beide (ECMP)'],a:win}],
+   steps:`<ol><li><b>Interface-Kosten</b> = Referenzbandwidth ÷ Interface-Bandwidth, abgerundet, mindestens 1.</li>${calc(A,'A')}${calc(B,'B')}<li>Der Pfad mit den kleineren Gesamtkosten gewinnt, bei Gleichstand teilt OSPF den Verkehr auf beide (ECMP). → <b>${win}</b>.</li>${saturated?'<li><b>Hinweis:</b> Mit Referenz 100 Mbit/s kosten alle Links ab 100 Mbit/s gleich 1. Deshalb stellt man die Referenz mit <code>auto-cost reference-bandwidth</code> höher, auf allen Routern gleich.</li>':''}</ol>`};}
+
+// ---------- HSRP ----------
+function genHsrp(){const mode=rnd(0,2);const oct=shuffle([1,2,3,4,5,6,7,8,9]);const ip=i=>`10.0.0.${oct[i]}`;const yn=b=>b?'ja':'nein';
+  if(mode===0){const rs=Array.from({length:3},(_,i)=>({nm:'R'+(i+1),pr:pick([100,100,90,110,150]),ip:ip(i),pe:Math.random()<.5,o:oct[i]}));
+    const o=[...rs].sort((a,b)=>b.pr-a.pr||b.o-a.o);const a=o[0],sb=o[1];
+    return{q:`HSRP-Gruppe 1 mit drei Routern, die gleichzeitig starten. Wer wird Active, wer Standby?`,
+     x:table(['Router','Priorität','Interface-IP','Preempt'],rs.map(r=>[r.nm,r.pr,r.ip,yn(r.pe)])),
+     data:{mode,rs:rs.map(r=>({nm:r.nm,pr:r.pr,o:r.o})),active:a.nm,standby:sb.nm},
+     fields:[{l:'Active',sel:rs.map(r=>r.nm),a:a.nm},{l:'Standby',sel:rs.map(r=>r.nm),a:sb.nm}],
+     steps:`<ol><li><b>Reihenfolge:</b> höchste Priorität (Standard 100), bei Gleichstand die höchste Interface-IP. ${o.map(r=>`${r.nm} (${r.pr}, ${r.ip})`).join(' > ')}.</li><li><b>Active</b> = ${a.nm}, <b>Standby</b> = ${sb.nm}.</li><li>Preempt spielt hier keine Rolle: Es gibt noch keinen Active, der verdrängt werden könnte.</li></ol>`};}
+  if(mode===1){const p1=pick([100,110,120]);let p2=pick([90,100,110,120,150]);while(p2===p1)p2=pick([90,100,110,120,150]);const pe=Math.random()<.5;
+    const takes=p2>p1&&pe;const act=takes?'R2':'R1',stb=takes?'R1':'R2';
+    return{q:`HSRP-Gruppe 1. R1 ist schon eine Weile Active. Dann wird R2 eingeschaltet.`,
+     x:table(['Router','Priorität','Interface-IP','Preempt'],[['R1',p1,ip(0),'nein'],['R2 (kommt später)',p2,ip(1),yn(pe)]]),
+     data:{mode,p1,p2,pe,active:act,standby:stb},
+     fields:[{l:'Active',sel:['R1','R2'],a:act},{l:'Standby',sel:['R1','R2'],a:stb}],
+     steps:`<ol><li>HSRP-Preempt ist <b>standardmäßig aus</b>. Ein Router mit höherer Priorität übernimmt Active nur, wenn er <code>standby 1 preempt</code> hat.</li><li>R2 hat Priorität ${p2} ${p2>p1?'&gt;':'&lt;'} ${p1} und Preempt ${yn(pe)}.</li><li>${takes?'Höhere Priorität und Preempt: R2 übernimmt, R1 wird Standby.':p2>p1?'Höhere Priorität, aber kein Preempt: R1 bleibt Active.':'R2 hat die niedrigere Priorität: R1 bleibt Active, R2 wird Standby.'} → Active <b>${act}</b>, Standby <b>${stb}</b>.</li></ol>`};}
+  const p1=pick([110,120,150]),d=pick([10,20,30]),p2=100;const np=p1-d;if(np===p2)return genHsrp();
+  const pe=Math.random()<.5;const takes=np<p2&&pe;const act=takes?'R2':'R1';
+  return{q:`HSRP-Gruppe 1, R1 ist Active und trackt seinen Uplink (<code>standby 1 track … decrement ${d}</code>). Der Uplink von R1 fällt aus.`,
+   x:table(['Router','Priorität','Preempt'],[['R1',p1,'ja'],['R2',p2,yn(pe)]]),
+   data:{mode,p1,d,p2,pe,np,active:act},
+   fields:[{l:'Neue Priorität von R1',a:String(np)},{l:'Active danach',sel:['R1','R2'],a:act}],
+   steps:`<ol><li><b>Priorität R1</b> = ${p1} − ${d} = <code>${np}</code>.</li><li>R2 hat ${p2} und Preempt ${yn(pe)}. Ohne Preempt übernimmt R2 trotz höherer Priorität nicht.</li><li>${takes?`${np} &lt; ${p2} und Preempt an: R2 wird Active.`:np<p2?`${np} &lt; ${p2}, aber R2 hat kein Preempt: R1 bleibt Active.`:`${np} &gt; ${p2}: R1 bleibt Active.`} → <b>${act}</b>.</li></ol>`};}
+
 const gens={bgp:{name:'BGP Best Path',gen:genBgp},stp:{name:'STP: Root, Root Port, Blockade',gen:genStp},dr:{name:'OSPF DR/BDR',gen:genDr},
- ospf:{name:'OSPF Areatypen und LSAs',gen:genOspf},eigrp:{name:'EIGRP Feasible Successor',gen:genEigrp},dscp:{name:'QoS: DSCP und PHB',gen:genDscp}};
+ ospf:{name:'OSPF Areatypen und LSAs',gen:genOspf},eigrp:{name:'EIGRP Feasible Successor',gen:genEigrp},var:{name:'EIGRP Variance',gen:genVar},cost:{name:'OSPF Kosten',gen:genCost},hsrp:{name:'HSRP Wahl und Preempt',gen:genHsrp},dscp:{name:'QoS: DSCP und PHB',gen:genDscp}};
 
 // ---------- UI ----------
 let cur='bgp',task=null,stats={r:0,t:0},counted=false;
@@ -266,7 +326,7 @@ function next(){counted=false;const k=cur==='all'?pick(Object.keys(gens)):cur;ta
   taskEl.querySelectorAll('input[type=text]').forEach(el=>el.addEventListener('keydown',e=>{if(e.key==='Enter')check()}));}
 const nrm=s=>String(s).trim().toLowerCase().replace(/\s+/g,'');
 function val(f,i){const el=document.getElementById('f'+i);if(f.multi)return[...el.querySelectorAll('input:checked')].map(x=>x.value);return el.value;}
-function good(f,v){if(f.multi){const a=new Set(f.a);return v.length===a.size&&v.every(x=>a.has(x))}return nrm(v)===nrm(f.a);}
+function good(f,v){if(f.hex){const h=x=>nrm(x).replace(/^0x/,'');return h(v)===h(f.a)}if(f.multi){const a=new Set(f.a);return v.length===a.size&&v.every(x=>a.has(x))}return nrm(v)===nrm(f.a);}
 function check(){let ok=0;task.fields.forEach((f,i)=>{const g=good(f,val(f,i));mark(i,g);if(g)ok++});
   if(!counted){stats.t++;if(ok===task.fields.length)stats.r++;counted=true}
   if(ok===task.fields.length)showSteps();updateStat();}

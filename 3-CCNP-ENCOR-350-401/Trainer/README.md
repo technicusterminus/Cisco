@@ -13,9 +13,12 @@ Datei: [`encor-rechentrainer.html`](encor-rechentrainer.html). Zufallsaufgaben, 
 | OSPF DR/BDR | DR und BDR aus Priorität und Router-ID, auch mit einem Router, der später dazukommt |
 | OSPF Areatypen und LSAs | welche LSA-Typen es in welcher Area gibt, wer sie erzeugt und woher die Default-Route kommt |
 | EIGRP Feasible Successor | Successor und Feasible Successors aus `show ip eigrp topology` |
+| EIGRP Variance | welche Nachbarn bei `variance` Verkehr bekommen (Feasible Successor und FD kleiner als Variance × FD des Successors) und die kleinste passende Variance |
+| OSPF Kosten | Interface-Kosten aus der Reference Bandwidth, Pfadkosten und Pfadwahl (auch ECMP) |
+| HSRP Wahl und Preempt | Active und Standby bei gleichzeitigem Start, bei späterem Einschalten und nach einem Tracking-Ausfall (Priorität, höchste IP, Preempt) |
 | QoS: DSCP und PHB | AF, EF und CS in Dezimal, Binär, IP Precedence und ToS-Byte umrechnen |
 
-Der Lösungsweg rechnet mit den Zahlen der Aufgabe. Bei BGP geht er die Kriterien der Reihe nach durch, bis eines entscheidet.
+Der Lösungsweg rechnet mit den Zahlen der Aufgabe. `node test_rechentrainer.js` (Playwright) prüft alle Generatoren mit je 3000 Aufgaben und rechnet die neuen Aufgabentypen unabhängig nach. Bei BGP geht er die Kriterien der Reihe nach durch, bis eines entscheidet.
 
 ## Ticket-Trainer
 
