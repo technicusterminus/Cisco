@@ -8,7 +8,7 @@ import os
 
 LABS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'labs')
 MODES = ('guided', 'exam')
-HIDDEN = ('cause', 'solution', 'solutionCommands', 'startCommands', 'worldClients', 'worldRadius', 'checks', 'hints', 'questions')
+HIDDEN = ('cause', 'solution', 'solutionCommands', 'startCommands', 'worldClients', 'worldRadius', 'worldMobility', 'checks', 'hints', 'questions')
 
 
 class LabError(Exception):
@@ -36,7 +36,8 @@ def run_check(chk, st):
         if c is None:
             return False, 'Client %s unbekannt' % chk['mac']
         ok = (c['state'] == chk['state'] and (chk.get('vlan') is None or str(c['vlan']) == str(chk['vlan']))
-              and (chk.get('switching') is None or c.get('switching') == chk['switching']))
+              and (chk.get('switching') is None or c.get('switching') == chk['switching'])
+              and (chk.get('roam') is None or c.get('roam') == chk['roam']))
         return ok, 'Zustand %s%s%s' % (c['state'], ', VLAN %s' % c['vlan'] if c['vlan'] else '',
                                        ', %s geschaltet' % c['switching'] if c['state'] == 'Run' and c.get('switching') else '')
     if t == 'wlan':
@@ -57,6 +58,10 @@ def run_check(chk, st):
     if t == 'apmode':
         a = next((x for x in st['aps'] if x['name'] == chk['ap']), None)
         return (a is not None and a['mode'] == chk['mode']), 'Modus %s' % (a['mode'] if a else '?')
+    if t == 'mobilitypeer':
+        pr = next((x for x in st['mobilityPeers'] if x['ip'] == chk['ip']), None)
+        return (pr is not None and pr['control'] == 'Up' and pr['data'] == 'Up'), 'Peer %s: %s' % (
+            chk['ip'], 'nicht konfiguriert' if pr is None else 'Control %s, Data %s' % (pr['control'], pr['data']))
     if t == 'wlanservers':
         got = st['_wlan_servers'].get(chk['profile']) or []
         return all(ip in got for ip in chk['servers']), 'Server in der Kette: %s' % (', '.join(got) if got else 'keine')
@@ -102,7 +107,7 @@ class LabEngine:
             raise LabError('Lab %s gibt es nicht' % lab_id, 404)
         if mode not in lab['modes']:
             raise LabError('Modus %s ist fuer dieses Lab nicht vorgesehen' % mode)
-        self.sim.reset_world(lab.get('worldClients'), lab.get('worldRadius'))
+        self.sim.reset_world(lab.get('worldClients'), lab.get('worldRadius'), lab.get('worldMobility'))
         ok, _, err = self.sim.apply(lab.get('startCommands', []))
         if not ok:
             raise LabError('Startkonfiguration von %s fehlerhaft: %s' % (lab_id, err['message']), 500)

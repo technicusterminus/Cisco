@@ -20,6 +20,7 @@ def default_world():
             {'mac': '58bf.eaaa.0002', 'ssid': 'Corp', 'psk': 'falsch', 'ap': 'ap-lobby', 'protocol': '11ax'},
         ],
         'radius': default_radius(),
+        'mobility': default_mobility(),
     }
 
 
@@ -30,6 +31,13 @@ def default_radius():
                          'users': [{'name': 'anna', 'password': 'Passw0rt!', 'vlan': '30'},
                                    {'name': 'bernd', 'password': 'Geheim#2', 'vlan': '40'},
                                    {'name': 'carla', 'password': 'Sommer#3', 'vlan': None}]}]}
+
+
+def default_mobility():
+    """Die simulierte Gegenseite fuer Mobility: andere Controller, ihre eigene Gruppe, wie sie diesen Controller eingetragen haben
+    (knows) und welche SSIDs mit welcher Sicherheit sie ausstrahlen (wlans: SSID -> akm)."""
+    return {'controllers': [{'name': 'wlc2', 'ip': '10.10.0.20', 'mac': 'aabb.cc00.0200', 'group': 'Campus', 'up': True,
+                             'knows': {'ip': '10.10.0.10', 'mac': 'aabb.cc00.0100', 'group': 'default'}, 'wlans': {'Corp': 'psk'}}]}
 
 
 def new_world():

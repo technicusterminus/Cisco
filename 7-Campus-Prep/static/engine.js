@@ -17,12 +17,12 @@
   'use strict';
 
   const DEF_POLICY_TAG = 'default-policy-tag', DEF_SITE_TAG = 'default-site-tag', DEF_RF_TAG = 'default-rf-tag';
-  const DEF_FLEX_PROFILE = 'default-flex-profile', DEF_WEBAUTH_MAP = 'global';
+  const DEF_FLEX_PROFILE = 'default-flex-profile', DEF_WEBAUTH_MAP = 'global', DEF_MOBILITY_GROUP = 'default';
   const NAME_RE = /^[\p{L}\p{N}_.-]{1,32}$/u;          // wie Python \w (Unicode)
   const STORE_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$/;
-  const KIND = 'campusprep-state', VERSION = 4, ACCEPTED = [1, 2, 3, 4];
+  const KIND = 'campusprep-state', VERSION = 5, ACCEPTED = [1, 2, 3, 4, 5];
   const MODES = ['guided', 'exam'];
-  const HIDDEN = ['cause', 'solution', 'solutionCommands', 'startCommands', 'worldClients', 'worldRadius', 'checks', 'hints', 'questions'];
+  const HIDDEN = ['cause', 'solution', 'solutionCommands', 'startCommands', 'worldClients', 'worldRadius', 'worldMobility', 'checks', 'hints', 'questions'];
 
   // ------------------------------------------------------------------ Hilfen
   class CliError extends Error {}
@@ -82,6 +82,8 @@
   }
 
   /* Der simulierte RADIUS-Server hinter dem Controller (Gegenseite, nicht konfigurierbar). */
+  const defaultMobility = () => clone({ controllers: [{ name: 'wlc2', ip: '10.10.0.20', mac: 'aabb.cc00.0200', group: 'Campus', up: true,
+    knows: { ip: '10.10.0.10', mac: 'aabb.cc00.0100', group: 'default' }, wlans: { Corp: 'psk' } }] });
   const defaultRadius = () => clone({ servers: [{ ip: '10.10.0.50', auth_port: 1812, secret: 'RadiusKey1', up: true, nas: ['10.10.0.10'],
     users: [{ name: 'anna', password: 'Passw0rt!', vlan: '30' }, { name: 'bernd', password: 'Geheim#2', vlan: '40' },
             { name: 'carla', password: 'Sommer#3', vlan: null }] }] });
@@ -101,6 +103,7 @@
         { mac: '58bf.eaaa.0002', ssid: 'Corp', psk: 'falsch', ap: 'ap-lobby', protocol: '11ax' },
       ],
       radius: defaultRadius(),
+      mobility: defaultMobility(),
     });
   }
 
@@ -124,13 +127,16 @@
       this.loginLists = dict();                 // Login-Methodenliste name -> {method: 'local'}
       this.authzDefaultLocal = false;           // aaa authorization network default local
       this.webauthMaps = dict(); this.webauthMaps[DEF_WEBAUTH_MAP] = { type: 'webauth', virtual_ip: '192.0.2.1' };
+      this.mobilityGroup = DEF_MOBILITY_GROUP;  // wireless mobility group name
+      this.mobilityPeers = dict();              // Peer-IP -> {mac, group}
     }
 
     snapshot() {
       return clone({ wlans: this.dumpWlans(), policies: this.policies, policyTags: this.policyTags, apCfg: this.apCfg,
                      flexProfiles: this.flexProfiles, siteTags: this.siteTags, radiusServers: this.radiusServers,
                      aaaGroups: this.aaaGroups, aaaLists: this.aaaLists, localUsers: this.localUsers, loginLists: this.loginLists,
-                     authzDefaultLocal: this.authzDefaultLocal, webauthMaps: this.webauthMaps });
+                     authzDefaultLocal: this.authzDefaultLocal, webauthMaps: this.webauthMaps, mobilityGroup: this.mobilityGroup,
+                     mobilityPeers: this.mobilityPeers });
     }
     restore(s) {
       this.loadWlans(s.wlans);
@@ -138,7 +144,7 @@
       this.flexProfiles = clone(s.flexProfiles); this.siteTags = clone(s.siteTags);
       this.radiusServers = clone(s.radiusServers); this.aaaGroups = clone(s.aaaGroups); this.aaaLists = clone(s.aaaLists);
       this.localUsers = clone(s.localUsers); this.loginLists = clone(s.loginLists); this.authzDefaultLocal = s.authzDefaultLocal;
-      this.webauthMaps = clone(s.webauthMaps);
+      this.webauthMaps = clone(s.webauthMaps); this.mobilityGroup = s.mobilityGroup; this.mobilityPeers = clone(s.mobilityPeers);
     }
     dumpWlans() { const o = dict(); for (const [k, v] of this.wlans) o[k] = clone(v); return o; }
     loadWlans(o) { this.wlans = new Map(); for (const k of Object.keys(o)) this.wlans.set(k, clone(o[k])); }
@@ -169,6 +175,9 @@
       this.authzDefaultLocal = !!d.authzDefaultLocal;
       this.webauthMaps = clone(d.webauthMaps && Object.keys(d.webauthMaps).length ? d.webauthMaps : {});
       setdefault(this.webauthMaps, DEF_WEBAUTH_MAP, { type: 'webauth', virtual_ip: '192.0.2.1' });
+      // Staende vor Version 5 kennen kein Mobility
+      this.mobilityGroup = d.mobilityGroup || DEF_MOBILITY_GROUP;
+      this.mobilityPeers = clone(d.mobilityPeers && Object.keys(d.mobilityPeers).length ? d.mobilityPeers : {});
     }
 
     // ---- Zustand fuer die Oberflaeche
@@ -197,6 +206,8 @@
         localUsers: sortedKeys(this.localUsers).map(n => ({ name: n, passwordSet: !!this.localUsers[n] })),
         loginLists: sortedKeys(this.loginLists).map(n => ({ name: n, method: this.loginLists[n].method })),
         authzDefaultLocal: this.authzDefaultLocal,
+        mobilityGroup: this.mobilityGroup, mobilityMac: this.world.wlc.mac,
+        mobilityPeers: sortedKeys(this.mobilityPeers).map(ip => Object.assign({ ip, mac: this.mobilityPeers[ip].mac, group: this.mobilityPeers[ip].group }, this.mobilityTunnel(ip))),
         webauthMaps: sortedKeys(this.webauthMaps).map(n => ({ name: n, builtin: n === DEF_WEBAUTH_MAP, type: this.webauthMaps[n].type, virtualIp: this.webauthMaps[n].virtual_ip })),
         flexProfiles: sortedKeys(this.flexProfiles).map(n => { const f = this.flexProfiles[n];
           return { name: n, builtin: n === DEF_FLEX_PROFILE, description: f.descr, native: f.native,
@@ -209,6 +220,7 @@
         aps,
         clients: this.clients().map(c => ({ mac: c.mac, ssid: c.ssid, ap: c.ap, protocol: c.protocol, state: c.state, wlan: c.wlan,
                                             vlan: c.vlan, method: c.method, switching: c.switching, mode: c.mode,
+                                            roam: c.roam === undefined ? null : c.roam,
                                             user: (() => { const e = c.eap && Object.keys(c.eap).length ? c.eap : (c.web && Object.keys(c.web).length ? c.web : null); return e && e.user !== undefined ? e.user : null; })(),
                                             reasons: c.reasons })),
       };
@@ -285,7 +297,7 @@
     decide(client) {
       const ap = this.apByName(client.ap);
       const res = { state: 'Not Associated', ap: client.ap, wlan: null, policy: null, vlan: null, method: null,
-                    switching: null, mode: null, reasons: [] };
+                    switching: null, mode: null, roam: null, reasons: [] };
       if (!ap || !ap.joined) { res.reasons.push('AP ' + client.ap + ' ist nicht am Controller registriert'); return res; }
       let wl = null;
       for (const [n, w] of this.wlans) if (w.ssid === client.ssid) { wl = n; break; }
@@ -354,8 +366,37 @@
         if (res.method === 'None') res.method = 'Web Auth';
         if (!this._webauth(client, w, res)) { res.state = 'Webauth Pending'; return res; }
       }
+      if (client.roam) this._roam(client, w, res);
       res.state = 'Run';
       return res;
+    }
+
+    mobilityTunnel(ip) {
+      /* Zustand des Mobility-Tunnels zu einem konfigurierten Peer (Simulator-Modell): Control und Data Path kommen nur hoch, wenn beide Seiten passen. */
+      const pr = get(this.mobilityPeers, ip);
+      const down = why => ({ control: 'Down', data: 'Down', reason: why });
+      if (!pr) return down('Peer ' + ip + ' ist nicht konfiguriert');
+      const ctl = (((this.world.mobility || {}).controllers) || []).find(x => x.ip === ip);
+      if (!ctl || !ctl.up) return down('Der Controller ' + ip + ' antwortet nicht');
+      if (pr.mac !== ctl.mac) return down('Die MAC-Adresse ' + pr.mac + ' stimmt nicht mit der des Controllers ' + ctl.name + ' (' + ctl.mac + ') ueberein');
+      if (pr.group !== ctl.group) return down('Der Gruppenname ' + pr.group + ' im Peer-Eintrag stimmt nicht: Der Controller ' + ctl.name + ' gehoert zur Gruppe ' + ctl.group);
+      const kn = ctl.knows || {};
+      if (kn.ip !== this.world.wlc.ip || kn.mac !== this.world.wlc.mac) return down('Der Controller ' + ctl.name + ' hat diesen Controller nicht oder mit falscher IP/MAC eingetragen');
+      if (kn.group !== this.mobilityGroup) return down('Der Controller ' + ctl.name + ' erwartet diesen Controller in der Gruppe ' + pyStr(kn.group) + ', hier ist ' + this.mobilityGroup + ' konfiguriert');
+      return { control: 'Up', data: 'Up', reason: '' };
+    }
+
+    _roam(client, w, res) {
+      const ip = isDict(client.roam) ? client.roam.from : null;
+      const ctl = (((this.world.mobility || {}).controllers) || []).find(x => x.ip === ip);
+      const tun = this.mobilityTunnel(ip);
+      if (tun.control !== 'Up') { res.reasons.push('Kein Roaming vom Controller ' + ip + ': ' + tun.reason + '. Der Client verbindet sich als neue Sitzung'); return; }
+      if (ctl.wlans[client.ssid] !== w.akm) {
+        res.reasons.push('Kein Roaming vom Controller ' + ctl.name + ': Die Sicherheit der SSID ' + client.ssid + ' dort (' + (has(ctl.wlans, client.ssid) ? ctl.wlans[client.ssid] : 'nicht vorhanden') +
+                         ') weicht von hier (' + w.akm + ') ab. Der Client verbindet sich als neue Sitzung');
+        return;
+      }
+      res.roam = 'Inter-Controller';
     }
 
     _webauth(client, w, res) {
@@ -430,6 +471,20 @@
     }
     showFlexSummary() { return this.nameDescTable('Flex Profiles', 'Flex Profile Name', sortedKeys(this.flexProfiles).map(n => [n, this.flexProfiles[n].descr])); }
     showSiteTagSummary() { return this.nameDescTable('Site Tags', 'Site Tag Name', sortedKeys(this.siteTags).map(n => [n, this.siteTags[n].descr])); }
+    showMobilitySummary() {
+      const w = this.world.wlc;
+      const out = ['Mobility Summary', '', 'Wireless Management IP Address: ' + w.ip, 'Mobility Control Message DSCP Value: 48', 'Mobility Keepalive Interval/Count: 10/3',
+                   'Mobility Group Name: ' + this.mobilityGroup, 'Mobility MAC Address: ' + w.mac, '',
+                   'Number of Mobility Peers (Simulator-Format): ' + Object.keys(this.mobilityPeers).length];
+      if (Object.keys(this.mobilityPeers).length) {
+        out.push('', 'IP Address        MAC Address     Group Name                        Control Path  Data Path', '-'.repeat(90));
+        for (const ip of sortedKeys(this.mobilityPeers)) {
+          const p = this.mobilityPeers[ip], t = this.mobilityTunnel(ip);
+          out.push(pad(ip, 17) + ' ' + pad(p.mac, 15) + ' ' + pad(p.group, 33) + ' ' + pad(t.control, 13) + ' ' + t.data);
+        }
+      }
+      return out.join('\n');
+    }
     showAaaServers() {
       /* Nur Zeilen, deren Format der genieparser-Parser kennt; das Geraet gibt weitere aus. Die Dauern sind simuliert. */
       const out = [];
@@ -494,7 +549,7 @@
       const m = { 'wlan summary': () => c.showWlanSummary(), 'ap summary': () => c.showApSummary(), 'ap tag summary': () => c.showApTagSummary(),
                   'wireless client summary': () => c.showWirelessClientSummary(), 'wireless profile policy summary': () => c.showPolicySummary(),
                   'wireless profile flex summary': () => c.showFlexSummary(), 'wireless tag site summary': () => c.showSiteTagSummary(),
-                  'aaa servers': () => c.showAaaServers() };
+                  'aaa servers': () => c.showAaaServers(), 'wireless mobility summary': () => c.showMobilitySummary() };
       if (!has(m, cmd)) throw new CliError('Der Befehl "show ' + cmd + '" ist in diesem Simulator (noch) nicht belegt/umgesetzt');
       return m[cmd]();
     }
@@ -625,6 +680,25 @@
           const users = [...c.wlans.keys()].filter(n => (c.wlans.get(n).webauth_map || undefined) === w[3]).sort(cmp);
           if (users.length) throw new CliError('Parameter Map ' + w[3] + ' wird von WLANs verwendet (' + users.join(', ') + ') - zuerst dort entfernen');
           delete c.webauthMaps[w[3]];
+          return '';
+        }
+        if (startsWith(w, ['wireless', 'mobility', 'group', 'name']) && w.length === 5 && !no) {
+          if (!NAME_RE.test(w[4])) throw new CliError('Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
+          c.mobilityGroup = w[4];
+          return '';
+        }
+        if (startsWith(w, ['wireless', 'mobility', 'group', 'member', 'mac-address']) && w.length === 10 && w[6] === 'ip' && w[8] === 'group' && !no) {
+          let mac;
+          try { mac = normMac(w[5]); } catch (e) { throw new CliError(e.message); }
+          if (!isIpv4(w[7])) throw new CliError('IPv4-Adresse ungueltig: ' + w[7]);
+          if (!NAME_RE.test(w[9])) throw new CliError('Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
+          if (w[7] === c.world.wlc.ip) throw new CliError('Die eigene Adresse kann kein Mobility-Peer sein');
+          c.mobilityPeers[w[7]] = { mac, group: w[9] };
+          return '';
+        }
+        if (no && startsWith(w, ['wireless', 'mobility', 'group', 'member', 'ip']) && w.length === 6) {
+          if (!has(c.mobilityPeers, w[5])) throw new CliError('Mobility-Peer ' + w[5] + ' existiert nicht');
+          delete c.mobilityPeers[w[5]];
           return '';
         }
         if (eq(w, ['aaa', 'new-model'])) return '';   // AAA ist im Simulator immer aktiv; der Befehl wird angenommen
@@ -912,7 +986,8 @@
       const c = st.clients.find(x => x.mac === chk.mac);
       if (!c) return [false, 'Client ' + chk.mac + ' unbekannt'];
       const ok = c.state === chk.state && (chk.vlan === undefined || chk.vlan === null || String(c.vlan) === String(chk.vlan)) &&
-                 (chk.switching === undefined || chk.switching === null || c.switching === chk.switching);
+                 (chk.switching === undefined || chk.switching === null || c.switching === chk.switching) &&
+                 (chk.roam === undefined || chk.roam === null || c.roam === chk.roam);
       return [ok, 'Zustand ' + c.state + (c.vlan ? ', VLAN ' + c.vlan : '') + (c.state === 'Run' && c.switching ? ', ' + c.switching + ' geschaltet' : '')];
     }
     if (t === 'wlan') {
@@ -934,6 +1009,10 @@
     if (t === 'apmode') {
       const a = st.aps.find(x => x.name === chk.ap);
       return [!!a && a.mode === chk.mode, 'Modus ' + (a ? a.mode : '?')];
+    }
+    if (t === 'mobilitypeer') {
+      const pr = st.mobilityPeers.find(x => x.ip === chk.ip);
+      return [!!pr && pr.control === 'Up' && pr.data === 'Up', 'Peer ' + chk.ip + ': ' + (!pr ? 'nicht konfiguriert' : 'Control ' + pr.control + ', Data ' + pr.data)];
     }
     if (t === 'wlanservers') {
       const got = (st._wlan_servers && st._wlan_servers[chk.profile]) || [];
@@ -979,7 +1058,7 @@
       const lab = get(this.labs, id);
       if (!lab) throw new LabError('Lab ' + id + ' gibt es nicht', 404);
       if (!lab.modes.includes(mode)) throw new LabError('Modus ' + pyStr(mode) + ' ist fuer dieses Lab nicht vorgesehen');
-      this.sim.resetWorld(lab.worldClients, lab.worldRadius);
+      this.sim.resetWorld(lab.worldClients, lab.worldRadius, lab.worldMobility);
       const [ok, , err] = this.sim.apply(lab.startCommands || []);
       if (!ok) throw new LabError('Startkonfiguration von ' + id + ' fehlerhaft: ' + err.message, 500);
       this.session = { id, mode, hints: 0, answers: {}, checks: 0 };
@@ -1080,10 +1159,11 @@
         if (st !== null) { try { this.restoreAll(st); } catch (e) { if (e instanceof StoreError) this.store.quarantine(this.store.P + 'state'); else throw e; } }
       }
     }
-    resetWorld(clients, radius) {
+    resetWorld(clients, radius, mobility) {
       this.world = newWorld();
       if (clients !== undefined && clients !== null) this.world.clients = clone(clients);
       if (radius !== undefined && radius !== null) this.world.radius = { servers: clone(radius) };
+      if (mobility !== undefined && mobility !== null) this.world.mobility = { controllers: clone(mobility) };
       this.wlc = new Wlc(this.world);
       this.cli = new Cli(this.wlc);
     }
@@ -1106,6 +1186,7 @@
       validateState(d);
       const world = clone(d.world);
       if (!has(world, 'radius')) world.radius = defaultRadius();   // aeltere Staende kennen keinen RADIUS-Server
+      if (!has(world, 'mobility')) world.mobility = defaultMobility();   // und keine Mobility-Gegenseite
       const wlc = new Wlc(world);
       try { wlc.load(d.wlc); wlc.state(); } catch (e) { throw new StoreError('Stand ist beschaedigt'); }
       this.world = world; this.wlc = wlc; this.cli = new Cli(wlc);

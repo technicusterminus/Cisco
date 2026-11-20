@@ -1,0 +1,165 @@
+{
+ "cause": "Im Peer-Eintrag steht der Gruppenname Zentrale; der Controller wlc2 gehört zur Gruppe Campus. Der Tunnel kommt nicht hoch.",
+ "checks": [
+  {
+   "category": "function",
+   "desc": "Laptop von wlc2: verbunden, VLAN 20, geroamt",
+   "mac": "58bf.eaaa.0001",
+   "roam": "Inter-Controller",
+   "state": "Run",
+   "type": "client",
+   "vlan": "20"
+  },
+  {
+   "category": "function",
+   "desc": "Mobility-Tunnel zu 10.10.0.20 ist oben",
+   "ip": "10.10.0.20",
+   "type": "mobilitypeer"
+  },
+  {
+   "category": "security",
+   "desc": "Laptop mit falschem Schlüssel bleibt abgewiesen",
+   "mac": "58bf.eaaa.0002",
+   "state": "Not Associated",
+   "type": "client"
+  },
+  {
+   "attrs": {
+    "akm": "psk"
+   },
+   "category": "security",
+   "desc": "Das WLAN nutzt weiterhin PSK",
+   "profile": "Corp_Profile",
+   "type": "wlan"
+  }
+ ],
+ "duration": "25 min",
+ "fabric": "wlc1 mit ap-lobby und ap-lager",
+ "goals": [
+  "Lesen, was `show wireless mobility summary` über den Tunnel zu einem Peer verrät",
+  "Die Einstellung finden, die den Tunnel verhindert, ohne den Peer zu entfernen"
+ ],
+ "hints": [
+  "**Konzept:** Roaming zwischen Controllern setzt einen funktionierenden Mobility-Tunnel voraus. Beide Seiten müssen zueinander passen.",
+  "**Ebene:** Der Peer-Eintrag am Controller. WLAN, Policy und Tags sind in Ordnung.",
+  "**Prüfschritte:** `show wireless mobility summary` zeigt Control und Data Path des Peers; die Client-Diagnose nennt, woran der Tunnel scheitert.",
+  "**Lösung:** Den Peer-Eintrag mit dem richtigen Gruppennamen **Campus** neu setzen (`wireless mobility group member mac-address aabb.cc00.0200 ip 10.10.0.20 group Campus`). Den Peer nicht entfernen."
+ ],
+ "id": "14-mobility-gruppenname",
+ "intro": "Ein zweiter Controller **wlc2** (10.10.0.20, MAC aabb.cc00.0200, Mobility-Gruppe **Campus**) ist als Mobility-Peer eingetragen. Trotzdem verliert ein Laptop beim Wechsel von wlc2 in die Lobby seine Sitzung: Er verbindet sich neu, statt zu roamen.\n\nZum Test: ein Laptop, der von wlc2 kommt, und ein Laptop mit falschem Schlüssel in der Lobby.",
+ "kind": "troubleshooting",
+ "level": "Fortgeschritten",
+ "limits": [
+  "Das Client-Modell ist didaktisch: Es erklärt, ob und warum ein Client verbunden ist, ist aber keine Abbildung der Controller-Pipeline.",
+  "Nicht modelliert: 802.1x/RADIUS, FlexConnect, RF-Profile, Roaming, Mobility.",
+  "Die Gegenseite ist ein simulierter Controller (wlc2); ob zwei Controller sich in der Praxis genauso verhalten, ist nicht belegt.",
+  "Das Roaming ist vereinfacht: Es gibt nur \"Inter-Controller\" oder eine neue Sitzung. Nicht modelliert: Anchor/Foreign, Guest Anchor, L2- und L3-Roaming im Detail, Datenverschlüsselung des Tunnels, Software-Mindestversionen."
+ ],
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 01"
+ ],
+ "questions": [
+  {
+   "answer": 0,
+   "explain": "Die Ausgabe nennt die Mobility-Daten dieses Controllers und die Peers samt Tunnelzustand (im Simulator in einem vereinfachten Format).",
+   "id": "q1",
+   "options": [
+    "Gruppenname, MAC-Adresse und den Zustand von Control und Data Path",
+    "Die Clients des Peers",
+    "Die WLANs des Peers",
+    "Die Laufzeit des Peers"
+   ],
+   "q": "Was zeigt `show wireless mobility summary` für den Peer?"
+  },
+  {
+   "answer": 0,
+   "explain": "Ohne Peer gibt es keinen Tunnel; der Laptop verbindet sich zwar, aber als neue Sitzung. Die Prüfung verlangt Roaming.",
+   "id": "q2",
+   "options": [
+    "Dann gibt es keinen Tunnel mehr, und der Laptop roamt nicht",
+    "Dann ist das WLAN down",
+    "Dann verliert der Laptop seine IP-Adresse",
+    "Das geht nicht"
+   ],
+   "q": "Warum ist es keine Lösung, den Peer-Eintrag zu entfernen?"
+  }
+ ],
+ "requirements": [
+  "Der Laptop von wlc2 ist verbunden (VLAN 20) und hat geroamt (Inter-Controller).",
+  "Der Mobility-Tunnel zu 10.10.0.20 ist oben (Control und Data Path).",
+  "Der Laptop mit falschem Schlüssel bleibt abgewiesen.",
+  "Das WLAN bleibt bei PSK."
+ ],
+ "solution": "WebUI: Configuration > Wireless > Mobility > Peer 10.10.0.20 > Edit: Gruppenname Campus. CLI: `wireless mobility group member mac-address aabb.cc00.0200 ip 10.10.0.20 group Campus`.",
+ "solutionCommands": [
+  "wireless mobility group member mac-address aabb.cc00.0200 ip 10.10.0.20 group Campus"
+ ],
+ "startCommands": [
+  "wlan Corp_Profile 1 Corp",
+  "security wpa akm psk",
+  "security wpa psk set-key ascii 0 Sommer2026",
+  "no shutdown",
+  "exit",
+  "wireless profile policy PP_Corp",
+  "vlan 20",
+  "no shutdown",
+  "exit",
+  "wireless tag policy PT_Corp",
+  "wlan Corp_Profile policy PP_Corp",
+  "exit",
+  "ap a4b2.32aa.0001",
+  "policy-tag PT_Corp",
+  "exit",
+  "wireless mobility group name Campus",
+  "wireless mobility group member mac-address aabb.cc00.0200 ip 10.10.0.20 group Zentrale"
+ ],
+ "title": "14 Roaming zwischen Controllern: Sitzung bricht ab",
+ "tools": [
+  "WebUI: Configuration > Wireless > Mobility",
+  "Monitoring > Wireless > Clients",
+  "Client-Diagnose (nur im geführten Modus)",
+  "CLI: show wireless mobility summary, show wireless client summary"
+ ],
+ "topic": "Mobility / Troubleshooting",
+ "track": "CCNP Enterprise Wireless (300-430 ENWLSI)",
+ "worldClients": [
+  {
+   "ap": "ap-lobby",
+   "mac": "58bf.eaaa.0001",
+   "protocol": "11ac",
+   "psk": "Sommer2026",
+   "roam": {
+    "from": "10.10.0.20"
+   },
+   "ssid": "Corp"
+  },
+  {
+   "ap": "ap-lobby",
+   "mac": "58bf.eaaa.0002",
+   "protocol": "11ac",
+   "psk": "falsch",
+   "ssid": "Corp"
+  }
+ ],
+ "worldMobility": [
+  {
+   "group": "Campus",
+   "ip": "10.10.0.20",
+   "knows": {
+    "group": "Campus",
+    "ip": "10.10.0.10",
+    "mac": "aabb.cc00.0100"
+   },
+   "mac": "aabb.cc00.0200",
+   "name": "wlc2",
+   "up": true,
+   "wlans": {
+    "Corp": "psk"
+   }
+  }
+ ]
+}

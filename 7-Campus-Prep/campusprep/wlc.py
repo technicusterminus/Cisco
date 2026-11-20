@@ -12,6 +12,7 @@ from .world import norm_mac
 DEF_POLICY_TAG, DEF_SITE_TAG, DEF_RF_TAG = 'default-policy-tag', 'default-site-tag', 'default-rf-tag'
 DEF_FLEX_PROFILE = 'default-flex-profile'
 DEF_WEBAUTH_MAP = 'global'
+DEF_MOBILITY_GROUP = 'default'
 NAME_RE = re.compile(r'^[\w.-]{1,32}$')
 
 
@@ -40,17 +41,19 @@ class Wlc:
         self.login_lists = {}      # Login-Methodenliste name -> {method: 'local'} (aaa authentication login ... local)
         self.authz_default_local = False   # aaa authorization network default local
         self.webauth_maps = {DEF_WEBAUTH_MAP: {'type': 'webauth', 'virtual_ip': '192.0.2.1'}}   # parameter-map type webauth
+        self.mobility_group = DEF_MOBILITY_GROUP   # wireless mobility group name
+        self.mobility_peers = {}   # Peer-IP -> {mac, group} (wireless mobility group member)
 
     # ------------------------------------------------------------------ Snapshot und Zustand fuer die Oberflaeche
     def snapshot(self):
         return copy.deepcopy((self.wlans, self.policies, self.policy_tags, self.ap_cfg, self.flex_profiles, self.site_tags,
                               self.radius_servers, self.aaa_groups, self.aaa_lists, self.local_users, self.login_lists,
-                              self.authz_default_local, self.webauth_maps))
+                              self.authz_default_local, self.webauth_maps, self.mobility_group, self.mobility_peers))
 
     def restore(self, snap):
         (self.wlans, self.policies, self.policy_tags, self.ap_cfg, self.flex_profiles, self.site_tags,
          self.radius_servers, self.aaa_groups, self.aaa_lists, self.local_users, self.login_lists,
-         self.authz_default_local, self.webauth_maps) = copy.deepcopy(snap)
+         self.authz_default_local, self.webauth_maps, self.mobility_group, self.mobility_peers) = copy.deepcopy(snap)
 
     def dump(self):
         """Konfiguration fuer die Persistenz (JSON-tauglich). Die Welt (APs, Clients) speichert die Sim."""
@@ -58,7 +61,8 @@ class Wlc:
                               'flexProfiles': self.flex_profiles, 'siteTags': self.site_tags, 'radiusServers': self.radius_servers,
                               'aaaGroups': self.aaa_groups, 'aaaLists': self.aaa_lists, 'localUsers': self.local_users,
                               'loginLists': self.login_lists, 'authzDefaultLocal': self.authz_default_local,
-                              'webauthMaps': self.webauth_maps})
+                              'webauthMaps': self.webauth_maps, 'mobilityGroup': self.mobility_group,
+                              'mobilityPeers': self.mobility_peers})
 
     def load(self, d):
         self.wlans, self.policies = copy.deepcopy(d['wlans']), copy.deepcopy(d['policies'])
@@ -79,6 +83,9 @@ class Wlc:
         self.authz_default_local = bool(d.get('authzDefaultLocal', False))
         self.webauth_maps = copy.deepcopy(d.get('webauthMaps') or {})
         self.webauth_maps.setdefault(DEF_WEBAUTH_MAP, {'type': 'webauth', 'virtual_ip': '192.0.2.1'})
+        # Staende vor Version 5 kennen kein Mobility
+        self.mobility_group = d.get('mobilityGroup') or DEF_MOBILITY_GROUP
+        self.mobility_peers = copy.deepcopy(d.get('mobilityPeers') or {})
 
     def state(self):
         """Alles, was die Weboberflaeche anzeigt (Schluessel werden nicht herausgegeben)."""
@@ -106,6 +113,8 @@ class Wlc:
             'localUsers': [{'name': n, 'passwordSet': bool(pw)} for n, pw in sorted(self.local_users.items())],
             'loginLists': [{'name': n, 'method': l['method']} for n, l in sorted(self.login_lists.items())],
             'authzDefaultLocal': self.authz_default_local,
+            'mobilityGroup': self.mobility_group, 'mobilityMac': self.world['wlc']['mac'],
+            'mobilityPeers': [dict(ip=ip, mac=p['mac'], group=p['group'], **self.mobility_tunnel(ip)) for ip, p in sorted(self.mobility_peers.items())],
             'webauthMaps': [{'name': n, 'builtin': n == DEF_WEBAUTH_MAP, 'type': m['type'], 'virtualIp': m['virtual_ip']}
                             for n, m in sorted(self.webauth_maps.items())],
             'flexProfiles': [{'name': n, 'builtin': n == DEF_FLEX_PROFILE, 'description': f['descr'], 'native': f['native'],
@@ -120,7 +129,7 @@ class Wlc:
             'aps': aps,
             'clients': [{'mac': c['mac'], 'ssid': c['ssid'], 'ap': c['ap'], 'protocol': c['protocol'], 'state': c['state'],
                          'wlan': c['wlan'], 'vlan': c['vlan'], 'method': c['method'], 'switching': c['switching'], 'mode': c['mode'],
-                         'user': (c.get('eap') or c.get('web') or {}).get('user'), 'reasons': c['reasons']} for c in self.clients()],
+                         'user': (c.get('eap') or c.get('web') or {}).get('user'), 'roam': c.get('roam'), 'reasons': c['reasons']} for c in self.clients()],
         }
 
     # ------------------------------------------------------------------ Zustand
@@ -256,7 +265,7 @@ class Wlc:
         """Didaktisches Modell: Warum ist ein Client assoziiert oder nicht? Rueckgabe {state, ap, wlan, reasons}."""
         ap = self.ap_by_name(client['ap'])
         res = {'state': 'Not Associated', 'ap': client['ap'], 'wlan': None, 'policy': None, 'vlan': None, 'method': None,
-               'switching': None, 'mode': None, 'reasons': []}
+               'switching': None, 'mode': None, 'roam': None, 'reasons': []}
         if not ap or not ap.get('joined'):
             res['reasons'].append('AP %s ist nicht am Controller registriert' % client['ap'])
             return res
@@ -335,8 +344,48 @@ class Wlc:
             if not self._webauth(client, w, res):
                 res['state'] = 'Webauth Pending'
                 return res
+        if client.get('roam'):
+            self._roam(client, w, res)
         res['state'] = 'Run'
         return res
+
+    def mobility_tunnel(self, ip):
+        """Zustand des Mobility-Tunnels zu einem konfigurierten Peer (Simulator-Modell, siehe docs/QUELLEN.md): Control und Data Path
+        kommen nur hoch, wenn beide Seiten zueinander passen. Rueckgabe {control, data, reason}."""
+        pr = self.mobility_peers.get(ip)
+
+        def down(why):
+            return {'control': 'Down', 'data': 'Down', 'reason': why}
+        if pr is None:
+            return down('Peer %s ist nicht konfiguriert' % ip)
+        ctl = next((x for x in self.world.get('mobility', {}).get('controllers', []) if x['ip'] == ip), None)
+        if ctl is None or not ctl['up']:
+            return down('Der Controller %s antwortet nicht' % ip)
+        if pr['mac'] != ctl['mac']:
+            return down('Die MAC-Adresse %s stimmt nicht mit der des Controllers %s (%s) ueberein' % (pr['mac'], ctl['name'], ctl['mac']))
+        if pr['group'] != ctl['group']:
+            return down('Der Gruppenname %s im Peer-Eintrag stimmt nicht: Der Controller %s gehoert zur Gruppe %s' % (pr['group'], ctl['name'], ctl['group']))
+        kn = ctl.get('knows') or {}
+        if kn.get('ip') != self.world['wlc']['ip'] or kn.get('mac') != self.world['wlc']['mac']:
+            return down('Der Controller %s hat diesen Controller nicht oder mit falscher IP/MAC eingetragen' % ctl['name'])
+        if kn.get('group') != self.mobility_group:
+            return down('Der Controller %s erwartet diesen Controller in der Gruppe %s, hier ist %s konfiguriert' % (ctl['name'], kn.get('group'), self.mobility_group))
+        return {'control': 'Up', 'data': 'Up', 'reason': ''}
+
+    def _roam(self, client, w, res):
+        """Inter-Controller-Roaming: Der Client kommt von einem anderen Controller. Ohne funktionierenden Tunnel oder bei anderer
+        Sicherheit dort verbindet er sich als neue Sitzung (er ist verbunden, hat aber nicht geroamt)."""
+        ip = client['roam'].get('from') if isinstance(client['roam'], dict) else None
+        ctl = next((x for x in self.world.get('mobility', {}).get('controllers', []) if x['ip'] == ip), None)
+        tun = self.mobility_tunnel(ip)
+        if tun['control'] != 'Up':
+            res['reasons'].append('Kein Roaming vom Controller %s: %s. Der Client verbindet sich als neue Sitzung' % (ip, tun['reason']))
+            return
+        if ctl['wlans'].get(client['ssid']) != w['akm']:
+            res['reasons'].append('Kein Roaming vom Controller %s: Die Sicherheit der SSID %s dort (%s) weicht von hier (%s) ab. Der Client '
+                                  'verbindet sich als neue Sitzung' % (ctl['name'], client['ssid'], ctl['wlans'].get(client['ssid'], 'nicht vorhanden'), w['akm']))
+            return
+        res['roam'] = 'Inter-Controller'
 
     def clients(self):
         out = []
@@ -400,6 +449,20 @@ class Wlc:
 
     def show_site_tag_summary(self):
         return self._name_desc_table('Site Tags', 'Site Tag Name', [(n, t['descr']) for n, t in sorted(self.site_tags.items())])
+
+    def show_mobility_summary(self):
+        """Felder laut Cisco-Dokument 213913 (nur Treffer der Websuche): Management-IP, Gruppenname, Mobility-MAC, DSCP, Keepalive. Abstaende,
+        Reihenfolge und die Peer-Tabelle sind Simulator-Format; DSCP 48 und Keepalive 10/3 sind die Werte aus dem Beispiel des Dokuments."""
+        w = self.world['wlc']
+        out = ['Mobility Summary', '', 'Wireless Management IP Address: %s' % w['ip'], 'Mobility Control Message DSCP Value: 48',
+               'Mobility Keepalive Interval/Count: 10/3', 'Mobility Group Name: %s' % self.mobility_group, 'Mobility MAC Address: %s' % w['mac'], '',
+               'Number of Mobility Peers (Simulator-Format): %d' % len(self.mobility_peers)]
+        if self.mobility_peers:
+            out += ['', 'IP Address        MAC Address     Group Name                        Control Path  Data Path', '-' * 90]
+            for ip, p in sorted(self.mobility_peers.items()):
+                t = self.mobility_tunnel(ip)
+                out.append('%-17s %-15s %-33s %-13s %s' % (ip, p['mac'], p['group'], t['control'], t['data']))
+        return '\n'.join(out)
 
     def show_aaa_servers(self):
         """Nur Zeilen, deren Format der genieparser-Parser kennt; das Geraet gibt weitere aus (Platform State, Author, Account, Zaehler).
@@ -474,7 +537,7 @@ class Cli:
              'wireless profile policy summary': self.wlc.show_policy_summary,
              'wireless profile flex summary': self.wlc.show_flex_summary,
              'wireless tag site summary': self.wlc.show_site_tag_summary,
-             'aaa servers': self.wlc.show_aaa_servers}
+             'aaa servers': self.wlc.show_aaa_servers, 'wireless mobility summary': self.wlc.show_mobility_summary}
         if cmd not in m:
             raise CliError('Der Befehl "show %s" ist in diesem Simulator (noch) nicht belegt/umgesetzt' % cmd)
         return m[cmd]()
@@ -615,6 +678,29 @@ class Cli:
                 if users:
                     raise CliError('Parameter Map %s wird von WLANs verwendet (%s) - zuerst dort entfernen' % (w[3], ', '.join(users)))
                 del c.webauth_maps[w[3]]
+                return ''
+            if w[:4] == ['wireless', 'mobility', 'group', 'name'] and len(w) == 5 and not no:
+                if not NAME_RE.match(w[4]):
+                    raise CliError('Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)')
+                c.mobility_group = w[4]
+                return ''
+            if w[:5] == ['wireless', 'mobility', 'group', 'member', 'mac-address'] and len(w) == 10 and w[6] == 'ip' and w[8] == 'group' and not no:
+                try:
+                    mac = norm_mac(w[5])
+                except ValueError as e:
+                    raise CliError(str(e))
+                if not is_ipv4(w[7]):
+                    raise CliError('IPv4-Adresse ungueltig: %s' % w[7])
+                if not NAME_RE.match(w[9]):
+                    raise CliError('Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)')
+                if w[7] == c.world['wlc']['ip']:
+                    raise CliError('Die eigene Adresse kann kein Mobility-Peer sein')
+                c.mobility_peers[w[7]] = {'mac': mac, 'group': w[9]}
+                return ''
+            if no and w[:5] == ['wireless', 'mobility', 'group', 'member', 'ip'] and len(w) == 6:
+                if w[5] not in c.mobility_peers:
+                    raise CliError('Mobility-Peer %s existiert nicht' % w[5])
+                del c.mobility_peers[w[5]]
                 return ''
             if w == ['aaa', 'new-model']:
                 return ''   # AAA ist im Simulator immer aktiv; der Befehl wird angenommen

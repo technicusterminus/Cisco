@@ -15,7 +15,8 @@ from campusprep.server import Sim, serve  # noqa: E402
 L1, L2 = 'a4b2.32aa.0001', 'a4b2.32aa.0002'
 ALL = ['01-ssid-nicht-sichtbar', '02-admin-down', '03-falscher-schluessel', '04-falsches-policy-profile',
        '05-gast-wlan-lobby', '06-aufraeumen', '07-flexconnect-zweigstelle', '08-flexconnect-vlan-name',
-       '09-radius-shared-secret', '10-aaa-override-vlan', '11-radius-redundanz', '12-webauth-authorization', '13-webauth-einrichten']
+       '09-radius-shared-secret', '10-aaa-override-vlan', '11-radius-redundanz', '12-webauth-authorization', '13-webauth-einrichten',
+       '14-mobility-gruppenname', '15-mobility-einrichten']
 # Woerter, die im sichtbaren Text vor dem Bestehen (Intro, Anforderungen, Pruefungsbeschreibungen) nicht stehen duerfen
 LEAKS = {
     '01-ssid-nicht-sichtbar': ['policy-tag', 'Policy Tag', 'Tag Source', 'PT_Corp'],
@@ -31,6 +32,8 @@ LEAKS = {
     '11-radius-redundanz': ['server name', 'RS2', 'Server Group'],
     '12-webauth-authorization': ['aaa authorization', 'Autorisierung konfigurieren', 'default local'],
     '13-webauth-einrichten': ['security web-auth', 'WEBAUTH', 'Parameter Map global', 'aaa authentication login'],
+    '14-mobility-gruppenname': ['Campus neu setzen', 'group Campus', 'Gruppenname Campus', 'member mac-address'],
+    '15-mobility-einrichten': ['group name Zentrale', 'Gruppennamen auf', 'member mac-address', 'wireless mobility group'],
 }
 
 
@@ -216,6 +219,52 @@ class TestFlexLabs(unittest.TestCase):
 
 def s_cmds(s):
     return s.labs.labs['07-flexconnect-zweigstelle']['solutionCommands']
+
+
+class TestMobilityLabs(unittest.TestCase):
+    """CCNP Enterprise Wireless: Mobility. Jede naheliegende falsche Abkuerzung besteht nicht."""
+    MEMBER = 'wireless mobility group member mac-address aabb.cc00.0200 ip 10.10.0.20 group Campus'
+
+    def test_labs_belong_to_the_wireless_track(self):
+        labs = Sim().labs.labs
+        for i in ('14-mobility-gruppenname', '15-mobility-einrichten'):
+            self.assertEqual(labs[i]['track'], 'CCNP Enterprise Wireless (300-430 ENWLSI)')
+
+    def test_lab14_start_state_is_a_new_session_and_the_diagnosis_names_the_group(self):
+        s = started('14-mobility-gruppenname')
+        roamer = next(c for c in s.wlc.clients() if c['mac'] == '58bf.eaaa.0001')
+        self.assertEqual((roamer['state'], roamer['roam']), ('Run', None))
+        self.assertIn('Gruppenname Zentrale', ' '.join(roamer['reasons']))
+        self.assertIn('Down', s.cli.run('show wireless mobility summary'))
+
+    def test_lab14_removing_the_peer_is_not_the_fix(self):
+        s = fixed('14-mobility-gruppenname', ['no wireless mobility group member ip 10.10.0.20'])
+        self.assertEqual(sorted(failed(s)), ['Laptop von wlc2: verbunden, VLAN 20, geroamt', 'Mobility-Tunnel zu 10.10.0.20 ist oben'])
+
+    def test_lab14_changing_the_own_group_name_is_not_the_fix(self):
+        s = fixed('14-mobility-gruppenname', ['wireless mobility group name Zentrale'])
+        self.assertFalse(s.labs.check()['passed'])
+
+    def test_lab14_opening_the_wlan_lets_the_wrong_key_in_and_fails_security(self):
+        s = fixed('14-mobility-gruppenname', [self.MEMBER, 'wlan Corp_Profile 1 Corp', 'no security wpa akm psk'])
+        # Mit offenem WLAN weicht auch die Sicherheit von der des Peers ab, deshalb roamt der Laptop ebenfalls nicht mehr
+        self.assertEqual(sorted(failed(s)), ['Das WLAN nutzt weiterhin PSK', 'Laptop mit falschem Schlüssel bleibt abgewiesen',
+                                              'Laptop von wlc2: verbunden, VLAN 20, geroamt'])
+
+    def test_lab15_each_half_alone_is_not_enough(self):
+        for cmds in (['wireless mobility group name Zentrale'], [self.MEMBER]):
+            s = fixed('15-mobility-einrichten', cmds)
+            self.assertFalse(s.labs.check()['passed'], cmds)
+            roamer = next(c for c in s.wlc.clients() if c['mac'] == '58bf.eaaa.0001')
+            self.assertEqual(roamer['roam'], None)
+
+    def test_lab15_wrong_mac_or_down_peer_keeps_the_tunnel_down(self):
+        s = fixed('15-mobility-einrichten', ['wireless mobility group name Zentrale',
+                                             'wireless mobility group member mac-address aabb.cc00.0299 ip 10.10.0.20 group Campus'])
+        self.assertIn('MAC-Adresse', s.wlc.state()['mobilityPeers'][0]['reason'])
+        s = fixed('15-mobility-einrichten')
+        s.world['mobility']['controllers'][0]['up'] = False
+        self.assertIn('antwortet nicht', s.wlc.state()['mobilityPeers'][0]['reason'])
 
 
 class TestWebAuthLabs(unittest.TestCase):
@@ -442,7 +491,7 @@ class TestLabApi(unittest.TestCase):
 
     def test_flow(self):
         st, body = self.call('/wlc/api/labs')
-        self.assertEqual((st, len(body['labs']), body['current']), (200, 13, None))
+        self.assertEqual((st, len(body['labs']), body['current']), (200, 15, None))
         self.assertEqual([x['track'] for x in body['labs']][:1] + [x['track'] for x in body['labs']][-1:],
                          ['Grundlagen Wireless', 'CCNP Enterprise Wireless (300-430 ENWLSI)'])
         self.assertEqual(self.call('/wlc/api/lab/check', 'POST', {})[0], 409)

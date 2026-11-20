@@ -57,7 +57,7 @@ class TestState(Base):
         self.assertEqual(read(os.path.join(self.dir, 'state.json')), first)
         self.assertEqual([f for f in os.listdir(self.dir) if f.endswith('.tmp')], [])
         d = json.loads(first)
-        self.assertEqual((d['kind'], d['version']), ('campusprep-state', 4))   # 4: Web-Auth (lokale Benutzer, Login-Listen, Parameter Maps); 3: AAA-Objekte
+        self.assertEqual((d['kind'], d['version']), ('campusprep-state', 5))   # 5: Mobility (Gruppe, Peers); 4: Web-Auth (lokale Benutzer, Login-Listen, Parameter Maps); 3: AAA-Objekte
         # Determinismus: ein zweiter, unabhaengiger Lauf mit denselben Aktionen schreibt dieselben Bytes (keine Zeitstempel)
         with tempfile.TemporaryDirectory() as other:
             s2 = Sim(data_dir=other)
@@ -168,6 +168,34 @@ class TestMigration(Base):
         self.assertEqual([m['name'] for m in w['webauthMaps']], ['global'], 'Parameter Map global wird ergaenzt')
         self.assertTrue(s2.labs.check()['passed'])
         self.assertFalse(os.path.exists(os.path.join(self.dir, 'state.json.bad')))
+
+    def test_version_4_state_without_mobility_still_loads(self):
+        s = Sim(data_dir=self.dir)
+        s.labs.start('09-radius-shared-secret')
+        s.apply(s.labs.labs['09-radius-shared-secret']['solutionCommands'])
+        st = s.snapshot_all()
+        st['version'] = 4
+        for k in ('mobilityGroup', 'mobilityPeers'):
+            del st['wlc'][k]
+        del st['world']['mobility']
+        with open(os.path.join(self.dir, 'state.json'), 'w', encoding='utf-8') as fh:
+            json.dump(st, fh)
+        s2 = Sim(data_dir=self.dir)
+        w = s2.wlc.state()
+        self.assertEqual((w['mobilityGroup'], w['mobilityPeers']), ('default', []))
+        self.assertEqual(s2.world['mobility']['controllers'][0]['name'], 'wlc2', 'Standard-Gegenseite wird ergaenzt')
+        self.assertTrue(s2.labs.check()['passed'])
+        self.assertFalse(os.path.exists(os.path.join(self.dir, 'state.json.bad')))
+
+    def test_mobility_config_roundtrips(self):
+        s = Sim(data_dir=self.dir)
+        s.labs.start('15-mobility-einrichten')
+        s.apply(s.labs.labs['15-mobility-einrichten']['solutionCommands'])
+        s.persist()
+        s2 = Sim(data_dir=self.dir)
+        self.assertEqual(s2.wlc.state(), s.wlc.state())
+        self.assertEqual(s2.world['mobility'], s.world['mobility'])
+        self.assertTrue(s2.labs.check()['passed'])
 
     def test_web_auth_config_roundtrips(self):
         s = Sim(data_dir=self.dir)

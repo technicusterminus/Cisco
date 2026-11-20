@@ -10,7 +10,7 @@ from .catc import CatalystCenter
 from .labs import LabEngine, LabError
 from .store import KIND, VERSION, Store, StoreError, validate_state
 from .wlc import Cli, Wlc, apply_commands
-from .world import default_radius, new_world
+from .world import default_mobility, default_radius, new_world
 
 
 STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'static')
@@ -43,6 +43,7 @@ class Sim:
         validate_state(d)
         world = copy.deepcopy(d['world'])
         world.setdefault('radius', default_radius())   # aeltere Staende kennen keinen RADIUS-Server
+        world.setdefault('mobility', default_mobility())   # und keine Mobility-Gegenseite
         wlc = Wlc(world)
         try:
             wlc.load(d['wlc'])
@@ -59,13 +60,15 @@ class Sim:
             self.store.write_state(self.snapshot_all())
             self.store.write_progress(self.labs.progress)
 
-    def reset_world(self, clients=None, radius=None):
+    def reset_world(self, clients=None, radius=None, mobility=None):
         """Neue Welt (Standard oder mit Lab-Clients und -RADIUS-Servern) und unkonfigurierter Controller."""
         self.world = new_world()
         if clients is not None:
             self.world['clients'] = copy.deepcopy(clients)
         if radius is not None:
             self.world['radius'] = {'servers': copy.deepcopy(radius)}
+        if mobility is not None:
+            self.world['mobility'] = {'controllers': copy.deepcopy(mobility)}
         self.wlc = Wlc(self.world)
         self.cli = Cli(self.wlc)
         self.catc = CatalystCenter(self.world)

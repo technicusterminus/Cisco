@@ -319,6 +319,59 @@ def sc_web_variants():
     return out
 
 
+def sc_cli_mobility():
+    r = Recorder('cli-mobility')
+    r.cli('configure terminal', 'wireless mobility group name', 'wireless mobility group name bad!name', 'wireless mobility group name Neu', 'wireless mobility group name a b',
+          'wireless mobility group member mac-address zz ip 10.10.0.20 group G', 'wireless mobility group member mac-address aabb.cc00.0200 ip 300.1.1.1 group G',
+          'wireless mobility group member mac-address aabb.cc00.0200 ip 10.10.0.10 group G', 'wireless mobility group member mac-address aabb.cc00.0200 ip 10.10.0.20',
+          'wireless mobility group member mac-address aabb.cc00.0200 ip 10.10.0.20 group bad!', 'wireless mobility group member ip 10.10.0.20',
+          'wireless mobility group member mac-address aabb.cc00.0200 ip 10.10.0.20 group Campus', 'wireless mobility group member mac-address AA:BB:CC:00:02:00 ip 10.10.0.21 group G2',
+          'wireless mobility group member mac-address aabb-cc00-0200 ip 10.10.0.22 group G3', 'no wireless mobility group member ip 10.9.9.9', 'no wireless mobility group member',
+          'no wireless mobility group member ip 10.10.0.21', 'no wireless mobility group member ip 10.10.0.21', 'no wireless mobility group name', 'wireless mobility group bogus', 'end',
+          'show wireless mobility summary', 'show wireless mobility', 'configure terminal', 'wireless mobility group name default', 'no wireless mobility group member ip 10.10.0.22',
+          'end', 'show wireless mobility summary')
+    r.call('GET', '/wlc/api/state')
+    return r.finish()
+
+
+MOB_MEMBER = 'wireless mobility group member mac-address aabb.cc00.0200 ip 10.10.0.20 group Campus'
+
+
+def mob_variants():
+    w = lambda *c: ['wlan Corp_Profile 1 Corp'] + list(c) + ['exit']
+    return [
+        ('14-mobility-gruppenname', 'fixed', [MOB_MEMBER]),
+        ('14-mobility-gruppenname', 'peer-removed', ['no wireless mobility group member ip 10.10.0.20']),
+        ('14-mobility-gruppenname', 'own-name-zentrale', ['wireless mobility group name Zentrale']),
+        ('14-mobility-gruppenname', 'wrong-mac', ['wireless mobility group member mac-address aabb.cc00.0299 ip 10.10.0.20 group Campus']),
+        ('14-mobility-gruppenname', 'wrong-ip', ['wireless mobility group member mac-address aabb.cc00.0200 ip 10.10.0.21 group Campus']),
+        ('14-mobility-gruppenname', 'open-wlan', [MOB_MEMBER] + w('no security wpa akm psk')),
+        ('14-mobility-gruppenname', 'fixed-name-case', ['wireless mobility group member mac-address aabb.cc00.0200 ip 10.10.0.20 group campus']),
+        ('14-mobility-gruppenname', 'dot1x-wlan', [MOB_MEMBER] + w('security wpa akm dot1x')),
+        ('15-mobility-einrichten', 'fixed', ['wireless mobility group name Zentrale', MOB_MEMBER]),
+        ('15-mobility-einrichten', 'only-name', ['wireless mobility group name Zentrale']),
+        ('15-mobility-einrichten', 'only-member', [MOB_MEMBER]),
+        ('15-mobility-einrichten', 'name-case', ['wireless mobility group name zentrale', MOB_MEMBER]),
+        ('15-mobility-einrichten', 'wrong-mac', ['wireless mobility group name Zentrale', 'wireless mobility group member mac-address aabb.cc00.0299 ip 10.10.0.20 group Campus']),
+        ('15-mobility-einrichten', 'wrong-group', ['wireless mobility group name Zentrale', 'wireless mobility group member mac-address aabb.cc00.0200 ip 10.10.0.20 group Zentrale']),
+        ('15-mobility-einrichten', 'member-then-delete', ['wireless mobility group name Zentrale', MOB_MEMBER, 'no wireless mobility group member ip 10.10.0.20']),
+        ('15-mobility-einrichten', 'second-peer', ['wireless mobility group name Zentrale', MOB_MEMBER, 'wireless mobility group member mac-address aabb.cc00.0300 ip 10.10.0.30 group X']),
+    ]
+
+
+def sc_mob_variants():
+    out = []
+    for lab, name, cmds in mob_variants():
+        r = Recorder('mob-%s-%s' % (lab[:2], name))
+        r.call('POST', '/wlc/api/lab/start', {'id': lab, 'mode': 'guided'})
+        r.apply(cmds)
+        r.call('GET', '/wlc/api/state')
+        r.cli('end', 'show wireless mobility summary', 'show wireless client summary', 'show wlan summary')
+        r.call('POST', '/wlc/api/lab/check', {})
+        out.append(r.finish())
+    return out
+
+
 def sc_apply():
     r = Recorder('apply-atomic-and-validation')
     r.apply(CORP)
@@ -454,7 +507,7 @@ def sc_no_persistence():
 
 
 def build():
-    out = [sc_cli_errors(), sc_cli_policy_ptag_ap(), sc_cli_flex(), sc_cli_aaa(), sc_cli_webauth(), sc_names()] + sc_decide() + sc_aaa_variants() + sc_web_variants() + [sc_apply(), sc_lab_errors(), sc_saves(), sc_no_persistence()]
+    out = [sc_cli_errors(), sc_cli_policy_ptag_ap(), sc_cli_flex(), sc_cli_aaa(), sc_cli_webauth(), sc_cli_mobility(), sc_names()] + sc_decide() + sc_aaa_variants() + sc_web_variants() + sc_mob_variants() + [sc_apply(), sc_lab_errors(), sc_saves(), sc_no_persistence()]
     for lab_id in lab_ids():
         for mode in ('guided', 'exam'):
             out.append(lab_flow(lab_id, mode))
