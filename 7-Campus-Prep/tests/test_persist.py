@@ -57,7 +57,7 @@ class TestState(Base):
         self.assertEqual(read(os.path.join(self.dir, 'state.json')), first)
         self.assertEqual([f for f in os.listdir(self.dir) if f.endswith('.tmp')], [])
         d = json.loads(first)
-        self.assertEqual((d['kind'], d['version']), ('campusprep-state', 6))   # 6: RF-Profile und RF Tags; 5: Mobility (Gruppe, Peers); 4: Web-Auth (lokale Benutzer, Login-Listen, Parameter Maps); 3: AAA-Objekte
+        self.assertEqual((d['kind'], d['version']), ('campusprep-state', 7))   # 7: QoS im Policy Profile; 6: RF-Profile und RF Tags; 5: Mobility (Gruppe, Peers); 4: Web-Auth (lokale Benutzer, Login-Listen, Parameter Maps); 3: AAA-Objekte
         # Determinismus: ein zweiter, unabhaengiger Lauf mit denselben Aktionen schreibt dieselben Bytes (keine Zeitstempel)
         with tempfile.TemporaryDirectory() as other:
             s2 = Sim(data_dir=other)
@@ -201,6 +201,25 @@ class TestMigration(Base):
         w = s2.wlc.state()
         self.assertEqual((w['rfProfiles'], [t['name'] for t in w['rfTags']]), ([], ['default-rf-tag']))
         self.assertTrue(s2.labs.check()['passed'])
+        self.assertFalse(os.path.exists(os.path.join(self.dir, 'state.json.bad')))
+
+    def test_qos_config_roundtrips_and_version_6_state_still_loads(self):
+        s = Sim(data_dir=self.dir)
+        s.labs.start('19-qos-gast-begrenzen')
+        s.apply(s.labs.labs['19-qos-gast-begrenzen']['solutionCommands'])
+        s.persist()
+        s2 = Sim(data_dir=self.dir)
+        self.assertEqual(s2.wlc.state(), s.wlc.state())
+        self.assertTrue(s2.labs.check()['passed'])
+        st = s.snapshot_all()
+        st['version'] = 6
+        for p in st['wlc']['policies'].values():
+            p.pop('qos_out', None)
+            p.pop('qos_in', None)
+        with open(os.path.join(self.dir, 'state.json'), 'w', encoding='utf-8') as fh:
+            json.dump(st, fh)
+        s3 = Sim(data_dir=self.dir)
+        self.assertEqual({(p['qosOutput'], p['qosInput']) for p in s3.wlc.state()['policies']}, {('', '')})
         self.assertFalse(os.path.exists(os.path.join(self.dir, 'state.json.bad')))
 
     def test_rf_config_roundtrips(self):
@@ -406,7 +425,7 @@ class TestHttp(Base):
             self.call('/wlc/api/saves', 'POST', {'name': 'geloest'})
             st, exp = self.call('/wlc/api/saves/export', 'POST', {'name': 'geloest'})
             self.assertEqual(st, 200)
-            self.assertEqual((exp['state']['kind'], exp['state']['version']), ('campusprep-state', 6))
+            self.assertEqual((exp['state']['kind'], exp['state']['version']), ('campusprep-state', 7))   # 7: QoS im Policy Profile
             # Import legt einen neuen Stand ab, laedt ihn aber nicht
             self.call('/wlc/api/lab/stop', 'POST', {})
             before = self.call('/wlc/api/state')[1]

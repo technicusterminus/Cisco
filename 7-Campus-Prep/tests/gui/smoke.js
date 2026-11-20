@@ -147,7 +147,7 @@ const STANDALONE = process.env.STANDALONE === '1';
     // Staende und Fortschritt
     await go('labs');
     console.log('       Kacheln: ' + (await text()).split('\n').filter(l => /bestanden|Starts|Prüfungsmodus$|^\d+( \/ \d+)?$/.test(l)).join(' | ').slice(0, 200));
-    check(/Geführt bestanden/.test(await text()) && /1 \/ 17[\s\S]*Labs bestanden/.test(await text()), 'Fortschritt: Lab 01 ist als geführt bestanden markiert');
+    check(/Geführt bestanden/.test(await text()) && /1 \/ 19[\s\S]*Labs bestanden/.test(await text()), 'Fortschritt: Lab 01 ist als geführt bestanden markiert');
     await p.fill('[data-id="save-name"]', 'lab01-geloest'); await p.click('[data-id="save"]'); await p.waitForTimeout(500);
     check(await p.locator('[data-id="load-lab01-geloest"]').count() === 1, 'Stand wird gespeichert und aufgelistet');
     await p.fill('[data-id="save-name"]', '../evil'); await p.click('[data-id="save"]'); await p.waitForTimeout(400);
@@ -189,7 +189,7 @@ const STANDALONE = process.env.STANDALONE === '1';
     await p.click('[data-id="del-lab01-geloest"]'); await p.waitForTimeout(400);
     check(await p.locator('[data-id="load-lab01-geloest"]').count() === 0, 'Stand lässt sich löschen');
     await p.click('[data-id="reset-progress"]'); await p.waitForTimeout(400);
-    check(/0 \/ 17[\s\S]*Labs bestanden/.test(await text()) && !/Geführt bestanden/.test(await text()), 'Fortschritt zurücksetzen');
+    check(/0 \/ 19[\s\S]*Labs bestanden/.test(await text()) && !/Geführt bestanden/.test(await text()), 'Fortschritt zurücksetzen');
 
     // 802.1X: AAA-Kette im Standardzustand ueber die Dialoge aufbauen, dann ein WLAN mit WPA2 Enterprise
     await go('aaa'); await p.click('[data-id="add-radius"]');
@@ -268,6 +268,26 @@ const STANDALONE = process.env.STANDALONE === '1';
     check(/gast1[\s\S]*aaa authorization network default local/.test(await text()), 'Lab 12: Diagnose nennt die fehlende Autorisierung');
     await go('webauth'); await p.click('[data-id="authz-toggle"]'); await p.waitForTimeout(400);
     check(solved2(await labCheck2()), 'Lab 12: mit der Autorisierung bestanden');
+
+    // QoS: Lab 19 und Lab 18 ueber den Policy-Dialog
+    const labCheck5 = async () => { await go('labs'); await p.click('[data-id="lab-check"]'); await p.waitForTimeout(300); return p.textContent('[data-id="check-result"]'); };
+    const solved5 = r => /bestanden/.test(r) && !/noch nicht/.test(r);
+    const editPolicy = async name => { await go('policies'); await p.locator('tr', { hasText: name }).locator('button:has-text("Edit")').click(); };
+    await go('labs'); await p.selectOption('[data-id="lab-mode"]', 'guided'); await p.click('[data-id="start-19"]'); await p.waitForTimeout(600);
+    check(!solved5(await labCheck5()), 'Lab 19: ohne Lösung nicht bestanden');
+    await go('diag');
+    check(/DSCP[\s\S]*46 → 46 \/ 46/.test(await text()), 'Diagnose zeigt den DSCP-Wert je Richtung (ohne Begrenzung)');
+    await editPolicy('PP_Guest'); await p.selectOption('[data-id="policy-qos-out"]', 'bronze');
+    check(/service-policy output bronze/.test(await p.textContent('[data-id="cli-preview"]')) && /no service-policy input/.test(await p.textContent('[data-id="cli-preview"]')), 'Policy-Dialog zeigt das CLI-Äquivalent (nur Output gesetzt)');
+    await apply();
+    check(!solved5(await labCheck5()), 'Lab 19: nur eine Richtung begrenzt reicht nicht');
+    await editPolicy('PP_Guest'); await p.selectOption('[data-id="policy-qos-in"]', 'bronze-up'); await apply();
+    check(/bronze \/ bronze-up/.test((await (async () => { await go('policies'); return text(); })())), 'Policy-Tabelle zeigt QoS je Richtung');
+    check(solved5(await labCheck5()), 'Lab 19: mit beiden Richtungen bestanden');
+    await go('labs'); await p.click('[data-id="start-18"]'); await p.waitForTimeout(600);
+    check(!solved5(await labCheck5()), 'Lab 18: ohne Lösung nicht bestanden');
+    await editPolicy('PP_Corp'); await p.selectOption('[data-id="policy-qos-out"]', 'platinum'); await p.selectOption('[data-id="policy-qos-in"]', 'platinum-up'); await apply();
+    check(solved5(await labCheck5()), 'Lab 18: mit Platinum in beide Richtungen bestanden');
 
     // RF: Lab 17 komplett ueber die Dialoge, Lab 16 ueber die AP-Zuordnung
     const labCheck4 = async () => { await go('labs'); await p.click('[data-id="lab-check"]'); await p.waitForTimeout(300); return p.textContent('[data-id="check-result"]'); };

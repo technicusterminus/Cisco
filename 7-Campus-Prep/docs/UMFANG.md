@@ -15,5 +15,6 @@ Ein Projekt, eine Welt: ein simulierter C9800-WLC mit Access Points und WLAN-Cli
 | 3c | Local Web Authentication: lokale Benutzer, Login-Liste, Autorisierung, Parameter Map, Web Auth im WLAN; Zustand Webauth Pending; Labs 12 und 13 | umgesetzt |
 | 3d | Mobility: Gruppenname, Peers, Tunnelzustand, Inter-Controller-Roaming; `show wireless mobility summary`; Labs 14 und 15 | umgesetzt |
 | 3e | RF-Profile und RF Tags: Profile je Band, Sendeleistung, Band an/aus, Zuordnung per AP; Labs 16 und 17 | umgesetzt |
-| 3f | WLC: QoS, Multicast, Location; weitere belegte Show-Befehle | offen |
+| 3f | QoS mit Metal-Profilen im Policy Profile: höchster DSCP-Wert je Richtung; Labs 18 und 19 | umgesetzt |
+| 3g | WLC: Multicast, Location; weitere belegte Show-Befehle | offen |
 | 4 | Catalyst Center: Sites, Network Settings, Provisioning des WLC, Assurance, Templates (nur mit belegten Antwortformaten) | offen |

@@ -1,0 +1,140 @@
+{
+ "cause": "Im Policy Profile der Gäste ist keine service-policy konfiguriert; der Verkehr wird nicht begrenzt.",
+ "checks": [
+  {
+   "category": "function",
+   "desc": "Gast-Laptop: DSCP 8 in beide Richtungen",
+   "dscpDown": 8,
+   "dscpUp": 8,
+   "mac": "58bf.eaaa.0002",
+   "state": "Run",
+   "type": "client"
+  },
+  {
+   "category": "security",
+   "desc": "Corp-Laptop bleibt bei DSCP 46 in beide Richtungen",
+   "dscpDown": 46,
+   "dscpUp": 46,
+   "mac": "58bf.eaaa.0001",
+   "state": "Run",
+   "type": "client"
+  }
+ ],
+ "duration": "25 min",
+ "fabric": "wlc1 mit ap-lobby und ap-lager",
+ "goals": [
+  "Ein Metal-Profil in beiden Richtungen setzen",
+  "Verstehen, dass Output und Input getrennt konfiguriert werden"
+ ],
+ "hints": [
+  "**Konzept:** Das Metal-Profil gilt je Richtung getrennt: zum Client (Output) und vom Client (Input). Beide gehören zum selben Profil.",
+  "**Ebene:** Das Policy Profile der Gäste.",
+  "**Prüfschritte:** Die Client-Diagnose zeigt den DSCP-Wert je Richtung. Ist nur eine Richtung begrenzt, bleibt die andere unverändert.",
+  "**Lösung:** Im Policy Profile **PP_Guest** Output **bronze** und Input **bronze-up** setzen."
+ ],
+ "id": "19-qos-gast-begrenzen",
+ "intro": "Im Gast-WLAN sendet ein Laptop Verkehr mit **DSCP 46**. Gäste sollen höchstens **DSCP 8** (Bronze) bekommen, in beide Richtungen. Das Corp-WLAN darf nicht gebremst werden: Dort bleibt DSCP 46 erhalten. Zurzeit ist nirgends QoS konfiguriert.",
+ "kind": "requirements",
+ "level": "Fortgeschritten",
+ "limits": [
+  "Das Client-Modell ist didaktisch: Es erklärt, ob und warum ein Client verbunden ist, ist aber keine Abbildung der Controller-Pipeline.",
+  "Nicht modelliert: 802.1x/RADIUS, FlexConnect, RF-Profile, Roaming, Mobility.",
+  "QoS ist stark vereinfacht: Ein Client sendet Verkehr mit einem DSCP-Wert; das Metal-Profil im Policy Profile begrenzt den höchsten Wert je Richtung. Es gibt keine Bandbreite, keine Warteschlangen, kein AVC und keine WMM-Zuordnung.",
+  "Das Cisco-Dokument 222241 beschreibt die Metal-Profile für APs im Local Mode; FlexConnect ist dort nicht behandelt, der Simulator wertet es gleich aus.",
+  "Ohne service-policy gibt es im Simulator keine Begrenzung; das Standardverhalten des Geräts ist nicht belegt."
+ ],
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 18"
+ ],
+ "questions": [
+  {
+   "answer": 0,
+   "explain": "Output und Input sind getrennte Einstellungen. Ohne Input-Profil bleibt der Verkehr vom Client unverändert (Simulator-Modell).",
+   "id": "q1",
+   "options": [
+    "Der Verkehr zum Client ist begrenzt, der vom Client nicht",
+    "Beide Richtungen sind begrenzt",
+    "Das Profil wird abgelehnt",
+    "Der Client wird getrennt"
+   ],
+   "q": "Was passiert, wenn nur `service-policy output bronze` gesetzt ist?"
+  },
+  {
+   "answer": 0,
+   "explain": "Laut Cisco-Dokument 222241 liegt der höchste Wert bei Silver 0 und bei Bronze 8.",
+   "id": "q2",
+   "options": [
+    "Silver begrenzt auf DSCP 0, die Anforderung nennt DSCP 8",
+    "Silver gibt es nicht",
+    "Silver gilt nur für Corp",
+    "Silver lässt alles durch"
+   ],
+   "q": "Warum ist es keine Lösung, das Gast-Profil auf Silver zu setzen?"
+  }
+ ],
+ "requirements": [
+  "Der Gast-Laptop wird in beide Richtungen auf DSCP 8 begrenzt.",
+  "Der Corp-Laptop behält DSCP 46 in beide Richtungen."
+ ],
+ "solution": "WebUI: Tags & Profiles > Policy > PP_Guest > Edit: QoS Output bronze, QoS Input bronze-up. CLI: `wireless profile policy PP_Guest`, `service-policy output bronze`, `service-policy input bronze-up`.",
+ "solutionCommands": [
+  "wireless profile policy PP_Guest",
+  "service-policy output bronze",
+  "service-policy input bronze-up"
+ ],
+ "startCommands": [
+  "wlan Corp_Profile 1 Corp",
+  "security wpa akm psk",
+  "security wpa psk set-key ascii 0 Sommer2026",
+  "no shutdown",
+  "exit",
+  "wlan Guest 2 Gast",
+  "no shutdown",
+  "exit",
+  "wireless profile policy PP_Corp",
+  "vlan 20",
+  "no shutdown",
+  "exit",
+  "wireless profile policy PP_Guest",
+  "vlan 99",
+  "no shutdown",
+  "exit",
+  "wireless tag policy PT_QOS",
+  "wlan Corp_Profile policy PP_Corp",
+  "wlan Guest policy PP_Guest",
+  "exit",
+  "ap a4b2.32aa.0001",
+  "policy-tag PT_QOS",
+  "exit"
+ ],
+ "title": "19 Gäste in beide Richtungen begrenzen",
+ "tools": [
+  "WebUI: Configuration > Tags & Profiles > Policy",
+  "Monitoring > Wireless > Clients",
+  "Client-Diagnose (nur im geführten Modus)",
+  "CLI: show wireless profile policy summary, show wireless client summary"
+ ],
+ "topic": "QoS / Design",
+ "track": "CCNP Enterprise Wireless (300-430 ENWLSI)",
+ "worldClients": [
+  {
+   "ap": "ap-lobby",
+   "dscp": 46,
+   "mac": "58bf.eaaa.0001",
+   "protocol": "11ac",
+   "psk": "Sommer2026",
+   "ssid": "Corp"
+  },
+  {
+   "ap": "ap-lobby",
+   "dscp": 46,
+   "mac": "58bf.eaaa.0002",
+   "protocol": "11ac",
+   "ssid": "Gast"
+  }
+ ]
+}

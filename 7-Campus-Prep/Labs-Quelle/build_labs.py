@@ -682,6 +682,82 @@ lab(id='17-rf-lobby-einrichten', title='17 Kleinere Funkzellen in der Lobby einr
 SOLUTIONS['17-rf-lobby-einrichten'] = RF_PROFILE_CMDS + RF_TAG_CMDS + ['ap %s' % L1, 'rf-tag RFT_LOBBY', 'exit']
 
 
+# ---------------------------------------------------------------------------------------------------------------
+# CCNP Enterprise Wireless (ENWLSI): QoS mit Metal-Profilen. Cisco-Dokument 222241 (ueber Websuche zitiert, siehe docs/QUELLEN.md):
+# service-policy input/output im Policy Profile, hoechste DSCP-Werte Bronze 8, Silver 0, Gold 34, Platinum 46.
+def qos_client(mac, ssid, dscp, psk=None, ap='ap-lobby'):
+    c = {'mac': mac, 'ssid': ssid, 'ap': ap, 'protocol': '11ac', 'dscp': dscp}
+    if psk is not None:
+        c['psk'] = psk
+    return c
+
+
+def qos_base(corp_out='', corp_in='', guest_out='', guest_in=''):
+    """Startkonfiguration: WLAN Corp (PSK, PP_Corp, VLAN 20) und WLAN Gast (offen, PP_Guest, VLAN 99) in einem Policy Tag an ap-lobby."""
+    def svc(out, inn):
+        return (['service-policy output ' + out] if out else []) + (['service-policy input ' + inn] if inn else [])
+    return ['wlan Corp_Profile 1 Corp', 'security wpa akm psk', 'security wpa psk set-key ascii 0 Sommer2026', 'no shutdown', 'exit',
+            'wlan Guest 2 Gast', 'no shutdown', 'exit',
+            'wireless profile policy PP_Corp', 'vlan 20', 'no shutdown'] + svc(corp_out, corp_in) + [
+            'exit', 'wireless profile policy PP_Guest', 'vlan 99', 'no shutdown'] + svc(guest_out, guest_in) + [
+            'exit', 'wireless tag policy PT_QOS', 'wlan Corp_Profile policy PP_Corp', 'wlan Guest policy PP_Guest', 'exit', 'ap %s' % L1, 'policy-tag PT_QOS', 'exit']
+
+
+QOS_TOOLS = ['WebUI: Configuration > Tags & Profiles > Policy', 'Monitoring > Wireless > Clients', 'Client-Diagnose (nur im geführten Modus)',
+             'CLI: show wireless profile policy summary, show wireless client summary']
+QOS_LIMITS = LIMITS + ['QoS ist stark vereinfacht: Ein Client sendet Verkehr mit einem DSCP-Wert; das Metal-Profil im Policy Profile begrenzt den höchsten Wert je Richtung. '
+                       'Es gibt keine Bandbreite, keine Warteschlangen, kein AVC und keine WMM-Zuordnung.',
+                       'Das Cisco-Dokument 222241 beschreibt die Metal-Profile für APs im Local Mode; FlexConnect ist dort nicht behandelt, der Simulator wertet es gleich aus.',
+                       'Ohne service-policy gibt es im Simulator keine Begrenzung; das Standardverhalten des Geräts ist nicht belegt.']
+VOICE = qos_client('58bf.eaaa.0001', 'Corp', 46, psk='Sommer2026')
+GUEST_TOUCH = qos_client('58bf.eaaa.0002', 'Gast', 46)
+
+lab(id='18-qos-metal-falsch', title='18 Sprache im Corp-WLAN verliert ihre Priorität', topic='QoS / Troubleshooting',
+    level='Fortgeschritten', duration='20 min', kind='troubleshooting', track=TRACK_WIFI, prerequisites=['Lab 01'], tools=QOS_TOOLS, limits=QOS_LIMITS,
+    goals=['Die Metal-Profile und ihren höchsten DSCP-Wert kennen', 'Beide Richtungen (Output und Input) im Policy Profile beachten'],
+    intro='Ein Laptop im Corp-WLAN sendet Sprache mit **DSCP 46**, aber sie wird auf dem Weg abgewertet. Das Gast-WLAN soll weiterhin begrenzt bleiben: '
+          'Auch dort sendet ein Laptop mit DSCP 46, soll aber höchstens DSCP 8 bekommen.',
+    requirements=['Der Corp-Laptop behält DSCP 46 in beide Richtungen (zum Client und vom Client).', 'Der Gast-Laptop wird in beide Richtungen auf DSCP 8 begrenzt.'],
+    hints=['**Konzept:** Ein Metal-Profil legt den höchsten DSCP-Wert fest, der in der jeweiligen Richtung erhalten bleibt. Jedes Profil gilt für einen Wert, den der Verkehr nicht übersteigen darf.',
+           '**Ebene:** Das Policy Profile der Corp-Clients. Das Gast-Profil ist in Ordnung.',
+           '**Prüfschritte:** Die Seite Monitoring > Clients bzw. die Client-Diagnose zeigt, welcher DSCP-Wert je Richtung ankommt. Die Policy-Seite zeigt das Profil je Richtung.',
+           '**Lösung:** Im Policy Profile **PP_Corp** Output **platinum** und Input **platinum-up** setzen (`service-policy output platinum`, `service-policy input platinum-up`). Das Gast-Profil nicht ändern.'],
+    cause='Das Policy Profile PP_Corp nutzt Silver (höchster DSCP 0); die Sprache wird zu Best Effort abgewertet.',
+    startCommands=qos_base('silver', 'silver-up', 'bronze', 'bronze-up'), worldClients=[VOICE, GUEST_TOUCH],
+    checks=[chk('Corp-Laptop: DSCP 46 in beide Richtungen', 'client', mac='58bf.eaaa.0001', state='Run', dscpDown=46, dscpUp=46),
+            chk('Gast-Laptop: DSCP 8 in beide Richtungen', 'client', 'security', mac='58bf.eaaa.0002', state='Run', dscpDown=8, dscpUp=8)],
+    questions=[q('q1', 'Welchen höchsten DSCP-Wert lässt das Metal-Profil Platinum zu?',
+                 ['46', '34', '8', '0'], 0, 'Laut Cisco-Dokument 222241: Platinum 46, Gold 34, Bronze 8, Silver 0.'),
+               q('q2', 'Warum ist es keine Lösung, auch das Gast-Profil auf Platinum zu setzen?',
+                 ['Dann könnten auch Gäste Sprache mit hoher Priorität senden', 'Das Gast-Profil lässt sich nicht ändern', 'Dann verliert der Corp-Laptop seine Verbindung', 'Platinum gilt nur für Corp'], 0,
+                 'Die Anforderung begrenzt Gäste auf DSCP 8. Mit Platinum käme ihr Verkehr unbegrenzt durch.')],
+    solution='WebUI: Tags & Profiles > Policy > PP_Corp > Edit: QoS Output platinum, QoS Input platinum-up. CLI: `wireless profile policy PP_Corp`, `service-policy output platinum`, `service-policy input platinum-up`.')
+SOLUTIONS['18-qos-metal-falsch'] = ['wireless profile policy PP_Corp', 'service-policy output platinum', 'service-policy input platinum-up']
+
+lab(id='19-qos-gast-begrenzen', title='19 Gäste in beide Richtungen begrenzen', topic='QoS / Design',
+    level='Fortgeschritten', duration='25 min', kind='requirements', track=TRACK_WIFI, prerequisites=['Lab 18'], tools=QOS_TOOLS, limits=QOS_LIMITS,
+    goals=['Ein Metal-Profil in beiden Richtungen setzen', 'Verstehen, dass Output und Input getrennt konfiguriert werden'],
+    intro='Im Gast-WLAN sendet ein Laptop Verkehr mit **DSCP 46**. Gäste sollen höchstens **DSCP 8** (Bronze) bekommen, in beide Richtungen. '
+          'Das Corp-WLAN darf nicht gebremst werden: Dort bleibt DSCP 46 erhalten. Zurzeit ist nirgends QoS konfiguriert.',
+    requirements=['Der Gast-Laptop wird in beide Richtungen auf DSCP 8 begrenzt.', 'Der Corp-Laptop behält DSCP 46 in beide Richtungen.'],
+    hints=['**Konzept:** Das Metal-Profil gilt je Richtung getrennt: zum Client (Output) und vom Client (Input). Beide gehören zum selben Profil.',
+           '**Ebene:** Das Policy Profile der Gäste.',
+           '**Prüfschritte:** Die Client-Diagnose zeigt den DSCP-Wert je Richtung. Ist nur eine Richtung begrenzt, bleibt die andere unverändert.',
+           '**Lösung:** Im Policy Profile **PP_Guest** Output **bronze** und Input **bronze-up** setzen.'],
+    cause='Im Policy Profile der Gäste ist keine service-policy konfiguriert; der Verkehr wird nicht begrenzt.',
+    startCommands=qos_base(), worldClients=[VOICE, GUEST_TOUCH],
+    checks=[chk('Gast-Laptop: DSCP 8 in beide Richtungen', 'client', mac='58bf.eaaa.0002', state='Run', dscpDown=8, dscpUp=8),
+            chk('Corp-Laptop bleibt bei DSCP 46 in beide Richtungen', 'client', 'security', mac='58bf.eaaa.0001', state='Run', dscpDown=46, dscpUp=46)],
+    questions=[q('q1', 'Was passiert, wenn nur `service-policy output bronze` gesetzt ist?',
+                 ['Der Verkehr zum Client ist begrenzt, der vom Client nicht', 'Beide Richtungen sind begrenzt', 'Das Profil wird abgelehnt', 'Der Client wird getrennt'], 0,
+                 'Output und Input sind getrennte Einstellungen. Ohne Input-Profil bleibt der Verkehr vom Client unverändert (Simulator-Modell).'),
+               q('q2', 'Warum ist es keine Lösung, das Gast-Profil auf Silver zu setzen?',
+                 ['Silver begrenzt auf DSCP 0, die Anforderung nennt DSCP 8', 'Silver gibt es nicht', 'Silver gilt nur für Corp', 'Silver lässt alles durch'], 0,
+                 'Laut Cisco-Dokument 222241 liegt der höchste Wert bei Silver 0 und bei Bronze 8.')],
+    solution='WebUI: Tags & Profiles > Policy > PP_Guest > Edit: QoS Output bronze, QoS Input bronze-up. CLI: `wireless profile policy PP_Guest`, `service-policy output bronze`, `service-policy input bronze-up`.')
+SOLUTIONS['19-qos-gast-begrenzen'] = ['wireless profile policy PP_Guest', 'service-policy output bronze', 'service-policy input bronze-up']
+
+
 def main(out=OUT, verbose=True):
     os.makedirs(out, exist_ok=True)
     for f in os.listdir(out):

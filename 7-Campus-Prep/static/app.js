@@ -200,7 +200,7 @@ const nextWlanId = () => Math.max(0, ...S.wlans.map(x => x.id)) + 1;
 VIEWS.policies = main => {
   main.append(h('div', { class: 'bar' }, h('button', { class: 'primary', 'data-id': 'add-policy', onclick: () => policyDialog() }, '+ Add')));
   main.append(table([{ l: 'Status', f: p => stateBadge(p.status) }, { l: 'Policy Profile Name', f: p => p.name },
-    { l: 'Description', f: p => p.description || 'Not required' }, { l: 'VLAN', f: p => p.vlan }, { l: 'Switching', f: p => p.central ? 'Central' : 'Local' }, { l: 'AAA Override', f: p => p.aaaOverride ? 'Yes' : 'No' },
+    { l: 'Description', f: p => p.description || 'Not required' }, { l: 'VLAN', f: p => p.vlan }, { l: 'Switching', f: p => p.central ? 'Central' : 'Local' }, { l: 'AAA Override', f: p => p.aaaOverride ? 'Yes' : 'No' }, { l: 'QoS (down / up)', f: p => (p.qosOutput || '–') + ' / ' + (p.qosInput || '–') },
     { l: '', f: p => [h('button', { class: 'small', onclick: () => policyDialog(p) }, 'Edit'), ' ',
       h('button', { class: 'small danger', onclick: () => remove('no wireless profile policy ' + p.name, 'Policy Profile ' + p.name) }, 'Delete')] }], S.policies));
 };
@@ -210,16 +210,22 @@ function policyDialog(p) {
   const vlan = h('input', { 'data-id': 'policy-vlan', value: p ? p.vlan : '1', placeholder: 'ID oder Name' });
   const central = h('input', { 'data-id': 'policy-central', type: 'checkbox' }); central.checked = p ? p.central : true;
   const aaa = h('input', { 'data-id': 'policy-aaa', type: 'checkbox' }); aaa.checked = p ? p.aaaOverride : false;
+  const metal = (id, names, cur) => { const sel = h('select', { 'data-id': id }, [h('option', { value: '' }, '(keines)')].concat(names.map(n => h('option', { value: n }, n)))); sel.value = cur || ''; return sel; };
+  const qout = metal('policy-qos-out', ['platinum', 'gold', 'silver', 'bronze'], p && p.qosOutput);
+  const qin = metal('policy-qos-in', ['platinum-up', 'gold-up', 'silver-up', 'bronze-up'], p && p.qosInput);
   const descr = h('input', { 'data-id': 'policy-descr', value: p ? p.description : '' });
   const en = h('input', { 'data-id': 'policy-enabled', type: 'checkbox' }); en.checked = p ? p.status === 'ENABLED' : false;
   const body = h('div', { class: 'row' }, field('Name', name), field('VLAN', vlan, 'ID (zentral) oder Name (bei lokalem Switching: Name aus dem Flex Profile).'),
     field('Central Switching', central, 'Ausgeschaltet: lokales Switching (nur für FlexConnect-APs).'),
-    field('AAA Override', aaa, 'Übernimmt Attribute aus RADIUS, z. B. das VLAN des Benutzers.'), field('Description', descr), field('Status Enabled', en));
+    field('AAA Override', aaa, 'Übernimmt Attribute aus RADIUS, z. B. das VLAN des Benutzers.'),
+    field('QoS Output (zum Client)', qout, 'Metal-Profil für den Verkehr zum Client. Höchster DSCP: Platinum 46, Gold 34, Silver 0, Bronze 8.'),
+    field('QoS Input (vom Client)', qin, 'Metal-Profil für den Verkehr vom Client; passend zum Output wählen.'), field('Description', descr), field('Status Enabled', en));
   modal(p ? 'Edit Policy Profile ' + p.name : 'Add Policy Profile', body, () => {
     if (!p) need(/^[\w.-]{1,32}$/.test(name.value), 'Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
     need(/^[\w.-]{1,32}$/.test(vlan.value), 'VLAN: ID oder Name (1-32 Zeichen, Buchstaben, Ziffern, . _ -)');
     const c = ['wireless profile policy ' + (p ? p.name : name.value), 'vlan ' + vlan.value, central.checked ? 'central switching' : 'no central switching',
-      aaa.checked ? 'aaa-override' : 'no aaa-override'];
+      aaa.checked ? 'aaa-override' : 'no aaa-override', qout.value ? 'service-policy output ' + qout.value : 'no service-policy output',
+      qin.value ? 'service-policy input ' + qin.value : 'no service-policy input'];
     if (descr.value.trim()) c.push('description ' + descr.value.trim());
     c.push(en.checked ? 'no shutdown' : 'shutdown');
     return c;
@@ -577,7 +583,7 @@ VIEWS.diag = main => {
   if (!S.diagAvailable) { main.append(h('div', { class: 'note', 'data-id': 'diag-locked' }, 'Im Prüfungsmodus ist die Client-Diagnose nicht verfügbar. Nutze Monitoring, die Show-Befehle und die CLI.')); return; }
   main.append(h('div', { class: 'note' }, 'Simulation: Diese Seite gibt es am echten Controller nicht. Sie erklärt, warum ein Client (nicht) verbunden ist. Die Begründungen sind ein didaktisches Modell.'));
   main.append(table([{ l: 'MAC Address', f: c => c.mac }, { l: 'Benutzer', f: c => c.user || '–' }, { l: 'SSID', f: c => c.ssid }, { l: 'AP', f: c => c.ap },
-    { l: 'Roaming', f: c => c.roam || '–' }, { l: 'Ergebnis', f: c => stateBadge(c.state) }, { l: 'Switching', f: c => c.switching || '–' }, { l: 'Begründung', cls: 'reason', f: c => c.reasons.length ? c.reasons.join(' ') : 'Verbunden' }], S.clients));
+    { l: 'Roaming', f: c => c.roam || '–' }, { l: 'DSCP (markiert → runter / rauf)', f: c => c.dscp === null ? '–' : c.state === 'Run' ? c.dscp + ' → ' + c.dscpDown + ' / ' + c.dscpUp : c.dscp + ' (nicht verbunden)' }, { l: 'Ergebnis', f: c => stateBadge(c.state) }, { l: 'Switching', f: c => c.switching || '–' }, { l: 'Begründung', cls: 'reason', f: c => c.reasons.length ? c.reasons.join(' ') : 'Verbunden' }], S.clients));
 };
 
 /* ---------------------------------------------------------------- Labs */

@@ -19,9 +19,11 @@
   const DEF_POLICY_TAG = 'default-policy-tag', DEF_SITE_TAG = 'default-site-tag', DEF_RF_TAG = 'default-rf-tag';
   const DEF_FLEX_PROFILE = 'default-flex-profile', DEF_WEBAUTH_MAP = 'global', DEF_MOBILITY_GROUP = 'default';
   const RF_BANDS = { '24ghz': '2,4 GHz', '5ghz': '5 GHz' };
+  const METAL_MAX_DSCP = { platinum: 46, gold: 34, silver: 0, bronze: 8 };   // Cisco-Dokument 222241
+  const METAL_IN = { 'platinum-up': 'platinum', 'gold-up': 'gold', 'silver-up': 'silver', 'bronze-up': 'bronze' };
   const NAME_RE = /^[\p{L}\p{N}_.-]{1,32}$/u;          // wie Python \w (Unicode)
   const STORE_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$/;
-  const KIND = 'campusprep-state', VERSION = 6, ACCEPTED = [1, 2, 3, 4, 5, 6];
+  const KIND = 'campusprep-state', VERSION = 7, ACCEPTED = [1, 2, 3, 4, 5, 6, 7];
   const MODES = ['guided', 'exam'];
   const HIDDEN = ['cause', 'solution', 'solutionCommands', 'startCommands', 'worldClients', 'worldRadius', 'worldMobility', 'checks', 'hints', 'questions'];
 
@@ -214,7 +216,8 @@
                                      webAuthMap: w.webauth_map || '', security: Wlc.securityOf(w) })),
         policies: sortedKeys(this.policies).map(n => { const p = this.policies[n];
           return { name: n, vlan: p.vlan, description: p.descr, central: has(p, 'central') ? p.central : true,
-                   aaaOverride: has(p, 'aaa_override') ? p.aaa_override : false, status: p.shutdown ? 'DISABLED' : 'ENABLED' }; }),
+                   aaaOverride: has(p, 'aaa_override') ? p.aaa_override : false, qosOutput: has(p, 'qos_out') ? p.qos_out : '', qosInput: has(p, 'qos_in') ? p.qos_in : '',
+                   status: p.shutdown ? 'DISABLED' : 'ENABLED' }; }),
         radiusServers: sortedKeys(this.radiusServers).map(n => { const r = this.radiusServers[n];
           return { name: n, ip: r.ip, authPort: r.auth_port, acctPort: r.acct_port, keySet: !!r.key, timeout: r.timeout, retransmit: r.retransmit,
                    state: this.radiusReply(n)[0] ? 'UP' : 'DEAD' }; }),
@@ -240,7 +243,8 @@
         aps,
         clients: this.clients().map(c => ({ mac: c.mac, ssid: c.ssid, ap: c.ap, protocol: c.protocol, state: c.state, wlan: c.wlan,
                                             vlan: c.vlan, method: c.method, switching: c.switching, mode: c.mode,
-                                            roam: c.roam === undefined ? null : c.roam,
+                                            roam: c.roam === undefined ? null : c.roam, dscp: c.dscp === undefined ? null : c.dscp,
+                                            dscpDown: c.dscpDown === undefined ? null : c.dscpDown, dscpUp: c.dscpUp === undefined ? null : c.dscpUp,
                                             user: (() => { const e = c.eap && Object.keys(c.eap).length ? c.eap : (c.web && Object.keys(c.web).length ? c.web : null); return e && e.user !== undefined ? e.user : null; })(),
                                             reasons: c.reasons })),
       };
@@ -328,7 +332,7 @@
     decide(client) {
       const ap = this.apByName(client.ap);
       const res = { state: 'Not Associated', ap: client.ap, wlan: null, policy: null, vlan: null, method: null,
-                    switching: null, mode: null, roam: null, reasons: [] };
+                    switching: null, mode: null, roam: null, dscpDown: null, dscpUp: null, reasons: [] };
       if (!ap || !ap.joined) { res.reasons.push('AP ' + client.ap + ' ist nicht am Controller registriert'); return res; }
       let wl = null;
       for (const [n, w] of this.wlans) if (w.ssid === client.ssid) { wl = n; break; }
@@ -398,9 +402,16 @@
         if (!this._webauth(client, w, res)) { res.state = 'Webauth Pending'; return res; }
       }
       if (client.roam) this._roam(client, w, res);
+      if (client.dscp !== undefined && client.dscp !== null) {
+        // QoS: Ein Metal-Profil begrenzt den hoechsten DSCP-Wert; ohne Profil gibt es keine Begrenzung (Simulator-Modell)
+        const out = has(p, 'qos_out') ? p.qos_out : '', inn = has(p, 'qos_in') ? p.qos_in : '';
+        res.dscpDown = Wlc.qosCap(client.dscp, has(METAL_MAX_DSCP, out) ? METAL_MAX_DSCP[out] : null);
+        res.dscpUp = Wlc.qosCap(client.dscp, has(METAL_IN, inn) ? METAL_MAX_DSCP[METAL_IN[inn]] : null);
+      }
       res.state = 'Run';
       return res;
     }
+    static qosCap(dscp, cap) { return cap === null ? dscp : Math.min(dscp, cap); }
 
     mobilityTunnel(ip) {
       /* Zustand des Mobility-Tunnels zu einem konfigurierten Peer (Simulator-Modell): Control und Data Path kommen nur hoch, wenn beide Seiten passen. */
@@ -862,6 +873,17 @@
         else if (w[0] === 'vlan' && w.length === 2 && NAME_RE.test(w[1])) x.vlan = w[1];
         else if (eq(w, ['central', 'switching'])) x.central = !no;
         else if (eq(w, ['aaa-override'])) x.aaa_override = !no;
+        else if (w[0] === 'service-policy' && w.length >= 2 && (w[1] === 'input' || w[1] === 'output') && ((!no && w.length === 3) || (no && (w.length === 2 || w.length === 3)))) {
+          const key = w[1] === 'input' ? 'qos_in' : 'qos_out';
+          if (no) {
+            if (w.length === 3 && (has(x, key) ? x[key] : undefined) !== w[2]) throw new CliError('Das Profil ' + w[2] + ' ist nicht als service-policy ' + w[1] + ' gesetzt');
+            x[key] = '';
+          } else {
+            const known = w[1] === 'input' ? METAL_IN : METAL_MAX_DSCP;
+            if (!has(known, w[2])) throw new CliError('Unbekanntes Profil ' + w[2] + ': Der Simulator kennt nur die vordefinierten Metal-Profile (' + Object.keys(known).sort(cmp).join(', ') + ')');
+            x[key] = w[2];
+          }
+        }
         else if (w[0] === 'description' && w.length > 1) x.descr = w.slice(1).join(' ');
         else throw inv();
         return '';
@@ -1085,8 +1107,10 @@
       if (!c) return [false, 'Client ' + chk.mac + ' unbekannt'];
       const ok = c.state === chk.state && (chk.vlan === undefined || chk.vlan === null || String(c.vlan) === String(chk.vlan)) &&
                  (chk.switching === undefined || chk.switching === null || c.switching === chk.switching) &&
-                 (chk.roam === undefined || chk.roam === null || c.roam === chk.roam);
-      return [ok, 'Zustand ' + c.state + (c.vlan ? ', VLAN ' + c.vlan : '') + (c.state === 'Run' && c.switching ? ', ' + c.switching + ' geschaltet' : '')];
+                 (chk.roam === undefined || chk.roam === null || c.roam === chk.roam) &&
+                 ['dscpDown', 'dscpUp'].every(k => chk[k] === undefined || chk[k] === null || c[k] === chk[k]);
+      return [ok, 'Zustand ' + c.state + (c.vlan ? ', VLAN ' + c.vlan : '') + (c.state === 'Run' && c.switching ? ', ' + c.switching + ' geschaltet' : '') +
+                    (c.dscpDown !== undefined && c.dscpDown !== null ? ', DSCP runter ' + c.dscpDown + ', rauf ' + c.dscpUp : '')];
     }
     if (t === 'wlan') {
       const w = st.wlans.find(x => x.profile === chk.profile);

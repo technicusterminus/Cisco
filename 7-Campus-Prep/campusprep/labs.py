@@ -37,9 +37,11 @@ def run_check(chk, st):
             return False, 'Client %s unbekannt' % chk['mac']
         ok = (c['state'] == chk['state'] and (chk.get('vlan') is None or str(c['vlan']) == str(chk['vlan']))
               and (chk.get('switching') is None or c.get('switching') == chk['switching'])
-              and (chk.get('roam') is None or c.get('roam') == chk['roam']))
-        return ok, 'Zustand %s%s%s' % (c['state'], ', VLAN %s' % c['vlan'] if c['vlan'] else '',
-                                       ', %s geschaltet' % c['switching'] if c['state'] == 'Run' and c.get('switching') else '')
+              and (chk.get('roam') is None or c.get('roam') == chk['roam'])
+              and all(chk.get(k) is None or c.get(k) == chk[k] for k in ('dscpDown', 'dscpUp')))
+        return ok, 'Zustand %s%s%s%s' % (c['state'], ', VLAN %s' % c['vlan'] if c['vlan'] else '',
+                                         ', %s geschaltet' % c['switching'] if c['state'] == 'Run' and c.get('switching') else '',
+                                         ', DSCP runter %s, rauf %s' % (c['dscpDown'], c['dscpUp']) if c.get('dscpDown') is not None else '')
     if t == 'wlan':
         w = next((x for x in st['wlans'] if x['profile'] == chk['profile']), None)
         if w is None:

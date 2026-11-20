@@ -423,6 +423,53 @@ def sc_rf_variants():
     return out
 
 
+def sc_cli_qos():
+    r = Recorder('cli-qos')
+    r.cli('configure terminal', 'wireless profile policy PP', 'service-policy', 'service-policy output', 'service-policy output bogus', 'service-policy output platinum-up',
+          'service-policy input platinum', 'service-policy both gold', 'service-policy output gold extra', 'no service-policy output gold', 'service-policy output platinum',
+          'service-policy input gold-up', 'no service-policy output gold', 'no service-policy output platinum', 'no service-policy input gold-up', 'no service-policy input',
+          'service-policy output silver', 'service-policy input bronze-up', 'no service-policy output', 'service-policy output bronze', 'exit', 'end',
+          'show wireless profile policy summary')
+    r.call('GET', '/wlc/api/state')
+    return r.finish()
+
+
+def qos_variants():
+    g = lambda *c: ['wireless profile policy PP_Guest'] + list(c) + ['exit']
+    c_ = lambda *c: ['wireless profile policy PP_Corp'] + list(c) + ['exit']
+    return [
+        ('18-qos-metal-falsch', 'fixed', c_('service-policy output platinum', 'service-policy input platinum-up')),
+        ('18-qos-metal-falsch', 'all-platinum', c_('service-policy output platinum', 'service-policy input platinum-up') + g('service-policy output platinum', 'service-policy input platinum-up')),
+        ('18-qos-metal-falsch', 'all-removed', c_('no service-policy output', 'no service-policy input') + g('no service-policy output', 'no service-policy input')),
+        ('18-qos-metal-falsch', 'output-only', c_('service-policy output platinum')),
+        ('18-qos-metal-falsch', 'gold', c_('service-policy output gold', 'service-policy input gold-up')),
+        ('18-qos-metal-falsch', 'mismatch', c_('service-policy output platinum', 'service-policy input gold-up')),
+        ('18-qos-metal-falsch', 'guest-silver', c_('service-policy output platinum', 'service-policy input platinum-up') + g('service-policy output silver', 'service-policy input silver-up')),
+        ('18-qos-metal-falsch', 'corp-shutdown', c_('shutdown')),
+        ('19-qos-gast-begrenzen', 'fixed', g('service-policy output bronze', 'service-policy input bronze-up')),
+        ('19-qos-gast-begrenzen', 'output-only', g('service-policy output bronze')),
+        ('19-qos-gast-begrenzen', 'input-only', g('service-policy input bronze-up')),
+        ('19-qos-gast-begrenzen', 'silver', g('service-policy output silver', 'service-policy input silver-up')),
+        ('19-qos-gast-begrenzen', 'gold', g('service-policy output gold', 'service-policy input gold-up')),
+        ('19-qos-gast-begrenzen', 'corp-too', g('service-policy output bronze', 'service-policy input bronze-up') + c_('service-policy output bronze', 'service-policy input bronze-up')),
+        ('19-qos-gast-begrenzen', 'unknown-name', g('service-policy output bronze', 'service-policy input bronze')),
+        ('19-qos-gast-begrenzen', 'wrong-direction', g('service-policy output bronze-up', 'service-policy input bronze-up')),
+    ]
+
+
+def sc_qos_variants():
+    out = []
+    for lab, name, cmds in qos_variants():
+        r = Recorder('qos-%s-%s' % (lab[:2], name))
+        r.call('POST', '/wlc/api/lab/start', {'id': lab, 'mode': 'guided'})
+        r.apply(cmds)
+        r.call('GET', '/wlc/api/state')
+        r.cli('end', 'show wireless profile policy summary', 'show wireless client summary')
+        r.call('POST', '/wlc/api/lab/check', {})
+        out.append(r.finish())
+    return out
+
+
 def sc_apply():
     r = Recorder('apply-atomic-and-validation')
     r.apply(CORP)
@@ -599,7 +646,7 @@ def sc_no_persistence():
 
 
 def build():
-    out = [sc_cli_errors(), sc_cli_policy_ptag_ap(), sc_cli_flex(), sc_cli_aaa(), sc_cli_webauth(), sc_cli_mobility(), sc_cli_rf(), sc_names()] + sc_decide() + sc_aaa_variants() + sc_web_variants() + sc_mob_variants() + sc_rf_variants() + [sc_apply(), sc_lab_errors(), sc_saves(), sc_export_import(), sc_no_persistence()]
+    out = [sc_cli_errors(), sc_cli_policy_ptag_ap(), sc_cli_flex(), sc_cli_aaa(), sc_cli_webauth(), sc_cli_mobility(), sc_cli_rf(), sc_cli_qos(), sc_names()] + sc_decide() + sc_aaa_variants() + sc_web_variants() + sc_mob_variants() + sc_rf_variants() + sc_qos_variants() + [sc_apply(), sc_lab_errors(), sc_saves(), sc_export_import(), sc_no_persistence()]
     for lab_id in lab_ids():
         for mode in ('guided', 'exam'):
             out.append(lab_flow(lab_id, mode))
