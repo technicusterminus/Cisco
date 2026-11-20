@@ -74,6 +74,10 @@ Pfade und Header wie im Original: `POST /dna/system/api/v1/auth/token` (HTTP Bas
 
 Das Catalyst Center hat keinen eigenen Bestand: Controller und APs kommen aus derselben Welt wie bei der WLC-CLI. Ein AP, der nicht registriert ist, fehlt in beiden.
 
+## Antworten aus dem eigenen Lab aufnehmen
+
+Für das Catalyst Center fehlen belegte Antwortformate. Wer ein eigenes Lab hat, kann sie mit `python3 tools/catc_capture.py --out catc-beispiele --anonymize` aufnehmen (Adresse und Zugang als Umgebungsvariablen `CATC_URL`, `CATC_USER`, `CATC_PASS`; nur lesende Abfragen; die Dateien vor dem Weitergeben prüfen). Das Werkzeug läuft nur, wenn man es selbst startet.
+
 ## Belegstand
 
 Was belegt ist, was aus Wissen stammt und was offen bleibt, steht in [`docs/QUELLEN.md`](docs/QUELLEN.md). Nicht belegte Ausgaben und Endpunkte werden nicht erfunden: Der Simulator lehnt sie ab und sagt, dass sie fehlen.
