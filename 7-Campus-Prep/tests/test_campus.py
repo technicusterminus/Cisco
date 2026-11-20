@@ -372,6 +372,89 @@ AAA = ['aaa new-model', 'radius server RS1', 'address ipv4 10.10.0.50 auth-port 
 CORP_CFG = CORP[1:-1] + ['ap a4b2.32aa.0001', 'policy-tag PT_Corp', 'exit']
 
 
+class TestRf(unittest.TestCase):
+    """RF-Profile und RF Tags: tx-power und 5ghz-rf-policy stammen aus einem Community-Beispiel (nicht offiziell); die Wirkung ist ein Simulator-Modell."""
+
+    def sim(self, extra=()):
+        s = Sim()
+        ok, _, err = s.apply(list(extra))
+        self.assertTrue(ok, err)
+        return s
+
+    def rf(self, s, i=0, band='5ghz'):
+        return s.wlc.state()['aps'][i]['rf'][band]
+
+    def test_defaults_and_effect_chain(self):
+        s = self.sim()
+        self.assertEqual(self.rf(s), {'profile': None, 'txMax': None, 'radio': 'on'})
+        self.assertEqual(s.wlc.state()['rfTags'], [{'name': 'default-rf-tag', 'builtin': True, 'rf24': '', 'rf5': ''}])
+        s = self.sim(['ap dot11 5ghz rf-profile P', 'tx-power max 12', 'tx-power min 6', 'no shutdown', 'exit', 'wireless tag rf T', '5ghz-rf-policy P', 'exit'])
+        self.assertEqual(self.rf(s), {'profile': None, 'txMax': None, 'radio': 'on'}, 'ohne Zuweisung am AP wirkungslos')
+        s.apply(['ap a4b2.32aa.0001', 'rf-tag T'])
+        self.assertEqual(self.rf(s), {'profile': 'P', 'txMax': 12, 'radio': 'on'})
+        self.assertEqual(self.rf(s, 1), {'profile': None, 'txMax': None, 'radio': 'on'})
+        self.assertEqual(self.rf(s, 0, '24ghz'), {'profile': None, 'txMax': None, 'radio': 'on'})
+        s.apply(['ap dot11 5ghz rf-profile P', 'shutdown'])
+        self.assertEqual(self.rf(s), {'profile': 'P', 'txMax': None, 'radio': 'off'})
+
+    def test_cli_forms_errors_and_prompts(self):
+        s = Sim()
+        cli = s.cli
+        cli.run('configure terminal')
+        self.assertEqual(cli.run('ap dot11 5ghz rf-profile P'), '')
+        self.assertTrue(cli.prompt.endswith('(config-rf-profile)#'))
+        for line in ('tx-power max 0', 'tx-power max 31', 'tx-power max x', 'tx-power', 'tx-power med 10', 'bogus', 'shutdown x', 'no bogus'):
+            self.assertTrue(cli.run(line).startswith('% '), line)
+        self.assertEqual(cli.run('tx-power max 10'), '')
+        self.assertIn('nicht groesser', cli.run('tx-power min 11'))
+        self.assertEqual(cli.run('tx-power min 10'), '')
+        self.assertEqual(cli.run('no tx-power min'), '')
+        cli.run('exit')
+        self.assertTrue(cli.run('ap dot11 6ghz rf-profile X').startswith('% '))
+        self.assertTrue(cli.run('ap dot11 5ghz rf-profile bad!name').startswith('% '))
+        cli.run('wireless tag rf T')
+        self.assertTrue(cli.prompt.endswith('(config-rf-tag)#'))
+        self.assertIn('existiert fuer 5 GHz nicht', cli.run('5ghz-rf-policy NIX'))
+        self.assertIn('existiert fuer 2,4 GHz nicht', cli.run('24ghz-rf-policy P'))
+        self.assertEqual(cli.run('5ghz-rf-policy P'), '')
+        self.assertEqual(cli.run('no 5ghz-rf-policy'), '')
+        self.assertTrue(cli.run('6ghz-rf-policy P').startswith('% '))
+        cli.run('exit')
+        cli.run('ap a4b2.32aa.0001')
+        self.assertIn('existiert nicht', cli.run('rf-tag NIX'))
+
+    def test_same_name_in_both_bands_is_two_profiles(self):
+        s = self.sim(['ap dot11 5ghz rf-profile P', 'tx-power max 10', 'exit', 'ap dot11 24ghz rf-profile P', 'tx-power max 20', 'exit'])
+        self.assertEqual(sorted((p['band'], p['txMax']) for p in s.wlc.state()['rfProfiles']), [('24ghz', 20), ('5ghz', 10)])
+
+    def test_dependencies_are_refused_and_the_default_tag_stays(self):
+        s = self.sim(['ap dot11 5ghz rf-profile P', 'exit', 'wireless tag rf T', '5ghz-rf-policy P', 'exit', 'ap a4b2.32aa.0001', 'rf-tag T', 'exit'])
+        cli = s.cli
+        cli.run('configure terminal')
+        self.assertIn('wird von RF Tags verwendet', cli.run('no ap dot11 5ghz rf-profile P'))
+        self.assertIn('APs zugewiesen', cli.run('no wireless tag rf T'))
+        self.assertIn('vordefiniert', cli.run('no wireless tag rf default-rf-tag'))
+        self.assertIn('existiert nicht', cli.run('no wireless tag rf NIX'))
+        self.assertIn('existiert fuer 5 GHz nicht', cli.run('no ap dot11 5ghz rf-profile NIX'))
+        cli.run('ap a4b2.32aa.0001')
+        self.assertEqual(cli.run('no rf-tag'), '')
+        cli.run('exit')
+        self.assertEqual(cli.run('no wireless tag rf T'), '')
+        self.assertEqual(cli.run('no ap dot11 5ghz rf-profile P'), '')
+
+    def test_deleted_rf_profile_in_an_open_submode_does_not_crash(self):
+        s = Sim()
+        s.cli.run('configure terminal')
+        s.cli.run('ap dot11 5ghz rf-profile P')
+        del s.wlc.rf_profiles['5ghz:P']
+        self.assertEqual(s.cli.run('tx-power max 5'), '% Das Objekt existiert nicht mehr')
+
+    def test_rf_tag_counts_as_a_static_tag_source(self):
+        s = self.sim(['wireless tag rf T', 'exit', 'ap a4b2.32aa.0001', 'rf-tag T'])
+        self.assertEqual([a['tagSource'] for a in s.wlc.state()['aps']], ['Static', 'Default'])
+        self.assertIn('Static', next(x for x in s.cli.run('show ap tag summary').splitlines() if x.startswith('ap-lobby')))
+
+
 class TestMobility(unittest.TestCase):
     """Mobility: Befehle und Felder nach Cisco-Dokument 213913; Tunnel- und Roaming-Entscheidung sind ein Simulator-Modell."""
     MEMBER = 'wireless mobility group member mac-address aabb.cc00.0200 ip 10.10.0.20 group Campus'

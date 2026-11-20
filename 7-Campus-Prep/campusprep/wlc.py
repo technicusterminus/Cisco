@@ -13,6 +13,7 @@ DEF_POLICY_TAG, DEF_SITE_TAG, DEF_RF_TAG = 'default-policy-tag', 'default-site-t
 DEF_FLEX_PROFILE = 'default-flex-profile'
 DEF_WEBAUTH_MAP = 'global'
 DEF_MOBILITY_GROUP = 'default'
+RF_BANDS = {'24ghz': '2,4 GHz', '5ghz': '5 GHz'}
 NAME_RE = re.compile(r'^[\w.-]{1,32}$')
 
 
@@ -43,17 +44,19 @@ class Wlc:
         self.webauth_maps = {DEF_WEBAUTH_MAP: {'type': 'webauth', 'virtual_ip': '192.0.2.1'}}   # parameter-map type webauth
         self.mobility_group = DEF_MOBILITY_GROUP   # wireless mobility group name
         self.mobility_peers = {}   # Peer-IP -> {mac, group} (wireless mobility group member)
+        self.rf_profiles = {}      # 'band:name' -> {band, name, shutdown, tx_min, tx_max, descr}
+        self.rf_tags = {DEF_RF_TAG: {'24ghz': '', '5ghz': ''}}   # name -> {24ghz: Profil, 5ghz: Profil}
 
     # ------------------------------------------------------------------ Snapshot und Zustand fuer die Oberflaeche
     def snapshot(self):
         return copy.deepcopy((self.wlans, self.policies, self.policy_tags, self.ap_cfg, self.flex_profiles, self.site_tags,
                               self.radius_servers, self.aaa_groups, self.aaa_lists, self.local_users, self.login_lists,
-                              self.authz_default_local, self.webauth_maps, self.mobility_group, self.mobility_peers))
+                              self.authz_default_local, self.webauth_maps, self.mobility_group, self.mobility_peers, self.rf_profiles, self.rf_tags))
 
     def restore(self, snap):
         (self.wlans, self.policies, self.policy_tags, self.ap_cfg, self.flex_profiles, self.site_tags,
          self.radius_servers, self.aaa_groups, self.aaa_lists, self.local_users, self.login_lists,
-         self.authz_default_local, self.webauth_maps, self.mobility_group, self.mobility_peers) = copy.deepcopy(snap)
+         self.authz_default_local, self.webauth_maps, self.mobility_group, self.mobility_peers, self.rf_profiles, self.rf_tags) = copy.deepcopy(snap)
 
     def dump(self):
         """Konfiguration fuer die Persistenz (JSON-tauglich). Die Welt (APs, Clients) speichert die Sim."""
@@ -62,7 +65,7 @@ class Wlc:
                               'aaaGroups': self.aaa_groups, 'aaaLists': self.aaa_lists, 'localUsers': self.local_users,
                               'loginLists': self.login_lists, 'authzDefaultLocal': self.authz_default_local,
                               'webauthMaps': self.webauth_maps, 'mobilityGroup': self.mobility_group,
-                              'mobilityPeers': self.mobility_peers})
+                              'mobilityPeers': self.mobility_peers, 'rfProfiles': self.rf_profiles, 'rfTags': self.rf_tags})
 
     def load(self, d):
         self.wlans, self.policies = copy.deepcopy(d['wlans']), copy.deepcopy(d['policies'])
@@ -86,15 +89,20 @@ class Wlc:
         # Staende vor Version 5 kennen kein Mobility
         self.mobility_group = d.get('mobilityGroup') or DEF_MOBILITY_GROUP
         self.mobility_peers = copy.deepcopy(d.get('mobilityPeers') or {})
+        # Staende vor Version 6 kennen keine RF-Profile
+        self.rf_profiles = copy.deepcopy(d.get('rfProfiles') or {})
+        self.rf_tags = copy.deepcopy(d.get('rfTags') or {})
+        self.rf_tags.setdefault(DEF_RF_TAG, {'24ghz': '', '5ghz': ''})
 
     def state(self):
         """Alles, was die Weboberflaeche anzeigt (Schluessel werden nicht herausgegeben)."""
         aps = []
         for a in self.world['aps']:
-            explicit = self.ap_cfg.get(a['ethMac'], {}).get('policy_tag') or self.ap_cfg.get(a['ethMac'], {}).get('site_tag')
+            explicit = (self.ap_cfg.get(a['ethMac'], {}).get('policy_tag') or self.ap_cfg.get(a['ethMac'], {}).get('site_tag')
+                        or self.ap_cfg.get(a['ethMac'], {}).get('rf_tag'))
             aps.append({'name': a['name'], 'model': a['model'], 'ethMac': a['ethMac'], 'radioMac': a['radioMac'], 'ip': a['ip'],
                         'location': a['location'], 'country': a['country'], 'state': 'Registered' if a.get('joined') else 'Not joined',
-                        'policyTag': self.policy_tag_of(a), 'siteTag': self.site_tag_of(a), 'rfTag': DEF_RF_TAG, 'mode': self.ap_mode(a),
+                        'policyTag': self.policy_tag_of(a), 'siteTag': self.site_tag_of(a), 'rfTag': self.rf_tag_of(a), 'rf': {b: self.rf_effective(a, b) for b in sorted(RF_BANDS)}, 'mode': self.ap_mode(a),
                         'tagSource': 'Static' if explicit else 'Default'})
         return {
             'wlc': dict(self.world['wlc']),
@@ -113,6 +121,9 @@ class Wlc:
             'localUsers': [{'name': n, 'passwordSet': bool(pw)} for n, pw in sorted(self.local_users.items())],
             'loginLists': [{'name': n, 'method': l['method']} for n, l in sorted(self.login_lists.items())],
             'authzDefaultLocal': self.authz_default_local,
+            'rfProfiles': [{'name': p['name'], 'band': p['band'], 'status': 'DISABLED' if p['shutdown'] else 'ENABLED', 'txMin': p['tx_min'],
+                            'txMax': p['tx_max'], 'description': p['descr']} for _, p in sorted(self.rf_profiles.items())],
+            'rfTags': [{'name': n, 'builtin': n == DEF_RF_TAG, 'rf24': t['24ghz'], 'rf5': t['5ghz']} for n, t in sorted(self.rf_tags.items())],
             'mobilityGroup': self.mobility_group, 'mobilityMac': self.world['wlc']['mac'],
             'mobilityPeers': [dict(ip=ip, mac=p['mac'], group=p['group'], **self.mobility_tunnel(ip)) for ip, p in sorted(self.mobility_peers.items())],
             'webauthMaps': [{'name': n, 'builtin': n == DEF_WEBAUTH_MAP, 'type': m['type'], 'virtualIp': m['virtual_ip']}
@@ -138,6 +149,21 @@ class Wlc:
 
     def ap_by_name(self, name):
         return next((a for a in self.world['aps'] if a['name'] == name), None)
+
+    def rf_tag_of(self, ap):
+        return self.ap_cfg.get(ap['ethMac'], {}).get('rf_tag') or DEF_RF_TAG
+
+    def rf_effective(self, ap, band):
+        """Wirkung der RF-Konfiguration auf einen AP und ein Band: Das RF Tag des APs verweist je Band auf ein RF-Profil. Ohne Verweis
+        gelten die globalen Einstellungen (txMax automatisch); ein deaktiviertes RF-Profil schaltet das Band ab (Simulator-Modell)."""
+        tag = self.rf_tags.get(self.rf_tag_of(ap)) or {}
+        name = tag.get(band) or ''
+        prof = self.rf_profiles.get('%s:%s' % (band, name)) if name else None
+        if prof is None:
+            return {'profile': None, 'txMax': None, 'radio': 'on'}
+        if prof['shutdown']:
+            return {'profile': name, 'txMax': None, 'radio': 'off'}
+        return {'profile': name, 'txMax': prof['tx_max'], 'radio': 'on'}
 
     def policy_tag_of(self, ap):
         return self.ap_cfg.get(ap['ethMac'], {}).get('policy_tag') or DEF_POLICY_TAG
@@ -424,9 +450,10 @@ class Wlc:
                '-' * 172]
         for a in aps:
             tag = self.policy_tag_of(a)
-            explicit = bool(self.ap_cfg.get(a['ethMac'], {}).get('policy_tag') or self.ap_cfg.get(a['ethMac'], {}).get('site_tag'))
+            explicit = bool(self.ap_cfg.get(a['ethMac'], {}).get('policy_tag') or self.ap_cfg.get(a['ethMac'], {}).get('site_tag')
+                            or self.ap_cfg.get(a['ethMac'], {}).get('rf_tag'))
             out.append('%-23s %-16s %-33s %-33s %-33s %-16s %s' % (
-                a['name'], a['ethMac'], self.site_tag_of(a), tag, DEF_RF_TAG, 'No', 'Static' if explicit else 'Default'))
+                a['name'], a['ethMac'], self.site_tag_of(a), tag, self.rf_tag_of(a), 'No', 'Static' if explicit else 'Default'))
         return '\n'.join(out)
 
     def show_wireless_client_summary(self):
@@ -491,7 +518,8 @@ class Cli:
     PROMPTS = {'exec': '#', 'config': '(config)#', 'wlan': '(config-wlan)#', 'policy': '(config-wireless-policy)#',
                'ptag': '(config-policy-tag)#', 'ap': '(config-ap)#', 'flex': '(config-wireless-flex-profile)#',
                'flexvlan': '(config-wireless-flex-profile-vlan)#', 'stag': '(config-site-tag)#', 'radius': '(config-radius-server)#',
-               'aaagrp': '(config-sg-radius)#', 'pmap': '(config-params-parameter-map)#'}
+               'aaagrp': '(config-sg-radius)#', 'pmap': '(config-params-parameter-map)#',
+               'rfprof': '(config-rf-profile)#', 'rftag': '(config-rf-tag)#'}
 
     def __init__(self, wlc):
         self.wlc, self.mode, self.ctx, self.ctx2 = wlc, 'exec', None, None
@@ -589,7 +617,7 @@ class Cli:
             raise CliError('Invalid input detected: "no"')
         # Das Objekt des aktuellen Untermodus kann inzwischen (z. B. ueber die Oberflaeche) geloescht worden sein
         store = {'wlan': c.wlans, 'policy': c.policies, 'ptag': c.policy_tags, 'flex': c.flex_profiles, 'flexvlan': c.flex_profiles,
-                 'stag': c.site_tags, 'radius': c.radius_servers, 'aaagrp': c.aaa_groups, 'pmap': c.webauth_maps}.get(self.mode)
+                 'stag': c.site_tags, 'radius': c.radius_servers, 'aaagrp': c.aaa_groups, 'pmap': c.webauth_maps, 'rfprof': c.rf_profiles, 'rftag': c.rf_tags}.get(self.mode)
         if store is not None and self.ctx not in store:
             self.mode, self.ctx, self.ctx2 = 'config', None, None
             raise CliError('Das Objekt existiert nicht mehr')
@@ -678,6 +706,38 @@ class Cli:
                 if users:
                     raise CliError('Parameter Map %s wird von WLANs verwendet (%s) - zuerst dort entfernen' % (w[3], ', '.join(users)))
                 del c.webauth_maps[w[3]]
+                return ''
+            if w[:2] == ['ap', 'dot11'] and len(w) == 5 and w[2] in RF_BANDS and w[3] == 'rf-profile' and not no:
+                if w[4] not in [p['name'] for p in c.rf_profiles.values() if p['band'] == w[2]] and not NAME_RE.match(w[4]):
+                    raise CliError('Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)')
+                key = '%s:%s' % (w[2], w[4])
+                c.rf_profiles.setdefault(key, {'band': w[2], 'name': w[4], 'shutdown': True, 'tx_min': None, 'tx_max': None, 'descr': ''})
+                self.mode, self.ctx = 'rfprof', key
+                return ''
+            if no and w[:2] == ['ap', 'dot11'] and len(w) == 5 and w[2] in RF_BANDS and w[3] == 'rf-profile':
+                key = '%s:%s' % (w[2], w[4])
+                if key not in c.rf_profiles:
+                    raise CliError('RF-Profil %s existiert fuer %s nicht' % (w[4], RF_BANDS[w[2]]))
+                users = sorted(n for n, t in c.rf_tags.items() if t[w[2]] == w[4])
+                if users:
+                    raise CliError('RF-Profil %s wird von RF Tags verwendet (%s) - zuerst dort entfernen' % (w[4], ', '.join(users)))
+                del c.rf_profiles[key]
+                return ''
+            if w[:3] == ['wireless', 'tag', 'rf'] and len(w) == 4 and not no:
+                if w[3] not in c.rf_tags and not NAME_RE.match(w[3]):
+                    raise CliError('Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)')
+                c.rf_tags.setdefault(w[3], {'24ghz': '', '5ghz': ''})
+                self.mode, self.ctx = 'rftag', w[3]
+                return ''
+            if no and w[:3] == ['wireless', 'tag', 'rf'] and len(w) == 4:
+                if w[3] == DEF_RF_TAG:
+                    raise CliError('%s ist vordefiniert und kann nicht geloescht werden' % DEF_RF_TAG)
+                if w[3] not in c.rf_tags:
+                    raise CliError('RF Tag %s existiert nicht' % w[3])
+                aps = sorted(a['name'] for a in c.world['aps'] if c.rf_tag_of(a) == w[3])
+                if aps:
+                    raise CliError('RF Tag %s ist APs zugewiesen (%s) - zuerst dort entfernen' % (w[3], ', '.join(aps)))
+                del c.rf_tags[w[3]]
                 return ''
             if w[:4] == ['wireless', 'mobility', 'group', 'name'] and len(w) == 5 and not no:
                 if not NAME_RE.match(w[4]):
@@ -910,6 +970,37 @@ class Cli:
             else:
                 raise CliError('Invalid input detected: "%s"' % ' '.join(w))
             return ''
+        if self.mode == 'rfprof':
+            x = c.rf_profiles[self.ctx]
+            if w[0] == 'shutdown' and len(w) == 1:
+                x['shutdown'] = not no
+            elif w[0] == 'tx-power' and len(w) == 3 and w[1] in ('min', 'max') and not no:
+                if not w[2].isdigit() or not 1 <= int(w[2]) <= 30:
+                    raise CliError('Sendeleistung: 1-30 dBm (Simulator-Wertebereich)')
+                v = int(w[2])
+                lo, hi = (v, x['tx_max']) if w[1] == 'min' else (x['tx_min'], v)
+                if lo is not None and hi is not None and lo > hi:
+                    raise CliError('tx-power min darf nicht groesser als tx-power max sein')
+                x['tx_' + w[1]] = v
+            elif w[0] == 'tx-power' and len(w) == 2 and w[1] in ('min', 'max') and no:
+                x['tx_' + w[1]] = None
+            elif w[0] == 'description' and len(w) > 1 and not no:
+                x['descr'] = ' '.join(w[1:])
+            else:
+                raise CliError('Invalid input detected: "%s"' % ' '.join(w))
+            return ''
+        if self.mode == 'rftag':
+            t = c.rf_tags[self.ctx]
+            if w[0] in ('24ghz-rf-policy', '5ghz-rf-policy') and (len(w) == 2 or (no and len(w) == 1)):
+                band = w[0][:-len('-rf-policy')]
+                if no:
+                    t[band] = ''
+                else:
+                    if '%s:%s' % (band, w[1]) not in c.rf_profiles:
+                        raise CliError('RF-Profil %s existiert fuer %s nicht' % (w[1], RF_BANDS[band]))
+                    t[band] = w[1]
+                return ''
+            raise CliError('Invalid input detected: "%s"' % ' '.join(w))
         if self.mode == 'ap':
             if w[0] == 'site-tag' and (len(w) == 2 or (no and len(w) == 1)):
                 if no:
@@ -924,6 +1015,14 @@ class Cli:
                     c.ap_cfg[self.ctx].pop('policy_tag', None)
                 else:
                     c.ap_cfg[self.ctx]['policy_tag'] = w[1]
+                return ''
+            if w[0] == 'rf-tag' and (len(w) == 2 or (no and len(w) == 1)):
+                if no:
+                    c.ap_cfg[self.ctx].pop('rf_tag', None)
+                else:
+                    if w[1] not in c.rf_tags:
+                        raise CliError('RF Tag %s existiert nicht' % w[1])
+                    c.ap_cfg[self.ctx]['rf_tag'] = w[1]
                 return ''
             raise CliError('Invalid input detected: "%s"' % ' '.join(w))
         raise CliError('Invalid input detected')

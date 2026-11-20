@@ -13,7 +13,7 @@ Alle Labs sind Eigenentwicklungen für den Simulator (keine Vorlagen von Cisco o
 
 ## CCNP Enterprise Wireless (300-430 ENWLSI)
 
-Die Labs 07 bis 15 tragen den Track *CCNP Enterprise Wireless*: FlexConnect (07, 08), 802.1X mit RADIUS (09 bis 11), Local Web Authentication (12, 13) und Mobility (14, 15), Prüfungsthemen der 300-430 (Quellen und Vorbehalte in `docs/QUELLEN.md`). Die Labs 01 bis 06 sind Grundlagen.
+Die Labs 07 bis 17 tragen den Track *CCNP Enterprise Wireless*: FlexConnect (07, 08), 802.1X mit RADIUS (09 bis 11), Local Web Authentication (12, 13), Mobility (14, 15) und RF (16, 17), Prüfungsthemen der 300-430 (Quellen und Vorbehalte in `docs/QUELLEN.md`). Die Labs 01 bis 06 sind Grundlagen.
 
 | Lab | Art | Lernmoment | Falsche Abkürzung, die die Prüfung abfängt |
 |---|---|---|---|
@@ -27,6 +27,8 @@ Die Labs 07 bis 15 tragen den Track *CCNP Enterprise Wireless*: FlexConnect (07,
 | 13 Gast-WLAN mit Portal-Anmeldung einrichten | Anforderungen | Reihenfolge der Bausteine: Benutzer, Login-Liste, Autorisierung, Parameter Map, Web Auth im WLAN | Nur den Benutzer anlegen: Das WLAN bleibt offen, Mallory kommt ohne Anmeldung hinein. Ohne Parameter Map oder Autorisierung bleibt jeder in Webauth Pending |
 | 14 Roaming zwischen Controllern: Sitzung bricht ab | Fehlersuche | Der Tunnel zum Peer kommt nur hoch, wenn Gruppe und MAC im Peer-Eintrag zum Peer passen | Den Peer entfernen oder den eigenen Gruppennamen ändern: Der Tunnel bleibt unten, der Laptop roamt nicht. Das WLAN öffnen: Auch der Laptop mit falschem Schlüssel kommt hinein |
 | 15 Mobility mit einem neuen Controller einrichten | Anforderungen | Beide Seiten müssen zueinander passen: Der eigene Gruppenname (wie die Gegenseite uns kennt) und der Peer-Eintrag | Nur den Peer eintragen oder nur den Gruppennamen setzen: Der Tunnel bleibt unten |
+| 16 RF-Profil angelegt, aber die Lobby sendet unverändert | Fehlersuche | Ein RF-Profil wirkt nur über ein RF Tag, das der AP trägt | Das Default RF Tag auf das Profil zeigen lassen: Es trifft auch ap-lager |
+| 17 Kleinere Funkzellen in der Lobby einrichten | Anforderungen | Profil, RF Tag und AP-Zuordnung; ein neues Profil ist zunächst deaktiviert | Profil ohne `no shutdown`: Das Band ist aus. Nur das 2,4-GHz-Profil oder das falsche Band: Das 5-GHz-Band bleibt unverändert. Default RF Tag: Trifft alle APs |
 
 Gleichwertig bei Lab 08: den Namen im Policy Profile anpassen oder im Flex Profile umbenennen.
 

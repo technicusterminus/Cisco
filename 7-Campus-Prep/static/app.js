@@ -34,7 +34,7 @@ const NAV = [
   { id: 'dash', l: 'Dashboard' },
   { id: 'labs', l: 'Labs (Simulation)' },
   { g: 'Monitoring', sub: 'Wireless', items: [['aps', 'Access Points'], ['clients', 'Clients']] },
-  { g: 'Configuration', sub: 'Tags & Profiles', items: [['wlans', 'WLANs'], ['policies', 'Policy'], ['flex', 'Flex'], ['tags', 'Tags (Policy)'], ['sitetags', 'Tags (Site)']] },
+  { g: 'Configuration', sub: 'Tags & Profiles', items: [['wlans', 'WLANs'], ['policies', 'Policy'], ['flex', 'Flex'], ['tags', 'Tags (Policy)'], ['sitetags', 'Tags (Site)'], ['rf', 'RF']] },
   { g: 'Configuration', sub: 'Wireless', items: [['apcfg', 'Access Points'], ['mobility', 'Mobility']] },
   { g: 'Configuration', sub: 'Security', items: [['aaa', 'AAA'], ['webauth', 'Web Auth']] },
   { g: 'Administration', items: [['cli', 'Command Line Interface']] },
@@ -42,7 +42,7 @@ const NAV = [
 ];
 const TITLES = { dash: 'Dashboard', labs: 'Labs (Simulation)', aps: 'Monitoring > Wireless > Access Points', clients: 'Monitoring > Wireless > Clients',
   wlans: 'Configuration > Tags & Profiles > WLANs', policies: 'Configuration > Tags & Profiles > Policy',
-  mobility: 'Configuration > Wireless > Mobility', aaa: 'Configuration > Security > AAA', webauth: 'Configuration > Security > Web Auth', flex: 'Configuration > Tags & Profiles > Flex', sitetags: 'Configuration > Tags & Profiles > Tags > Site',
+  rf: 'Configuration > Tags & Profiles > RF', mobility: 'Configuration > Wireless > Mobility', aaa: 'Configuration > Security > AAA', webauth: 'Configuration > Security > Web Auth', flex: 'Configuration > Tags & Profiles > Flex', sitetags: 'Configuration > Tags & Profiles > Tags > Site',
   tags: 'Configuration > Tags & Profiles > Tags > Policy', apcfg: 'Configuration > Wireless > Access Points',
   cli: 'Administration > Command Line Interface', diag: 'Troubleshooting > Client-Diagnose (Simulation)' };
 
@@ -300,6 +300,50 @@ function listDialog(l) {
   }, refresh);
 }
 
+VIEWS.rf = main => {
+  main.append(h('div', { class: 'note' }, 'Ein RF-Profil legt Funkparameter für ein Band fest. Es wirkt nur, wenn ein RF Tag darauf verweist und der AP dieses RF Tag trägt. Ein deaktiviertes Profil schaltet das Band an diesen APs ab.'));
+  main.append(h('h2', null, 'RF-Profile'), h('div', { class: 'bar' }, h('button', { class: 'primary', 'data-id': 'add-rfprof', onclick: () => rfProfDialog() }, '+ Add')));
+  main.append(table([{ l: 'Status', f: p => stateBadge(p.status) }, { l: 'Band', f: p => p.band === '5ghz' ? '5 GHz' : '2,4 GHz' }, { l: 'RF Profile Name', f: p => p.name },
+    { l: 'Tx Power Min', f: p => p.txMin !== null ? p.txMin + ' dBm' : 'automatisch' }, { l: 'Tx Power Max', f: p => p.txMax !== null ? p.txMax + ' dBm' : 'automatisch' },
+    { l: '', f: p => [h('button', { class: 'small', onclick: () => rfProfDialog(p) }, 'Edit'), ' ',
+      h('button', { class: 'small danger', onclick: () => remove('no ap dot11 ' + p.band + ' rf-profile ' + p.name, 'RF-Profil ' + p.name) }, 'Delete')] }], S.rfProfiles, 'Keine RF-Profile.'));
+  main.append(h('h2', null, 'RF Tags'), h('div', { class: 'bar' }, h('button', { class: 'primary', 'data-id': 'add-rftag', onclick: () => rfTagDialog() }, '+ Add')));
+  main.append(table([{ l: 'RF Tag Name', f: t => t.name }, { l: '5 GHz Profil', f: t => t.rf5 || 'global' }, { l: '2,4 GHz Profil', f: t => t.rf24 || 'global' },
+    { l: '', f: t => t.builtin ? badge('vordefiniert', 'warn') : [h('button', { class: 'small', onclick: () => rfTagDialog(t) }, 'Edit'), ' ',
+      h('button', { class: 'small danger', onclick: () => remove('no wireless tag rf ' + t.name, 'RF Tag ' + t.name) }, 'Delete')] }], S.rfTags));
+};
+
+function rfProfDialog(p) {
+  const band = h('select', { 'data-id': 'rfprof-band', disabled: !!p }, h('option', { value: '5ghz' }, '5 GHz'), h('option', { value: '24ghz' }, '2,4 GHz'));
+  if (p) band.value = p.band;
+  const name = h('input', { 'data-id': 'rfprof-name', value: p ? p.name : '', disabled: !!p, placeholder: 'RF_Lobby' });
+  const mx = h('input', { 'data-id': 'rfprof-max', type: 'number', min: 1, max: 30, value: p && p.txMax !== null ? p.txMax : '', placeholder: 'automatisch' });
+  const mn = h('input', { 'data-id': 'rfprof-min', type: 'number', min: 1, max: 30, value: p && p.txMin !== null ? p.txMin : '', placeholder: 'automatisch' });
+  const en = h('input', { 'data-id': 'rfprof-enabled', type: 'checkbox' }); en.checked = p ? p.status === 'ENABLED' : false;
+  modal(p ? 'Edit RF-Profil ' + p.name : 'Add RF-Profil', h('div', { class: 'row' }, field('Band', band), field('RF Profile Name', name), field('Tx Power Max (dBm)', mx, '1-30, leer = automatisch.'),
+    field('Tx Power Min (dBm)', mn, 'Darf nicht größer als Max sein.'), field('Status Enabled', en, 'Ausgeschaltet: Das Band wird an APs mit diesem Profil abgeschaltet.')), () => {
+    if (!p) need(/^[\w.-]{1,32}$/.test(name.value), 'Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
+    for (const [v, l] of [[mx.value, 'Max'], [mn.value, 'Min']]) need(v === '' || (/^\d+$/.test(v) && +v >= 1 && +v <= 30), 'Tx Power ' + l + ': 1-30 dBm');
+    need(mx.value === '' || mn.value === '' || +mn.value <= +mx.value, 'Tx Power Min darf nicht größer als Max sein');
+    const c = ['ap dot11 ' + (p ? p.band : band.value) + ' rf-profile ' + (p ? p.name : name.value)];
+    if (mx.value !== '') c.push('tx-power max ' + mx.value); else if (p && p.txMax !== null) c.push('no tx-power max');
+    if (mn.value !== '') c.push('tx-power min ' + mn.value); else if (p && p.txMin !== null) c.push('no tx-power min');
+    c.push(en.checked ? 'no shutdown' : 'shutdown');
+    return c;
+  }, refresh);
+}
+
+function rfTagDialog(t) {
+  const name = h('input', { 'data-id': 'rftag-name', value: t ? t.name : '', disabled: !!t, placeholder: 'RFT_Lobby' });
+  const opts = band => [h('option', { value: '' }, '(global)')].concat(S.rfProfiles.filter(p => p.band === band).map(p => h('option', { value: p.name }, p.name)));
+  const s5 = h('select', { 'data-id': 'rftag-5' }, opts('5ghz')); s5.value = t ? t.rf5 : '';
+  const s24 = h('select', { 'data-id': 'rftag-24' }, opts('24ghz')); s24.value = t ? t.rf24 : '';
+  modal(t ? 'Edit RF Tag ' + t.name : 'Add RF Tag', h('div', { class: 'row' }, field('Name', name), field('5 GHz RF-Profil', s5), field('2,4 GHz RF-Profil', s24)), () => {
+    if (!t) need(/^[\w.-]{1,32}$/.test(name.value), 'Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
+    return ['wireless tag rf ' + (t ? t.name : name.value), s5.value ? '5ghz-rf-policy ' + s5.value : 'no 5ghz-rf-policy', s24.value ? '24ghz-rf-policy ' + s24.value : 'no 24ghz-rf-policy'];
+  }, refresh);
+}
+
 VIEWS.mobility = main => {
   main.append(h('div', { class: 'note' }, 'Mobility verbindet Controller, damit Clients ihre Sitzung beim Wechsel behalten. Der Tunnel kommt nur hoch, wenn beide Seiten zueinander passen: Peer-Eintrag hier und Eintrag der Gegenseite. Die Gegenseite ist ein simulierter Controller.'));
   main.append(h('h2', null, 'Dieser Controller'), table([{ l: 'Mobility Group Name', f: () => S.mobilityGroup }, { l: 'Mobility MAC Address', f: () => S.mobilityMac },
@@ -484,18 +528,24 @@ function tagDialog(t) {
 VIEWS.apcfg = main => {
   main.append(h('div', { class: 'note' }, 'Ein AP ohne eigenes Tag nutzt die Default Tags. Tag Source zeigt, ob ein Tag zugewiesen (Static) oder der Standard ist. Der AP-Modus kommt vom Site Tag.'));
   main.append(table([{ l: 'AP Name', f: a => a.name }, { l: 'AP MAC', f: a => a.ethMac }, { l: 'Site Tag', f: a => a.siteTag },
-    { l: 'Policy Tag', f: a => a.policyTag }, { l: 'RF Tag', f: a => a.rfTag }, { l: 'AP Mode', f: a => a.mode }, { l: 'Tag Source', f: a => a.tagSource },
+    { l: 'Policy Tag', f: a => a.policyTag }, { l: 'RF Tag', f: a => a.rfTag }, { l: 'RF 5 GHz', f: a => rfText(a.rf['5ghz']) }, { l: 'RF 2,4 GHz', f: a => rfText(a.rf['24ghz']) },
+    { l: 'AP Mode', f: a => a.mode }, { l: 'Tag Source', f: a => a.tagSource },
     { l: '', f: a => h('button', { class: 'small', 'data-id': 'ap-tag-' + a.name, onclick: () => apDialog(a) }, 'Edit Tags') }], S.aps));
 };
+
+const rfText = r => r.radio === 'off' ? 'Funk aus (' + r.profile + ')' : r.profile ? r.profile + ', max. ' + (r.txMax !== null ? r.txMax + ' dBm' : 'automatisch') : 'global';
 
 function apDialog(a) {
   const tag = h('select', { 'data-id': 'ap-policy-tag' }, S.policyTags.map(t => h('option', { value: t.name }, t.name)));
   tag.value = a.policyTag;
   const site = h('select', { 'data-id': 'ap-site-tag' }, S.siteTags.map(t => h('option', { value: t.name }, t.name)));
   site.value = a.siteTag;
-  const body = h('div', { class: 'row' }, field('AP Name', h('input', { value: a.name, disabled: true })), field('Policy Tag', tag), field('Site Tag', site, 'Ein Site Tag ohne Local Site versetzt den AP in den FlexConnect-Modus.'));
+  const rft = h('select', { 'data-id': 'ap-rf-tag' }, S.rfTags.map(t => h('option', { value: t.name }, t.name)));
+  rft.value = a.rfTag;
+  const body = h('div', { class: 'row' }, field('AP Name', h('input', { value: a.name, disabled: true })), field('Policy Tag', tag), field('Site Tag', site, 'Ein Site Tag ohne Local Site versetzt den AP in den FlexConnect-Modus.'),
+    field('RF Tag', rft, 'Ein RF-Profil wirkt nur an APs, deren RF Tag darauf verweist.'));
   modal('Edit Tags: ' + a.name, body, () => ['ap ' + a.ethMac, tag.value === 'default-policy-tag' ? 'no policy-tag' : 'policy-tag ' + tag.value,
-    site.value === 'default-site-tag' ? 'no site-tag' : 'site-tag ' + site.value], refresh);
+    site.value === 'default-site-tag' ? 'no site-tag' : 'site-tag ' + site.value, rft.value === 'default-rf-tag' ? 'no rf-tag' : 'rf-tag ' + rft.value], refresh);
 }
 
 async function remove(cmd, what) {

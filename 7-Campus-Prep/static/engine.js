@@ -18,9 +18,10 @@
 
   const DEF_POLICY_TAG = 'default-policy-tag', DEF_SITE_TAG = 'default-site-tag', DEF_RF_TAG = 'default-rf-tag';
   const DEF_FLEX_PROFILE = 'default-flex-profile', DEF_WEBAUTH_MAP = 'global', DEF_MOBILITY_GROUP = 'default';
+  const RF_BANDS = { '24ghz': '2,4 GHz', '5ghz': '5 GHz' };
   const NAME_RE = /^[\p{L}\p{N}_.-]{1,32}$/u;          // wie Python \w (Unicode)
   const STORE_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$/;
-  const KIND = 'campusprep-state', VERSION = 5, ACCEPTED = [1, 2, 3, 4, 5];
+  const KIND = 'campusprep-state', VERSION = 6, ACCEPTED = [1, 2, 3, 4, 5, 6];
   const MODES = ['guided', 'exam'];
   const HIDDEN = ['cause', 'solution', 'solutionCommands', 'startCommands', 'worldClients', 'worldRadius', 'worldMobility', 'checks', 'hints', 'questions'];
 
@@ -129,6 +130,8 @@
       this.webauthMaps = dict(); this.webauthMaps[DEF_WEBAUTH_MAP] = { type: 'webauth', virtual_ip: '192.0.2.1' };
       this.mobilityGroup = DEF_MOBILITY_GROUP;  // wireless mobility group name
       this.mobilityPeers = dict();              // Peer-IP -> {mac, group}
+      this.rfProfiles = dict();                 // 'band:name' -> {band, name, shutdown, tx_min, tx_max, descr}
+      this.rfTags = dict(); this.rfTags[DEF_RF_TAG] = { '24ghz': '', '5ghz': '' };   // name -> {24ghz, 5ghz}
     }
 
     snapshot() {
@@ -136,7 +139,7 @@
                      flexProfiles: this.flexProfiles, siteTags: this.siteTags, radiusServers: this.radiusServers,
                      aaaGroups: this.aaaGroups, aaaLists: this.aaaLists, localUsers: this.localUsers, loginLists: this.loginLists,
                      authzDefaultLocal: this.authzDefaultLocal, webauthMaps: this.webauthMaps, mobilityGroup: this.mobilityGroup,
-                     mobilityPeers: this.mobilityPeers });
+                     mobilityPeers: this.mobilityPeers, rfProfiles: this.rfProfiles, rfTags: this.rfTags });
     }
     restore(s) {
       this.loadWlans(s.wlans);
@@ -145,6 +148,7 @@
       this.radiusServers = clone(s.radiusServers); this.aaaGroups = clone(s.aaaGroups); this.aaaLists = clone(s.aaaLists);
       this.localUsers = clone(s.localUsers); this.loginLists = clone(s.loginLists); this.authzDefaultLocal = s.authzDefaultLocal;
       this.webauthMaps = clone(s.webauthMaps); this.mobilityGroup = s.mobilityGroup; this.mobilityPeers = clone(s.mobilityPeers);
+      this.rfProfiles = clone(s.rfProfiles); this.rfTags = clone(s.rfTags);
     }
     dumpWlans() { const o = dict(); for (const [k, v] of this.wlans) o[k] = clone(v); return o; }
     loadWlans(o) { this.wlans = new Map(); for (const k of Object.keys(o)) this.wlans.set(k, clone(o[k])); }
@@ -178,16 +182,21 @@
       // Staende vor Version 5 kennen kein Mobility
       this.mobilityGroup = d.mobilityGroup || DEF_MOBILITY_GROUP;
       this.mobilityPeers = clone(d.mobilityPeers && Object.keys(d.mobilityPeers).length ? d.mobilityPeers : {});
+      // Staende vor Version 6 kennen keine RF-Profile
+      this.rfProfiles = clone(d.rfProfiles && Object.keys(d.rfProfiles).length ? d.rfProfiles : {});
+      this.rfTags = clone(d.rfTags && Object.keys(d.rfTags).length ? d.rfTags : {});
+      setdefault(this.rfTags, DEF_RF_TAG, { '24ghz': '', '5ghz': '' });
     }
 
     // ---- Zustand fuer die Oberflaeche
     state() {
       const aps = this.world.aps.map(a => {
         const cfg = get(this.apCfg, a.ethMac) || {};
-        const explicit = cfg.policy_tag || cfg.site_tag;
+        const explicit = cfg.policy_tag || cfg.site_tag || cfg.rf_tag;
         return { name: a.name, model: a.model, ethMac: a.ethMac, radioMac: a.radioMac, ip: a.ip, location: a.location,
                  country: a.country, state: a.joined ? 'Registered' : 'Not joined', policyTag: this.policyTagOf(a),
-                 siteTag: this.siteTagOf(a), rfTag: DEF_RF_TAG, mode: this.apMode(a), tagSource: explicit ? 'Static' : 'Default' };
+                 siteTag: this.siteTagOf(a), rfTag: this.rfTagOf(a),
+                 rf: { '24ghz': this.rfEffective(a, '24ghz'), '5ghz': this.rfEffective(a, '5ghz') }, mode: this.apMode(a), tagSource: explicit ? 'Static' : 'Default' };
       });
       const wl = [...this.wlans.entries()].sort((x, y) => x[1].id - y[1].id);
       return {
@@ -206,6 +215,9 @@
         localUsers: sortedKeys(this.localUsers).map(n => ({ name: n, passwordSet: !!this.localUsers[n] })),
         loginLists: sortedKeys(this.loginLists).map(n => ({ name: n, method: this.loginLists[n].method })),
         authzDefaultLocal: this.authzDefaultLocal,
+        rfProfiles: sortedKeys(this.rfProfiles).map(k => { const p = this.rfProfiles[k];
+          return { name: p.name, band: p.band, status: p.shutdown ? 'DISABLED' : 'ENABLED', txMin: p.tx_min, txMax: p.tx_max, description: p.descr }; }),
+        rfTags: sortedKeys(this.rfTags).map(n => ({ name: n, builtin: n === DEF_RF_TAG, rf24: this.rfTags[n]['24ghz'], rf5: this.rfTags[n]['5ghz'] })),
         mobilityGroup: this.mobilityGroup, mobilityMac: this.world.wlc.mac,
         mobilityPeers: sortedKeys(this.mobilityPeers).map(ip => Object.assign({ ip, mac: this.mobilityPeers[ip].mac, group: this.mobilityPeers[ip].group }, this.mobilityTunnel(ip))),
         webauthMaps: sortedKeys(this.webauthMaps).map(n => ({ name: n, builtin: n === DEF_WEBAUTH_MAP, type: this.webauthMaps[n].type, virtualIp: this.webauthMaps[n].virtual_ip })),
@@ -227,6 +239,17 @@
     }
 
     apByName(name) { return this.world.aps.find(a => a.name === name) || null; }
+    rfTagOf(ap) { return (get(this.apCfg, ap.ethMac) || {}).rf_tag || DEF_RF_TAG; }
+    rfEffective(ap, band) {
+      /* Wirkung der RF-Konfiguration: Das RF Tag verweist je Band auf ein RF-Profil. Ohne Verweis gelten die globalen Einstellungen;
+         ein deaktiviertes RF-Profil schaltet das Band ab (Simulator-Modell). */
+      const tag = get(this.rfTags, this.rfTagOf(ap)) || {};
+      const name = tag[band] || '';
+      const prof = name ? get(this.rfProfiles, band + ':' + name) : null;
+      if (!prof) return { profile: null, txMax: null, radio: 'on' };
+      if (prof.shutdown) return { profile: name, txMax: null, radio: 'off' };
+      return { profile: name, txMax: prof.tx_max, radio: 'on' };
+    }
     policyTagOf(ap) { return (get(this.apCfg, ap.ethMac) || {}).policy_tag || DEF_POLICY_TAG; }
     siteTagOf(ap) { return (get(this.apCfg, ap.ethMac) || {}).site_tag || DEF_SITE_TAG; }
     apMode(ap) { const st = get(this.siteTags, this.siteTagOf(ap)); return !st || st.local ? 'Local' : 'FlexConnect'; }
@@ -450,8 +473,8 @@
         '                   RF Tag Name                       Misconfigured    Tag Source', '-'.repeat(172)];
       for (const a of aps) {
         const cfg = get(this.apCfg, a.ethMac) || {};
-        out.push([pad(a.name, 23), pad(a.ethMac, 16), pad(this.siteTagOf(a), 33), pad(this.policyTagOf(a), 33), pad(DEF_RF_TAG, 33),
-                  pad('No', 16), (cfg.policy_tag || cfg.site_tag) ? 'Static' : 'Default'].join(' '));
+        out.push([pad(a.name, 23), pad(a.ethMac, 16), pad(this.siteTagOf(a), 33), pad(this.policyTagOf(a), 33), pad(this.rfTagOf(a), 33),
+                  pad('No', 16), (cfg.policy_tag || cfg.site_tag || cfg.rf_tag) ? 'Static' : 'Default'].join(' '));
       }
       return out.join('\n');
     }
@@ -513,7 +536,8 @@
   // ------------------------------------------------------------------ CLI
   const PROMPTS = { exec: '#', config: '(config)#', wlan: '(config-wlan)#', policy: '(config-wireless-policy)#', ptag: '(config-policy-tag)#',
                     ap: '(config-ap)#', flex: '(config-wireless-flex-profile)#', flexvlan: '(config-wireless-flex-profile-vlan)#', stag: '(config-site-tag)#',
-                    radius: '(config-radius-server)#', aaagrp: '(config-sg-radius)#', pmap: '(config-params-parameter-map)#' };
+                    radius: '(config-radius-server)#', aaagrp: '(config-sg-radius)#', pmap: '(config-params-parameter-map)#',
+                    rfprof: '(config-rf-profile)#', rftag: '(config-rf-tag)#' };
   const isIpv4 = v => { const p = v.split('.'); return p.length === 4 && p.every(x => isDigits(x) && x.length <= 3 && parseInt(x, 10) <= 255); };
   const eq = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
   const startsWith = (w, p) => w.length >= p.length && p.every((x, i) => w[i] === x);
@@ -594,7 +618,7 @@
       const inv = () => new CliError('Invalid input detected: "' + w.join(' ') + '"');
       // Das Objekt des aktuellen Untermodus kann inzwischen (z. B. ueber die Oberflaeche) geloescht worden sein
       const store = { wlan: null, policy: c.policies, ptag: c.policyTags, flex: c.flexProfiles, flexvlan: c.flexProfiles, stag: c.siteTags,
-                      radius: c.radiusServers, aaagrp: c.aaaGroups, pmap: c.webauthMaps };
+                      radius: c.radiusServers, aaagrp: c.aaaGroups, pmap: c.webauthMaps, rfprof: c.rfProfiles, rftag: c.rfTags };
       if (this.mode === 'wlan' ? !c.wlans.has(this.ctx) : (has(store, this.mode) && store[this.mode] && !has(store[this.mode], this.ctx))) {
         this.mode = 'config'; this.ctx = null; this.ctx2 = null;
         throw new CliError('Das Objekt existiert nicht mehr');
@@ -680,6 +704,36 @@
           const users = [...c.wlans.keys()].filter(n => (c.wlans.get(n).webauth_map || undefined) === w[3]).sort(cmp);
           if (users.length) throw new CliError('Parameter Map ' + w[3] + ' wird von WLANs verwendet (' + users.join(', ') + ') - zuerst dort entfernen');
           delete c.webauthMaps[w[3]];
+          return '';
+        }
+        if (startsWith(w, ['ap', 'dot11']) && has(RF_BANDS, w[2]) && w.length === 5 && w[3] === 'rf-profile' && !no) {
+          const known = sortedKeys(c.rfProfiles).some(k => c.rfProfiles[k].band === w[2] && c.rfProfiles[k].name === w[4]);
+          if (!known && !NAME_RE.test(w[4])) throw new CliError('Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
+          const key = w[2] + ':' + w[4];
+          setdefault(c.rfProfiles, key, { band: w[2], name: w[4], shutdown: true, tx_min: null, tx_max: null, descr: '' });
+          this.mode = 'rfprof'; this.ctx = key;
+          return '';
+        }
+        if (no && startsWith(w, ['ap', 'dot11']) && w.length === 5 && has(RF_BANDS, w[2]) && w[3] === 'rf-profile') {
+          const key = w[2] + ':' + w[4];
+          if (!has(c.rfProfiles, key)) throw new CliError('RF-Profil ' + w[4] + ' existiert fuer ' + RF_BANDS[w[2]] + ' nicht');
+          const users = sortedKeys(c.rfTags).filter(n => c.rfTags[n][w[2]] === w[4]);
+          if (users.length) throw new CliError('RF-Profil ' + w[4] + ' wird von RF Tags verwendet (' + users.join(', ') + ') - zuerst dort entfernen');
+          delete c.rfProfiles[key];
+          return '';
+        }
+        if (startsWith(w, ['wireless', 'tag', 'rf']) && w.length === 4 && !no) {
+          if (!has(c.rfTags, w[3]) && !NAME_RE.test(w[3])) throw new CliError('Name: 1-32 Zeichen (Buchstaben, Ziffern, . _ -)');
+          setdefault(c.rfTags, w[3], { '24ghz': '', '5ghz': '' });
+          this.mode = 'rftag'; this.ctx = w[3];
+          return '';
+        }
+        if (no && startsWith(w, ['wireless', 'tag', 'rf']) && w.length === 4) {
+          if (w[3] === DEF_RF_TAG) throw new CliError(DEF_RF_TAG + ' ist vordefiniert und kann nicht geloescht werden');
+          if (!has(c.rfTags, w[3])) throw new CliError('RF Tag ' + w[3] + ' existiert nicht');
+          const aps = c.world.aps.filter(a => c.rfTagOf(a) === w[3]).map(a => a.name).sort(cmp);
+          if (aps.length) throw new CliError('RF Tag ' + w[3] + ' ist APs zugewiesen (' + aps.join(', ') + ') - zuerst dort entfernen');
+          delete c.rfTags[w[3]];
           return '';
         }
         if (startsWith(w, ['wireless', 'mobility', 'group', 'name']) && w.length === 5 && !no) {
@@ -868,7 +922,42 @@
         else throw inv();
         return '';
       }
+      if (this.mode === 'rfprof') {
+        const x = c.rfProfiles[this.ctx];
+        if (w[0] === 'shutdown' && w.length === 1) x.shutdown = !no;
+        else if (w[0] === 'tx-power' && w.length === 3 && (w[1] === 'min' || w[1] === 'max') && !no) {
+          if (!isDigits(w[2]) || !(parseInt(w[2], 10) >= 1 && parseInt(w[2], 10) <= 30)) throw new CliError('Sendeleistung: 1-30 dBm (Simulator-Wertebereich)');
+          const v = parseInt(w[2], 10);
+          const lo = w[1] === 'min' ? v : x.tx_min, hi = w[1] === 'min' ? x.tx_max : v;
+          if (lo !== null && hi !== null && lo > hi) throw new CliError('tx-power min darf nicht groesser als tx-power max sein');
+          x['tx_' + w[1]] = v;
+        } else if (w[0] === 'tx-power' && w.length === 2 && (w[1] === 'min' || w[1] === 'max') && no) x['tx_' + w[1]] = null;
+        else if (w[0] === 'description' && w.length > 1 && !no) x.descr = w.slice(1).join(' ');
+        else throw inv();
+        return '';
+      }
+      if (this.mode === 'rftag') {
+        const t = c.rfTags[this.ctx];
+        if ((w[0] === '24ghz-rf-policy' || w[0] === '5ghz-rf-policy') && (w.length === 2 || (no && w.length === 1))) {
+          const band = w[0].slice(0, -'-rf-policy'.length);
+          if (no) t[band] = '';
+          else {
+            if (!has(c.rfProfiles, band + ':' + w[1])) throw new CliError('RF-Profil ' + w[1] + ' existiert fuer ' + RF_BANDS[band] + ' nicht');
+            t[band] = w[1];
+          }
+          return '';
+        }
+        throw inv();
+      }
       if (this.mode === 'ap') {
+        if (w[0] === 'rf-tag' && (w.length === 2 || (no && w.length === 1))) {
+          if (no) delete c.apCfg[this.ctx].rf_tag;
+          else {
+            if (!has(c.rfTags, w[1])) throw new CliError('RF Tag ' + w[1] + ' existiert nicht');
+            c.apCfg[this.ctx].rf_tag = w[1];
+          }
+          return '';
+        }
         if (w[0] === 'site-tag' && (w.length === 2 || (no && w.length === 1))) {
           if (no) delete c.apCfg[this.ctx].site_tag;
           else {
@@ -1009,6 +1098,12 @@
     if (t === 'apmode') {
       const a = st.aps.find(x => x.name === chk.ap);
       return [!!a && a.mode === chk.mode, 'Modus ' + (a ? a.mode : '?')];
+    }
+    if (t === 'aprf') {
+      const a = st.aps.find(x => x.name === chk.ap);
+      const r = a ? a.rf[chk.band] : null;
+      const ok = !!r && Object.keys(chk.attrs).every(k => r[k] === chk.attrs[k]);
+      return [ok, !r ? 'nicht gefunden' : 'Profil ' + (r.profile || '-') + ', max. Sendeleistung ' + (r.txMax !== null ? r.txMax : 'automatisch') + ', Funk ' + r.radio];
     }
     if (t === 'mobilitypeer') {
       const pr = st.mobilityPeers.find(x => x.ip === chk.ip);

@@ -16,7 +16,7 @@ L1, L2 = 'a4b2.32aa.0001', 'a4b2.32aa.0002'
 ALL = ['01-ssid-nicht-sichtbar', '02-admin-down', '03-falscher-schluessel', '04-falsches-policy-profile',
        '05-gast-wlan-lobby', '06-aufraeumen', '07-flexconnect-zweigstelle', '08-flexconnect-vlan-name',
        '09-radius-shared-secret', '10-aaa-override-vlan', '11-radius-redundanz', '12-webauth-authorization', '13-webauth-einrichten',
-       '14-mobility-gruppenname', '15-mobility-einrichten']
+       '14-mobility-gruppenname', '15-mobility-einrichten', '16-rf-tag-fehlt', '17-rf-lobby-einrichten']
 # Woerter, die im sichtbaren Text vor dem Bestehen (Intro, Anforderungen, Pruefungsbeschreibungen) nicht stehen duerfen
 LEAKS = {
     '01-ssid-nicht-sichtbar': ['policy-tag', 'Policy Tag', 'Tag Source', 'PT_Corp'],
@@ -34,6 +34,8 @@ LEAKS = {
     '13-webauth-einrichten': ['security web-auth', 'WEBAUTH', 'Parameter Map global', 'aaa authentication login'],
     '14-mobility-gruppenname': ['Campus neu setzen', 'group Campus', 'Gruppenname Campus', 'member mac-address'],
     '15-mobility-einrichten': ['group name Zentrale', 'Gruppennamen auf', 'member mac-address', 'wireless mobility group'],
+    '16-rf-tag-fehlt': ['rf-tag', 'zuweisen', 'RF Tag RFT_LOBBY'],
+    '17-rf-lobby-einrichten': ['no shutdown', 'tx-power max', '5ghz-rf-policy', 'deaktiviert'],
 }
 
 
@@ -219,6 +221,53 @@ class TestFlexLabs(unittest.TestCase):
 
 def s_cmds(s):
     return s.labs.labs['07-flexconnect-zweigstelle']['solutionCommands']
+
+
+class TestRfLabs(unittest.TestCase):
+    """CCNP Enterprise Wireless: RF-Profile und RF Tags. Jede naheliegende falsche Abkuerzung besteht nicht."""
+    PROFILE = ['ap dot11 5ghz rf-profile RF_LOBBY', 'tx-power max 14', 'no shutdown', 'exit']
+    TAG = ['wireless tag rf RFT_LOBBY', '5ghz-rf-policy RF_LOBBY', 'exit']
+
+    def rf(self, s, ap, band='5ghz'):
+        return next(a for a in s.wlc.state()['aps'] if a['name'] == ap)['rf'][band]
+
+    def test_labs_belong_to_the_wireless_track(self):
+        labs = Sim().labs.labs
+        for i in ('16-rf-tag-fehlt', '17-rf-lobby-einrichten'):
+            self.assertEqual(labs[i]['track'], 'CCNP Enterprise Wireless (300-430 ENWLSI)')
+
+    def test_lab16_start_state_the_profile_has_no_effect_without_the_ap_tag(self):
+        s = started('16-rf-tag-fehlt')
+        self.assertEqual(self.rf(s, 'ap-lobby'), {'profile': None, 'txMax': None, 'radio': 'on'})
+        self.assertIn('default-rf-tag', s.cli.run('show ap tag summary'))
+
+    def test_lab16_changing_the_default_rf_tag_would_hit_every_ap(self):
+        s = fixed('16-rf-tag-fehlt', ['wireless tag rf default-rf-tag', '5ghz-rf-policy RF_LOBBY'])
+        self.assertEqual(failed(s), ['ap-lager bleibt bei den globalen Einstellungen'])
+        self.assertEqual(self.rf(s, 'ap-lager')['profile'], 'RF_LOBBY')
+
+    def test_lab16_the_rf_tag_shows_up_in_the_ap_tag_summary(self):
+        s = fixed('16-rf-tag-fehlt')
+        lines = s.cli.run('show ap tag summary').splitlines()
+        self.assertIn('RFT_LOBBY', next(x for x in lines if x.startswith('ap-lobby')))
+        self.assertIn('default-rf-tag', next(x for x in lines if x.startswith('ap-lager')))
+
+    def test_lab17_a_new_profile_is_disabled_and_switches_the_band_off(self):
+        cmds = ['ap dot11 5ghz rf-profile RF_LOBBY', 'tx-power max 14', 'exit'] + self.TAG + ['ap %s' % L1, 'rf-tag RFT_LOBBY']
+        s = fixed('17-rf-lobby-einrichten', cmds)
+        self.assertEqual(self.rf(s, 'ap-lobby'), {'profile': 'RF_LOBBY', 'txMax': None, 'radio': 'off'})
+        self.assertFalse(s.labs.check()['passed'])
+
+    def test_lab17_missing_pieces_each_fail(self):
+        for cmds in (self.PROFILE + self.TAG, self.PROFILE + ['wireless tag rf RFT_LOBBY', 'exit', 'ap %s' % L1, 'rf-tag RFT_LOBBY'],
+                     self.PROFILE + self.TAG + ['ap %s' % L2, 'rf-tag RFT_LOBBY']):
+            self.assertFalse(fixed('17-rf-lobby-einrichten', cmds).labs.check()['passed'], cmds)
+
+    def test_lab17_the_24ghz_policy_does_not_change_the_5ghz_band(self):
+        cmds = ['ap dot11 24ghz rf-profile RF24', 'tx-power max 14', 'no shutdown', 'exit', 'wireless tag rf RFT_LOBBY', '24ghz-rf-policy RF24', 'exit', 'ap %s' % L1, 'rf-tag RFT_LOBBY']
+        s = fixed('17-rf-lobby-einrichten', cmds)
+        self.assertFalse(s.labs.check()['passed'])
+        self.assertEqual(self.rf(s, 'ap-lobby', '24ghz')['txMax'], 14)
 
 
 class TestMobilityLabs(unittest.TestCase):
@@ -491,7 +540,7 @@ class TestLabApi(unittest.TestCase):
 
     def test_flow(self):
         st, body = self.call('/wlc/api/labs')
-        self.assertEqual((st, len(body['labs']), body['current']), (200, 15, None))
+        self.assertEqual((st, len(body['labs']), body['current']), (200, 17, None))
         self.assertEqual([x['track'] for x in body['labs']][:1] + [x['track'] for x in body['labs']][-1:],
                          ['Grundlagen Wireless', 'CCNP Enterprise Wireless (300-430 ENWLSI)'])
         self.assertEqual(self.call('/wlc/api/lab/check', 'POST', {})[0], 409)

@@ -1,0 +1,122 @@
+{
+ "cause": "Es gibt weder ein RF-Profil noch ein RF Tag; der AP nutzt das Default RF Tag.",
+ "checks": [
+  {
+   "ap": "ap-lobby",
+   "attrs": {
+    "profile": "RF_LOBBY",
+    "radio": "on",
+    "txMax": 14
+   },
+   "band": "5ghz",
+   "category": "function",
+   "desc": "ap-lobby nutzt ein RF-Profil im 5-GHz-Band mit 14 dBm und Funk an",
+   "type": "aprf"
+  },
+  {
+   "ap": "ap-lager",
+   "attrs": {
+    "profile": null,
+    "radio": "on",
+    "txMax": null
+   },
+   "band": "5ghz",
+   "category": "security",
+   "desc": "ap-lager bleibt bei den globalen Einstellungen",
+   "type": "aprf"
+  },
+  {
+   "ap": "ap-lobby",
+   "attrs": {
+    "profile": null,
+    "radio": "on",
+    "txMax": null
+   },
+   "band": "24ghz",
+   "category": "security",
+   "desc": "Das 2,4-GHz-Band von ap-lobby bleibt global",
+   "type": "aprf"
+  }
+ ],
+ "duration": "25 min",
+ "fabric": "wlc1 mit ap-lobby und ap-lager",
+ "goals": [
+  "Ein RF-Profil, ein RF Tag und die Zuordnung von Grund auf einrichten",
+  "Typische Stolpersteine kennen: neues Profil ist zunächst deaktiviert"
+ ],
+ "hints": [
+  "**Konzept:** Profil anlegen, in einem RF Tag je Band darauf verweisen, das RF Tag dem AP zuweisen.",
+  "**Ebene:** RF-Profil für 5 GHz, RF Tag, AP-Zuordnung.",
+  "**Prüfschritte:** Ein neu angelegtes RF-Profil ist zunächst deaktiviert und schaltet das Band ab. Prüfe den Status in der Seite Configuration > Wireless > Access Points.",
+  "**Lösung:** `ap dot11 5ghz rf-profile RF_LOBBY` mit `tx-power max 14` und `no shutdown`; `wireless tag rf RFT_LOBBY` mit `5ghz-rf-policy RF_LOBBY`; am AP `rf-tag RFT_LOBBY`."
+ ],
+ "id": "17-rf-lobby-einrichten",
+ "intro": "In der Lobby sollen die Zellen im 5-GHz-Band kleiner werden: maximal **14 dBm** Sendeleistung. Nur **ap-lobby** ist betroffen, **ap-lager** und das 2,4-GHz-Band bleiben unverändert. Es gibt noch kein RF-Profil und kein RF Tag.",
+ "kind": "requirements",
+ "level": "Fortgeschritten",
+ "limits": [
+  "Das Client-Modell ist didaktisch: Es erklärt, ob und warum ein Client verbunden ist, ist aber keine Abbildung der Controller-Pipeline.",
+  "Nicht modelliert: 802.1x/RADIUS, FlexConnect, RF-Profile, Roaming, Mobility.",
+  "Die Wirkung eines RF-Profils ist vereinfacht: maximale Sendeleistung und Band an/aus je AP. Es gibt keine Funkumgebung, keine Clients mit Signalstärke und kein RRM.",
+  "Nicht modelliert: DCA und Kanalbreite, Datenraten, Band Select, Coverage Hole Detection, RX-SOP, Tx-Power-Wertebereiche des Geräts (der Simulator erlaubt 1 bis 30 dBm)."
+ ],
+ "modes": [
+  "guided",
+  "exam"
+ ],
+ "prerequisites": [
+  "Lab 16"
+ ],
+ "questions": [
+  {
+   "answer": 0,
+   "explain": "Ein deaktiviertes Profil, einem RF Tag zugewiesen, ist ein gängiger Weg, ein Band an bestimmten APs abzuschalten (Community-Beitrag; im Simulator so festgelegt).",
+   "id": "q1",
+   "options": [
+    "Das Band wird an den APs mit diesem RF Tag abgeschaltet",
+    "Nichts, es wird ignoriert",
+    "Die Sendeleistung wird auf das Minimum gesetzt",
+    "Der AP startet neu"
+   ],
+   "q": "Was bewirkt ein deaktiviertes RF-Profil, auf das ein RF Tag verweist?"
+  },
+  {
+   "answer": 0,
+   "explain": "Die Wirkung hängt am RF Tag des einzelnen APs.",
+   "id": "q2",
+   "options": [
+    "Es trägt weiter das Default RF Tag",
+    "Weil es im Local Mode läuft",
+    "Weil es kein 5-GHz-Funkmodul hat",
+    "Weil RF-Profile nur einen AP betreffen"
+   ],
+   "q": "Warum bleibt ap-lager unverändert?"
+  }
+ ],
+ "requirements": [
+  "ap-lobby nutzt im 5-GHz-Band ein RF-Profil mit max. 14 dBm und eingeschaltetem Funk.",
+  "ap-lager bleibt bei den globalen Einstellungen.",
+  "Das 2,4-GHz-Band von ap-lobby bleibt bei den globalen Einstellungen."
+ ],
+ "solution": "WebUI: Tags & Profiles > RF: RF-Profil RF_LOBBY (5 GHz, max 14, Enabled), RF Tag RFT_LOBBY mit diesem Profil; Wireless > Access Points > ap-lobby: RF Tag RFT_LOBBY. CLI: `ap dot11 5ghz rf-profile RF_LOBBY` / `tx-power max 14` / `no shutdown`; `wireless tag rf RFT_LOBBY` / `5ghz-rf-policy RF_LOBBY`; `ap a4b2.32aa.0001` / `rf-tag RFT_LOBBY`.",
+ "solutionCommands": [
+  "ap dot11 5ghz rf-profile RF_LOBBY",
+  "tx-power max 14",
+  "no shutdown",
+  "exit",
+  "wireless tag rf RFT_LOBBY",
+  "5ghz-rf-policy RF_LOBBY",
+  "exit",
+  "ap a4b2.32aa.0001",
+  "rf-tag RFT_LOBBY",
+  "exit"
+ ],
+ "startCommands": [],
+ "title": "17 Kleinere Funkzellen in der Lobby einrichten",
+ "tools": [
+  "WebUI: Configuration > Tags & Profiles > RF und Configuration > Wireless > Access Points",
+  "CLI: show ap tag summary"
+ ],
+ "topic": "RF / Design",
+ "track": "CCNP Enterprise Wireless (300-430 ENWLSI)"
+}
